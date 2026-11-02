@@ -185,7 +185,7 @@ jobs:
           cache-from: type=gha
 
   publish:
-    needs: [backend, backend-jdk25, frontend, clipper]
+    needs: [backend, backend-jdk25, frontend, clipper, e2e]   # e2e: 88 tests green in 3 of 3 CI runs and every local run (2026-11-02), about 4 minutes
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'   # push, weekly schedule, manual
     uses: ./.github/workflows/publish.yml
     permissions:

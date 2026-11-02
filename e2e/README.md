@@ -34,6 +34,13 @@ npm run stop               # stop what reset started
   allowlist `e2e-owner@example.test` (any other `Tailscale-User-Login` is refused; no login is the
   dev profile's default "Owner"), and a 2-second history batch.
 
+## In CI
+
+The `e2e` job of `.github/workflows/ci.yml` runs `npm run reset -- --prod` and `npm test` on Linux with
+the runner's Google Chrome, on pull requests and pushes to `main`, in about four minutes. A failed run
+keeps its HTML report, traces and server log as the `e2e-report` artifact. Publishing the image waits
+for it, as for the unit tests: a change that renames a button or label a test uses updates the test too.
+
 ## What's covered
 
 | File | What |
