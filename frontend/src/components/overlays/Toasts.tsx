@@ -1,17 +1,30 @@
-// Toast stack (aria-live polite), with an optional action such as Undo.
+// Toast stack (aria-live polite), with an optional action such as Undo. A toast waits while the
+// pointer is over it or the focus is in it, so its action can be reached in time (WCAG 2.2.1); it
+// then gets its whole time again.
 import { X } from 'lucide-react';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useToasts, type Toast } from '../../state/toasts';
 
 function ToastItem({ toast }: { toast: Toast }) {
   const dismiss = useToasts((s) => s.dismiss);
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const paused = hovered || focused;
   useEffect(() => {
-    if (toast.timeout <= 0) return;
+    if (toast.timeout <= 0 || paused) return;
     const timer = setTimeout(() => dismiss(toast.id), toast.timeout);
     return () => clearTimeout(timer);
-  }, [toast.id, toast.timeout, dismiss]);
+  }, [toast.id, toast.timeout, dismiss, paused]);
   return (
-    <div className={`toast toast-${toast.kind}`}>
+    <div
+      className={`toast toast-${toast.kind}`}
+      onPointerEnter={() => setHovered(true)}
+      onPointerLeave={() => setHovered(false)}
+      onFocus={() => setFocused(true)}
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setFocused(false);
+      }}
+    >
       <span className="toast-message">{toast.message}</span>
       {toast.action && (
         <button

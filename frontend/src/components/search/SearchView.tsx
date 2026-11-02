@@ -273,7 +273,8 @@ export function SearchView({ query, onQuery, autoFocus }: Props) {
         </label>
       </div>
       {!empty && data && !search.isError && <Corrections data={data} onExact={() => setExact(trimmed)} />}
-      <div className="search-results">
+      {/* With only the help to show it has nothing to Tab to, so it takes the focus itself to scroll (WCAG 2.1.1). */}
+      <div className="search-results" role="region" aria-label="Search results" tabIndex={empty ? 0 : undefined}>
         {empty ? (
           <>
             {savedList.length > 0 && <SavedSearches searches={savedList} onPick={pick} />}

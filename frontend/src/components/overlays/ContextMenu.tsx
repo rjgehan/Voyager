@@ -1,9 +1,9 @@
-// A context menu at a point (right-click, long-press, or a ⋯ button): role=menu, arrow keys,
-// Esc and outside taps close it, and focus returns to where it was. On touch devices the back
+// A context menu at a point (right-click, long-press, or a ⋯ button): role=menu, arrow keys, Home
+// and End; Esc, Tab and outside taps close it, and focus returns to where it was. On touch devices the back
 // gesture closes it too (DESIGN §6.4).
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { returnFocus } from '../../features/focus';
+import { menuKey, returnFocus } from '../../features/focus';
 import { useOverlayHistory } from '../../features/overlayHistory';
 
 export interface MenuItem {
@@ -70,13 +70,6 @@ export function ContextMenu({ x, y, label, items, onClose }: Props) {
 
   useOverlayHistory(true, () => onCloseRef.current());
 
-  const moveFocus = (delta: number) => {
-    const options = [...(ref.current?.querySelectorAll<HTMLElement>('[role="menuitem"]:not([disabled])') ?? [])];
-    if (options.length === 0) return;
-    const i = options.indexOf(document.activeElement as HTMLElement);
-    options[(i + delta + options.length) % options.length].focus();
-  };
-
   return createPortal(
     <div
       ref={ref}
@@ -85,10 +78,12 @@ export function ContextMenu({ x, y, label, items, onClose }: Props) {
       aria-label={label}
       style={{ left: x, top: y }}
       onKeyDown={(e) => {
-        if (e.key === 'ArrowDown') moveFocus(1);
-        else if (e.key === 'ArrowUp') moveFocus(-1);
-        else return;
-        e.preventDefault();
+        if (menuKey(e, ref.current)) return;
+        // Tab leaves a menu (ARIA menu pattern): it closes, and focus goes back to where it was.
+        if (e.key === 'Tab') {
+          e.preventDefault();
+          onClose();
+        }
       }}
       onContextMenu={(e) => e.preventDefault()}
     >

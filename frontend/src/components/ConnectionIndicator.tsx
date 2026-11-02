@@ -1,5 +1,6 @@
 // Connection and offline indicator (DESIGN §6.18): Live (green), Reconnecting (amber), Offline
-// (red). A labelled item in the desktop status bar, a dot on the phone TopBar title.
+// (red). A labelled item in the desktop status bar, a polite live region so a change is announced
+// (DESIGN §6.19); a dot on the phone TopBar title, where the offline banner does the announcing.
 import { useUi, type ConnectionState } from '../state/ui';
 
 const LABEL: Record<ConnectionState, string> = {
@@ -20,7 +21,7 @@ export function ConnectionIndicator({ compact = false }: { compact?: boolean }) 
     return <span className={`connection-dot is-${connection}`} role="img" aria-label={`Connection: ${LABEL[connection]}`} title={TITLE[connection]} />;
   }
   return (
-    <span className={`status-item connection-indicator is-${connection}`} title={TITLE[connection]}>
+    <span className={`status-item connection-indicator is-${connection}`} title={TITLE[connection]} role="status">
       <span className={`connection-dot is-${connection}`} aria-hidden />
       {LABEL[connection]}
     </span>

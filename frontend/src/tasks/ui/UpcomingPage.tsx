@@ -77,21 +77,25 @@ export default function UpcomingPage() {
           {strip.map((day) => {
             const count = byDay.get(day)?.length ?? 0;
             const d = localDate(day);
+            const relative = formatDay(day, today);
+            // The name starts with what the button shows ("Tue 3", then the count): WCAG 2.5.3.
+            const name = `${weekday.format(d)} ${d.getDate()}, ${count === 0 ? 'no tasks' : count === 1 ? '1 task' : `${count} tasks`}, ${relative === 'Today' || relative === 'Tomorrow' ? `${relative}, ` : ''}${formatLongDate(day)}`;
             return (
               <li key={day}>
                 <button
                   type="button"
                   className={`tasks-week-day${day === today ? ' is-today' : ''}${day === selected ? ' is-selected' : ''}`}
-                  aria-label={`${formatDay(day, today)}, ${formatLongDate(day)}: ${count === 0 ? 'no tasks' : count === 1 ? '1 task' : `${count} tasks`}`}
+                  aria-label={name}
                   title={weekdayLong.format(d)}
                   onClick={() => jump(day)}
                 >
+                  {/* The spaces keep the shown text "M 2 3" (not "M23") for the name check. */}
                   <span className="tasks-week-name" aria-hidden>
                     {weekday.format(d)}
-                  </span>
+                  </span>{' '}
                   <span className="tasks-week-date" aria-hidden>
                     {d.getDate()}
-                  </span>
+                  </span>{' '}
                   <span className={`tasks-week-load${count > 0 ? ' has-tasks' : ''}`} aria-hidden>
                     {count > 0 ? count : ''}
                   </span>

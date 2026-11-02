@@ -1,5 +1,6 @@
-// Sidebar panel tabs over the registered panels (DESIGN §6.8 registerPanel).
-import { lazy, Suspense, type ComponentType } from 'react';
+// Sidebar panel tabs over the registered panels (DESIGN §6.8 registerPanel). The strip follows the
+// ARIA tabs pattern (§6.19): one Tab stop, the arrow keys, Home and End move between panels.
+import { lazy, Suspense, type ComponentType, type KeyboardEvent } from 'react';
 import { useLocation } from 'react-router';
 import { registeredPanels, useExtensionsVersion, type PanelDescriptor } from '../../extensions';
 import { pathFromLocation } from '../../features/paths';
@@ -30,10 +31,27 @@ export function PanelTabs({ side, active, onSelect }: Props) {
   const current = panels.find((p) => p.id === active) ?? panels[0];
   if (!current) return null;
   const Panel = panelComponent(current);
+  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    const i = panels.findIndex((p) => p.id === current.id);
+    const next =
+      e.key === 'ArrowRight' || e.key === 'ArrowDown'
+        ? (i + 1) % panels.length
+        : e.key === 'ArrowLeft' || e.key === 'ArrowUp'
+          ? (i - 1 + panels.length) % panels.length
+          : e.key === 'Home'
+            ? 0
+            : e.key === 'End'
+              ? panels.length - 1
+              : -1;
+    if (next < 0) return;
+    e.preventDefault();
+    onSelect(panels[next].id);
+    e.currentTarget.querySelector<HTMLElement>(`#tab-${CSS.escape(panels[next].id)}`)?.focus();
+  };
   return (
     <div className="panel-tabs">
       {panels.length > 1 && (
-        <div className="panel-tab-strip" role="tablist" aria-label={side === 'left' ? 'Left sidebar' : 'Right sidebar'}>
+        <div className="panel-tab-strip" role="tablist" aria-label={side === 'left' ? 'Left sidebar' : 'Right sidebar'} onKeyDown={onKeyDown}>
           {panels.map((p) => {
             const Icon = p.icon;
             const selected = p.id === current.id;
@@ -43,7 +61,8 @@ export function PanelTabs({ side, active, onSelect }: Props) {
                 type="button"
                 role="tab"
                 aria-selected={selected}
-                aria-controls={`panel-${p.id}`}
+                aria-controls={selected ? `panel-${p.id}` : undefined}
+                tabIndex={selected ? 0 : -1}
                 id={`tab-${p.id}`}
                 className={`panel-tab${selected ? ' is-active' : ''}`}
                 title={p.title}

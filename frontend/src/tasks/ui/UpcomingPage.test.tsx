@@ -48,7 +48,7 @@ describe('Upcoming page (ROADMAP item 4)', () => {
     renderWithApp(<UpcomingPage />);
     await screen.findByText('Pay rent');
     const strip = screen.getByRole('group', { name: 'This week' });
-    const tomorrow = within(strip).getByRole('button', { name: /^Tomorrow, .*: 2 tasks$/ });
+    const tomorrow = within(strip).getByRole('button', { name: /^\w+ \d+, 2 tasks, Tomorrow, / });
     fireEvent.click(tomorrow);
     expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
     expect(tomorrow).toHaveClass('is-selected');

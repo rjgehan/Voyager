@@ -4,7 +4,7 @@
 // owns a history entry, so the back gesture closes it (§6.4).
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { returnFocus } from '../../features/focus';
+import { returnFocus, trapTab } from '../../features/focus';
 import { useOverlayHistory } from '../../features/overlayHistory';
 
 interface Props {
@@ -18,8 +18,6 @@ interface Props {
   dismissible?: boolean;
   describedBy?: string;
 }
-
-const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 export function Modal({ label, onClose, children, className, variant = 'dialog', dismissible = true, describedBy }: Props) {
   const panel = useRef<HTMLDivElement>(null);
@@ -58,20 +56,10 @@ export function Modal({ label, onClose, children, className, variant = 'dialog',
         return;
       }
       if (e.key !== 'Tab' || !panel.current) return;
-      const items = [...panel.current.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((el) => el.offsetParent !== null || el === document.activeElement);
-      if (items.length === 0) {
-        e.preventDefault();
-        return;
-      }
-      const first = items[0];
-      const last = items[items.length - 1];
-      if (e.shiftKey && (document.activeElement === first || !panel.current.contains(document.activeElement))) {
-        e.preventDefault();
-        last.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault();
-        first.focus();
-      }
+      // Only the topmost dialog keeps the focus.
+      const dialogs = document.querySelectorAll('.modal-panel');
+      if (dialogs[dialogs.length - 1] !== panel.current) return;
+      trapTab(e, panel.current);
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);

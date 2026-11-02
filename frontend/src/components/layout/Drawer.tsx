@@ -1,9 +1,9 @@
 // Overlay containers (DESIGN §6.16): the phone drawer (left, 88 % width, with an optional footer),
 // the tablet sidebar overlays, and the phone bottom sheet (70 % height, dismissed by dragging its
 // handle or swiping down from the top of its content). Esc and a backdrop tap close them, and on
-// touch devices so does the back gesture (§6.4).
+// touch devices so does the back gesture (§6.4). While open, Tab stays inside (§6.19).
 import { useEffect, useRef, type ReactNode } from 'react';
-import { returnFocus } from '../../features/focus';
+import { returnFocus, trapTab } from '../../features/focus';
 import { useOverlayHistory } from '../../features/overlayHistory';
 import { useSheetDrag } from './BottomSheet';
 
@@ -28,15 +28,20 @@ export function Overlay({ open, onClose, side, label, children, footer, full }: 
   useEffect(() => {
     if (!open) return;
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const el = panel.current;
     const onKey = (e: KeyboardEvent) => {
       // A dialog or menu opened from the overlay handles its own Esc first.
       if (e.key === 'Escape' && !e.defaultPrevented) {
         e.preventDefault();
         onClose();
+        return;
       }
+      // A dialog or menu opened from the overlay (portaled outside it) keeps its own focus.
+      const active = document.activeElement;
+      const elsewhere = active instanceof Element && !el?.contains(active) && active.closest('[role="dialog"], [role="menu"], [role="listbox"]');
+      if (el && !e.defaultPrevented && !elsewhere && !document.querySelector('.modal-panel')) trapTab(e, el);
     };
     window.addEventListener('keydown', onKey);
-    const el = panel.current;
     if (el && !el.contains(document.activeElement)) el.focus({ preventScroll: true });
     return () => {
       window.removeEventListener('keydown', onKey);

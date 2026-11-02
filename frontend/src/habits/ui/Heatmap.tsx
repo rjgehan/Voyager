@@ -1,7 +1,8 @@
 // Calendar heatmaps (DESIGN §6.35): weeks as columns (Monday on top), the latest on the right; on
 // a phone the grid scrolls sideways and opens on the latest weeks. A tap or focus on a day shows it
-// in the readout above the grid, so days need no tiny tap targets.
-import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+// in the readout above the grid, so days need no tiny tap targets. The grid is one Tab stop (a
+// roving tabindex, DESIGN §6.19): ↑/↓ move a day, ←/→ a week, Home and End to the first and last day.
+import { useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
 import { dayjs } from '../../features/dates';
 import { calendarWeeks } from '../progress';
 
@@ -48,6 +49,23 @@ export function Heatmap({ today, weeks, cell, color, readout, legend, onSelect }
     setSelected(day);
     onSelect?.(day);
   };
+  // The days that can take the focus, oldest first; the selected one (else the latest) is the Tab stop.
+  const days = columns.flat().filter((d) => cell(d) !== null);
+  const stop = selected !== null && days.includes(selected) ? selected : days[days.length - 1];
+  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    const from = (e.target as HTMLElement).dataset.day;
+    if (!from) return;
+    const step = { ArrowUp: -1, ArrowDown: 1, ArrowLeft: -7, ArrowRight: 7 }[e.key];
+    let next: string | undefined;
+    if (step !== undefined) {
+      next = dayjs(from, 'YYYY-MM-DD').add(step, 'day').format('YYYY-MM-DD');
+      if (!days.includes(next)) return;
+    } else if (e.key === 'Home') next = days[0];
+    else if (e.key === 'End') next = days[days.length - 1];
+    else return;
+    e.preventDefault();
+    e.currentTarget.querySelector<HTMLElement>(`[data-day="${next}"]`)?.focus();
+  };
   return (
     <div className="hb-heatmap" style={color ? ({ '--hb-color': color } as CSSProperties) : undefined}>
       {readout && <div className="hb-heatmap-readout">{readout(selected)}</div>}
@@ -68,7 +86,7 @@ export function Heatmap({ today, weeks, cell, color, readout, legend, onSelect }
               return <span key={i}>{first || i === 0 ? dayjs(first ?? col[0], 'YYYY-MM-DD').format('MMM') : ''}</span>;
             })}
           </div>
-          <div className="hb-heatmap-grid" role="grid" aria-label="Calendar">
+          <div className="hb-heatmap-grid" role="grid" aria-label="Calendar" onKeyDown={onKeyDown}>
             {columns.map((col, i) => (
               <div key={i} className="hb-heatmap-week" role="row">
                 {col.map((day) => {
@@ -79,6 +97,8 @@ export function Heatmap({ today, weeks, cell, color, readout, legend, onSelect }
                       key={day}
                       type="button"
                       role="gridcell"
+                      data-day={day}
+                      tabIndex={day === stop ? 0 : -1}
                       className={`hb-cell is-${c.tone}${selected === day ? ' is-selected' : ''}`}
                       aria-label={c.label}
                       title={c.label}

@@ -37,14 +37,14 @@ function RibbonButton({ id, icon: Icon }: { id: string; icon: LucideIcon }) {
   );
 }
 
-export function Ribbon() {
+export function Ribbon({ inert }: { inert?: boolean }) {
   useCommandsVersion();
   useExtensionsVersion();
   usePrefs((s) => s.theme);
   const dark = resolvedTheme() === 'dark';
 
   return (
-    <nav className="ribbon" aria-label="Ribbon">
+    <nav className="ribbon" aria-label="Ribbon" inert={inert}>
       <div className="ribbon-group">
         <button
           type="button"
