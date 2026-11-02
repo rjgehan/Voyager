@@ -161,3 +161,16 @@ describe('occurrencesBetween (the calendar, ROADMAP item 14)', () => {
     expect(occurrencesBetween('FREQ=DAILY', '2026-12-01', '2026-10-01', '2026-10-31')).toEqual([]);
   });
 });
+
+describe('hand-edited rules rrule cannot step through', () => {
+  // A .tasks file edited by hand can hold any INTERVAL; rrule loops forever on one that is not a
+  // positive number, which froze the calendar, the task's detail and its completion.
+  it('gives up on a bad INTERVAL instead of hanging', () => {
+    for (const interval of ['-1', '0', 'abc', '-2']) {
+      expect(occurrencesBetween(`FREQ=DAILY;INTERVAL=${interval}`, '2026-10-21', '2026-11-01', '2026-11-30')).toEqual([]);
+      expect(nextOccurrence(`FREQ=WEEKLY;INTERVAL=${interval}`, 'due', '2026-10-21', '2026-10-21')).toBeUndefined();
+      expect(upcomingOccurrences(`FREQ=MONTHLY;INTERVAL=${interval}`, '2026-10-21', '2026-10-21')).toEqual([]);
+    }
+    expect(rollForward({ due: '2026-10-21', start: null, recurrence: { rrule: 'FREQ=DAILY;INTERVAL=-1', from: 'due' }, reminders: [] }, '2026-10-21')).toBeUndefined();
+  });
+});

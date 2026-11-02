@@ -105,8 +105,14 @@ function untilDate(value: string): LocalDate | null {
   return !Number.isNaN(d.getTime()) && dateOf(d) === date ? date : null;
 }
 
-/** A rule without COUNT and UNTIL (the app handles those), bounded so a rule that never matches cannot spin. */
+/**
+ * A rule without COUNT and UNTIL (the app handles those), bounded so a rule that never matches cannot
+ * spin. Throws for an INTERVAL that is not a positive number (a hand-edited file can hold one): rrule
+ * would step through it forever.
+ */
 function evaluator(parts: ReadonlyMap<string, string>, dtstart: Date, timed: boolean): RRule {
+  const interval = parts.get('INTERVAL');
+  if (interval !== undefined && !NUMBER.test(interval)) throw new Error('INTERVAL must be a whole number from 1 to 99999');
   const open = new Map(parts);
   open.delete('COUNT');
   open.delete('UNTIL');
