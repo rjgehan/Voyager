@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '../../api/endpoints';
 import { queryClient } from '../../api/queryClient';
 import { setTranscribeNewRecordings } from '../../features/voice/voiceNotes';
-import { RemindersSection, TextSetting, VoiceRow } from './SettingsPage';
+import { NumberSetting, RemindersSection, TextSetting, VoiceRow } from './SettingsPage';
 import { remindersApi } from '../../features/reminders/client';
 import { DEFAULT_SETTINGS } from '../../features/settings';
 import type { RemindersStatus, Settings } from '../../api/types';
@@ -121,5 +121,36 @@ describe('Settings › Reminders (ROADMAP item 9)', () => {
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Send a test' })[0]);
     expect(test).toHaveBeenCalledWith({ route: 'webPush', deviceId: 'dev1' });
+  });
+});
+
+describe('NumberSetting', () => {
+  function Budget({ onValue }: { onValue(v: number): void }) {
+    const [value, setValue] = useState(20);
+    return (
+      <NumberSetting
+        label="Monthly budget"
+        value={value}
+        disabled={false}
+        step={1}
+        min={0}
+        onChange={(v) => {
+          setValue(v);
+          onValue(v);
+        }}
+      />
+    );
+  }
+
+  it('clearing the field to type another number keeps the page working (NaN while it is not a number)', () => {
+    const values: number[] = [];
+    render(<Budget onValue={(v) => values.push(v)} />);
+    const input = screen.getByLabelText<HTMLInputElement>('Monthly budget');
+    fireEvent.change(input, { target: { value: '' } });
+    expect(input.value).toBe('');
+    expect(values.at(-1)).toBeNaN();
+    fireEvent.change(input, { target: { value: '35' } });
+    expect(input.value).toBe('35');
+    expect(values.at(-1)).toBe(35);
   });
 });

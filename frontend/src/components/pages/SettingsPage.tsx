@@ -423,12 +423,13 @@ function EditorSection({ settings: s, set, disabled }: VaultSectionProps) {
 }
 
 /** A number field that keeps what is typed and passes on the number (NaN while it is not one). */
-function NumberSetting({ value, onChange, disabled, label, step, min }: { value: number; onChange(v: number): void; disabled: boolean; label: string; step: number; min: number }) {
+export function NumberSetting({ value, onChange, disabled, label, step, min }: { value: number; onChange(v: number): void; disabled: boolean; label: string; step: number; min: number }) {
   const [text, setText] = useState(String(value));
   const [shown, setShown] = useState(value);
-  if (value !== shown) {
+  // Object.is: NaN (a cleared field) equals itself, so it is not a new value on every render.
+  if (!Object.is(value, shown)) {
     setShown(value);
-    if (Number(text) !== value) setText(String(value));
+    if (!Number.isNaN(value) && Number(text) !== value) setText(String(value));
   }
   return (
     <input
