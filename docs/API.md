@@ -126,9 +126,9 @@ Besides notes, the server indexes the content of some structured text files (DES
 | `Origin` | Sent automatically by browsers | On mutating requests, if present, its host:port must equal the `Host` header, compared case-insensitively. `Origin: null` is rejected. Failure gets `403 cross-origin`. |
 | `Sec-Fetch-Site` | Sent automatically by browsers | On mutating requests, if present, it must be `same-origin` or `none`. Anything else gets `403 cross-origin`. |
 | `Accept` | Optional | `application/json`, or `text/event-stream` for §16 |
-| `Idempotency-Key` | Optional on `POST /api/files`, `PUT /api/files/raw`, `POST /api/attachments`, `POST /api/capture`, `POST /api/capture/file` and every `POST`, `PATCH` and `DELETE` of the task API (§20) | Any string of 8 to 64 characters from `[A-Za-z0-9-]`, unique per logical operation (for example `crypto.randomUUID()` generated once and reused for every retry). The server keeps a per-boot cache of 1,000 keys for 1 hour; a request whose key, method and path match an earlier one gets the **stored status and body** of the first result, and nothing is done again. Without it, a retried "New note" whose response was lost would create `Untitled 1.md`. |
+| `Idempotency-Key` | Optional on `POST /api/files`, `POST /api/s/{key}/files` (§42.8), `PUT /api/files/raw`, `POST /api/attachments`, `POST /api/capture`, `POST /api/capture/file` and every `POST`, `PATCH` and `DELETE` of the task API (§20) | Any string of 8 to 64 characters from `[A-Za-z0-9-]`, unique per logical operation (for example `crypto.randomUUID()` generated once and reused for every retry). The server keeps a per-boot cache of 1,000 keys for 1 hour; a request whose key, method and path match an earlier one gets the **stored status and body** of the first result, and nothing is done again. Without it, a retried "New note" whose response was lost would create `Untitled 1.md`. |
 | `Host` | Sent by every client | Must match the server's allowlist (`notes.<tailnet>.ts.net` in production). Otherwise `421 unknown-host`. |
-| `Tailscale-User-*` | Set by `tailscale serve` in production | Identity (§6.1). A request without an allowed `Tailscale-User-Login` gets `403 identity-not-allowed` (DESIGN §5.13). Clients never send them. |
+| `Tailscale-User-*` | Set by `tailscale serve` in production | Identity (§6.1). A request without an allowed `Tailscale-User-Login` gets `403 identity-not-allowed` (DESIGN §5.13), except that any other login may use the guest endpoints of shares (§42). Clients never send them. |
 
 **Response headers** on every response: `X-Notes-Build: <buildSha>`. Every `/api/**` JSON response carries `Cache-Control: no-store`; the raw-file endpoints (§9.1, §13.2, §14.3) and `/api/events` set their own.
 
@@ -168,7 +168,7 @@ Every error response is RFC 9457 `application/problem+json` with an extra `code`
 | `move-into-self` | 400 | Cannot move a folder into itself | A folder moved into itself or a descendant | `from`, `to` |
 | `client-id-required` | 403 | Client id required | A mutating request without a valid `X-Client-Id` | |
 | `cross-origin` | 403 | Cross-origin request rejected | The `Origin` or `Sec-Fetch-Site` check failed | |
-| `identity-not-allowed` | 403 | Identity not allowed | No `Tailscale-User-Login` (a tagged device) or a login not in the allowlist | |
+| `identity-not-allowed` | 403 | Identity not allowed | No `Tailscale-User-Login` (a tagged device), or a login not in the allowlist outside the guest endpoints of shares (§42) | |
 | `reserved-path` | 403 | Reserved path | A hidden or internal path (`.git`, `.notesapp`, `.trash`, any dot-segment) | `path` |
 | `not-found` | 404 | Not found | No such file, folder, commit, trash entry or route | `path` (when applicable) |
 | `method-not-allowed` | 405 | Method not allowed | | |
@@ -201,6 +201,11 @@ Every error response is RFC 9457 `application/problem+json` with an extra `code`
 | `vault-not-found` | 404 | No such vault | §41: a `/api/v/<name>/` request for a name this server does not serve | `vault` |
 | `vault-unavailable` | 503 | Vault not available | §41: the vault's context is starting (`reason: "starting"`, with `Retry-After: 2`) or could not be started (`reason: "failed"`) | `vault`, `reason` |
 | `vaults-off` | 409 | Creating vaults is off | §41.2: `NOTES_VAULTS_DIR` is empty or `NOTES_VAULTS_ALLOW_CREATE=false` | |
+| `share-not-found` | 404 | Share not found | §42: a guest endpoint's key names no share, a revoked or expired one, or a share id used by someone who is not one of its recipients (the same answer in every case) | |
+| `outside-share` | 403 | Outside the share | §42: the path is not in the share (the same answer whether the file exists or not), or a guest's text adds an embed of a file outside the share (§42.8) | `path` |
+| `share-read-only` | 403 | The share is read-only | §42: a write through a view share, or of a file that is not a Markdown note | `path` (when applicable) |
+| `too-many-attempts` | 429 | Too many attempts | §42: this login's guest requests were refused 20 times in 15 minutes | `retryAfter` (seconds), header `Retry-After` |
+| `sharing-unavailable` | 409 | Sharing is unavailable | §42.2, §42.3: the server has no owner list (`NOTES_IDENTITY_ALLOWED_LOGINS` empty), so every tailnet login already has the whole vault | |
 
 ```ts
 export interface FieldError { field: string; message: string }   // e.g. {"field":"settings.files.newNoteFolder","message":"invalid path"}
@@ -357,7 +362,7 @@ Request `SettingsUpdateRequest`: `{"settings": { ...full Settings... }, "baseVer
 ```
 
 - Values come from `Tailscale-User-Login`, `Tailscale-User-Name` (RFC 2047-decoded) and `Tailscale-User-Profile-Pic`.
-- In production a request without an allowed login never gets here (`403 identity-not-allowed`). In the dev profile, a missing login gives `{"login": "owner@notes", "name": "Owner", "profilePicUrl": null, "source": "default"}`, with values from configuration.
+- In production a request without an allowed login never gets here (`403 identity-not-allowed`; a guest learns its own login from `GET /api/s`, §42.5). In the dev profile, a missing login gives `{"login": "owner@notes", "name": "Owner", "profilePicUrl": null, "source": "default"}`, with values from configuration.
 - An empty profile picture header becomes `null`.
 
 ### 6.2 `GET /api/status`
@@ -1806,6 +1811,8 @@ data: {"serverTime":"2026-10-16T14:05:20.004Z"}
 | `bookmarks.changed` | `BookmarksChangedEvent` | no | The bookmarks were saved (§21). After a move or a trash restore the server re-keys them itself and sends this with `origin: null`, so it reaches every client, the mover's included. Refetch `GET /api/bookmarks`. |
 | `status.changed` | `StatusChangedEvent` | yes | Something shown by `GET /api/status` changed state (`git.state`, `watcher.mode`, `settings.readOnly`, `mirror.state`, or free space crossing 1 GiB), or a push requested with §6.4 ended; refetch it |
 | `reminder.due` | `ReminderDueEvent` | no | A reminder for every open tab: the in-app route (§28.5). Not in `VAULT_EVENT_NAMES`: the reminders feature registers it with `registerEventHandler`. |
+| `shares.changed` | `SharesChangedEvent` | no | A share was made, changed or revoked (§42), or the shares followed a move (`origin: null`); refetch `GET /api/shares`. Owners' streams only. |
+| `share.changed` | `ShareChangedEvent` (`{}`) | n/a | On a guest's stream only (§42.10): something moved into, out of or within the share in a way the page cannot patch; refetch the share. Not in `VAULT_EVENT_NAMES`. |
 | `flashcards.changed` | `FlashcardsChangedEvent` | no | Flashcard review records or settings changed (§34.7). Not in `VAULT_EVENT_NAMES`: the flashcards feature registers it with `registerEventHandler`. |
 | `resync` | `ResyncEvent` | yes | The server could not describe the change precisely (watcher overflow, a bulk change of more than 50 entries, or a rescan error). Refetch everything (§16.5). |
 | `task.created`, `task.changed` | `TaskEvent` | no | A task was created or changed through the task API (§20.8) |
@@ -1878,7 +1885,8 @@ export type ErrorCode =
   | 'not-audio' | 'transcription-off' | 'transcription-failed'
   | 'ai-unavailable' | 'ai-excluded' | 'ai-budget-exceeded'
   | 'block-not-found' | 'funnel-request' | 'publishing-off'
-  | 'vault-not-found' | 'vault-unavailable' | 'vaults-off';
+  | 'vault-not-found' | 'vault-unavailable' | 'vaults-off'
+  | 'share-not-found' | 'outside-share' | 'share-read-only' | 'too-many-attempts' | 'sharing-unavailable';
 
 export interface FieldError { field: string; message: string }
 
@@ -1900,6 +1908,7 @@ export interface Problem {
   to?: VaultPath;
   reason?: string;                // e.g. vault-unavailable: starting | failed (§41)
   vault?: string;                 // vault-not-found, vault-unavailable: the vault name (§41)
+  retryAfter?: number;            // too-many-attempts: seconds until the next try, as Retry-After (§42)
   incidentId?: string;
   errors?: FieldError[];
 }
@@ -2525,12 +2534,13 @@ export interface VaultEventMap {
   'status.changed': StatusChangedEvent;
   'resync': ResyncEvent;
   'types.changed': PropertyTypesChangedEvent;
+  'shares.changed': SharesChangedEvent;
 }
 export type VaultEventName = keyof VaultEventMap;
 export const VAULT_EVENT_NAMES: readonly VaultEventName[] = [
   'hello', 'ping', 'file.created', 'file.changed', 'file.deleted', 'folder.created', 'folder.deleted',
   'entry.moved', 'trash.changed', 'history.committed', 'settings.changed', 'bookmarks.changed', 'status.changed',
-  'resync', 'types.changed',
+  'resync', 'types.changed', 'shares.changed',
 ];
 // Extensions add their own event names at runtime with registerEventHandler (DESIGN §6.8).
 
@@ -2857,6 +2867,80 @@ export interface NotesQueryResponse {
   total: number;                // every match
   truncated: boolean;           // total > notes.length
 }
+
+// ---------- Sharing with family (API.md §42, ROADMAP item 43) ----------
+// Owner endpoints: /api/shares (owners only, like the rest of the API). Guest endpoints: /api/s/<key>/...,
+// where <key> is a share id (for its recipients) or a link token (for anyone on the tailnet who has it).
+export type ShareKind = 'note' | 'folder';
+export type ShareMode = 'read' | 'edit';
+export type ShareState = 'active' | 'expired' | 'missing';   // missing: the note or folder is gone
+export interface ShareInfo {
+  id: string;                   // 12 of a-z 0-9; not a secret
+  path: VaultPath;              // the note or folder; follows moves and renames made in the app
+  kind: ShareKind;
+  mode: ShareMode;
+  recipients: string[];         // Tailscale logins, as entered
+  hasLink: boolean;             // a capability link exists; its address is shown only when it is made
+  linkCreatedAt: IsoInstant | null;
+  expiresAt: IsoInstant | null; // null: never
+  createdAt: IsoInstant;
+  createdBy: string;            // the owner's login
+  state: ShareState;
+  url: string;                  // the recipients' address: '/s/<id>' or '/v/<name>/s/<id>'
+}
+export interface SharesResponse {
+  available: boolean;           // false while NOTES_IDENTITY_ALLOWED_LOGINS is empty (everyone is an owner)
+  reason: 'no-owner-list' | null;
+  shares: ShareInfo[];          // newest first
+}
+export interface CreateShareRequest {
+  path: VaultPath;              // a Markdown note or a folder (not the root)
+  mode: ShareMode;
+  recipients?: string[];        // at most 20; at least one recipient or a link
+  link?: boolean;               // also make a capability link
+  expiresAt?: IsoInstant | null;   // in the future
+}
+export interface UpdateShareRequest {
+  mode: ShareMode;
+  recipients: string[];
+  link: 'keep' | 'new' | 'none';   // new: a new token, the old link stops working
+  expiresAt: IsoInstant | null;
+}
+export interface ShareResult {
+  share: ShareInfo;
+  link: string | null;          // '/s/<token>' (or '/v/<name>/s/<token>'), only in the answer that made it
+}
+export interface SharesChangedEvent { origin: string | null }
+// The guest page.
+export interface GuestShareSummary {
+  vault: string | null;         // null: the default vault
+  id: string;
+  kind: ShareKind;
+  title: string;                // the note's or folder's name
+  mode: ShareMode;
+  sharedBy: string;             // the owner's display name
+  url: string;                  // '/s/<id>' or '/v/<name>/s/<id>'
+}
+export interface GuestLandingResponse {
+  login: string;                // who is asking
+  name: string;
+  shares: GuestShareSummary[];  // the shares naming this login, in every vault
+}
+export interface GuestShareResponse {
+  id: string;
+  kind: ShareKind;
+  path: VaultPath;
+  title: string;
+  mode: ShareMode;
+  sharedBy: string;
+  expiresAt: IsoInstant | null;
+  eventId: EventId;             // the stream resumes from here (§16.5)
+  folders: FolderEntry[];       // a folder share: the folder and every folder under it
+  files: FileEntry[];           // what is shared
+  embedded: FileEntry[];        // images, audio, video and PDFs outside the share that its notes embed
+  login: string;                // who is asking
+}
+export type ShareChangedEvent = Record<string, never>;   // guest streams only: refetch the share
 ```
 
 ---
@@ -2929,6 +3013,17 @@ export interface NotesQueryResponse {
 | POST | `/api/publish` | `PublishRequest` | 200 `PublishedNote` | 26.2 |
 | DELETE | `/api/publish?path=` | | 204 | 26.3 |
 | GET | `/api/vaults` | | 200 `VaultsResponse` | 38.1 |
+| GET | `/api/shares` | | 200 `SharesResponse` | 42.1 |
+| POST | `/api/shares` | `CreateShareRequest` | 201 `ShareResult` | 42.2 |
+| PUT | `/api/shares/{id}` | `UpdateShareRequest` | 200 `ShareResult` | 42.3 |
+| DELETE | `/api/shares/{id}` | | 204 | 42.4 |
+| GET | `/api/s` | | 200 `GuestLandingResponse` | 42.5 |
+| GET | `/api/s/{key}` | | 200 `GuestShareResponse` | 42.6 |
+| GET | `/api/s/{key}/files?path=` | | 200 `TextFile` | 42.7 |
+| PUT | `/api/s/{key}/files?path=` | `SaveFileRequest` | 200 `WriteResult` | 42.8 |
+| POST | `/api/s/{key}/files` | `CreateFileRequest` | 201 `WriteResult` | 42.8 |
+| GET | `/api/s/{key}/files/raw?path=&v=&download=` | | 200/206/304 bytes | 42.9 |
+| GET | `/api/s/{key}/events?clientId=&lastEventId=` | | 200 `text/event-stream` | 42.10 |
 | POST | `/api/vaults` | `CreateVaultRequest` | 201 `VaultInfo` | 38.2 |
 | POST | `/api/notes/rename-heading` | `HeadingRenameRequest` | 200 `HeadingRenameResult` | 22 |
 | POST | `/api/notes/block-id` | `BlockIdRequest` | 200 `BlockIdResult` | 37 |
@@ -3002,6 +3097,7 @@ export interface NotesQueryResponse {
 | `NotesQueryResponse`, `QueriedNote`, `NoteTask` | Same | `QueriedNote.frontmatter` is a `@Nullable Map<String, @Nullable Object>`, `tasks` a `@Nullable List<NoteTask>` |
 | `TranscriptionStatus`, `TranscriptionResult` | Same; the request is `TranscribeRequest(String path)` | |
 | `VaultsResponse`, `VaultInfo`, `CreateVaultRequest` | Same | `VaultInfo.state` is the registry's enum written in lower case; `CreateVaultRequest.name` is `@Nullable` (missing: `400 invalid-name`) |
+| `ShareInfo`, `SharesResponse`, `CreateShareRequest`, `UpdateShareRequest`, `ShareResult`, `GuestShareSummary`, `GuestLandingResponse`, `GuestShareResponse` | Same (§42) | Enums `ShareKind` (`note`, `folder`), `ShareMode` (`read`, `edit`), `ShareState` (`active`, `expired`, `missing`) and `ShareLinkAction` (`keep`, `new`, `none`, for `UpdateShareRequest.link`); every request component is `@Nullable`, checked by `ShareService`. `SharesChangedEvent` and `ShareChangedEvent` are in `com.rjgehan.notes.events` |
 | `PublishResponse`, `PublishedNote`, `PublishRequest` | Same | `PublishedNote.state` is the enum `PublishedNoteState` (`current`, `changed`, `source-missing`, `snapshot-missing`); every `PublishRequest` component is `@Nullable` |
 | `HelloEvent`, `PingEvent`, `FileEvent`, `FileDeletedEvent`, `FolderEvent`, `FolderDeletedEvent`, `MovedEvent`, `TrashChangedEvent`, `HistoryCommittedEvent`, `SettingsChangedEvent`, `BookmarksChangedEvent`, `StatusChangedEvent`, `ResyncEvent` | Same names in `com.rjgehan.notes.events`, all implementing `sealed interface VaultEvent { @JsonIgnore String eventName(); @JsonIgnore default @Nullable String echoOrigin() { return null; } }` | `eventName()` returns the §16.4 string. Content events (`file.*`, `folder.*`, `entry.moved`, `settings.changed`) have a real `origin` record component, which is serialized, and override `echoOrigin()` to return it. Non-content events have no `origin` component, so they never serialize `"origin": null` into an event the TypeScript types declare without one. Neither interface method is serialized. `HelloEvent` and `PingEvent` are written by `EventHub` directly and never stored in the replay ring. |
 | `Problem` / `VersionConflictProblem` / `TaskConflictProblem` | Not records: Spring `ProblemDetail` with properties added by `NotesException` / `VersionConflictException` | |
@@ -3868,3 +3964,77 @@ Request `CreateVaultRequest`: `{"name": "work"}`. Creates the empty folder `<NOT
 | `409 vaults-off` |
 
 There is no rename or delete endpoint: stop the server and rename or remove the folder (DEPLOY.md *Multiple vaults*).
+
+## 42. Sharing with family (ROADMAP item 43)
+
+One note or one folder can be shared with someone else on the tailnet, to view or to edit, without the rest of the vault (DESIGN §5.40). There are no accounts: `NOTES_IDENTITY_ALLOWED_LOGINS` names the **owners**, who have every endpoint of this document; any other Tailscale login is a **guest**, which may use only the guest endpoints below (§42.5–42.10) and the guest page (`/s`, `/s/<key>`, `/v/<name>/s/…`). Everything else answers a guest `403 identity-not-allowed`, and a guest who opens `/` is sent to `/s` (`303`). A request without an identity (a tagged device) is refused everywhere.
+
+- **Keys.** A guest endpoint names the share in its path, `/api/s/<key>/…`. The key is the share's **id** (12 of `a-z0-9`), which works for the share's recipients (their logins, compared ignoring case), or its **link token** (43 of `A-Za-z0-9_-`), which works for any identity that has it. Owners may use either key of any share. Anything else, an expired share, and an id used by someone who is not a recipient all answer `404 share-not-found`.
+- **Scope.** A note share is its note; a folder share is everything strictly under its folder. Every `path` is checked against the scope after the vault's path rules (§1.3) and before any file is read: outside answers `403 outside-share`, whether the file exists or not. Raw files may also be the images, audio, video and PDFs outside the share that a shared note embeds (§42.9).
+- **Rate limit.** Refused guest requests (`404 share-not-found`, a path outside the scope, a path the vault's rules refuse) count against the login: after 20 in 15 minutes, every guest request of that login answers `429 too-many-attempts` (`retryAfter`, `Retry-After`) until the oldest leaves the window. Owners are not counted. The limit is per server, across vaults.
+- **Vaults.** Shares belong to their vault (§41): an extra vault's are `/api/v/<name>/shares…` and `/api/v/<name>/s/<key>…`, and its pages `/v/<name>/s/<key>`. A key never opens another vault's share.
+- **Without an owner list** (`NOTES_IDENTITY_ALLOWED_LOGINS` empty) every tailnet login is an owner, so nothing can be shared: `GET /api/shares` reports `available: false` and creating a share or a link answers `409 sharing-unavailable`.
+
+### 42.1 `GET /api/shares`
+
+`200 SharesResponse`: `available` and `reason` (above), and every share of this vault, newest first. Owners only.
+
+| `ShareInfo` field | Meaning |
+|---|---|
+| `id` | 12 of `a-z0-9`; not a secret |
+| `path`, `kind` | The note (`note`, a Markdown note) or folder (`folder`). Follows moves and renames made through the app |
+| `mode` | `read` (view only) or `edit` |
+| `recipients` | Tailscale logins, as entered |
+| `hasLink`, `linkCreatedAt` | Whether a capability link exists, and when it was made. The link itself is never listed |
+| `expiresAt` | When the share ends, or `null` |
+| `createdAt`, `createdBy` | When and by which owner |
+| `state` | `active`; `expired` (guests get `404 share-not-found` until it is extended); `missing` (the note or folder is gone; restoring it brings the share back) |
+| `url` | The recipients' address: `/s/<id>`, or `/v/<name>/s/<id>` in an extra vault |
+
+### 42.2 `POST /api/shares`
+
+Request `CreateShareRequest`: `path` (a Markdown note, not an `.excalidraw.md` drawing, or a folder other than the root), `mode`, `recipients` (at most 20; each 1 to 254 characters with an `@` neither first nor last, no spaces, quotes, angle brackets or control characters; duplicates ignoring case are dropped), `link` (`true` makes a capability link) and `expiresAt` (`null` or a future instant). At least one recipient or a link. At most 200 shares.
+
+`201 ShareResult`: the share, and `link`: the link's address (`/s/<token>`, or `/v/<name>/s/<token>`) when one was made, else `null`. **The token is returned only here**: the server keeps its SHA-256. `.notesapp/shares.json` is written and committed with the next batch; `shares.changed` tells the owner's other tabs.
+
+| Errors |
+|---|
+| `400 bad-request`: no `path` or `mode`, an invalid recipient, nobody and no link, more than 20 recipients, a past `expiresAt`, 200 shares already, or a file that is not a Markdown note |
+| `400 invalid-path`, `403 reserved-path`, `404 not-found`: the path breaks the rules of §1.3, is hidden, or names nothing |
+| `409 sharing-unavailable` |
+
+### 42.3 `PUT /api/shares/{id}`
+
+Request `UpdateShareRequest`: the share's new `mode`, `recipients` and `expiresAt` (`null`: never; a past date only when it is the current one), and `link`: `keep`, `new` (a new token: the old link stops working at once, and the new address is in the answer) or `none`. `200 ShareResult` (`link` set only for `new`). A share left with nobody and no link is refused (`400`; revoke it instead). Guests who lose access (a recipient removed, a link replaced or removed, a past date) are cut off at once, their event streams included. `404 not-found` (`id`) for an unknown share; `409 sharing-unavailable` for `link: new` without an owner list.
+
+### 42.4 `DELETE /api/shares/{id}`
+
+Revokes the share: `204`, and from then on its id and link answer `404 share-not-found`; its guests' event streams end. The note or folder is not changed. `404 not-found` (`id`) for an unknown share.
+
+### 42.5 `GET /api/s`
+
+`200 GuestLandingResponse`: the asking identity's `login` and `name`, and the unexpired shares naming that login (`GuestShareSummary`: `vault` (`null` for the default vault), `id`, `kind`, `title` (the note's name without `.md`, or the folder's name), `mode`, `sharedBy` (the owner's display name) and `url`). The default vault's answer covers every running vault; an extra vault's (`/api/v/<name>/s`) covers itself. Link-only shares are not listed.
+
+### 42.6 `GET /api/s/{key}`
+
+`200 GuestShareResponse`: the share as its guest may see it: `id`, `kind`, `path`, `title`, `mode`, `sharedBy`, `expiresAt`, `login` (who is asking), `eventId` (where §42.10 resumes, as `TreeResponse.eventId` does, §16.5), `folders` (a folder share: the folder and every folder under it), `files` (what is shared, as `FileEntry`s) and `embedded` (the media outside the share that its notes embed now). A guest client builds its tree from `files` and `embedded`.
+
+### 42.7 `GET /api/s/{key}/files?path={path}`
+
+A text file of the share, exactly as §8.1 (`200 TextFile`, `404 not-found`, `415 not-text`, `413 too-large`).
+
+### 42.8 `PUT /api/s/{key}/files?path={path}` and `POST /api/s/{key}/files`
+
+Edit shares only (`403 share-read-only` otherwise), Markdown notes only (`403 share-read-only` for other files). `PUT` saves a note of the share with the version protocol of §4 (`200 WriteResult`, `409 version-conflict` with the current text, `413 too-large`); a note share's note must exist (`404 not-found`: a guest never recreates a deleted shared note). `POST` (`CreateFileRequest`, `Idempotency-Key` honoured) creates a note inside a folder share (`201 WriteResult`, `409 already-exists` unless `onConflict: "rename"`); a note share creates nothing (`403 outside-share`).
+
+**Embeds a guest adds.** The text is scanned, and every embed (`![[…]]`, `![](…)`) whose target as written is not already embedded by the note's current text must resolve inside the share, or to media the share embeds now or did in the last 24 hours. Anything else, an unresolved embed included, answers `403 outside-share` (`path`: the note), whatever exists in the vault; these refusals do not count toward the rate limit. The client keeps the guest's text and saves it again after the next edit (DESIGN §6.48). The commit is the guest's: its author is the guest's Tailscale name and login.
+
+Guests have no other write: no delete, move, rename, upload or folder (those are owner endpoints).
+
+### 42.9 `GET /api/s/{key}/files/raw?path={path}[&v=][&download=true]`
+
+A file of the share, or an image, audio file, video or PDF outside it that a note of the share embeds now (resolved as the editor resolves embeds). Served exactly as §9.1: the sandbox CSP, `Range`, caching keyed by `v`.
+
+### 42.10 `GET /api/s/{key}/events?clientId={id}[&lastEventId={id}]`
+
+The share's event stream, with the frames and client algorithm of §16. Its `hello` always has `resync: true` and `replayed: 0`, so the client refetches §42.6 on every connection. It carries `file.created`, `file.changed` and `file.deleted` for the share's files and its embedded media; `entry.moved` when the share itself moved (a rename of the shared note or folder: the share follows it) or both ends are inside it; `share.changed` (`{}`) when something else moved into, out of or within the share, or a folder of it was created or deleted; `resync`; and `ping`. Nothing else (settings, history, tasks, bookmarks, status, reminders, other files). The stream ends when the share is revoked or expires, or this identity loses access; the client then gets `404 share-not-found` from §42.6.

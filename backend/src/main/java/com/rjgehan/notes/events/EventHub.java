@@ -54,6 +54,20 @@ public class EventHub {
 	private record Stored(long seq, String id, VaultEvent event) {
 	}
 
+	/**
+	 * What a guest's stream may carry (DESIGN §5.40). {@link #map} runs on the connection's own writer thread, never
+	 * under the hub's lock, so it may read the index; it returns the event to send (the same one, or another in its
+	 * place) or null to leave it out. {@link #open} is asked before each event and heartbeat and by
+	 * {@link #recheckFilters()}: once it is false, the stream ends.
+	 */
+	public interface ConnectionFilter {
+
+		@Nullable VaultEvent map(VaultEvent event);
+
+		boolean open();
+
+	}
+
 	private final String bootId;
 
 	private final int capacity;
@@ -114,7 +128,7 @@ public class EventHub {
 			for (Connection connection : this.connections.toArray(new Connection[0])) {
 				try {
 					if (!connection.suppresses(event)) {
-						connection.enqueue(() -> frame(stored));
+						connection.enqueueEvent(stored);
 					}
 				}
 				catch (RuntimeException ex) {
@@ -130,7 +144,17 @@ public class EventHub {
 	 * then live events.
 	 */
 	public SseEmitter connect(SseEmitter emitter, String clientId, @Nullable String lastEventId) {
-		Connection connection = new Connection(clientId, emitter);
+		return connect(emitter, clientId, lastEventId, null);
+	}
+
+	/**
+	 * Registers a connection whose events pass through {@code filter} (a guest's, DESIGN §5.40). Its {@code hello}
+	 * always asks for a resync and nothing is replayed, so no replay count has to agree with what the filter leaves out:
+	 * the client refetches what it shows, then applies live events.
+	 */
+	public SseEmitter connect(SseEmitter emitter, String clientId, @Nullable String lastEventId,
+			@Nullable ConnectionFilter filter) {
+		Connection connection = new Connection(clientId, emitter, filter);
 		emitter.onTimeout(emitter::complete);
 		emitter.onError((ex) -> emitter.complete());
 		emitter.onCompletion(connection::detach);
@@ -143,8 +167,9 @@ public class EventHub {
 			}
 			EventIds.EventId last = EventIds.parse(lastEventId);
 			String head = EventIds.format(this.bootId, this.seq);
-			boolean replayable = lastEventId != null && last != null && last.bootId().equals(this.bootId)
-					&& last.seq() <= this.seq && last.seq() >= this.seq - this.ring.size();
+			boolean replayable = filter == null && lastEventId != null && last != null
+					&& last.bootId().equals(this.bootId) && last.seq() <= this.seq
+					&& last.seq() >= this.seq - this.ring.size();
 			List<Stored> replay = new ArrayList<>();
 			if (replayable) {
 				for (Stored stored : this.ring) {
@@ -162,7 +187,7 @@ public class EventHub {
 				.id(helloId)
 				.data(hello, MediaType.APPLICATION_JSON));
 			for (Stored stored : replay) {
-				connection.enqueue(() -> frame(stored));
+				connection.enqueueEvent(stored);
 			}
 			this.connections.add(connection);
 		}
@@ -178,8 +203,25 @@ public class EventHub {
 		}
 		for (Connection connection : snapshot) {
 			PingEvent ping = new PingEvent(this.clock.instant());
-			connection.enqueue(() -> SseEmitter.event().name(ping.eventName()).data(ping, MediaType.APPLICATION_JSON));
+			connection.enqueue(() -> connection.stillOpen()
+					? SseEmitter.event().name(ping.eventName()).data(ping, MediaType.APPLICATION_JSON) : null);
 			connection.enqueue(() -> SseEmitter.event().comment("keepalive"));
+		}
+	}
+
+	/**
+	 * Ends every filtered stream whose filter no longer lets it stay open (a share was revoked, expired or lost a
+	 * recipient, DESIGN §5.40). The filters are asked outside the hub's lock.
+	 */
+	public void recheckFilters() {
+		List<Connection> snapshot;
+		synchronized (this.lock) {
+			snapshot = List.copyOf(this.connections);
+		}
+		for (Connection connection : snapshot) {
+			if (connection.filter != null && !connection.filter.open()) {
+				connection.closeLater();
+			}
 		}
 	}
 
@@ -215,13 +257,16 @@ public class EventHub {
 
 		private final ExecutorService executor;
 
+		private final @Nullable ConnectionFilter filter;
+
 		private final AtomicInteger pending = new AtomicInteger();
 
 		private final AtomicBoolean closed = new AtomicBoolean();
 
-		Connection(String clientId, SseEmitter emitter) {
+		Connection(String clientId, SseEmitter emitter, @Nullable ConnectionFilter filter) {
 			this.clientId = clientId;
 			this.emitter = emitter;
+			this.filter = filter;
 			this.executor = Executors.newSingleThreadExecutor(Thread.ofVirtual().name("sse-", 0).factory());
 		}
 
@@ -230,10 +275,42 @@ public class EventHub {
 		}
 
 		/**
+		 * Queues a stored event. A filtered connection maps it when the frame is written, on its own thread, and ends
+		 * the stream there once its filter closes it.
+		 */
+		void enqueueEvent(Stored stored) {
+			ConnectionFilter connectionFilter = this.filter;
+			if (connectionFilter == null) {
+				enqueue(() -> frame(stored));
+				return;
+			}
+			enqueue(() -> {
+				if (!stillOpen()) {
+					return null;
+				}
+				VaultEvent mapped = connectionFilter.map(stored.event());
+				return (mapped == null) ? null
+						: SseEmitter.event()
+							.id(stored.id())
+							.name(mapped.eventName())
+							.data(mapped, MediaType.APPLICATION_JSON);
+			});
+		}
+
+		/** False once the filter closes this connection; the stream then ends from the writer thread. */
+		boolean stillOpen() {
+			if (this.filter == null || this.filter.open()) {
+				return true;
+			}
+			closeLater();
+			return false;
+		}
+
+		/**
 		 * Hands a frame to the writer. Never blocks, and never touches the hub's connection set or the emitter, because
 		 * {@link #publish} calls it while holding the hub lock and iterating the set.
 		 */
-		void enqueue(Supplier<SseEventBuilder> frame) {
+		void enqueue(Supplier<@Nullable SseEventBuilder> frame) {
 			if (this.closed.get()) {
 				return;
 			}
@@ -247,7 +324,10 @@ public class EventHub {
 				this.executor.execute(() -> {
 					try {
 						if (!this.closed.get()) {
-							this.emitter.send(frame.get());
+							SseEventBuilder built = frame.get();
+							if (built != null && !this.closed.get()) {
+								this.emitter.send(built);
+							}
 						}
 					}
 					catch (IOException | IllegalStateException ex) {

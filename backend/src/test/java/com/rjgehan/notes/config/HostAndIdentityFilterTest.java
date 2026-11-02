@@ -2,6 +2,7 @@ package com.rjgehan.notes.config;
 
 import java.nio.file.Path;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import com.rjgehan.notes.api.error.Problems;
@@ -95,10 +96,84 @@ class HostAndIdentityFilterTest {
 	}
 
 	@Test
-	void loginOutsideTheAllowlistGets403() throws Exception {
+	void loginOutsideTheAllowlistGets403OutsideTheGuestSurface() throws Exception {
+		for (String path : List.of("/api/tree", "/n/Note.md", "/settings", "/api/shares", "/sw.js",
+				"/manifest.webmanifest", "/api/events", "/api/files/raw")) {
+			MockFilterChain chain = new MockFilterChain();
+			MockHttpServletResponse response = run(filter(Map.of("notes.identity.allowed-logins", "octocat@github")),
+					request(path, "localhost:8080", "stranger@github"), chain);
+			assertThat(response.getStatus()).as(path).isEqualTo(403);
+			assertThat(response.getContentAsString()).contains("\"code\":\"identity-not-allowed\"");
+			assertThat(chain.getRequest()).as(path).isNull();
+		}
+	}
+
+	@Test
+	void guestsOpeningTheServerGoToTheirLandingPage() throws Exception {
+		MockFilterChain chain = new MockFilterChain();
 		MockHttpServletResponse response = run(filter(Map.of("notes.identity.allowed-logins", "octocat@github")),
-				request("/", "localhost:8080", "stranger@github"), new MockFilterChain());
-		assertThat(response.getStatus()).isEqualTo(403);
+				request("/", "localhost:8080", "mom@example.com"), chain);
+		assertThat(response.getStatus()).isEqualTo(303);
+		assertThat(response.getHeader("Location")).isEqualTo("/s");
+		assertThat(chain.getRequest()).isNull();
+	}
+
+	@ParameterizedTest
+	@ValueSource(strings = { "/api/s", "/api/s/abcdefghijkl", "/api/s/abcdefghijkl/files", "/s", "/s/abcdefghijkl",
+			"/v/work/s", "/v/work/s/abcdefghijkl", "/assets/index-abc.js", "/favicon.svg", "/theme-boot.js" })
+	void guestsReachTheGuestSurface(String path) throws Exception {
+		MockFilterChain chain = new MockFilterChain();
+		MockHttpServletRequest request = request(path, "localhost:8080", "mom@example.com");
+		MockHttpServletResponse response = run(filter(Map.of("notes.identity.allowed-logins", "octocat@github")),
+				request, chain);
+		assertThat(response.getStatus()).isEqualTo(200);
+		assertThat(chain.getRequest()).isNotNull();
+		assertThat(((Identity) request.getAttribute(Identity.ATTRIBUTE)).login()).isEqualTo("mom@example.com");
+	}
+
+	@Test
+	void theGuestSurfaceIsDecidedOnThePathSpringMatches() {
+		assertThat(HostAndIdentityFilter.guestAccess("PUT", "/api/s/abcdefghijkl/files"))
+			.isEqualTo(HostAndIdentityFilter.GuestAccess.ALLOW);
+		assertThat(HostAndIdentityFilter.guestAccess("POST", "/s/abcdefghijkl"))
+			.isEqualTo(HostAndIdentityFilter.GuestAccess.DENY);
+		assertThat(HostAndIdentityFilter.guestAccess("POST", "/")).isEqualTo(HostAndIdentityFilter.GuestAccess.DENY);
+		assertThat(HostAndIdentityFilter.guestAccess("DELETE", "/assets/x.js"))
+			.isEqualTo(HostAndIdentityFilter.GuestAccess.DENY);
+		for (String path : List.of("/api/s/../tree", "/api/s/x/../../tree", "/s/../api/tree", "/api/sx", "/api/shares",
+				"/apis/s", "/v/work/n/x", "/v/Work/s", "/v/work/sx", "/x/s", "/n/s/x", "/assets", "/api/v/work/s",
+				"/api/s/./x")) {
+			assertThat(HostAndIdentityFilter.guestAccess("GET", path)).as(path)
+				.isEqualTo(HostAndIdentityFilter.GuestAccess.DENY);
+		}
+	}
+
+	@Test
+	void escapedAndParameterizedPathsAreDecidedDecoded() throws Exception {
+		// /api/%73hares decodes to /api/shares, which is not guest surface; /api/s;x=1/k is /api/s/k.
+		MockFilterChain refusedChain = new MockFilterChain();
+		MockHttpServletResponse refused = run(filter(Map.of("notes.identity.allowed-logins", "octocat@github")),
+				request("/api/%73hares", "localhost:8080", "mom@example.com"), refusedChain);
+		assertThat(refused.getStatus()).isEqualTo(403);
+		MockFilterChain refusedDots = new MockFilterChain();
+		MockHttpServletResponse dots = run(filter(Map.of("notes.identity.allowed-logins", "octocat@github")),
+				request("/api/s/%2e%2e/tree", "localhost:8080", "mom@example.com"), refusedDots);
+		assertThat(dots.getStatus()).isEqualTo(403);
+		MockFilterChain chain = new MockFilterChain();
+		MockHttpServletResponse admitted = run(filter(Map.of("notes.identity.allowed-logins", "octocat@github")),
+				request("/api/s;x=1/abcdefghijkl", "localhost:8080", "mom@example.com"), chain);
+		assertThat(admitted.getStatus()).isEqualTo(200);
+	}
+
+	@Test
+	void ownersAndAnEmptyListAreUnchanged() throws Exception {
+		MockFilterChain owner = new MockFilterChain();
+		run(filter(Map.of("notes.identity.allowed-logins", "octocat@github")),
+				request("/api/tree", "localhost:8080", "OctoCat@GitHub"), owner);
+		assertThat(owner.getRequest()).isNotNull();
+		MockFilterChain anyone = new MockFilterChain();
+		run(filter(Map.of()), request("/api/tree", "localhost:8080", "anyone@example.com"), anyone);
+		assertThat(anyone.getRequest()).isNotNull();
 	}
 
 	@ParameterizedTest

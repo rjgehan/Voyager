@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Date | 2026-10-17 |
-| Status | **Everything approved, 2026-10-17** ("build all of the features"): items 1–41, built on the `build/roadmap` branch in waves and merged to `main` once verified. **Item 42** (notes ↔ sheets linking) approved 2026-11-02. |
+| Status | **Everything approved, 2026-10-17** ("build all of the features"): items 1–41, built on the `build/roadmap` branch in waves and merged to `main` once verified. **Item 42** (notes ↔ sheets linking) and **item 43** (sharing with family) approved 2026-11-02. |
 | Decisions (2026-10-17) | **Server:** homeserver, as designed. **Formula engine** (items 6 and 39): GPL-3.0 with HyperFormula; the repository becomes GPL-3.0. **Reminder delivery** (item 9): undecided, so every route is built and each one is switched on in Settings. **Public publishing** (item 26): built switched off; nothing is exposed until you enable it. **No iOS app**; the phone uses the web app. **Desktop app** (item 41): Electron, because rgpc has no Rust toolchain. |
 | Build order | Wave 1: 10, 6, 4, 5, then 1, 2, 23 and 38. Wave 2: 3, 39, 40 (with 17), 13, 12, 7, 19, 8, 22. Wave 3: everything else except 37 and 41. Wave 4: 37 and 41, then end-to-end verification. |
 
@@ -91,6 +91,7 @@ DESIGN.md has the details.
 | 38 | Ops polish: JDK 25 runtime, faster start, app-error alerts, status page | M | S | |
 | 41 | **Desktop app (Windows and macOS) with live sync** *(new, 2026-10-17)* | M | M | 7 for quick capture; 8 for offline |
 | 42 | **Notes ↔ sheets linking: editable sheet embeds, sheets reading notes, notes reading sheets** *(new, approved 2026-11-02; built 2026-11-02, `feat/notes-sheets`)* | H | M | 6, 39, 10, 40 |
+| 43 | **Share a note with family** *(new, approved 2026-11-02; built 2026-11-02, `feat/family-share`)* | M | M | 37 for multiple vaults |
 | 44 | Security audit follow-ups *(proposed 2026-11-02, not approved; a. built 2026-11-02)* | M | M | |
 
 ---
@@ -1261,6 +1262,27 @@ Deviations and limits:
 - Search and other devices' read-only tables show a spreadsheet's note-derived values as of its last save.
 - Item 6's embed note ("Embeds in Live Preview") is superseded: Live Preview renders embeds, and spreadsheets edit there.
 
+### 43. Share a note with family *(new, approved 2026-11-02)*
+
+**One line:** give someone else on your tailnet read-only or editable access to one note or one folder, without giving them the whole vault.
+
+| Value | Effort | Depends on |
+|---|---|---|
+| M | M | 37 for multiple vaults |
+
+- **No accounts.** Who someone is still comes from Tailscale: family join your tailnet, or you share the NotesApp machine with their own Tailscale account. `NOTES_IDENTITY_ALLOWED_LOGINS` names you, the owner; any other login sees only what is shared with it.
+- **A share** is a note or a folder, *view* or *edit*, for named people (their Tailscale logins) and/or a link anyone on the tailnet can use (`/s/<random>`), with an optional expiry. Made and revoked from the note's ⋯ menu, the explorer and Settings › Sharing; stored in `.notesapp/shares.json` with link tokens hashed.
+- **A guest page** shows only the shared note or folder: Live Preview editing with the same autosave, conflict and live-sync protocol for edit shares (history records the guest as the author), read-only rendering for view shares. No search, tree, backlinks, settings or AI; attachments outside the share only when the shared note embeds them.
+- **Deny by default on the server**: every endpoint outside the guest surface refuses a guest, every guest request is checked against the share's scope, and guessing is rate-limited.
+
+**Status:** built (2026-11-02, branch `feat/family-share`): DESIGN §5.40 (server) and §6.48 (app), API.md §42, CASAOS.md and DEPLOY.md *Sharing with family*. Decisions and additions:
+- **Owners and guests.** `NOTES_IDENTITY_ALLOWED_LOGINS` now names the owners; any other Tailscale login is admitted only to the guest surface (`/api/s/**`, the guest page `/s/**` and its static files; `/` redirects to `/s`). With the list empty (the CasaOS default) everyone is an owner as before and sharing is off, with the fix shown in Settings › Sharing. Tagged devices stay refused; a link does not change that.
+- **Keys.** A share is reached by its id (for its named recipients) or a 256-bit link token (for anyone on the tailnet who has it); only the token's SHA-256 is stored, and the link is shown once. Unknown keys, other logins and expired shares all get the same `404`; refused guest requests are rate-limited per login (20 per 15 minutes, server-wide, with an alert).
+- **Scope, deny by default.** Every guest request checks its path against the share before any file is touched; embedded media outside the share is readable only while a shared note embeds it, and a guest cannot add an embed that reaches outside (refused, whatever exists). Guests edit and create notes (edit shares) but cannot delete, move, rename or upload. A test walks every handler mapping as a guest and a stranger.
+- **The guest page** is a separate entry (`share.html`): the owner's Live Preview editor, save, conflict and live-sync code on the share's own endpoints and filtered event stream, without the service worker, settings, tree, search or any other part of the app; the landing page lists what is shared with the login (every vault).
+- **Development**: `scripts/dev-identity-proxy.mjs` stands in for `tailscale serve` to try owner and guest side by side; nothing in the app trusts it.
+- **Not verified on a real iPhone**: the guest page on iOS Safari and from the Home Screen (checked in a 375 × 812 emulated viewport), and a real second Tailscale account (checked with the dev proxy injecting identities).
+
 ### 44. Security audit follow-ups *(proposed 2026-11-02, not approved; a. built 2026-11-02)*
 
 The audit of 2026-11-02 (docs/SECURITY.md) fixed what could be fixed in small steps; these are the residual risks that need a decision or a larger change. Each is independent.
@@ -1277,5 +1299,5 @@ The audit of 2026-11-02 (docs/SECURITY.md) fixed what could be fixed in small st
 
 - **Obsidian Sync protocol compatibility.** Proprietary. Your devices sync through this server instead.
 - **Running Obsidian community plugins.** Different runtime. The popular ones are covered natively above: Excalidraw, Kanban, Tasks, Dataview and Spaced Repetition.
-- **Multi-user accounts.** The tailnet is the security boundary. Sharing with another tailnet user works through Tailscale device sharing **plus** adding their login to `NOTES_IDENTITY_ALLOWED_LOGINS`, with history recording the correct author.
+- **Multi-user accounts.** The tailnet is the security boundary. Other tailnet users get exactly what you share with them (item 43), with history recording the correct author; there are no app accounts or passwords.
 - **Exposing the app to the public internet.** Only item 26's separate, read-only publish server ever goes through Funnel.

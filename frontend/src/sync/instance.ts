@@ -14,6 +14,7 @@ import { viewFor } from '../views/registry';
 import { DocumentRegistry } from './documents';
 import { IdbDraftStore, TabCoordinator, type DraftStore } from './drafts';
 import { MoveMap } from './moves';
+import { provideSessionLookup } from './sessionLookup';
 import { setCreatedListener } from './treePatch';
 
 /** IndexedDB may be missing (old private modes); drafts then fail loudly instead of silently. */
@@ -76,6 +77,8 @@ registry = new DocumentRegistry({
 });
 
 export const documents: DocumentRegistry = registry;
+// Editor code finds the open note's session here (encrypted sections, DESIGN §6.33).
+provideSessionLookup((path) => documents.get(path));
 
 setUnsavedProbe(() => documents.anyUnsaved());
 

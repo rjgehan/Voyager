@@ -39,6 +39,7 @@ import com.rjgehan.notes.index.VaultIndex;
 import com.rjgehan.notes.settings.LinkFormat;
 import com.rjgehan.notes.settings.Settings;
 import com.rjgehan.notes.settings.SettingsService;
+import com.rjgehan.notes.share.ShareService;
 import com.rjgehan.notes.vault.VaultPaths.Mode;
 import com.rjgehan.notes.watch.VaultReconciler;
 import org.jspecify.annotations.Nullable;
@@ -84,9 +85,11 @@ public class MoveService {
 
 	private final PublishService publish;
 
+	private final ShareService shares;
+
 	public MoveService(VaultPaths paths, VaultFs fs, VaultLocks locks, VaultIndex index, FileService files,
 			FileIndexer indexer, VaultReconciler reconciler, CommitBatcher batcher, EventHub hub, MoveLog moveLog,
-			SettingsService settings, BookmarkService bookmarks, PublishService publish) {
+			SettingsService settings, BookmarkService bookmarks, PublishService publish, ShareService shares) {
 		this.paths = paths;
 		this.fs = fs;
 		this.locks = locks;
@@ -100,6 +103,7 @@ public class MoveService {
 		this.settings = settings;
 		this.bookmarks = bookmarks;
 		this.publish = publish;
+		this.shares = shares;
 	}
 
 	/** {@code POST /api/move}. {@code updateLinks} defaults to {@code settings.files.autoUpdateLinks}. */
@@ -160,6 +164,8 @@ public class MoveService {
 			this.bookmarks.moved(from.nfc(), to.nfc(), type, identity);
 			// Published notes keep their public address and follow the note (DESIGN §5.28).
 			this.publish.moved(from.nfc(), to.nfc(), type, identity);
+			// Shares follow their note or folder, so their addresses keep working (DESIGN §5.40).
+			this.shares.moved(from.nfc(), to.nfc(), type, identity);
 			GitStore.Commit last = (linksCommit != null) ? linksCommit : renameCommit;
 			logger.info("MOVE {} links={} client={} user={} {}ms", description, rewritten.updates().size(), origin,
 					identity.login(), (System.nanoTime() - started) / 1_000_000);

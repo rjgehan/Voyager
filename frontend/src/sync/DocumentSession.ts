@@ -183,6 +183,8 @@ export class DocumentSession {
   private error: string | null = null;
   /** LF length of the text a 413 refused; a shorter text is tried again. */
   private refusedLength: number | null = null;
+  /** The server refused the text for what it contains (a shared note's embeds, DESIGN §6.48): the next edit tries again. */
+  private contentRefused = false;
 
   /** Increments on every local change; a save records the count it covered. */
   private changes = 0;
@@ -786,6 +788,7 @@ export class DocumentSession {
     this.deleted = null;
     this.error = null;
     this.refusedLength = null;
+    this.contentRefused = false;
     this.flushHistoryNext = false;
     this.pendingMerge = null;
     this.savedChanges = this.changes;
@@ -905,6 +908,8 @@ export class DocumentSession {
       if (this.serializer) this.scheduleRefusedCheck();
       else if (this.editorState.doc.length < this.refusedLength) this.status = 'dirty';
     }
+    // Text refused for what it contains: an edit may have removed it, so autosave tries again.
+    if (this.status === 'error' && this.contentRefused) this.status = 'dirty';
     if (this.status === 'deleted' && this.deleted) this.deleted = { ...this.deleted, hasLocalEdits: true };
     this.scheduleDraft();
     if (this.status === 'dirty') this.scheduleSave(false);
@@ -1012,6 +1017,7 @@ export class DocumentSession {
     this.deleted = null;
     this.error = null;
     this.refusedLength = null;
+    this.contentRefused = false;
     this.retryAttempt = 0;
     this.savedChanges = covered;
     this.deps.onWriteResult(result, body);
@@ -1130,6 +1136,9 @@ export class DocumentSession {
       this.setStatus('error');
       return;
     }
+    // A shared note's guest added an embed of a file outside the share (API.md §42.8): the text
+    // stays editable and unsaved, and the next edit (removing the embed) saves again.
+    if (isProblem(e, 'outside-share')) this.contentRefused = true;
     this.error = errorMessage(e as ApiError);
     this.setStatus('error');
   }

@@ -26,7 +26,8 @@ export type ErrorCode =
   | 'not-audio' | 'transcription-off' | 'transcription-failed'
   | 'ai-unavailable' | 'ai-excluded' | 'ai-budget-exceeded'
   | 'block-not-found' | 'funnel-request' | 'publishing-off'
-  | 'vault-not-found' | 'vault-unavailable' | 'vaults-off';
+  | 'vault-not-found' | 'vault-unavailable' | 'vaults-off'
+  | 'share-not-found' | 'outside-share' | 'share-read-only' | 'too-many-attempts' | 'sharing-unavailable';
 
 export interface FieldError { field: string; message: string }
 
@@ -48,6 +49,7 @@ export interface Problem {
   to?: VaultPath;
   reason?: string;                // e.g. vault-unavailable: starting | failed (§41)
   vault?: string;                 // vault-not-found, vault-unavailable: the vault name (§41)
+  retryAfter?: number;            // too-many-attempts: seconds until the next try, as Retry-After (§42)
   incidentId?: string;
   errors?: FieldError[];
 }
@@ -673,12 +675,13 @@ export interface VaultEventMap {
   'status.changed': StatusChangedEvent;
   'resync': ResyncEvent;
   'types.changed': PropertyTypesChangedEvent;
+  'shares.changed': SharesChangedEvent;
 }
 export type VaultEventName = keyof VaultEventMap;
 export const VAULT_EVENT_NAMES: readonly VaultEventName[] = [
   'hello', 'ping', 'file.created', 'file.changed', 'file.deleted', 'folder.created', 'folder.deleted',
   'entry.moved', 'trash.changed', 'history.committed', 'settings.changed', 'bookmarks.changed', 'status.changed',
-  'resync', 'types.changed',
+  'resync', 'types.changed', 'shares.changed',
 ];
 // Extensions add their own event names at runtime with registerEventHandler (DESIGN §6.8).
 
@@ -1005,3 +1008,77 @@ export interface NotesQueryResponse {
   total: number;                // every match
   truncated: boolean;           // total > notes.length
 }
+
+// ---------- Sharing with family (API.md §42, ROADMAP item 43) ----------
+// Owner endpoints: /api/shares (owners only, like the rest of the API). Guest endpoints: /api/s/<key>/...,
+// where <key> is a share id (for its recipients) or a link token (for anyone on the tailnet who has it).
+export type ShareKind = 'note' | 'folder';
+export type ShareMode = 'read' | 'edit';
+export type ShareState = 'active' | 'expired' | 'missing';   // missing: the note or folder is gone
+export interface ShareInfo {
+  id: string;                   // 12 of a-z 0-9; not a secret
+  path: VaultPath;              // the note or folder; follows moves and renames made in the app
+  kind: ShareKind;
+  mode: ShareMode;
+  recipients: string[];         // Tailscale logins, as entered
+  hasLink: boolean;             // a capability link exists; its address is shown only when it is made
+  linkCreatedAt: IsoInstant | null;
+  expiresAt: IsoInstant | null; // null: never
+  createdAt: IsoInstant;
+  createdBy: string;            // the owner's login
+  state: ShareState;
+  url: string;                  // the recipients' address: '/s/<id>' or '/v/<name>/s/<id>'
+}
+export interface SharesResponse {
+  available: boolean;           // false while NOTES_IDENTITY_ALLOWED_LOGINS is empty (everyone is an owner)
+  reason: 'no-owner-list' | null;
+  shares: ShareInfo[];          // newest first
+}
+export interface CreateShareRequest {
+  path: VaultPath;              // a Markdown note or a folder (not the root)
+  mode: ShareMode;
+  recipients?: string[];        // at most 20; at least one recipient or a link
+  link?: boolean;               // also make a capability link
+  expiresAt?: IsoInstant | null;   // in the future
+}
+export interface UpdateShareRequest {
+  mode: ShareMode;
+  recipients: string[];
+  link: 'keep' | 'new' | 'none';   // new: a new token, the old link stops working
+  expiresAt: IsoInstant | null;
+}
+export interface ShareResult {
+  share: ShareInfo;
+  link: string | null;          // '/s/<token>' (or '/v/<name>/s/<token>'), only in the answer that made it
+}
+export interface SharesChangedEvent { origin: string | null }
+// The guest page.
+export interface GuestShareSummary {
+  vault: string | null;         // null: the default vault
+  id: string;
+  kind: ShareKind;
+  title: string;                // the note's or folder's name
+  mode: ShareMode;
+  sharedBy: string;             // the owner's display name
+  url: string;                  // '/s/<id>' or '/v/<name>/s/<id>'
+}
+export interface GuestLandingResponse {
+  login: string;                // who is asking
+  name: string;
+  shares: GuestShareSummary[];  // the shares naming this login, in every vault
+}
+export interface GuestShareResponse {
+  id: string;
+  kind: ShareKind;
+  path: VaultPath;
+  title: string;
+  mode: ShareMode;
+  sharedBy: string;
+  expiresAt: IsoInstant | null;
+  eventId: EventId;             // the stream resumes from here (§16.5)
+  folders: FolderEntry[];       // a folder share: the folder and every folder under it
+  files: FileEntry[];           // what is shared
+  embedded: FileEntry[];        // images, audio, video and PDFs outside the share that its notes embed
+  login: string;                // who is asking
+}
+export type ShareChangedEvent = Record<string, never>;   // guest streams only: refetch the share

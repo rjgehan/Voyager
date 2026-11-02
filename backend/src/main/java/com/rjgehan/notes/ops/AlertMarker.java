@@ -30,7 +30,11 @@ public enum AlertMarker {
 
 	SETTINGS_READ_ONLY(3, "Settings are read-only",
 			"The settings file was written by a newer NotesApp or is invalid, so settings cannot be changed until "
-					+ "it is fixed or the newer version runs again.");
+					+ "it is fixed or the newer version runs again."),
+
+	SHARE_RATE_LIMITED(3, "Someone is trying share addresses",
+			"A Tailscale login made many requests for shares or files it may not open, so NotesApp refuses its "
+					+ "guest requests for up to 15 minutes. Check Settings, Sharing, and who is on your tailnet.");
 
 	private final int priority;
 

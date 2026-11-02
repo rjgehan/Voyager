@@ -1,12 +1,13 @@
 // Explorer row menu items (DESIGN §6.15): new note/folder here and the views' create items,
 // rename, move, delete, copy link, file history and download.
-import { Columns2, Copy, Download, FilePlus, PanelTop, FolderInput, FolderPlus, History, LayoutTemplate, Pencil, Star, StarOff, Trash } from 'lucide-react';
+import { Columns2, Copy, Download, FilePlus, PanelTop, FolderInput, FolderPlus, History, LayoutTemplate, Pencil, Star, StarOff, Trash, Users } from 'lucide-react';
 import type { FileEntry } from '../../api/types';
 import { findFolderBookmarks } from '../../features/bookmarks';
 import { currentBookmarks, isFileBookmarked, toggleFileBookmark, toggleFolderBookmark } from '../../features/bookmarkStore';
 import { copyLink, createFolder, createNote, deleteEntry, downloadFile, validateNewName } from '../../features/fileOps';
 import { newNoteFromTemplateIn } from '../../features/folderTemplates';
 import { activePath, openPath } from '../../features/navigation';
+import { openShareDialog } from '../../features/shares';
 import { displayName, folderOf, noteRoute } from '../../features/paths';
 import { isPhoneLayout } from '../../features/platform';
 import { openInNewTab, splitPane, workspace } from '../../workspace/store';
@@ -77,6 +78,10 @@ export function rowMenuItems(row: RowTarget, startRename: () => void): MenuEntry
     icon: starred ? <StarOff size={16} /> : <Star size={16} />,
     run: () => void (row.kind === 'file' ? toggleFileBookmark(row.path) : toggleFolderBookmark(row.path)),
   });
+  // Sharing with family (ROADMAP item 43): a folder, or a plain Markdown note (not a drawing).
+  if (row.kind === 'folder' || (row.entry?.kind === 'note' && /\.md$/i.test(row.path) && !/\.excalidraw\.md$/i.test(row.path))) {
+    items.push({ id: 'share', label: 'Share…', icon: <Users size={16} />, run: () => openShareDialog(row.path, row.kind === 'folder' ? 'folder' : 'note') });
+  }
   if (row.kind === 'file') {
     // Tabs and split panes (ROADMAP item 11, DESIGN §6.40); phones have one pane.
     const desktop = !isPhoneLayout();

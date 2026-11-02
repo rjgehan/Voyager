@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.PostMapping;
  * Serves the single-page app's {@code index.html} (never cached) for its client routes, including pages registered by
  * extensions under {@code /x/**}, the quick-capture page {@code /capture} and the web clipper's {@code /clip} (API.md
  * §18). An extra vault's app lives under {@code /v/<name>/} (DESIGN §5.39); the app itself finds out whether that vault
- * exists.
+ * exists. The guest page of shares, {@code share.html}, answers {@code /s/**} and {@code /v/<name>/s/**} (DESIGN §5.40).
  */
 @Controller
 @ServerWide
@@ -29,16 +29,28 @@ public class SpaController {
 
 	private final Resource index = new ClassPathResource("static/index.html");
 
+	private final Resource share = new ClassPathResource("static/share.html");
+
 	@GetMapping({ "/", "/n/**", "/search", "/trash", "/settings", "/settings/**", "/x/**", "/capture", "/clip",
 			"/v/{vault:[a-z0-9-]{1,32}}/**" })
 	ResponseEntity<Resource> index() {
-		if (!this.index.exists()) {
+		return page(this.index);
+	}
+
+	/** The guest page (DESIGN §5.40): more specific than {@code /v/<name>/**}, so it wins for an extra vault's shares. */
+	@GetMapping({ "/s", "/s/**", "/v/{vault:[a-z0-9-]{1,32}}/s", "/v/{vault:[a-z0-9-]{1,32}}/s/**" })
+	ResponseEntity<Resource> share() {
+		return page(this.share);
+	}
+
+	private static ResponseEntity<Resource> page(Resource page) {
+		if (!page.exists()) {
 			throw new NotesException(ErrorCode.NOT_FOUND, "The web app is not built into this server");
 		}
 		return ResponseEntity.ok()
 			.cacheControl(CacheControl.noCache())
 			.contentType(new MediaType(MediaType.TEXT_HTML, StandardCharsets.UTF_8))
-			.body(this.index);
+			.body(page);
 	}
 
 	/**

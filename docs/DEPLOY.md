@@ -169,6 +169,7 @@ The deploy works without this step, but it is the only thing that limits what co
     // { "src": ["autogroup:member"], "dst": ["autogroup:internet"], "ip": ["*"] },  // using exit nodes
     // { "src": ["autogroup:member"], "dst": ["192.168.1.0/24"], "ip": ["*"] },      // a subnet route
     // { "src": ["autogroup:member"], "dst": ["friend@example.com"], "ip": ["*"] },   // another member's devices
+    // { "src": ["autogroup:shared"], "dst": ["tag:notes"], "ip": ["tcp:443"] },     // family you share the notes machine with
   ],
 
   "hosts": {
@@ -198,7 +199,7 @@ nano .env
 |---|---|
 | `TS_AUTHKEY` | The auth key from step 5. Deleted again in step 9. |
 | `NOTES_ALLOWED_HOSTS` | `notes.<tailnet>.ts.net`, exactly. The app answers `421` to any other `Host`. |
-| `NOTES_IDENTITY_ALLOWED_LOGINS` | Your login exactly as the Users page shows it; comma-separated for several. Everyone else gets `403`. |
+| `NOTES_IDENTITY_ALLOWED_LOGINS` | Your login exactly as the Users page shows it; comma-separated for several. These are the owners, with the whole vault; everyone else gets `403`, except for what you share with them (*Sharing with family*). Never list family here. |
 | `WATCHTOWER_NOTIFICATION_URL` | Optional, recommended: an ntfy URL (below). Empty means no notifications. |
 | `TZ` | Your IANA time zone, for logs and git commit times, e.g. `Europe/Berlin`. |
 
@@ -371,7 +372,7 @@ docker compose logs -f notes                                # follow
 docker compose logs --since 24h notes | grep -E ' (ERROR|WARN) '
 ```
 
-Stable ERROR markers to search for (DESIGN §5.18): `GIT_COMMIT_FAILED`, `GIT_MIRROR_FAILED`, `WATCHER_DEGRADED`, `TAILSCALE_WATCHDOG_EXIT`, `STORAGE_LOW`, `SETTINGS_READ_ONLY`. Logs are rotated at 5 × 10 MB per container. Note content and search queries are never logged; paths are. With *App alerts* set up, the app also pushes each marker to your phone, and the status page counts them under *App alerts*.
+Stable ERROR markers to search for (DESIGN §5.18): `GIT_COMMIT_FAILED`, `GIT_MIRROR_FAILED`, `WATCHER_DEGRADED`, `TAILSCALE_WATCHDOG_EXIT`, `STORAGE_LOW`, `SETTINGS_READ_ONLY`, and the warning `SHARE_RATE_LIMITED` (*Sharing with family*). Logs are rotated at 5 × 10 MB per container. Note content and search queries are never logged; paths are. With *App alerts* set up, the app also pushes each marker to your phone, and the status page counts them under *App alerts*.
 
 ### Monitoring
 
@@ -933,6 +934,30 @@ Off until you make a second vault; the default vault and its addresses never cha
 - **Rename or delete** a vault: stop the app (`docker compose stop notes`), rename or move away `/srv/notes/data/vaults/<name>`, start it again. Renaming changes its address (`/v/<new>/`); open tabs and the phone's offline copies of the old name are not carried over, so sync first.
 - **Turn creation off** with `NOTES_VAULTS_ALLOW_CREATE=false` in the `notes` service's environment; `NOTES_VAULTS_DIR=` (empty) turns extra vaults off altogether (their folders stay untouched).
 
+### Sharing with family
+
+Share **one note or one folder** with someone else on your tailnet, to view or to edit, without the rest of the vault (DESIGN §5.40, ROADMAP item 43). There are no app accounts: `NOTES_IDENTITY_ALLOWED_LOGINS` names the owners (you), and any other Tailscale login that reaches the app sees only what is shared with it; every other page and endpoint answers it `403 identity-not-allowed`, as before.
+
+1. **The owner list.** `NOTES_IDENTITY_ALLOWED_LOGINS` in `deploy/.env` must name you (it is required in this layout already). Never add family to it: everyone on it has everything. With an empty list (possible only in the CasaOS layout) every tailnet login is an owner and sharing is off.
+2. **A way in for them.** Their device needs Tailscale, signed in to some account, and a path to `notes:443`:
+   - **Invite them to your tailnet** (admin console → **Users** → **Invite users**). With the policy of step 6 they are members who reach their own devices and `tag:notes` on `tcp:443` only, never your devices: nothing else to change. Members count toward your plan's users.
+   - Or **share the `notes` machine** with their own Tailscale account (admin console → **Machines** → `notes` → **⋯** → **Share…**; they accept the invite). Shared users reach only the machines shared with them, subject to your policy, so add `{ "src": ["autogroup:shared"], "dst": ["tag:notes"], "ip": ["tcp:443"] }` to the grants of step 6. If the admin console offers no **Share…** for the tagged node, invite them as members instead.
+   Their login, as `tailscale serve` passes it to the app, is the account they joined or accepted with (`name@gmail.com`, `name@github`, `name@privaterelay.appleid.com`); the server's address shows it to them.
+3. **Share** from the app: a note's **⋯** → **Share with family…**, a folder's or note's menu in the file list → **Share…**, or the command palette. Pick **Can view** or **Can edit**, their login(s), optionally a link (anyone who reaches the app and has it can open it; shown once, only its SHA-256 is stored) and an end date. Send them the address the dialog shows: `https://notes.<tailnet>.ts.net/s/<id>` (an extra vault's: `/v/<name>/s/<id>`). The server's own address shows them everything shared with them.
+4. **What they get**: the note (or the folder's notes and files) in their browser, in the same Live Preview editor with autosave, conflict handling and live updates for **Can edit**, read-only for **Can view**; commits record them as the author. Images, audio, video and PDFs that a shared note embeds load even when they live outside the share; nothing else of the vault does. They cannot delete, rename, move or upload; in a shared folder they can add notes.
+5. **Stop** in Settings › Sharing (**Stop sharing**, **Remove link**, **New link**, an end date): it takes effect at once, open pages included. Removing the user or the machine share in the admin console cuts them off the node.
+
+Shares are stored in `.notesapp/shares.json` in the vault (committed with the history, backed up, mirrored: it holds logins and link fingerprints, never a working link). They follow renames and moves made in the app. A login whose guest requests are refused 20 times in 15 minutes (unknown addresses, files outside its share) is locked out for up to 15 minutes and logs `SHARE_RATE_LIMITED`, which *App alerts* pushes to your phone.
+
+**Trying it in development.** The dev profile has no `tailscale serve`; `scripts/dev-identity-proxy.mjs` stands in for it on loopback: it drops any `Tailscale-*` headers a client sends, sets `Tailscale-User-Login` (and `-Name`) to the identity it was started with, and forwards to the backend with the browser's `Host`. For example, with the backend on 18620 and `notes.identity.allowed-logins=owner@notes` (the dev profile's default identity, so plain requests stay the owner's):
+
+```sh
+node scripts/dev-identity-proxy.mjs --listen 18621 --target 18620 --login mom@example.com --name Mom
+# then open http://localhost:18621/ as Mom (add localhost:18621 to notes.allowed-hosts)
+```
+
+It is not part of the image, and nothing in the app knows about it.
+
 ### Editing the vault over SSH
 
 Edit as uid 1000. Open notes update live, and an `External changes` commit appears in history about 30 s later:
@@ -1008,7 +1033,7 @@ The `Host` the browser used is not in `NOTES_ALLOWED_HOSTS`: a typo, a renamed n
 
 ### `403 identity-not-allowed`
 
-The request's Tailscale login is not in `NOTES_IDENTITY_ALLOWED_LOGINS`. Compare with the [Users](https://login.tailscale.com/admin/users) page exactly. Requests from tagged devices (they carry no identity) and from users the node is shared with are refused by design.
+The request's Tailscale login is not in `NOTES_IDENTITY_ALLOWED_LOGINS`. Compare with the [Users](https://login.tailscale.com/admin/users) page exactly. Requests from tagged devices (they carry no identity) are refused everywhere; other logins (family members, users the node is shared with) reach only the addresses of what is shared with them (*Sharing with family*), and the server's own address sends them to that list.
 
 ### `403 funnel-request`
 

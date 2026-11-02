@@ -12,6 +12,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Predicate;
 
 import org.jspecify.annotations.Nullable;
@@ -53,9 +54,19 @@ public final class SseRecorder implements AutoCloseable {
 
 	/** Connects to the event stream under {@code apiPrefix}, such as {@code /api/v/work} for an extra vault. */
 	public static SseRecorder open(int port, String apiPrefix, String clientId, @Nullable String lastEventId) {
-		String uri = "http://localhost:" + port + apiPrefix + "/events?clientId=" + Api.enc(clientId)
-				+ ((lastEventId != null) ? "&lastEventId=" + Api.enc(lastEventId) : "");
-		HttpRequest request = HttpRequest.newBuilder(URI.create(uri)).header("Accept", "text/event-stream").build();
+		return openPath(port, apiPrefix + "/events?clientId=" + Api.enc(clientId)
+				+ ((lastEventId != null) ? "&lastEventId=" + Api.enc(lastEventId) : ""), Map.of());
+	}
+
+	/**
+	 * Connects to the event stream at {@code pathAndQuery} with extra request headers, such as a share's stream
+	 * ({@code /api/s/<key>/events?clientId=…}) opened with a guest's {@code Tailscale-User-Login}.
+	 */
+	public static SseRecorder openPath(int port, String pathAndQuery, Map<String, String> headers) {
+		String uri = "http://localhost:" + port + pathAndQuery;
+		HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(uri)).header("Accept", "text/event-stream");
+		headers.forEach(builder::header);
+		HttpRequest request = builder.build();
 		try {
 			HttpResponse<InputStream> response = HttpClient.newHttpClient()
 				.send(request, HttpResponse.BodyHandlers.ofInputStream());
