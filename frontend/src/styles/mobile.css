@@ -249,6 +249,22 @@ select {
   display: none;
 }
 
+/* More tools past an edge: the row fades out there (MobileToolbar sets the classes on scroll). */
+.mobile-toolbar-scroll.has-more-after {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
+}
+
+.mobile-toolbar-scroll.has-more-before {
+  -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 32px), transparent);
+  mask-image: linear-gradient(to left, #000 calc(100% - 32px), transparent);
+}
+
+.mobile-toolbar-scroll.has-more-before.has-more-after {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent);
+  mask-image: linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent);
+}
+
 .mobile-toolbar-button {
   display: inline-flex;
   flex: none;
