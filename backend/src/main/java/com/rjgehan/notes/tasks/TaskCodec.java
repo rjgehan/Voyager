@@ -232,6 +232,12 @@ final class TaskCodec {
 		if (!from.equals("due") && !from.equals("completion")) {
 			problems.add("\"recurrence.from\" is not due or completion");
 		}
+		// A hand-edited rule is served as written (the client shows it and evaluates nothing it cannot), but said to
+		// be one that cannot repeat: completing the task then closes it instead of making up a step.
+		String unusable = Recurrence.storedRuleProblem(rrule);
+		if (unusable != null) {
+			problems.add("\"recurrence.rrule\" cannot repeat: " + unusable);
+		}
 		return new TaskRecurrence(rrule, from.equals("completion") ? RecurrenceFrom.COMPLETION : RecurrenceFrom.DUE);
 	}
 

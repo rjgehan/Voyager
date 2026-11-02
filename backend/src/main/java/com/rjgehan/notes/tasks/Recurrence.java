@@ -74,11 +74,9 @@ final class Recurrence {
 		if (freq == null || !FREQUENCIES.contains(freq)) {
 			throw new IllegalArgumentException("FREQ must be DAILY, WEEKLY, MONTHLY or YEARLY");
 		}
-		for (String numeric : new String[] { "INTERVAL", "COUNT" }) {
-			String value = parts.get(numeric);
-			if (value != null && !NUMBER.matcher(value).matches()) {
-				throw new IllegalArgumentException(numeric + " must be a whole number from 1 to 99999");
-			}
+		String numeric = numericProblem(parts);
+		if (numeric != null) {
+			throw new IllegalArgumentException(numeric);
 		}
 		if (parts.containsKey("COUNT") && parts.containsKey("UNTIL")) {
 			throw new IllegalArgumentException("COUNT and UNTIL cannot be combined");
@@ -111,10 +109,18 @@ final class Recurrence {
 	 * date, the next occurrence is the first one after the anchor that falls after the completion day, so completing
 	 * an overdue task skips the occurrences already missed; counting from completion, it is the first one after the
 	 * completion day (at the anchor's time, if it has one).
+	 * <p>
+	 * A rule from a file edited by hand is not always one {@link #normalize} would store: an {@code INTERVAL} or
+	 * {@code COUNT} that is not a whole number from 1 to 99999 cannot be evaluated (lib-recur's lax mode would read
+	 * {@code INTERVAL=0}, {@code -1} or {@code abc} as 1 and make up a step), so such a rule has no next occurrence,
+	 * as on the client (DESIGN §6.22).
 	 */
 	static @Nullable Next next(String rrule, RecurrenceFrom from, @Nullable String anchor, LocalDate completionDay) {
 		try {
 			Map<String, String> parts = parts(rrule);
+			if (numericProblem(parts) != null) {
+				return null;
+			}
 			String countValue = parts.remove("COUNT");
 			String untilValue = parts.remove("UNTIL");
 			Integer count = (countValue != null) ? Integer.valueOf(countValue) : null;
@@ -153,6 +159,31 @@ final class Recurrence {
 		catch (InvalidRecurrenceRuleException | RuntimeException ex) {
 			logger.debug("Cannot evaluate the recurrence rule {}: {}", rrule, ex.toString());
 			return null;
+		}
+	}
+
+	/** Why {@code INTERVAL} or {@code COUNT} cannot be used (not a whole number from 1 to 99999), or null. */
+	private static @Nullable String numericProblem(Map<String, String> parts) {
+		for (String numeric : new String[] { "INTERVAL", "COUNT" }) {
+			String value = parts.get(numeric);
+			if (value != null && !NUMBER.matcher(value).matches()) {
+				return numeric + " must be a whole number from 1 to 99999";
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * Why a rule read from a file cannot be repeated, or null when it can be evaluated: a cheap check, without
+	 * evaluating the rule, for what {@link #next} refuses (parts it does not know, a bad {@code INTERVAL} or
+	 * {@code COUNT}). A file edited by hand can hold any rule; the API only stores normalized ones.
+	 */
+	static @Nullable String storedRuleProblem(String rrule) {
+		try {
+			return numericProblem(parts(rrule));
+		}
+		catch (IllegalArgumentException ex) {
+			return ex.getMessage();
 		}
 	}
 

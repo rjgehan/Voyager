@@ -1,8 +1,11 @@
 package com.rjgehan.notes.index;
 
+import java.time.Duration;
+
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 /** Inline Meld Encrypt sections (ROADMAP item 27): blanked for search, replaced for Ask your vault. */
 class EncryptedSectionsTest {
@@ -40,6 +43,26 @@ class EncryptedSectionsTest {
 		assertThat(EncryptedSections.strip(text)).isEqualTo(text);
 		String unmarked = LOCK + " QUJDREVGR0hJSktMTU5PUA== " + LOCK + " and " + LOCK + "β QUJD " + LOCK;
 		assertThat(EncryptedSections.strip(unmarked)).isSameAs(unmarked);
+	}
+
+	@Test
+	void aLineOfHintMarkersIsScannedInLinearTime() {
+		// The hint ends at the next 💡 (a hint never holds one, as in the editor's meld.ts): a lazy [^\n]*? tried
+		// every later 💡 of the line from every section start, quadratic on a long line.
+		String commented = ("%%" + LOCK + "β " + HINT).repeat(20_000);
+		String visible = (LOCK + "β " + HINT + "x").repeat(20_000);
+		assertTimeoutPreemptively(Duration.ofSeconds(3), () -> {
+			assertThat(EncryptedSections.blank(commented)).isSameAs(commented);
+			assertThat(EncryptedSections.ranges(visible, true)).isEmpty();
+			assertThat(EncryptedSections.strip(commented + visible)).isEqualTo(commented + visible);
+		});
+		// A hint still works; text with a 💡 inside it is not a hint, so that is no section (as in the editor).
+		String b64 = "QUJDREVGR0hJSktMTU5PUA==";
+		assertThat(EncryptedSections.ranges("%%" + LOCK + "β " + HINT + "my hint" + HINT + b64 + " " + LOCK + "%%", false))
+			.hasSize(1);
+		assertThat(EncryptedSections.ranges("%%" + LOCK + "β " + HINT + "a" + HINT + "b" + HINT + b64 + " " + LOCK + "%%",
+				false))
+			.isEmpty();
 	}
 
 	@Test

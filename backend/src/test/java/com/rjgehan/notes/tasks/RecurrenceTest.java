@@ -1,5 +1,6 @@
 package com.rjgehan.notes.tasks;
 
+import java.time.Duration;
 import java.time.LocalDate;
 
 import com.rjgehan.notes.api.dto.RecurrenceFrom;
@@ -9,6 +10,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 /** Recurrence rules and the roll-forward dates (2026-10-14 is a Wednesday). */
 class RecurrenceTest {
@@ -110,6 +112,34 @@ class RecurrenceTest {
 		assertThat(Recurrence.next("FREQ=YEARLY;BYMONTH=2;BYMONTHDAY=30", RecurrenceFrom.DUE, "2026-10-14",
 				WEDNESDAY)).isNull();
 		assertThat(Recurrence.next("NONSENSE", RecurrenceFrom.DUE, "2026-10-14", WEDNESDAY)).isNull();
+	}
+
+	@ParameterizedTest
+	@ValueSource(strings = { "0", "-1", "-2", "abc", "1.5", "999999" })
+	void aHandEditedIntervalThatIsNotAPositiveNumberNeverLoops(String interval) {
+		// A .tasks file edited by hand can hold any INTERVAL (the API's normalize refuses them): completing such a
+		// task must neither hang nor roll it forward by a made-up step, from the due date (which fast-forwards past
+		// the missed occurrences) or from completion.
+		assertTimeoutPreemptively(Duration.ofSeconds(5), () -> {
+			for (String freq : new String[] { "DAILY", "WEEKLY", "MONTHLY", "YEARLY" }) {
+				String rule = "FREQ=" + freq + ";INTERVAL=" + interval;
+				assertThat(Recurrence.next(rule, RecurrenceFrom.DUE, "2020-01-01", WEDNESDAY)).as(rule).isNull();
+				assertThat(Recurrence.next(rule, RecurrenceFrom.COMPLETION, "2026-10-14T09:00", WEDNESDAY)).as(rule)
+					.isNull();
+				assertThat(Recurrence.next(rule + ";COUNT=5", RecurrenceFrom.DUE, "2026-10-14", WEDNESDAY)).as(rule)
+					.isNull();
+			}
+		});
+	}
+
+	@Test
+	void aHandEditedCountThatIsNotAPositiveNumberIsNotRepeated() {
+		for (String count : new String[] { "0", "-3", "abc", "999999" }) {
+			assertThat(Recurrence.next("FREQ=DAILY;COUNT=" + count, RecurrenceFrom.DUE, "2026-10-14", WEDNESDAY))
+				.as(count)
+				.isNull();
+		}
+		assertThat(Recurrence.next("FREQ=DAILY;COUNT=2", RecurrenceFrom.DUE, "2026-10-14", WEDNESDAY)).isNotNull();
 	}
 
 	private static String next(String rule, RecurrenceFrom from, String anchor, LocalDate day) {

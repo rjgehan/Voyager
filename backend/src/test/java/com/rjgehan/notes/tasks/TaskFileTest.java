@@ -164,6 +164,25 @@ class TaskFileTest {
 	}
 
 	@Test
+	void aHandEditedRuleThatCannotRepeatIsServedAsWrittenAndReported() throws Exception {
+		String content = """
+				{"type": "notesapp-tasks", "version": 1, "list": {"id": "L", "name": "L"},
+				 "tasks": [
+				   {"id": "zero", "title": "Z", "due": "2026-10-14", "recurrence": {"rrule": "FREQ=DAILY;INTERVAL=0"}},
+				   {"id": "word", "title": "W", "due": "2026-10-14", "recurrence": {"rrule": "FREQ=WEEKLY;INTERVAL=abc"}},
+				   {"id": "fine", "title": "F", "due": "2026-10-14", "recurrence": {"rrule": "FREQ=WEEKLY;INTERVAL=2"}}
+				 ]}
+				""";
+		TaskSnapshot snapshot = TaskSnapshot.of("Tasks/L.tasks", "v",
+				TaskFile.parse(content.getBytes(StandardCharsets.UTF_8), TestVault.JSON));
+		assertThat(snapshot.tasks()).extracting((t) -> t.recurrence().rrule())
+			.containsExactly("FREQ=DAILY;INTERVAL=0", "FREQ=WEEKLY;INTERVAL=abc", "FREQ=WEEKLY;INTERVAL=2");
+		assertThat(snapshot.problems()).extracting((p) -> p.taskId() + ": " + p.reason())
+			.containsExactly("zero: \"recurrence.rrule\" cannot repeat: INTERVAL must be a whole number from 1 to 99999",
+					"word: \"recurrence.rrule\" cannot repeat: INTERVAL must be a whole number from 1 to 99999");
+	}
+
+	@Test
 	void aNewerFormatVersionIsReadOnly() throws Exception {
 		String content = HOME.replace("\"version\": 1", "\"version\": 2");
 		TaskSnapshot snapshot = TaskSnapshot.of("Tasks/Home.tasks", "v",

@@ -318,6 +318,24 @@ class TaskServiceTest {
 		assertThat(last.status()).isEqualTo(TaskStatus.DONE);
 	}
 
+	@Test
+	void completingAHandEditedRuleThatCannotRepeatClosesTheTask() throws Exception {
+		Task task = this.fx.create("""
+				{"title": "Stretch", "due": "2026-10-14", "recurrence": {"rrule": "FREQ=DAILY"}}
+				""");
+		String file = this.fx.read("Tasks/Inbox.tasks");
+		this.fx.write("Tasks/Inbox.tasks", file.replace("\"FREQ=DAILY\"", "\"FREQ=DAILY;INTERVAL=0\""));
+		// Completing it neither hangs nor makes up a step (lib-recur would read INTERVAL=0 as 1): the task closes,
+		// and its rule stays as written.
+		TaskWriteResult done = this.fx.tasks.complete(task.id(), new CompleteTaskRequest(null, "2026-10-14", null),
+				TestVault.ALICE, TaskFixture.CLIENT);
+		assertThat(done.rolledForward()).isFalse();
+		assertThat(done.task().status()).isEqualTo(TaskStatus.DONE);
+		assertThat(done.task().due()).isEqualTo("2026-10-14");
+		assertThat(done.task().recurrence().rrule()).isEqualTo("FREQ=DAILY;INTERVAL=0");
+		assertThat(this.fx.read("Tasks/Inbox.tasks")).contains("\"FREQ=DAILY;INTERVAL=0\"");
+	}
+
 	// ---------------------------------------------------------------- reorder and delete
 
 	@Test

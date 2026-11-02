@@ -19,7 +19,10 @@ public final class EncryptedSections {
 
 	// Base64 payload (16 characters or more) with an optional 💡hint💡 before it, on one line. The commented form pairs
 	// with its own suffix; the visible one needs its α or β mark, so words between two lock emoji are never a section.
-	private static final String BODY = "(?:💡[^\\n]*?💡)?[A-Za-z0-9+/=]{16,}";
+	// The hint ends at the next 💡 (a hint never holds one): a lazy [^\n]*? tried every later 💡 of the line from every
+	// section start, quadratic on a long line. The editor's meld.ts uses the same pattern, so search skips exactly
+	// what the editor shows as sections.
+	private static final String BODY = "(?:💡[^\\n💡]*💡)?[A-Za-z0-9+/=]{16,}";
 
 	private static final Pattern SECTION = Pattern
 		.compile("%%" + LOCK + "[αβ]? " + BODY + " " + LOCK + "%%|" + LOCK + "[αβ] " + BODY + " " + LOCK);
