@@ -21,14 +21,17 @@ export function pageTitle(markdown: string, fallback: string): string {
   return fallback;
 }
 
-/** Heading text as it reads: code, emphasis, highlight and link markup removed. */
+/** Text as it reads: code, emphasis, highlight and link markup removed (code keeps its characters as they are). */
 export function stripInline(text: string): string {
+  const code: string[] = [];
   return text
+    // Set aside under a private-use character, which no guide text contains.
+    .replace(/`+([^`]*)`+/g, (_, inner: string) => `${code.push(inner) - 1}`)
     .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
-    .replace(/`+([^`]*)`+/g, '$1')
     .replace(/(\*\*|__|~~|==)(.+?)\1/g, '$2')
     .replace(/(^|[^\w*])[*_]([^*_]+)[*_](?=[^\w*]|$)/g, '$1$2')
     .replace(/\\([\\`*_{}[\]()#+\-.!|=~<>])/g, '$1')
+    .replace(/(\d+)/g, (_, i: string) => code[Number(i)])
     .trim();
 }
 

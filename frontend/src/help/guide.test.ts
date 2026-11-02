@@ -39,6 +39,8 @@ describe('guide helpers', () => {
     expect(pageTitle('Intro\n\n# The **big** `=SUM` guide\n', 'x')).toBe('The big =SUM guide');
     expect(pageTitle('No heading', 'fallback')).toBe('fallback');
     expect(stripInline('Use [links](a.md) and *italic* and ==marks== and \\#hash')).toBe('Use links and italic and marks and #hash');
+    // Code keeps its characters, and they never pair with emphasis outside it.
+    expect(stripInline('**Hide all** keeps `**` and `#` hidden; **Reveal** shows them')).toBe('Hide all keeps ** and # hidden; Reveal shows them');
     const headings = pageHeadings('# Title\n\n```md\n## Not a heading\n```\n\n## Real `code` heading\n### Again\n## Again\n');
     expect(headings.map((h) => [h.level, h.text, h.slug])).toEqual([
       [1, 'Title', 'title'],
