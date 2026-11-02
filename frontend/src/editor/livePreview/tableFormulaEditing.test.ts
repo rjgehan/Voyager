@@ -182,6 +182,33 @@ describe('function suggestions and the signature hint', () => {
     expect(cell.state.doc.toString()).toBe(`=${item.textContent}(`);
     expect(cell.hasFocus).toBe(true);
   });
+
+  it('a swipe that scrolls the suggestions picks nothing', async () => {
+    const view = editor(`${TABLE}\n\nAfter`);
+    const cell = type(grid(view), 4, 1, '=CO');
+    await vi.waitFor(() => expect(document.querySelectorAll('.formula-assist-item').length).toBeGreaterThan(2));
+    const items = [...document.querySelectorAll<HTMLElement>('.formula-assist-item')];
+    const touchStart = (el: HTMLElement, x: number, y: number) => {
+      const e = new Event('touchstart', { bubbles: true, cancelable: true });
+      Object.defineProperty(e, 'touches', { value: [{ clientX: x, clientY: y }] });
+      el.dispatchEvent(e);
+    };
+    // The finger moves up the list and lifts over another function.
+    touchStart(items[2], 20, 60);
+    touchEnd(items[0], 20, 10);
+    expect(cell.state.doc.toString()).toBe('=CO');
+    // The list scrolled under a finger that hardly moved: no pick either.
+    const list = document.querySelector<HTMLElement>('.formula-assist-list')!;
+    touchStart(items[1], 20, 30);
+    Object.defineProperty(list, 'scrollTop', { value: 40, configurable: true });
+    touchEnd(items[1], 20, 32);
+    expect(cell.state.doc.toString()).toBe('=CO');
+    // A tap still picks.
+    Object.defineProperty(list, 'scrollTop', { value: 0, configurable: true });
+    touchStart(items[1], 20, 30);
+    touchEnd(items[1], 21, 31);
+    expect(cell.state.doc.toString()).toBe(`=${items[1].textContent}(`);
+  });
 });
 
 describe('fill in tables', () => {
