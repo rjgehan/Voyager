@@ -1,7 +1,9 @@
 package com.rjgehan.notes.reminders;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.URI;
+import java.net.UnknownHostException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -19,7 +21,9 @@ import org.springframework.stereotype.Component;
 /**
  * Sends one encrypted message to one push service endpoint (RFC 8030) with a VAPID {@code Authorization} header
  * (RFC 8292). Redirects are not followed. The endpoint's answer decides the outcome: 2xx delivered, 404 or 410 gone
- * (the subscription expired or was revoked, so it is dropped), anything else an error.
+ * (the subscription expired or was revoked, so it is dropped), anything else an error. Nothing is sent to an endpoint
+ * whose host resolves to an address that is not public ({@link PublicAddresses}): push services are on the internet,
+ * and anything else would let a subscription aim the server at this machine, the LAN or the tailnet.
  */
 @Component
 @ServerWide
@@ -30,6 +34,9 @@ public class WebPushSender {
 	/** How long a push service keeps an undelivered reminder (a phone that is off): one day. */
 	static final int TTL_SECONDS = 24 * 60 * 60;
 
+	/** The error of a message that was not sent because the endpoint is not on the public internet. */
+	static final String NOT_PUBLIC = "the push service's address is not on the public internet";
+
 	/** What became of one message. {@code error} names the HTTP status or the exception, never the endpoint. */
 	public record Result(boolean delivered, boolean gone, @Nullable String error) {
 
@@ -37,13 +44,52 @@ public class WebPushSender {
 
 	}
 
+	/** Looks a host up; the tests replace it. */
+	@FunctionalInterface
+	interface Resolver {
+
+		InetAddress[] resolve(String host) throws UnknownHostException;
+
+	}
+
 	private final HttpClient http;
 
+	private final @Nullable Resolver publicOnly;
+
 	public WebPushSender() {
+		this(InetAddress::getAllByName);
+	}
+
+	/** {@code publicOnly}: what every endpoint host is resolved with and checked against; null only in tests. */
+	WebPushSender(@Nullable Resolver publicOnly) {
+		this.publicOnly = publicOnly;
 		this.http = HttpClient.newBuilder()
 			.connectTimeout(Duration.ofSeconds(10))
 			.followRedirects(HttpClient.Redirect.NEVER)
 			.build();
+	}
+
+	/** Null when every address of {@code host} is public; otherwise why nothing may be sent there. */
+	private @Nullable String addressError(@Nullable String host) {
+		if (this.publicOnly == null) {
+			return null;
+		}
+		if (host == null || PublicAddresses.hostError(host) != null) {
+			return NOT_PUBLIC;
+		}
+		InetAddress[] addresses;
+		try {
+			addresses = this.publicOnly.resolve(host);
+		}
+		catch (UnknownHostException ex) {
+			return "UnknownHostException: " + host;
+		}
+		for (InetAddress address : addresses) {
+			if (!PublicAddresses.isPublic(address)) {
+				return NOT_PUBLIC;
+			}
+		}
+		return null;
 	}
 
 	/**
@@ -66,6 +112,10 @@ public class WebPushSender {
 		}
 		catch (GeneralSecurityException | IllegalArgumentException ex) {
 			return new Result(false, false, "cannot encrypt for this device: " + ex.getMessage());
+		}
+		String addressError = addressError(endpoint.getHost());
+		if (addressError != null) {
+			return new Result(false, false, addressError);
 		}
 		HttpRequest.Builder request = HttpRequest.newBuilder(endpoint)
 			.timeout(TIMEOUT)

@@ -113,6 +113,15 @@ class RemindersIntegrationTest {
 		assertThat(this.api
 			.postJson("/api/push/subscriptions", Map.of("endpoint", "http://push.example.com/x", "keys", Map.of()))
 			.problem(400)).isEqualTo("bad-request");
+		// Security audit (docs/SECURITY.md, F4): no endpoint on this machine, the LAN, the cloud metadata service or
+		// the tailnet, which the server would otherwise post to (and probe through the reminders test).
+		for (String endpoint : List.of("https://127.0.0.1:8080/api/tree", "https://localhost/x", "https://192.168.1.1/x",
+				"https://169.254.169.254/latest/meta-data/", "https://100.100.100.100/x", "https://[::1]/x")) {
+			assertThat(this.api
+				.postJson("/api/push/subscriptions", Map.of("endpoint", endpoint, "keys", subscription.get("keys")))
+				.problem(400)).as(endpoint).isEqualTo("bad-request");
+		}
+		assertThat(this.api.get("/api/reminders/status").ok(200).get("webPush").get("devices")).hasSize(1);
 		this.api.delete("/api/push/subscriptions/" + id).ok(204);
 		assertThat(this.api.delete("/api/push/subscriptions/" + id).problem(404)).isEqualTo("not-found");
 		assertThat(this.api.get("/api/reminders/status").ok(200).get("webPush").get("devices")).isEmpty();
