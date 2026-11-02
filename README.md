@@ -90,6 +90,7 @@ Rolling back, pausing updates, backups and everything else on the server side ar
 - [docs/CASAOS.md](docs/CASAOS.md): installing on CasaOS by pasting one compose file, and its optional alerts, mirror and backups
 - [docs/CLIPPER.md](docs/CLIPPER.md): installing the web clipper (browser extension, bookmarklet, iPhone Shortcut)
 - [docs/DESKTOP.md](docs/DESKTOP.md): the Windows and macOS desktop app (install, Gatekeeper steps, usage, building and releases)
+- [docs/SECURITY.md](docs/SECURITY.md): threat model, trust boundaries of each deployment layout, the security audit's findings, residual risks and hardening advice; [SECURITY.md](SECURITY.md): how to report a vulnerability
 - [docs/ROADMAP.md](docs/ROADMAP.md): what comes after v1
 
 ## Licence

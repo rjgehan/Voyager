@@ -38,7 +38,7 @@ An older layout with its own Tailscale container is kept as an appendix (*Advanc
 
 ### Who can reach port 18095
 
-The app answers only requests whose `Host` is in `NOTES_ALLOWED_HOSTS` and that carry Tailscale's identity headers (`Tailscale-User-Login`, which `tailscale serve` adds); anything else gets `421` or `403`. That is what keeps out a browser that opens `http://<server-ip>:18095`. But the port itself is open on the LAN (and on the host's tailnet address), and a program there can send those headers itself. On a LAN you do not fully trust, drop every connection to the port that does not come from the host itself (`tailscale serve` connects from the host, so it keeps working):
+The app answers only requests whose `Host` is in `NOTES_ALLOWED_HOSTS` and that carry Tailscale's identity headers (`Tailscale-User-Login`, which `tailscale serve` adds); anything else gets `421` or `403`. That is what keeps out a browser that opens `http://<server-ip>:18095`. But the port itself is open on the LAN (and on the host's tailnet address), and a program there can send those headers itself: **any device on the LAN, a guest's phone or a smart plug included, can then read and change every note**. The app cannot tell such a connection from `tailscale serve`'s (both reach the container through Docker's proxy; docs/SECURITY.md §3.2 explains why), and `NOTES_IDENTITY_ALLOWED_LOGINS` only makes the attacker guess your login. Unless every device on the LAN is yours, drop every connection to the port that does not come from the host itself (`tailscale serve` connects from the host, so it keeps working):
 
 ```sh
 sudo iptables -I DOCKER-USER -p tcp -m conntrack --ctorigdstport 18095 --ctdir ORIGINAL -j DROP
@@ -46,7 +46,7 @@ sudo ip6tables -I INPUT -p tcp --dport 18095 -j DROP     # Docker's proxy also l
 curl -sI http://127.0.0.1:18095 | head -1                # on the host: still answers (421 without a Host it knows)
 ```
 
-`DOCKER-USER` is the chain Docker leaves for your own rules; the rule matches connections forwarded to the container that were addressed to port 18095, which is every connection from another machine. The rules last until the next reboot: save them with your distribution's tool (on Debian or Ubuntu `sudo apt install iptables-persistent`, then `sudo netfilter-persistent save`), or put the two commands in a boot-time script. To check from another machine on the LAN: `curl -m 5 http://<server-ip>:18095` now times out.
+`DOCKER-USER` is the chain Docker leaves for your own rules; the rule matches connections forwarded to the container that were addressed to port 18095, which is every connection from another machine. The rules last until the next reboot: save them with your distribution's tool (on Debian or Ubuntu `sudo apt install iptables-persistent`, then `sudo netfilter-persistent save`), or put the two commands in a boot-time script. To check from another machine on the LAN: `curl -m 5 http://<server-ip>:18095` now times out, and so does `curl -m 5 -g 'http://[<server-ipv6>]:18095'` for each IPv6 address of the server, its link-local `fe80::` one included, which every LAN neighbour can reach (written `[fe80::…%25eth0]`, with the interface of the machine you test from).
 
 ## Import an Obsidian vault
 

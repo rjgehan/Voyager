@@ -10,7 +10,8 @@
 # Then open https://homeserver.<tailnet>.ts.net:8443
 # (--https=443 and the name without :8443 work too when nothing else on the host serves 443.)
 #
-# Port 18095 is also reachable from the LAN; docs/CASAOS.md shows the firewall rule that limits it to the host.
+# Port 18095 is also reachable from the LAN, where any device can forge the identity headers and use the app:
+# add the firewall rules of docs/CASAOS.md ("Who can reach port 18095"), which limit it to the host.
 # Data lives under /DATA/AppData/notesapp/data: vault/ (your notes and their git history) and, only if you set
 # up the optional extras of docs/CASAOS.md, secrets/. A fresh install needs none of the extras.
 name: notesapp

