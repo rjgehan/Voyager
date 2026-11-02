@@ -72,7 +72,7 @@ describe('Help page', () => {
     expect(article().querySelector('[data-anchor="when-a-formula-shows-an-error"]')).not.toBeNull();
   });
 
-  it('opens web links in a new tab and keeps checkboxes inert', () => {
+  it('opens web links in a new tab', () => {
     renderAt('/x/help/desktop-app');
     const web = within(article()).getByRole('link', { name: 'DESKTOP.md' });
     expect(web).toHaveAttribute('target', '_blank');

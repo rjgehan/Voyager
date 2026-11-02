@@ -24,15 +24,6 @@
   margin-top: 0.6em;
 }
 
-/* Keys written as `Ctrl+P` read as keys, not code. */
-.help-article code {
-  white-space: nowrap;
-}
-
-.help-article pre code {
-  white-space: pre;
-}
-
 .help-article table {
   display: block;
   max-width: 100%;
