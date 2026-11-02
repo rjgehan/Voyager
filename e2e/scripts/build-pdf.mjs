@@ -61,6 +61,7 @@ const html = `<!doctype html><html><head><meta charset="utf-8"><style>
   .intro th { background: #f2f2f7; }
   .intro tr { break-inside: avoid; }
   .intro code { font: 8.5pt Consolas, ui-monospace, Menlo, monospace; background: #f2f2f7; padding: 0 2pt; border-radius: 3pt; }
+  .intro td code { overflow-wrap: anywhere; }
   .intro pre { background: #f2f2f7; padding: 6pt 8pt; border-radius: 6pt; white-space: pre-wrap; }
   .intro pre code { background: none; padding: 0; }
   .intro li { margin: 2pt 0; break-inside: avoid; }
