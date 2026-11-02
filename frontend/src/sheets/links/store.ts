@@ -119,6 +119,8 @@ export class LinkStore {
   private readonly dynamicEdges = new Map<string, Set<string>>();
   /** Notes whose tables are being computed now (a NOTETABLE that comes back to one is a cycle). */
   private readonly computing = new Set<string>();
+  /** Each file's edges, until anything changes (a large sheet's formulas are not scanned per reference). */
+  private readonly edgesCache = new Map<string, string[]>();
   private computer: TableComputer | null = null;
   private computerLoading = false;
   private readonly trackers: Set<string>[] = [];
@@ -160,6 +162,7 @@ export class LinkStore {
   }
 
   private changed(key: string): void {
+    this.edgesCache.clear();
     this.pending.add(key);
     if (this.timer !== null) return;
     const wait = Math.max(30, this.lastFlush + THROTTLE_MS - Date.now());
@@ -520,6 +523,7 @@ export class LinkStore {
     if (set.has(to)) return;
     set.add(to);
     this.dynamicEdges.set(from, set);
+    this.edgesCache.delete(from);
   }
 
   /**
@@ -527,9 +531,17 @@ export class LinkStore {
    * (`Budget.sheet!B10`) and NOTETABLE calls, a spreadsheet's NOTETABLE calls. Null while loading.
    */
   edges(path: string): string[] | null {
+    const isSheet = path.toLowerCase().endsWith('.sheet');
+    const cached = this.edgesCache.get(path);
+    if (cached) {
+      // What they came from is still read, so a change of it computes the reader again.
+      this.read(isSheet ? `sheet:${path}` : `text:${path}`);
+      this.read('names');
+      return cached;
+    }
     const out = new Set(this.dynamicEdges.get(path) ?? []);
     let formulas: readonly string[];
-    if (path.toLowerCase().endsWith('.sheet')) {
+    if (isSheet) {
       const sheet = this.sheet(path);
       if (sheet.status === 'loading') return null;
       formulas = sheet.value ? sheet.value.sheets.flatMap((s) => Object.values(s.cells).flatMap((c) => (c.f === undefined ? [] : [c.f]))) : [];
@@ -550,7 +562,9 @@ export class LinkStore {
         if (sheet) out.add(sheet);
       }
     }
-    return [...out];
+    const edges = [...out];
+    this.edgesCache.set(path, edges);
+    return edges;
   }
 
   /** Whether `from`'s values depend, through any chain of files, on `to`'s (a cycle when `to` reads `from`). */

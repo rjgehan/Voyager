@@ -107,7 +107,7 @@ Besides notes, the server indexes the content of some structured text files (DES
 |---|---|---|
 | `.tasks` lists (§20.9) | The list's name; each task's title, tags, related notes (`links`) and notes | Those in titles and notes, and each path in `links` |
 | `.excalidraw` drawings (DESIGN §6.8.1) | Each text element's text, each element link (web links excluded), each image stored as a vault attachment, frame names | None: the drawing is reported as `not-rewritable` |
-| `.sheet` spreadsheets (§12.3) | What each cell shows (its text or number, or its formula's cached result), sheet names, chart titles | None: the spreadsheet is reported as `not-rewritable` |
+| `.sheet` spreadsheets (§12.3) | What each cell shows (its text or number, or its formula's cached result), sheet names, chart titles, and formulas that read a note by name (as links to it) | None: the spreadsheet is reported as `not-rewritable` |
 | `.canvas` boards (DESIGN §6.8.2) | Each text card's Markdown, group names, link nodes' addresses, edge labels, and each file node as an embed of its file (with its subpath) | Those in cards, group names and edge labels, and each file node's `file`; only those JSON strings change |
 | `.excalidraw.md` drawings | A note, scanned as one; also the texts and links that only its drawing JSON holds | Those in its Markdown, as in any note; not those only its JSON holds (`not-rewritable`) |
 
@@ -1188,9 +1188,9 @@ Clauses next to each other must all match (AND).
 
 ### 12.3 Spreadsheets in search, backlinks and tags
 
-`.sheet` files (DESIGN §6.21) are indexed documents (§1.8), indexed through the `DocumentIndexer` extension point (DESIGN §6.8): what each cell shows (its text or number, or the cached result of its formula, as stored in the file), the sheet names and the chart titles become searchable text, one line per cell, and the links and tags in it count like a note's. Formulas, error results, number formats and the JSON around the values are not indexed.
+`.sheet` files (DESIGN §6.21) are indexed documents (§1.8), indexed through the `DocumentIndexer` extension point (DESIGN §6.8): what each cell shows (its text or number, or the cached result of its formula, as stored in the file), the sheet names and the chart titles become searchable text, one line per cell, and the links and tags in it count like a note's. Formulas, error results, number formats and the JSON around the values are not indexed, except formulas that read a note by name (ROADMAP item 42, DESIGN §6.45): `=NOTEPROP("Projects/Plan", "status")` or `=NOTETABLE("Costs")` is indexed as one line with the name as a wikilink, `=NOTEPROP([[Projects/Plan]], "status")`.
 
-- A `[[Note]]` (or Markdown link) in a cell's text or cached result makes the spreadsheet a backlink source of that note (§11.2); the mention's `context` is the cell's text. `#tags` in cells count in `GET /api/tags` and `tag:` search.
+- A `[[Note]]` (or Markdown link) in a cell's text or cached result makes the spreadsheet a backlink source of that note (§11.2); the mention's `context` is the cell's text. So does a formula that reads the note by name (`NOTEPROP` or `NOTETABLE` with the name written as text); the mention's `context` is the formula with the name as a wikilink. `#tags` in cells count in `GET /api/tags` and `tag:` search.
 - `GET /api/search` can return a spreadsheet; its `matches` are lines of cell text, and their `line` numbers count lines of that text, not of the file.
 - A spreadsheet is not a note: `GET /api/notes/meta` answers `409 type-mismatch`, it never appears in unlinked mentions, and it does not count in `/api/status` `vault.notes`.
 - Renaming or moving a note, or renaming a heading (§22), does not rewrite links in spreadsheets; such a file is reported in `failed` with `not-rewritable`, and the cell can be edited by hand.
@@ -3870,7 +3870,7 @@ At most 10 `tag` and `prop` filters together, each (and `folder`, `linksTo`) at 
 |---|
 | `400 bad-request`: `limit` out of range, too many or too long filters, an empty `tag`, a `prop` that is not `name`, `name=value` or `name!=value` |
 
-No events. The client reruns a script when a note it read changes (`file.*`, `entry.moved`, `folder.deleted`, `resync`, §16), debounced.
+No events. The client reruns a script when a note it read changes (`file.*`, `entry.moved`, `folder.deleted`, `resync`, §16), debounced. Spreadsheets use the same endpoint (ROADMAP item 42, DESIGN §6.45): `NOTEPROP` reads one note with `path`, and `NOTECOUNT` and `NOTEQUERY` turn their query text into these filters; their values follow the tree's versions.
 
 ### 40.2 The sandbox worker's CSP
 

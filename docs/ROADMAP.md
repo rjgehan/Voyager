@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Date | 2026-10-17 |
-| Status | **Everything approved, 2026-10-17** ("build all of the features"): items 1–41, built on the `build/roadmap` branch in waves and merged to `main` once verified. |
+| Status | **Everything approved, 2026-10-17** ("build all of the features"): items 1–41, built on the `build/roadmap` branch in waves and merged to `main` once verified. **Item 42** (notes ↔ sheets linking) approved 2026-11-02. |
 | Decisions (2026-10-17) | **Server:** homeserver, as designed. **Formula engine** (items 6 and 39): GPL-3.0 with HyperFormula; the repository becomes GPL-3.0. **Reminder delivery** (item 9): undecided, so every route is built and each one is switched on in Settings. **Public publishing** (item 26): built switched off; nothing is exposed until you enable it. **No iOS app**; the phone uses the web app. **Desktop app** (item 41): Electron, because rgpc has no Rust toolchain. |
 | Build order | Wave 1: 10, 6, 4, 5, then 1, 2, 23 and 38. Wave 2: 3, 39, 40 (with 17), 13, 12, 7, 19, 8, 22. Wave 3: everything else except 37 and 41. Wave 4: 37 and 41, then end-to-end verification. |
 
@@ -90,6 +90,7 @@ DESIGN.md has the details.
 | 37 | Multiple vaults *(built 2026-10-22, `feat/vaults`)* | M | L | |
 | 38 | Ops polish: JDK 25 runtime, faster start, app-error alerts, status page | M | S | |
 | 41 | **Desktop app (Windows and macOS) with live sync** *(new, 2026-10-17)* | M | M | 7 for quick capture; 8 for offline |
+| 42 | **Notes ↔ sheets linking: editable sheet embeds, sheets reading notes, notes reading sheets** *(new, approved 2026-11-02; built 2026-11-02, `feat/notes-sheets`)* | H | M | 6, 39, 10, 40 |
 
 ---
 
@@ -495,7 +496,7 @@ Deviations, and why:
 
 - HyperFormula is pinned at **3.4.0**, not 3.5.0, because 3.5.0 (published 2026-10-09) is less than two weeks old (same GPL-3.0-only licence; a later upgrade recalculates each sheet once). Glide Data Grid is pinned at **6.0.4-alpha24**, not 6.0.3: 6.0.3 declares React 16 to 18 as peers, and only the 6.0.4 line accepts React 19.
 - Glide has no frozen top rows, so frozen rows are drawn in its header: they are edited in the formula bar rather than in place, and a range selection stops at them. On phones a cell is edited in the formula bar (tap a selected cell), and columns are resized with a width dialog as well as by dragging.
-- Embeds in **Live Preview**: Live Preview does not render any embeds yet (item 10b). Sheet embeds are built as the view's `loadEmbed()` and handle their own clicks, so they work wherever embeds are hydrated: in the reading view today, and in Live Preview once 10b renders embeds through the same `loadEmbed`.
+- Embeds in **Live Preview** (superseded: Live Preview renders embeds since 10b, and since item 42 a spreadsheet embedded in a note that can be written is edited in place): Live Preview does not render any embeds yet (item 10b). Sheet embeds are built as the view's `loadEmbed()` and handle their own clicks, so they work wherever embeds are hydrated: in the reading view today, and in Live Preview once 10b renders embeds through the same `loadEmbed`.
 - Embeds show at most 100 rows and 26 columns (and say so), and an embed of a whole sheet also shows its charts.
 - The format goes beyond the spec in three compatible ways, documented in DESIGN §6.21.1: cells take `fmt` (before the row's and the column's); each sheet takes `charts`, keyed by time-ordered ids so charts merge per chart; and a sheet takes `structure`, a marker that changes when rows or columns are inserted or deleted, so a merge never misplaces cells another device added meanwhile. Files without charts or such edits keep their exact earlier layout.
 - Rows and columns can be inserted and deleted (references follow, as in Google Sheets); sorting and filtering a range in place are not built yet (the `SORT` and `FILTER` functions are).
@@ -1229,6 +1230,33 @@ Scheduling uses `ts-fsrs` 5.4.2 (MIT). Review state is stored in `.notesapp/srs.
 - **Closing the window keeps the app in the tray** (and the hotkey working); Quit is in the tray menu. A tray item **Settings…** changes the server, the shortcut (configurable, or none) and launch at login.
 - **Resume:** after sleep or unlock the shell asks the page to reconnect its event stream at once (`EventStream.reconnect()`), rather than waiting for the 45 s watchdog.
 - **macOS:** the dmg is universal and ad-hoc signed (so Apple Silicon runs it) but not notarised: DESKTOP.md has the Gatekeeper steps. Windows is not code-signed: SmartScreen asks once.
+
+
+### 42. Notes ↔ sheets linking *(new, approved 2026-11-02; built 2026-11-02, `feat/notes-sheets`)*
+
+**One line:** one app where notes and Google-Sheets-style spreadsheets live together: a spreadsheet embedded in a note is a live grid you edit right there, spreadsheets read notes, notes read spreadsheets, and a chart embeds on its own.
+
+| Value | Effort | Depends on |
+|---|---|---|
+| H | M | 6 (spreadsheets), 39 (formulas in notes), 10 (Live Preview embeds), 40 (the notes query endpoint) |
+
+**Status:** built (2026-11-02, branch `feat/notes-sheets`): DESIGN §6.45, the server's part in API.md §12.3. Tested with both formula engines against each other and with the real session, binding and engine in the embed; checked in the built-in browser against the mock API (desktop and phone width). Not yet checked on a real iPhone.
+
+- **Editable embeds.** `![[Budget.sheet]]`, `![[Budget.sheet#Summary]]`, `![[Budget.sheet#Budget!A1:C10]]` and named ranges show a live grid in a note that can be written: click or tap a cell, type, Enter; formulas with the function help and pointing at cells; copy and paste; a compact toolbar (undo, redo, bold rows, fill down, insert and delete rows) and **Open full sheet**. It is the same workbook as the spreadsheet view, through the file's own session, so an edit saves, syncs, merges per cell and undoes exactly as one made there, and an open spreadsheet tab shows it at once. In a locked or read-only note, an embedded note or a canvas it stays item 6b's read-only table. On a phone a second tap edits the cell with the keyboard up.
+- **Sheets reading notes:** `=NOTEPROP("Projects/Plan", "status")` (any property, or `file.name`, `file.mtime`, … as in Dataview queries), `=NOTETABLE("Budget note", "budget")` (a note's table, computed, spilled; tables are named with `^budget` as in item 39), `=NOTECOUNT("tag:work")` and `=NOTEQUERY("tag:work status!=done", "title, status, due")` (spilled), over `GET /api/notes/query`. Notes are named as links name them. A missing note or table is `#REF!`, a missing property `#N/A`, and the functions show up in the formula suggestions.
+- **Notes reading sheets:** `=Budget.sheet!B10` in a note's table or inline formula, `=SUM(Budget.sheet!B2:B9)`, `='Budget.sheet#Summary'!A1`, `=Budget.sheet!Total` (a named range). **Syntax chosen: the reference, not `=SHEET("Budget", "B10")`**, because item 39 already refers to a note's tables as `budget!B5`: the same shape keeps one rule, the fill handle and Mod-D move it like any reference, ranges work natively in `SUM` and lookups, and `#Summary` is the same subpath as in links and embeds (DESIGN §6.45.2 has the reasoning). A single-cell reference shows in that cell's number format.
+- **Charts in notes:** `![[Budget.sheet#chart:Spending]]` shows the chart titled Spending.
+- **Live:** values follow the files they read, on this device as you type and on other devices as they save (the tree's versions through the event stream), throttled to a few recalculations a second. A spreadsheet's values computed from notes are not saved on their own (no history entry each time a note changes); they are saved with its next edit, as `NOW()` is.
+- **Correctness:** a loop across files (a note's table reading a cell that the spreadsheet's `NOTETABLE` reads back) shows `#CYCLE!` on both sides instead of oscillating; `NOTETABLE` reads at most four notes deep. Everything stays within the page's vault (item 37).
+- **Backlinks:** a spreadsheet whose `NOTEPROP` or `NOTETABLE` names a note is one of that note's backlinks, with the formula as context (server: `SheetDocumentIndexer`).
+
+Deviations and limits:
+
+- `NOTETABLE` and `NOTEQUERY` spill only when their arguments are written as text (HyperFormula sizes arrays when the formula is set); with a cell reference they say so with `#VALUE!`.
+- A note that reads a spreadsheet does not make a backlink of it (formulas are not links); spreadsheets cannot read other spreadsheets' cells; renaming a note does not rewrite the names in formulas (as for links in cells, item 6).
+- The embedded grid has no fill handle, frozen panes, column resizing, number-format dialog or charts editor: **Open full sheet** has them. Cut in an embed clears the cells at once (the spreadsheet view moves them on paste).
+- Search and other devices' read-only tables show a spreadsheet's note-derived values as of its last save.
+- Item 6's embed note ("Embeds in Live Preview") is superseded: Live Preview renders embeds, and spreadsheets edit there.
 
 ---
 

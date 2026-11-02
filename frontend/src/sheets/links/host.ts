@@ -23,8 +23,9 @@ export function appLinkHost(): LinkHost {
     queryNotes: (filter) => api.queryNotes(filter),
     readFile: async (path) => (await api.readFile(path)).content,
     openDocument(path) {
+      // Only a document being edited here: a cached session no view holds may be behind the file.
       const session = documents.get(path);
-      if (!session || !session.getSnapshot().loaded) return null;
+      if (!session || session.editorCount === 0 || !session.getSnapshot().loaded) return null;
       return { text: () => session.getText(), subscribe: (fn) => session.subscribe(fn) };
     },
     tableComputer: async () => (await formulaEngine()).computeTables,
