@@ -2335,3 +2335,11 @@ mark.match {
 .encrypted-editor {
   min-height: 240px;
 }
+
+/* Settings' link to the user guide (DESIGN §6.45), apart from the sections. */
+.settings-nav-help {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}

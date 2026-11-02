@@ -6,6 +6,8 @@ WORKDIR /src/frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 COPY frontend/ ./
+# The user guide is bundled into the app's Help page (vite-plugin-guide.ts, DESIGN §6.45).
+COPY docs/guide/ /src/docs/guide/
 ARG GIT_SHA=dev
 ENV VITE_BUILD_SHA=${GIT_SHA}
 RUN npm run build

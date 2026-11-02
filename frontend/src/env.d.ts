@@ -19,6 +19,12 @@ interface Window {
 /** Glide Data Grid's lazily loaded cell editor (vite.config.ts), loaded ahead by the spreadsheet view. */
 declare module 'glide-overlay-editor';
 
+/** The user guide, docs/guide/*.md, as page name → Markdown (vite-plugin-guide.ts, DESIGN §6.45). */
+declare module 'virtual:user-guide' {
+  const pages: Record<string, string>;
+  export default pages;
+}
+
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }

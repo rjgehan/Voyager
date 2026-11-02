@@ -1971,6 +1971,8 @@ frontend/src/
 │                             session.ts, stats.ts, store.ts (records, outbox), register.ts, ui/ (the /x/flashcards page)
 ├── habits/                   ROADMAP item 35 (§6.35): model.ts, progress.ts, frontmatterEdit.ts, write.ts, actions.ts,
 │                             useHabits.ts, register.ts, ui/ (the /x/habits page and the Habits panel)
+├── help/                     The user guide in the app (§6.45): guide.ts (pure: order, anchors, links, search),
+│                             renderGuide.ts and HelpPage.tsx (the lazy /x/help page), register.ts
 ├── views/                    FILE-TYPE → VIEW REGISTRY (§6.8)
 │   ├── registry.ts
 │   ├── excalidraw/           drawings (§6.8.1): register.ts and newDrawing.ts (eager), format.ts and merge.ts (lazy),
@@ -2144,11 +2146,12 @@ Per-device preferences (theme, spellcheck, autocorrect, remote images, syntax vi
 
 | Route | View |
 |---|---|
-| `/` | `HomePage`. If `dailyNotes.openOnStartup`, open today's note. Otherwise open the last-opened path (`localStorage notesapp:lastPath`) if it still exists, then `Welcome.md`, then an empty state with "New note" and "Today". |
+| `/` | `HomePage`. If `dailyNotes.openOnStartup`, open today's note. Otherwise open the last-opened path (`localStorage notesapp:lastPath`) if it still exists, then `Welcome.md`, then an empty state with "New note", "Today" and "Help". |
 | `/n/<path>` | `FileView`. The registry picks the view. `#<heading text>` scrolls to the heading. `?line=N` scrolls to 0-based line `N` (a search hit), flashes it, and highlights the terms of `&q=` (words, phrases and regular expressions). For a PDF, `?page=N` opens the viewer at that page. `?mode=read` forces the reading view (a locked note). The other modes (Live Preview, source, locked) are chosen per note, §6.6.1. |
 | `/search?q=…` | Search page, **phones only**. On desktop the search panel keeps its query in zustand and never changes the route, so typing in it never navigates away from the open note. |
 | `/trash` | Trash page |
 | `/settings`, `/settings/<section>` | Settings page (lazy) |
+| `/x/help`, `/x/help/<page>` | The user guide, read-only (§6.45): its contents, or one page of `docs/guide/`; `#<anchor>` scrolls to a heading |
 | `/x/<route>` | A page registered with `registerPage` (§6.8). ROADMAP item 4 adds `/x/tasks` (all lists), `/x/tasks/today`, `/x/tasks/upcoming`, `/x/tasks/completed`, `/x/tasks/filter?tag=&priority=&list=&status=` and `/x/tasks/list/<list id>` (§6.22). A `.tasks` file at `/n/<path>` shows its list (`?view=source`: its JSON; `#^<task id>`: that task). |
 | anything else | `NotFoundPage` |
 
@@ -3101,6 +3104,7 @@ The version view of §6.11 also gains **Compare with**: in the History panel it 
 | `nav.back` / `nav.forward` | Navigate back / forward | `Mod-Alt-←` / `Mod-Alt-→` (as in Obsidian; bound at `Prec.highest`, so they also work inside the editor). The browser's own back and forward still work. |
 | `trash.open` | Open trash | |
 | `settings.open` | Open settings | `Mod-,` |
+| `help.open` / `help.shortcuts` | Open help (user guide) / Open help: keyboard shortcuts (§6.45) | |
 | `theme.toggle` | Toggle dark/light theme | |
 | `app.resync` | Reload vault from server | |
 | `capture.quick` | Quick capture (§6.27) | `Mod-Shift-Space` (works in the editor too) |
@@ -3140,8 +3144,8 @@ The version view of §6.11 also gains **Compare with**: in the History panel it 
 
 | Breakpoint | Layout |
 |---|---|
-| **Phone** `< 768 px` | Single column. **TopBar:** ☰ (left drawer), title with the connection dot, **+** (quick capture, §6.27), a switcher/search button (quick switcher; its sheet has a "Search in notes" row), edit/read toggle, a **tabs button** with the number of open tabs (the tab switcher, §6.40), and ⋯ (Command palette, Backlinks, Outline, History, Bookmark, Rename, Move, Delete, Template, Today, Reload). Phones show one pane. **Drawer:** full-height, 88 % width, slides in from the left; Files, Search, Bookmarks, Tags and Recent files tabs (plus registered left panels), **New note** and **Today** buttons, and a footer with **Settings**, **Trash** and the **theme toggle**. Right-side panels open as a **bottom sheet** (70 % height), dismissed by dragging its handle, or by swiping down only when its content is scrolled to the top, so scrolling the sheet never closes it. |
-| **Tablet** `768–1199 px` | The ribbon is a collapsed icon rail (48 px) that is always visible, so every desktop entry point (switcher, search, Today, template, new note, palette, Trash, Settings) stays one tap away on an iPad. Both sidebars are overlays over the editor, toggled from the rail or the TopBar. |
+| **Phone** `< 768 px` | Single column. **TopBar:** ☰ (left drawer), title with the connection dot, **+** (quick capture, §6.27), a switcher/search button (quick switcher; its sheet has a "Search in notes" row), edit/read toggle, a **tabs button** with the number of open tabs (the tab switcher, §6.40), and ⋯ (Command palette, Backlinks, Outline, History, Bookmark, Rename, Move, Delete, Template, Today, Help, Reload). Phones show one pane. **Drawer:** full-height, 88 % width, slides in from the left; Files, Search, Bookmarks, Tags and Recent files tabs (plus registered left panels), **New note** and **Today** buttons, and a footer with **Settings**, **Trash**, **Help** (§6.45) and the **theme toggle**. Right-side panels open as a **bottom sheet** (70 % height), dismissed by dragging its handle, or by swiping down only when its content is scrolled to the top, so scrolling the sheet never closes it. |
+| **Tablet** `768–1199 px` | The ribbon is a collapsed icon rail (48 px) that is always visible, so every desktop entry point (switcher, search, Today, template, new note, palette, Help, Trash, Settings) stays one tap away on an iPad. Both sidebars are overlays over the editor, toggled from the rail or the TopBar. |
 | **Desktop** `≥ 1200 px` | Ribbon (48 px), left sidebar (default 280 px, resizable 200–480), workspace (readable width 598 px, 46 em of the 13 px UI size, when `readableLineLength`), right sidebar (300 px, resizable). Status bar at the bottom. |
 
 **iOS and touch specifics:**
@@ -4197,6 +4201,30 @@ The server side is §5.39. A page shows **one vault for its whole life** (`state
 - **Features merged after item 37** need nothing of their own: the properties panel and editor (§6.41), the formula engine (§6.42), the script host's `queryNotes` (§6.43) and the `/` menu all reach the API through `apiFetch`, and the tabs and panes (§6.40) persist under `vaultKey`. The properties block's collapsed state and Settings › Scripts in notes are device preferences, shared by the vaults like the theme.
 - **Tests.** `state/vault.test.ts` (addresses, keys, titles, reminder links), `sw/core.test.ts` and `sw/push.test.ts` (vault routes, images and reminder actions), `components/vaults/Vaults.test.tsx` (switcher shown only with another vault, options and states, full-load switching, creation and its validation).
 
+### 6.45 Help: the user guide in the app
+
+The user guide is a set of Markdown pages in `docs/guide/` (an index and one page per area, task-oriented, written for the person using the app). It reads as ordinary Markdown on GitHub, and the app shows the same pages on its **Help** page, so a question such as "how do I write code" or "why does `=SUM` show `#NAME?`" has an answer one tap away.
+
+**Bundled, not stored in the vault.** The pages are part of the build, not notes:
+
+- `frontend/vite-plugin-guide.ts` serves the module `virtual:user-guide`, an object of page name → Markdown read from `../docs/guide/*.md` (LF line breaks; `index.md` required). A missing folder fails the build rather than shipping an empty Help page; the Dockerfile copies `docs/guide/` into the frontend stage (§7.1) and `.dockerignore` lets it through. In development an edited, added or removed page reloads the module.
+- Only `help/HelpPage.tsx` imports it (through `renderGuide.ts`), so the guide is a lazy chunk with the page (about 120 kB, 45 kB gzip, with the page's code): the initial bundle gains only the registration and two icons, and the service worker precaches it with every other chunk (§6.26), so Help works offline and always matches the app's version.
+- **Why not read-only notes in a Help vault or folder.** They would have to live in the user's vault (or a fake one in the tree), which Help must never touch: no files, no index entries, no search hits, no history. A bundled chunk needs no server, follows the deployed version exactly, and cannot be edited by accident.
+
+**The page** (`registerPage({route: 'help/*', hidden: true})`, so no ribbon or drawer page entry; Help has its own entries below). `/x/help` shows `index.md`, `/x/help/<page>` a page; the name is decoded from the pane's location (§6.4).
+
+- **Rendering.** The reading pipeline (§6.7, `renderNote`, then `hydrateRich`), with the guide as its world: a context whose `resolve` knows only guide pages (`guideLink`), `strictLineBreaks` on (GitHub's rule), remote images off. Callouts (`> [!TIP]`, which GitHub also shows), tables and highlighted code with Copy buttons work as in notes. Afterwards every heading gets GitHub's anchor (`headingSlug`: github-slugger's rule, `-1`, `-2` for repeats) as `data-anchor`, never `id`, so a page loaded with `#anchor` is not scrolled by the browser itself (which would also move the shell's `overflow: hidden` boxes); links to guide pages get their Help route and are followed with `navigateTo` (Mod-click and middle click keep the new-tab gestures, §6.40); web links get `target="_blank" rel="noopener noreferrer"`; checkboxes are disabled. Nothing is fetched and nothing is written.
+- **Anchors.** `#<anchor>` in the route scrolls the pane's scroll container (§6.16) to that heading and flashes it.
+- **Order.** The contents are the index's list items that start with a page link; pages follow that order (`pageOrder`) for **Previous** and **Next** at the bottom of each page. Links elsewhere in the index (its quick answers) do not change it.
+- **Search.** A field at the top of every Help page searches the whole guide as you type (`searchGuide`): each section (a `##` or `###` heading and its text, or a page's introduction) that holds every word, case-insensitively, scored by where the words are (heading, page title, text); a hit shows the page, the heading and a snippet, and opens the page at the heading. `Escape` clears it.
+- **Unknown pages** say so, with a link to the contents.
+
+**Entries.** The palette commands `help.open` (*Open help (user guide)*) and `help.shortcuts` (*Open help: keyboard shortcuts*, the cheat sheet page); the ribbon's bottom group (and the tablet rail), next to Trash and Settings; the phone drawer's footer; the phone and tablet top bar's ⋯; Settings (a *Help and user guide* link after the sections, and *User guide* in About); and a **Help** button in the home page's empty state. Opening Help closes the phone drawer, as page commands do.
+
+**The Welcome note** (§7.8) is a short guided tour that points to Help by the names of its entries ("Help › **Writing**"). It does not link to `/x/help` routes: a note's links are vault links, and a link to `/x/help/writing` would create a note there (§6.6). The mock API's seed holds the same `Welcome.md` (a test compares them) and keeps the editor showcase that used to be its Welcome as `Live Preview demo.md`.
+
+**Keeping the guide true.** `help/guide.test.ts` checks that every page has a title and is listed in the index, that every link between pages lands on a page and a heading that exist, that links to repository documents point to files that exist, that the anchors the Help page renders equal the source's (so GitHub and the app agree), and that the questions the guide was written for find their answers. Guide edits change the app, so CI's path filter deploys pushes that touch only `docs/guide/` (§7.5), while other docs-only pushes still do not restart production.
+
 ## 7. Infrastructure
 
 ### 7.1 `Dockerfile` (repo root)
@@ -4210,6 +4238,8 @@ WORKDIR /src/frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 COPY frontend/ ./
+# The user guide is bundled into the app's Help page (vite-plugin-guide.ts, DESIGN §6.45).
+COPY docs/guide/ /src/docs/guide/
 ARG GIT_SHA=dev
 ENV VITE_BUILD_SHA=${GIT_SHA}
 RUN npm run build
@@ -4317,6 +4347,7 @@ ENTRYPOINT ["java", "-XX:AOTCache=/app/notesapp.aot", "-jar", "application.jar"]
   .git
   .github
   docs
+  !docs/guide
   deploy
   dev-vault
   **/node_modules
@@ -4490,7 +4521,8 @@ on:
   pull_request:
   push:
     branches: [main]
-    paths-ignore: ['docs/**', 'README.md']   # docs-only pushes must not restart production
+    # Docs-only pushes must not restart production, except the user guide: the app's Help page bundles docs/guide.
+    paths: ['**', '!docs/**', 'docs/guide/**', '!README.md']
   schedule:
     - cron: '0 6 * * 1'                     # weekly: rebuild with fresh base images and pick up security fixes
   workflow_dispatch:
@@ -4613,7 +4645,7 @@ jobs:
 
 - **Two JDKs.** `backend` builds and tests on JDK 21, like the image's build stage and the development machine; `backend-jdk25` runs the same `verify` on the JDK the image runs (ROADMAP item 38). A separate job, not a matrix, keeps the existing `backend` check name, and `publish` waits for both.
 - **Why two files.** `ci.yml` calls `publish.yml` as a reusable workflow, gated on green tests and on `main`. Publishing therefore never happens on red, and `publish.yml` stays independently runnable.
-- **Triggers.** Docs-only pushes (`docs/**`, `README.md`) are skipped: every publish produces a new digest (the build stamps a created-time label), and Watchtower would restart production and drop every SSE stream for nothing. `**/*.md` is deliberately not ignored, because `backend/src/main/resources/welcome/Welcome.md` ships in the image. The weekly schedule rebuilds and republishes, so Temurin and Ubuntu security fixes arrive without a code change.
+- **Triggers.** Docs-only pushes (`docs/**`, `README.md`) are skipped: every publish produces a new digest (the build stamps a created-time label), and Watchtower would restart production and drop every SSE stream for nothing. The exception is `docs/guide/**`: the user guide is bundled into the app (§6.45), so a guide-only push is built and deployed like code (GitHub's `paths` filter, where a later pattern re-includes what an earlier `!` pattern left out). `**/*.md` is deliberately not ignored, because `backend/src/main/resources/welcome/Welcome.md` ships in the image. The weekly schedule rebuilds and republishes, so Temurin and Ubuntu security fixes arrive without a code change.
 - **Pinning.** WP-Infra pins every action to the full commit SHA of the version shown above, with the version as a comment (`uses: actions/checkout@<40 hex> # v7`). The publishing job holds `packages: write`, and anything it pushes reaches `homeserver` within 5 minutes, so a re-pushed tag must not be able to change what runs.
 - **Tags.** `type=sha` produces `sha-<7 hex>`. `latest` is only added on the default branch.
 - **GHCR.** The first publish creates a **private** package linked to the repo. It stays private: the server pulls with a classic PAT that has only the `read:packages` scope (fine-grained PATs are not supported by GitHub Packages), created **without an expiry**, so an expired token can never silently stop deploys. The same PAT backs Watchtower's credentials directory.
@@ -4679,7 +4711,7 @@ On the first `docker compose up -d` with empty volumes:
 2. The app finds `/data/vault` empty:
    - it creates `.notesapp/settings.json` with defaults;
    - it runs `git init` on `main` and writes the config and `info/exclude`;
-   - it writes `Welcome.md`, a short tour covering links, tags, daily notes, the shortcuts table and where history lives;
+   - it writes `Welcome.md`, a short guided tour (writing, links, finding things, a table with a formula, planning, history) that points to the built-in user guide, Help (§6.45);
    - it builds the index and starts serving;
    - right after readiness, it commits `Initial commit` in the background.
 3. Opening `https://notes.<tailnet>.ts.net` on any allowed tailnet device shows `Welcome.md`.
