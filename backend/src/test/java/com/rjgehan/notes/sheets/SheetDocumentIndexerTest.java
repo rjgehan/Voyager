@@ -119,11 +119,39 @@ class SheetDocumentIndexerTest {
 	}
 
 	@Test
+	void versionTwoFilesWithFiltersRulesAndValidationAreIndexedLikeVersionOne() {
+		String text = """
+				{
+				  "type": "notesapp-sheet",
+				  "version": 2,
+				  "engine": "hyperformula@3.4.0",
+				  "sheets": [
+				    {
+				      "id": "s1",
+				      "name": "Budget",
+				      "cells": { "A1": { "v": "Open" }, "B1": { "v": true } },
+				      "cols": {},
+				      "rows": {},
+				      "frozen": { "rows": 0, "cols": 0 },
+				      "filter": { "range": "A1:B9", "cols": { "A": { "hide": ["Done"] } } },
+				      "conditional": { "r1": { "range": "A1:A9", "when": "textIs", "value": "Hidden", "bg": "#ffffff" } },
+				      "validation": { "v1": { "range": "A1:A9", "type": "list", "values": ["Open", "Done"] } }
+				    }
+				  ],
+				  "named": {}
+				}
+				""";
+		assertThat(blocks(text)).containsExactly("Budget", "Open", "TRUE");
+	}
+
+	@Test
 	void filesThatAreNotReadableSheetsAreNotContentIndexed() {
 		assertThat(this.indexer.index("A.sheet", "{\"type\": \"notesapp-sheet\", \"sheets\": [")).isNull();
 		assertThat(this.indexer.index("A.sheet", "[1, 2]")).isNull();
 		assertThat(this.indexer.index("A.sheet", "{\"type\": \"excalidraw\", \"elements\": []}")).isNull();
-		assertThat(this.indexer.index("A.sheet", "{\"type\": \"notesapp-sheet\", \"version\": 2, \"sheets\": []}"))
+		assertThat(this.indexer.index("A.sheet", "{\"type\": \"notesapp-sheet\", \"version\": 3, \"sheets\": []}"))
+			.isNull();
+		assertThat(this.indexer.index("A.sheet", "{\"type\": \"notesapp-sheet\", \"version\": 0, \"sheets\": []}"))
 			.isNull();
 		assertThat(this.indexer.index("A.sheet", "{\"type\": \"notesapp-sheet\", \"version\": \"1\"}")).isNull();
 	}

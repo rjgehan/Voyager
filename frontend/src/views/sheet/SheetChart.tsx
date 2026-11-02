@@ -217,7 +217,7 @@ export function SheetChart({ sheet, chart, height = 200, actions }: Props) {
         <>
           {legend.length > 0 && <Legend items={legend} />}
           <div className="sheet-chart-plot" style={{ height }}>
-            {type === 'pie' ? <PieChart data={result.data} width={width} height={height} /> : <CartesianChart data={result.data} type={type} width={width} height={height} />}
+            {type === 'pie' ? <PieChart data={result.data} width={width} height={height} /> : <CartesianChart data={result.data} type={type === 'line' ? 'line' : 'bar'} width={width} height={height} />}
           </div>
           {hidden > 0 && (
             <p className="sheet-chart-note">

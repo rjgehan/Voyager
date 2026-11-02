@@ -35,7 +35,11 @@ public class SheetDocumentIndexer implements DocumentIndexer {
 
 	private static final String TYPE = "notesapp-sheet";
 
-	private static final int VERSION = 1;
+	/**
+	 * The newest format version read (DESIGN §6.21.1). Version 2 adds filters, conditional formatting
+	 * and data validation, which change nothing indexed.
+	 */
+	private static final int VERSION = 2;
 
 	private static final Pattern CELL = Pattern.compile("([A-Z]{1,3})([1-9][0-9]{0,6})");
 
@@ -72,7 +76,8 @@ public class SheetDocumentIndexer implements DocumentIndexer {
 			return null;
 		}
 		JsonNode version = root.get("version");
-		if (version != null && !(version.isIntegralNumber() && version.canConvertToInt() && version.intValue() == VERSION)) {
+		if (version != null && !(version.isIntegralNumber() && version.canConvertToInt() && version.intValue() >= 1
+				&& version.intValue() <= VERSION)) {
 			// A newer format is shown read-only by the frontend until NotesApp is updated; its layout is unknown.
 			return null;
 		}

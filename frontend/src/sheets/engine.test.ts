@@ -876,3 +876,117 @@ describe('inserting and deleting rows and columns', () => {
     expect(wb.canUndo()).toBe(false);
   });
 });
+
+describe('conditional formatting, validation, filters and sorting (format version 2)', () => {
+  const data = () =>
+    workbook([
+      {
+        name: 'Data',
+        cells: {
+          A1: { v: 'Item' },
+          B1: { v: 'Cost' },
+          C1: { v: 'Double' },
+          A2: { v: 'Rent' },
+          B2: { v: 1450 },
+          C2: { f: '=B2*2' },
+          A3: { v: 'Food' },
+          B3: { v: 300, fmt: '$#,##0' },
+          C3: { f: '=B3*2' },
+          A4: { v: 'Gym' },
+          B4: { v: 45 },
+          C4: { f: '=B4*2' },
+          D6: { f: '=SUM(B2:B4)' },
+        },
+      },
+      { name: 'Lists', cells: { A1: { v: 'Rent' } } },
+    ]);
+  const saved = (wb: Workbook) => file(JSON.parse(wb.serialize()));
+
+  it('adds, changes and removes rules and validation as undoable steps, kept in the file', () => {
+    const wb = data();
+    const r = wb.addItem('conditional', 's1', { range: 'B2:B4', when: 'gt', value: '100', bg: '#f4c7c3' });
+    const v = wb.addItem('validation', 's1', { range: 'A2:A4', type: 'range', source: 'Lists!A1:A3' });
+    expect(r).toMatch(/^r/);
+    expect(v).toMatch(/^v/);
+    expect(saved(wb).sheets[0].conditional?.[r]).toEqual({ range: 'B2:B4', when: 'gt', value: '100', bg: '#f4c7c3' });
+    wb.setItem('conditional', 's1', r, { range: 'B2:B4', when: 'lt', value: '100', bg: '#f4c7c3' });
+    expect(wb.file.sheets[0].conditional?.[r].when).toBe('lt');
+    wb.setItem('conditional', 's1', r, null);
+    expect(wb.file.sheets[0].conditional).toBeUndefined();
+    expect(wb.serialize()).toContain('"version": 2');
+    wb.undo();
+    expect(wb.file.sheets[0].conditional?.[r].when).toBe('lt');
+    wb.undo();
+    wb.undo();
+    wb.undo();
+    expect(wb.file.sheets[0].conditional).toBeUndefined();
+    expect(wb.file.sheets[0].validation).toBeUndefined();
+    expect(wb.serialize()).toContain('"version": 1');
+  });
+
+  it('sets a filter as one step; a removed sheet takes its rules with it, and undo brings them back', () => {
+    const wb = data();
+    wb.setFilter('s1', { range: 'A1:C4', cols: { A: { hide: ['Gym'] } }, sort: { col: 'B' } });
+    expect(saved(wb).sheets[0].filter).toEqual({ range: 'A1:C4', sort: { col: 'B' }, cols: { A: { hide: ['Gym'] } } });
+    wb.addItem('conditional', 's2', { range: 'A1:A3', when: 'notEmpty', bold: true });
+    wb.removeSheet('s2');
+    wb.undo();
+    expect(Object.values(wb.file.sheets[1].conditional ?? {})).toEqual([{ range: 'A1:A3', when: 'notEmpty', bold: true }]);
+    wb.setFilter('s1', null);
+    expect(wb.file.sheets[0].filter).toBeUndefined();
+    wb.undo();
+    expect(wb.file.sheets[0].filter?.range).toBe('A1:C4');
+  });
+
+  it('sorts a range by a column: cells move with their formats, formulas as if copied, one undo step', () => {
+    const wb = data();
+    const structure = wb.file.sheets[0].structure;
+    wb.sortRange('s1', { col: 0, row: 1, width: 3, height: 3 }, [{ col: 1 }]);
+    const s = wb.file.sheets[0];
+    expect(['A2', 'A3', 'A4'].map((r) => s.cells[r].v)).toEqual(['Gym', 'Food', 'Rent']);
+    expect([s.cells.B3, s.cells.C2.f, s.cells.C4.f]).toEqual([{ v: 300, fmt: '$#,##0' }, '=B2*2', '=B4*2']);
+    expect([value(wb, 'C2'), value(wb, 'C4'), value(wb, 'D6')]).toEqual([90, 2900, 1795]);
+    // Cells moved: a merge with other edits shows the banner.
+    expect(s.structure).not.toBe(structure);
+    wb.sortRange('s1', { col: 0, row: 1, width: 3, height: 3 }, [{ col: 0, desc: true }]);
+    expect(['A2', 'A3', 'A4'].map((r) => wb.file.sheets[0].cells[r].v)).toEqual(['Rent', 'Gym', 'Food']);
+    wb.undo();
+    wb.undo();
+    expect(['A2', 'A3', 'A4'].map((r) => wb.file.sheets[0].cells[r].v)).toEqual(['Rent', 'Food', 'Gym']);
+    expect(saved(Workbook.open(saved(wb))).sheets[0].cells.C4).toEqual({ f: '=B4*2', c: 90 });
+  });
+
+  it('moves rule, validation and filter ranges with inserted and deleted rows and columns', () => {
+    const wb = data();
+    const r = wb.addItem('conditional', 's1', { range: 'B2:B4', when: 'gt', value: '100', bg: '#f4c7c3' });
+    const v = wb.addItem('validation', 's2', { range: 'B1:B3', type: 'range', source: 'Data!A2:A4' });
+    const gone = wb.addItem('validation', 's1', { range: 'C2:C4', type: 'checkbox' });
+    wb.setFilter('s1', { range: 'A1:C4', cols: { B: { when: 'gt', value: '10' }, C: { hide: ['90'] } }, sort: { col: 'C', desc: true } });
+    wb.insertRows('s1', 1, 2);
+    expect(wb.file.sheets[0].conditional?.[r].range).toBe('B4:B6');
+    expect(wb.file.sheets[1].validation?.[v].source).toBe('Data!A4:A6');
+    expect(wb.file.sheets[0].filter?.range).toBe('A1:C6');
+    wb.insertColumns('s1', 0, 1);
+    expect(wb.file.sheets[0].conditional?.[r].range).toBe('C4:C6');
+    expect(wb.file.sheets[0].filter).toEqual({ range: 'B1:D6', sort: { col: 'D', desc: true }, cols: { C: { when: 'gt', value: '10' }, D: { hide: ['90'] } } });
+    wb.deleteColumns('s1', 3, 1);
+    expect(wb.file.sheets[0].validation?.[gone]).toBeUndefined();
+    expect(wb.file.sheets[0].filter).toEqual({ range: 'B1:C6', cols: { C: { when: 'gt', value: '10' } } });
+    wb.undo();
+    expect(wb.file.sheets[0].validation?.[gone]?.range).toBe('D4:D6');
+  });
+
+  it('moves rules with cut cells, and dropdown sources follow moved cells and renamed sheets', () => {
+    const wb = data();
+    const r = wb.addItem('conditional', 's1', { range: 'B2:B4', when: 'empty', italic: true });
+    const v = wb.addItem('validation', 's1', { range: 'E1:E3', type: 'range', source: 'Lists!A1:A3' });
+    wb.moveCells({ sheet: 's1', range: { col: 0, row: 0, width: 3, height: 4 } }, { sheet: 's1', col: 5, row: 10 });
+    expect(wb.file.sheets[0].conditional?.[r].range).toBe('G12:G14');
+    wb.moveCells({ sheet: 's2', range: { col: 0, row: 0, width: 1, height: 3 } }, { sheet: 's2', col: 1, row: 0 });
+    expect(wb.file.sheets[0].validation?.[v].source).toBe('Lists!B1:B3');
+    wb.renameSheet('s2', 'Choices');
+    expect(wb.file.sheets[0].validation?.[v].source).toBe('Choices!B1:B3');
+    wb.undo();
+    expect(wb.file.sheets[0].validation?.[v].source).toBe('Lists!B1:B3');
+  });
+});

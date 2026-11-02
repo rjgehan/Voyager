@@ -87,7 +87,7 @@ describe('parseSheet', () => {
       ['a list', [], /not a JSON object/],
       ['another type', { type: 'excalidraw' }, /not a NotesApp sheet/],
       ['a missing type', { sheets: [] }, /not a NotesApp sheet/],
-      ['a newer format', { ...EXAMPLE, version: 2 }, /newer NotesApp \(format version 2\)/],
+      ['a newer format', { ...EXAMPLE, version: 3 }, /newer NotesApp \(format version 3\)/],
       ['an unknown version', { ...EXAMPLE, version: '1' }, /Unknown format version/],
       ['sheets that are not a list', { ...EXAMPLE, sheets: {} }, /"sheets" is not a list/],
       ['a sheet that is not an object', { ...EXAMPLE, sheets: [1] }, /Sheet 1 is not an object/],
@@ -107,7 +107,7 @@ describe('parseSheet', () => {
     });
 
     it('marks only a newer format as newer, which the view shows read-only', () => {
-      expect(parseSheet(JSON.stringify({ ...EXAMPLE, version: 2 }))).toMatchObject({ ok: false, newer: true });
+      expect(parseSheet(JSON.stringify({ ...EXAMPLE, version: 3 }))).toMatchObject({ ok: false, newer: true });
       expect(parseSheet(JSON.stringify({ ...EXAMPLE, version: '1' }))).not.toHaveProperty('newer');
     });
 
@@ -402,19 +402,19 @@ describe('number formats and charts (6c)', () => {
         cells: { A1: { v: 'x' } },
         charts: {
           c2: { type: 'pie', range: 'A1:B4', title: 'Split', labels: true },
-          c1: { type: 'bar', range: 'A1:C7', headers: true, labels: false, legend: 'top' },
+          c1: { type: 'bar', range: 'A1:C7', headers: true, labels: false, theme: 'dark' },
         },
       }),
     );
     expect(repairs).toEqual([]);
     expect(file.sheets[0].charts).toEqual({
-      c1: { type: 'bar', range: 'A1:C7', headers: true, labels: false, extra: { legend: 'top' } },
+      c1: { type: 'bar', range: 'A1:C7', headers: true, labels: false, extra: { theme: 'dark' } },
       c2: { type: 'pie', range: 'A1:B4', title: 'Split', labels: true },
     });
     const text = serializeSheet(file);
     expect(text).toContain(`      "frozen": { "rows": 0, "cols": 0 },
       "charts": {
-        "c1": { "type": "bar", "range": "A1:C7", "headers": true, "labels": false, "legend": "top" },
+        "c1": { "type": "bar", "range": "A1:C7", "headers": true, "labels": false, "theme": "dark" },
         "c2": { "type": "pie", "range": "A1:B4", "title": "Split", "labels": true }
       }
     }`);
@@ -483,5 +483,91 @@ describe('a sheet’s structure marker', () => {
     const odd = parseSheet(text(7));
     expect(odd.ok && odd.repairs).toEqual(['Sheet "S": "structure" is not text; it is kept unchanged.']);
     expect(serializeSheet((odd as { file: SheetFile }).file)).toContain('"structure": 7');
+  });
+});
+
+describe('format version 2: filters, conditional formatting and data validation', () => {
+  const V2 = {
+    filter: { range: 'A1:C9', sort: { col: 'b', desc: true }, cols: { c: { hide: ['', 'Done'], when: 'gt', value: '10' } } },
+    conditional: {
+      r2: { range: 'B2:B9', scale: { min: '#ffffff', max: '#57bb8a' } },
+      r1: { range: 'B2:B9', when: 'between', value: '1', value2: '5%', bg: '#B7E1CD', color: '#0d652d', bold: true, italic: false },
+    },
+    validation: {
+      v1: { range: 'C2:C9', type: 'list', values: ['Open', 'Done'], strict: true },
+      v2: { range: 'D2:D9', type: 'range', source: "'My lists'!A1:A5" },
+      v3: { range: 'E2:E9', type: 'checkbox' },
+    },
+  };
+
+  it('reads them without repairs, writes them after the charts in a stable layout, as version 2', () => {
+    const { file, repairs } = parse(withSheet({ cells: { A1: { v: 'x' } }, ...V2, structure: 'abc' }));
+    expect(repairs).toEqual(['Sheet "Sheet1" filter columns: "c" is written as "C".']);
+    const sheet = file.sheets[0];
+    expect(sheet.filter).toEqual({ range: 'A1:C9', sort: { col: 'B', desc: true }, cols: { C: { hide: ['', 'Done'], when: 'gt', value: '10' } } });
+    expect(sheet.conditional?.r1).toEqual({ range: 'B2:B9', when: 'between', value: '1', value2: '5%', bg: '#B7E1CD', color: '#0d652d', bold: true, italic: false });
+    expect(sheet.validation?.v2).toEqual({ range: 'D2:D9', type: 'range', source: "'My lists'!A1:A5" });
+    const text = serializeSheet(file);
+    expect(text).toContain('  "version": 2,');
+    expect(text).toContain(`      "frozen": { "rows": 0, "cols": 0 },
+      "filter": { "range": "A1:C9", "sort": { "col": "B", "desc": true }, "cols": { "C": { "hide": ["", "Done"], "when": "gt", "value": "10" } } },
+      "conditional": {
+        "r1": { "range": "B2:B9", "when": "between", "value": "1", "value2": "5%", "bg": "#B7E1CD", "color": "#0d652d", "bold": true, "italic": false },
+        "r2": { "range": "B2:B9", "scale": { "min": "#ffffff", "max": "#57bb8a" } }
+      },
+      "validation": {
+        "v1": { "range": "C2:C9", "type": "list", "values": ["Open", "Done"], "strict": true },
+        "v2": { "range": "D2:D9", "type": "range", "source": "'My lists'!A1:A5" },
+        "v3": { "range": "E2:E9", "type": "checkbox" }
+      },
+      "structure": "abc"
+    }`);
+    const again = parse(text);
+    expect(again.repairs).toEqual([]);
+    expect(again.file).toEqual({ ...file, version: 2 });
+    expect(serializeSheet(again.file)).toBe(text);
+  });
+
+  it('writes version 1, in the earlier layout, while a file uses none of them', () => {
+    const { file } = parse(withSheet({ cells: { A1: { v: 1 } }, conditional: {}, validation: {} }));
+    expect(file.sheets[0].conditional).toBeUndefined();
+    const text = serializeSheet(file);
+    expect(text).toContain('  "version": 1,');
+    expect(text).not.toMatch(/conditional|validation|filter/);
+    // A version 2 file whose last rule went is version 1 again.
+    const v2 = parse({ ...withSheet({ ...V2 }), version: 2 }).file;
+    expect(serializeSheet(v2)).toContain('"version": 2');
+    delete v2.sheets[0].filter;
+    delete v2.sheets[0].conditional;
+    delete v2.sheets[0].validation;
+    expect(serializeSheet(v2)).toContain('"version": 1');
+  });
+
+  it('keeps unusable values aside, and a collection that is not an object, instead of refusing', () => {
+    const { file, repairs } = parse(
+      withSheet({
+        conditional: { r1: { range: 'A1:A3', when: 'bigger', bg: 'red', scale: { min: '#fff' } } },
+        validation: { v1: { type: 'radio', values: [1, 2], strict: 'yes' } },
+        filter: { range: 5, sort: { col: '1' }, cols: { A: { hide: 'x' } } },
+      }),
+    );
+    expect(repairs).toHaveLength(9);
+    expect(file.sheets[0].conditional?.r1).toEqual({ range: 'A1:A3', extra: { when: 'bigger', bg: 'red', scale: { min: '#fff' } } });
+    expect(file.sheets[0].validation?.v1).toEqual({ extra: { type: 'radio', values: [1, 2], strict: 'yes' } });
+    expect(file.sheets[0].filter).toEqual({ cols: { A: { extra: { hide: 'x' } } }, extra: { range: 5, sort: { col: '1' } } });
+    const text = serializeSheet(file);
+    expect(parse(text).file.sheets[0]).toEqual(file.sheets[0]);
+    const odd = parse(withSheet({ conditional: [1], filter: 'on' }));
+    expect(odd.file.sheets[0].extra).toEqual({ conditional: [1], filter: 'on' });
+    expect(serializeSheet(odd.file)).toContain('"conditional": [\n        1\n      ]');
+    expect(refusal(withSheet({ validation: { v1: 'list' } }))).toMatch(/validation v1 is not an object/);
+  });
+
+  it('reads the new chart options', () => {
+    const { file, repairs } = parse(withSheet({ charts: { c1: { type: 'hbar', range: 'A1:B3', stacked: true, legend: 'bottom', xTitle: 'Month', yTitle: 'Cost' }, c2: { type: 'pie', donut: true, legend: 'left' } } }));
+    expect(repairs).toHaveLength(1);
+    expect(file.sheets[0].charts.c1).toEqual({ type: 'hbar', range: 'A1:B3', stacked: true, legend: 'bottom', xTitle: 'Month', yTitle: 'Cost' });
+    expect(file.sheets[0].charts.c2).toEqual({ type: 'pie', donut: true, extra: { legend: 'left' } });
+    expect(serializeSheet(file)).toContain('"c1": { "type": "hbar", "range": "A1:B3", "stacked": true, "legend": "bottom", "xTitle": "Month", "yTitle": "Cost" }');
   });
 });

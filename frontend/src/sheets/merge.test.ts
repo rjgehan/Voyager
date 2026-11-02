@@ -432,3 +432,69 @@ describe('inserted or deleted rows and columns', () => {
 });
 
 const notesOf = (f: SheetFile) => f.sheets.find((s) => s.id === 's2')!;
+
+describe('mergeSheetText with filters, conditional formatting and validation (version 2)', () => {
+  it('merges rules and validation per id, and conflicts on two changes of one', () => {
+    const merged = merge(
+      (f) => {
+        budget(f).conditional = { r1: { range: 'B2:B9', when: 'gt', value: '1000', bg: '#f4c7c3' } };
+      },
+      (f) => {
+        budget(f).validation = { v1: { range: 'A2:A9', type: 'list', values: ['Rent', 'Food'] } };
+        budget(f).cells.B3 = { v: 320 };
+      },
+    );
+    expect(budget(merged!).conditional).toEqual({ r1: { range: 'B2:B9', when: 'gt', value: '1000', bg: '#f4c7c3' } });
+    expect(budget(merged!).validation).toEqual({ v1: { range: 'A2:A9', type: 'list', values: ['Rent', 'Food'] } });
+    expect(budget(merged!).cells.B3).toEqual({ v: 320 });
+    expect(serializeSheet(merged!)).toContain('"version": 2');
+    const withRule = (bg: string) => (f: SheetFile) => {
+      budget(f).conditional = { r1: { range: 'B2:B9', when: 'gt', value: '1000', bg } };
+    };
+    expect(merge(withRule('#ffffff'), withRule('#000000'))).toBeNull();
+  });
+
+  it('merges a filter per part: a hidden value on one side, a sort on the other', () => {
+    const baseFilter = () => ({ range: 'A1:B9', cols: {} });
+    const text = (edit: (f: SheetFile) => void) =>
+      edited((f) => {
+        budget(f).filter = baseFilter();
+        edit(f);
+      });
+    const result = mergeSheetText(
+      text(() => {}),
+      text((f) => {
+        budget(f).filter!.cols = { A: { hide: ['Rent'] } };
+      }),
+      text((f) => {
+        budget(f).filter!.sort = { col: 'B', desc: true };
+      }),
+    );
+    const parsed = parseSheet(result!);
+    expect(parsed.ok && budget(parsed.file).filter).toEqual({ range: 'A1:B9', sort: { col: 'B', desc: true }, cols: { A: { hide: ['Rent'] } } });
+    // Removed on one side and changed on the other: the banner.
+    expect(
+      mergeSheetText(
+        text(() => {}),
+        text((f) => {
+          delete budget(f).filter;
+        }),
+        text((f) => {
+          budget(f).filter!.sort = { col: 'A' };
+        }),
+      ),
+    ).toBeNull();
+  });
+
+  it('renames the other side’s dropdown sources with a renamed sheet', () => {
+    const merged = merge(
+      (f) => {
+        f.sheets[1].name = 'Lists';
+      },
+      (f) => {
+        budget(f).validation = { v1: { range: 'A2:A9', type: 'range', source: 'Notes!A1:A5' } };
+      },
+    );
+    expect(budget(merged!).validation?.v1.source).toBe('Lists!A1:A5');
+  });
+});

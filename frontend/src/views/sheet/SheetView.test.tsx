@@ -612,7 +612,7 @@ describe('the spreadsheet view', () => {
   });
 
   it('shows a file a newer NotesApp wrote read-only, without inviting a fix', async () => {
-    const text = '{"type": "notesapp-sheet", "version": 2, "sheets": []}';
+    const text = '{"type": "notesapp-sheet", "version": 3, "sheets": []}';
     const path = await open(text);
     expect(await screen.findByText(/read-only here/, {}, { timeout: 5000 })).toBeInTheDocument();
     expect(screen.getByText(/saved by a newer NotesApp/)).toBeInTheDocument();
