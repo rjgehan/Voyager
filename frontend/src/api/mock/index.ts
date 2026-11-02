@@ -75,6 +75,7 @@ export function createMockEndpoints(vault: MockVault, controls: { latency: numbe
     deleteFolder: (path) => call(() => vault.deleteFolder(path, clientId)),
     move: (req) => call(() => vault.move(req, clientId)),
     getNoteMeta: (path) => call(() => vault.getNoteMeta(path)),
+    queryNotes: (filter) => call(() => vault.queryNotes(filter)),
     getBacklinks: (path, unlinked) => call(() => vault.getBacklinks(path, unlinked)),
     resolveLinks: (req) => call(() => ({ resolved: vault.resolveTargets(req.source, req.targets) })),
     search: (q, opts = {}) => call(() => vault.search(q, opts.limit, opts.sort, opts.prefix ?? false)),

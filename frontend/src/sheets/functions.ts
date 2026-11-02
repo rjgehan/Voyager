@@ -76,6 +76,11 @@ const NAMED: Record<string, string> = {
   ISNUMBER: 'value',
   CHOOSE: 'index, choice',
   SWITCH: 'expression, case, value',
+  // Reading notes (ROADMAP item 42, links/noteFunctions.ts).
+  NOTEPROP: 'note, property',
+  NOTETABLE: 'note, table, headers',
+  NOTECOUNT: 'query',
+  NOTEQUERY: 'query, columns, headers',
 };
 
 const RANKS = new Map(Object.keys(NAMED).map((name, i) => [name, i]));

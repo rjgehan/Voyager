@@ -62,6 +62,8 @@ import {
   type FormulaRef,
   type LineChange,
 } from './refs';
+// The functions that read notes (ROADMAP item 42), registered before any engine is built.
+import './links/noteFunctions';
 
 export { functionCatalog } from './functions';
 
@@ -279,7 +281,8 @@ export interface WorkbookChange {
   cells: Map<string, Set<string>> | null;
   /** Sheets (added, removed, renamed, reordered, frozen panes), columns, rows or named ranges changed. */
   layout: boolean;
-  origin: 'edit' | 'undo' | 'redo' | 'replace';
+  /** `recalc`: formulas that read notes computed again (ROADMAP item 42); not an edit, nothing to save. */
+  origin: 'edit' | 'undo' | 'redo' | 'replace' | 'recalc';
 }
 
 export interface CellEdit {
@@ -327,13 +330,19 @@ export class Workbook {
   private transaction: { patch: Patch; change: WorkbookChange } | null = null;
   private listeners = new Set<(change: WorkbookChange) => void>();
   private readonly openedStale: boolean;
+  /** HyperFormula's `context`: what formulas that read other files need (ROADMAP item 42, links/store.ts). */
+  private readonly context: unknown;
 
-  /** Loads and calculates a parsed file. The caller's object is not modified. */
-  static open(file: SheetFile): Workbook {
-    return new Workbook(file);
+  /**
+   * Loads and calculates a parsed file. The caller's object is not modified. `context` reaches the
+   * functions that read notes (the file's path, what they read).
+   */
+  static open(file: SheetFile, context?: unknown): Workbook {
+    return new Workbook(file, context);
   }
 
-  private constructor(file: SheetFile) {
+  private constructor(file: SheetFile, context?: unknown) {
+    this.context = context;
     this.model = JSON.parse(JSON.stringify(file)) as SheetFile;
     this.model.engine = ENGINE_ID;
     this.rebuild();
@@ -798,6 +807,38 @@ export class Workbook {
     return true;
   }
 
+  // ---------- formulas that read notes (ROADMAP item 42) ----------
+
+  /**
+   * Computes again the formulas `match` picks: those whose inputs live outside the workbook (notes,
+   * DESIGN §6.45), which the engine cannot know have changed. Not an edit: no undo step, and the
+   * change's origin is `recalc`, which the view does not save (as `NOW()` is not saved on its own).
+   * Listeners hear of it only when a value changed.
+   */
+  recalculate(match: (formula: string) => boolean): void {
+    const targets: Array<[string, string, SimpleCellAddress, string]> = [];
+    for (const sheet of this.model.sheets) {
+      for (const [ref, cell] of Object.entries(sheet.cells)) {
+        const at = cell.f !== undefined && match(cell.f) ? this.address(sheet.id, ref) : null;
+        if (at) targets.push([sheet.id, ref, at, cell.f!]);
+      }
+    }
+    if (targets.length === 0) return;
+    const hf = this.engine;
+    const before = targets.map(([id, ref]) => JSON.stringify(this.cell(id, ref)?.c ?? null));
+    const change: WorkbookChange = { cells: new Map(), layout: false, origin: 'recalc' };
+    const exported = hf.batch(() => {
+      for (const [, , at, f] of targets) hf.setCellContents(at, f);
+    });
+    targets.forEach(([id, ref], i) => {
+      this.refreshCell(id, ref);
+      if (JSON.stringify(this.cell(id, ref)?.c ?? null) !== before[i]) noteCell(change, id, ref);
+    });
+    this.takeExported(exported, change);
+    this.retryBlockedSpills(change);
+    if (change.cells === null || change.cells.size > 0) this.emit(change);
+  }
+
   // ---------- remote changes ----------
 
   /**
@@ -1096,7 +1137,7 @@ export class Workbook {
   /** Builds the engine from the model and recomputes every cached value. */
   private rebuild(): void {
     this.hf?.destroy();
-    const hf = HyperFormula.buildEmpty(engineConfig());
+    const hf = HyperFormula.buildEmpty(this.context === undefined ? engineConfig() : { ...engineConfig(), context: this.context });
     if (hf.licenseKeyValidityState !== 'valid') throw new Error(`The HyperFormula licence key is ${hf.licenseKeyValidityState}.`);
     this.hf = hf;
     this.engineIds.clear();
