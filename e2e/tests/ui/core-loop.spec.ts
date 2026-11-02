@@ -13,7 +13,9 @@ test('create a note, write in Live Preview and link another note from autocomple
   await createFile(`${target}.md`, `# ${target}\n\nRaised beds.\n`);
   const title = unique('Ideas');
 
-  await page.goto('/');
+  // Start from an open note: New note in the first moment after the app opens races the start
+  // page (a known bug, tests/ui/known-bugs.spec.ts).
+  await openNote(page, `${target}.md`);
   await newNote(page);
   await page.keyboard.type(title);
   await page.keyboard.press('Enter'); // from the title into the body

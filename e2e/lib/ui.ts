@@ -20,14 +20,14 @@ export const editor = (page: Page): Locator => page.locator('.note-editor > .cm-
 export const noteTitle = (page: Page) => page.getByRole('textbox', { name: 'Note title' }).first();
 
 /** New note, the way each device reaches it: the ribbon on the PC, the drawer on the phone. */
-export async function newNote(page: Page) {
+export async function newNote(page: Page, { waitForTitle = true } = {}) {
   if (isPhone(page)) {
     await page.getByRole('button', { name: 'Open sidebar' }).click();
     await page.getByRole('dialog', { name: 'Sidebar' }).getByRole('button', { name: 'New note' }).first().click();
   } else {
     await page.getByRole('button', { name: 'Create new note' }).click();
   }
-  await expect(noteTitle(page)).toBeFocused();
+  if (waitForTitle) await expect(noteTitle(page)).toBeFocused();
 }
 
 /**
@@ -56,6 +56,7 @@ export async function secondDevice(browser: Browser, testInfo: TestInfo) {
     userAgent: u.userAgent,
     storageState: u.storageState,
     serviceWorkers: u.serviceWorkers,
+    locale: u.locale,
   });
   return { context, page: await context.newPage() };
 }
@@ -81,4 +82,14 @@ export async function leaveCell(page: Page, cellName: string) {
     await page.waitForTimeout(100);
   }
   await expect(cell).toHaveCount(0);
+}
+
+/**
+ * Puts the caret in the note and waits until the editor's lazily loaded parts (rich paste and the
+ * like) have arrived, as they have for anyone who has been editing for a moment.
+ */
+export async function focusEditor(page: Page) {
+  await editor(page).locator('.cm-line').first().click();
+  // Not 'networkidle': the live event stream never ends. The chunks load in well under a second.
+  await page.waitForTimeout(1000);
 }

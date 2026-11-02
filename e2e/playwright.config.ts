@@ -11,10 +11,17 @@ import { browserChannel, desktop, iphone, prefs } from './lib/device';
  * Every UI test runs on both devices unless its title says `@desktop` or `@phone`.
  */
 const channel = browserChannel();
+// The inventory wipes screens-output/ and takes minutes: it runs only when asked for by name
+// (`npm run screens`), never as part of a bare `npx playwright test`.
+// Workers load this file again without the command line, so the choice travels in the environment.
+if (process.argv.some((a) => a.includes('screens'))) process.env.E2E_SCREENS = '1';
+const wantScreens = process.env.E2E_SCREENS === '1';
 const device = (d: typeof desktop | typeof iphone) => ({
   ...d,
   baseURL: WEB_URL,
   channel,
+  // Dates and day names in the tests are written in US English, whatever the machine's language.
+  locale: 'en-US',
   // Service workers would cache the app between tests; the suite tests the page itself.
   serviceWorkers: 'block' as const,
   storageState: {
@@ -47,6 +54,6 @@ export default defineConfig({
     { name: 'api', testMatch: /api\/.*\.spec\.ts/ },
     { name: 'desktop', testMatch: /ui\/.*\.spec\.ts/, grepInvert: /@phone/, use: device(desktop) },
     { name: 'iphone', testMatch: /ui\/.*\.spec\.ts/, grepInvert: /@desktop/, use: device(iphone) },
-    { name: 'screens', testMatch: /screens\/.*\.spec\.ts/, use: device(iphone), timeout: 600_000 },
+    ...(wantScreens ? [{ name: 'screens', testMatch: /screens\/.*\.spec\.ts/, use: device(iphone), timeout: 600_000 }] : []),
   ],
 });

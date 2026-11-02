@@ -8,7 +8,7 @@
 //
 // The jar is rebuilt by itself when backend/src or backend/pom.xml is newer than it, the frontend
 // build (--prod) when frontend/src, index.html or the lockfile is.
-import { execFileSync, spawn } from 'node:child_process';
+import { execFileSync, execSync, spawn } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { connect } from 'node:net';
 import { join } from 'node:path';
@@ -48,7 +48,10 @@ function findJar() {
 
 function run(cmd, cmdArgs, cwd, env = {}) {
   console.log(`> ${cmd} ${cmdArgs.join(' ')}   (in ${cwd})`);
-  execFileSync(cmd, cmdArgs, { cwd, stdio: 'inherit', env: { ...process.env, ...env }, shell: win });
+  const opts = { cwd, stdio: 'inherit', env: { ...process.env, ...env } };
+  // .cmd scripts (mvnw.cmd, npm.cmd) need cmd.exe on Windows; give it one quoted command line.
+  if (win) execSync([cmd, ...cmdArgs].map((a) => `"${a}"`).join(' '), opts);
+  else execFileSync(cmd, cmdArgs, opts);
 }
 
 function ensureJar() {
@@ -125,6 +128,8 @@ function start(name, image, cmd, cmdArgs, { cwd, env = {}, log }) {
 // ---------------------------------------------------------------------------------------------
 await stopRecorded();
 for (const port of prod ? [API_PORT] : [API_PORT, WEB_PORT]) {
+  // A process just stopped can hold its port for a moment.
+  for (let i = 0; i < 20 && (await listening(port)); i++) await sleep(500);
   if (await listening(port)) {
     throw new Error(
       `Port ${port} is in use by a process this script did not start. Stop it yourself, or pick ` +
@@ -133,8 +138,12 @@ for (const port of prod ? [API_PORT] : [API_PORT, WEB_PORT]) {
   }
 }
 
-const jar = ensureJar();
+const builtJar = ensureJar();
 const webDir = prod ? ensureFrontendBuild() : null;
+// Run a copy: on Windows a running jar is locked, and `mvnw verify` must still be able to rebuild it.
+const jar = join(RUN, 'notesapp.jar');
+mkdirSync(RUN, { recursive: true });
+cpSync(builtJar, jar);
 
 console.log('Wiping the scratch vaults...');
 for (const d of ['vault', 'vaults', 'publish', 'web']) rmSync(join(RUN, d), { recursive: true, force: true });

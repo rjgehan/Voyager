@@ -73,9 +73,11 @@ test('the calendar shows a day’s tasks and dated notes, and opens its daily no
   const cell = page.getByRole('button', { name: new RegExp(`^${label}`) });
   // Earlier runs may have dated things on the same day too.
   await expect(cell).toHaveAccessibleName(/\d+ notes?, \d+ open tasks?/);
-  // The address focused the day, so its details are showing: the task and the dated note.
-  await expect(page.getByText(title)).toBeVisible();
-  await expect(page.getByText(dated)).toBeVisible();
+  // The address focused the day, so its details are showing: the task and the dated note. (A
+  // wide grid also writes titles in the day itself.)
+  const details = page.locator('.cal-day-details');
+  await expect(details.getByText(title)).toBeVisible();
+  await expect(details.getByText(dated)).toBeVisible();
 
   // A tap on the focused day opens (or makes) its daily note.
   await cell.click();

@@ -43,7 +43,10 @@ test('the same path in two vaults is two files', async () => {
 });
 
 test('paths in an extra vault never reach the default vault', async () => {
-  for (const p of ['../vault/Welcome.md', '..%2Fvault%2FWelcome.md', '/Welcome.md', 'C:/Windows/win.ini']) {
+  // A file only the default vault has (its folder is e2e/.run/vault, the extra vaults' e2e/.run/vaults/<name>).
+  const name = `${unique('Main only')}.md`;
+  await createFile(name, 'main vault secret\n');
+  for (const p of [`../vault/${name}`, `../../vault/${name}`, `..%2F..%2Fvault%2F${name}`, `/${name}`, name, 'C:/Windows/win.ini']) {
     const r = await refusal('GET', `/api/v/${VAULT}/files?path=${encodeURIComponent(p)}`);
     expect(r.status, p).toBeGreaterThanOrEqual(400);
   }
