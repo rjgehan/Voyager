@@ -26,23 +26,35 @@ export interface SettingsWriterDeps {
   onError(error: unknown): void;
 }
 
-const SECTIONS = ['files', 'dailyNotes', 'templates', 'editor'] as const;
+type Fields = Record<string, unknown>;
 
-/** `onto` with every field where `edited` differs from `base` taken from `edited`. */
+const isFields = (v: unknown): v is Fields => typeof v === 'object' && v !== null && !Array.isArray(v);
+
+/**
+ * `onto` with every field where `edited` differs from `base` taken from `edited`, in every section
+ * (files, daily notes, templates, editor, Ask and summaries, reminders, and any added later).
+ */
 export function applyDelta(base: Settings, edited: Settings, onto: Settings): Settings {
-  const out = { ...onto };
-  for (const section of SECTIONS) {
-    const b = base[section] as unknown as Record<string, unknown>;
-    const e = edited[section] as unknown as Record<string, unknown>;
-    let next: Record<string, unknown> | null = null;
-    for (const key of Object.keys(e)) {
-      if (JSON.stringify(e[key]) === JSON.stringify(b[key])) continue;
-      next ??= { ...(onto[section] as unknown as Record<string, unknown>) };
-      next[key] = e[key];
+  const b = base as unknown as Fields;
+  const e = edited as unknown as Fields;
+  const o = onto as unknown as Fields;
+  const out: Fields = { ...o };
+  for (const section of Object.keys(e)) {
+    const bs = b[section];
+    const es = e[section];
+    if (!isFields(es) || !isFields(bs)) {
+      if (JSON.stringify(es) !== JSON.stringify(bs)) out[section] = es;
+      continue;
     }
-    if (next) (out as Record<string, unknown>)[section] = next;
+    let next: Fields | null = null;
+    for (const key of Object.keys(es)) {
+      if (JSON.stringify(es[key]) === JSON.stringify(bs[key])) continue;
+      next ??= { ...(isFields(o[section]) ? o[section] : {}) };
+      next[key] = es[key];
+    }
+    if (next) out[section] = next;
   }
-  return out;
+  return out as unknown as Settings;
 }
 
 export class SettingsWriter {
