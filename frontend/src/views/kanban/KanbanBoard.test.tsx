@@ -79,6 +79,29 @@ describe('KanbanBoard', () => {
     expect(within(lane('To do')).getAllByRole('listitem')).toHaveLength(2);
   });
 
+  it('a card’s menu acts on that card even when the board changed while the menu was open', async () => {
+    const { session } = await setup();
+    const card = lane('To do').querySelectorAll<HTMLElement>('[data-board-card]')[1];
+    fireEvent.click(within(card).getByRole('button', { name: 'Card actions' }));
+    // Another device (or another pane) adds a card at the top of the lane meanwhile.
+    act(() => session.applyEdit({ from: session.getText().indexOf('- [ ] Call'), insert: '- [ ] New on top\n' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }));
+    const text = session.getText();
+    expect(text).toContain('- [ ] New on top\n- [ ] Call [[Bob]] @{2020-01-02}\n');
+    expect(text).not.toContain('Second');
+  });
+
+  it('a lane’s menu acts on that lane even when lanes moved while it was open', async () => {
+    const { session } = await setup();
+    fireEvent.click(within(lane('Done')).getByRole('button', { name: 'More for lane Done' }));
+    act(() => session.applyEdit({ from: session.getText().indexOf('## To do'), insert: '## Ideas\n\n- [ ] Maybe\n\n\n' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete lane…' }));
+    const text = session.getText();
+    expect(text).not.toContain('## Done');
+    expect(text).toContain('## To do');
+    expect(text).toContain('## Ideas');
+  });
+
   it('moves a lane right from its menu', async () => {
     const { session } = await setup();
     fireEvent.click(within(lane('To do')).getByRole('button', { name: 'More for lane To do' }));

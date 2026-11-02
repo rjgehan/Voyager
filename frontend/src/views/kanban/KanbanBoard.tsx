@@ -41,6 +41,7 @@ import {
   duplicateCard,
   editCard,
   findCard,
+  findLane,
   insertsAtTop,
   moveCard,
   moveLane,
@@ -226,9 +227,16 @@ export default function KanbanBoard({ session, readOnly, onShowMarkdown }: Props
   const cardMenu = (e: MouseEvent, item: Item) => {
     const ref = { lane: item.lane, index: item.index };
     const done = item.card.check !== ' ';
+    // The board may change while the menu is open (another device, another pane): each action finds
+    // its card again by its text, and does nothing when it went away.
+    const onCard = (fn: (b: Model, at: CardRef) => Model) =>
+      write((b) => {
+        const at = findCard(b, ref, item.card.text);
+        return at ? fn(b, at) : b;
+      });
     const entries: MenuEntry[] = [
       { id: 'edit', label: 'Edit', icon: <Pencil size={16} />, disabled: !editable, run: () => startEdit(item) },
-      { id: 'done', label: done ? 'Mark as not done' : 'Mark as done', icon: <Check size={16} />, disabled: !editable, run: () => write((b) => toggleCard(b, ref)) },
+      { id: 'done', label: done ? 'Mark as not done' : 'Mark as done', icon: <Check size={16} />, disabled: !editable, run: () => onCard(toggleCard) },
     ];
     board.lanes.forEach((lane, l) => {
       if (l === item.lane) return;
@@ -237,17 +245,28 @@ export default function KanbanBoard({ session, readOnly, onShowMarkdown }: Props
         label: `Move to “${laneTitleText(lane.title)}”`,
         icon: <SquareSplitVertical size={16} />,
         disabled: !editable,
-        run: () => write((b) => moveCard(b, ref, { lane: l, index: b.lanes[l]?.cards.length ?? 0 })),
+        run: () =>
+          onCard((b, at) => {
+            const to = findLane(b, l, lane.title);
+            return to < 0 || to === at.lane ? b : moveCard(b, at, { lane: to, index: b.lanes[to].cards.length });
+          }),
       });
     });
     entries.push(
       'separator',
-      { id: 'duplicate', label: 'Duplicate', icon: <Copy size={16} />, disabled: !editable, run: () => write((b) => duplicateCard(b, ref)) },
-      { id: 'archive', label: 'Archive', icon: <Archive size={16} />, disabled: !editable, run: () => write((b) => archiveCard(b, ref)) },
-      { id: 'delete', label: 'Delete', icon: <Trash2 size={16} />, danger: true, disabled: !editable, run: () => write((b) => deleteCard(b, ref)) },
+      { id: 'duplicate', label: 'Duplicate', icon: <Copy size={16} />, disabled: !editable, run: () => onCard(duplicateCard) },
+      { id: 'archive', label: 'Archive', icon: <Archive size={16} />, disabled: !editable, run: () => onCard(archiveCard) },
+      { id: 'delete', label: 'Delete', icon: <Trash2 size={16} />, danger: true, disabled: !editable, run: () => onCard(deleteCard) },
     );
     setMenu({ ...at(e), label: 'Card actions', items: entries });
   };
+
+  /** Applies `fn` to the lane shown at `lane` with `title`, found again in the current text. */
+  const onLane = (lane: number, title: string, fn: (b: Model, lane: number) => Model) =>
+    write((b) => {
+      const at = findLane(b, lane, title);
+      return at < 0 ? b : fn(b, at);
+    });
 
   const renameLanePrompt = (lane: number) => {
     const current = board.lanes[lane];
@@ -261,7 +280,7 @@ export default function KanbanBoard({ session, readOnly, onShowMarkdown }: Props
     }).then((value) => {
       if (value === null) return;
       const { title, maxItems } = parseLaneTitle(value);
-      write((b) => renameLane(b, lane, title, maxItems));
+      onLane(lane, current.title, (b, at) => renameLane(b, at, title, maxItems));
     });
   };
 
@@ -280,23 +299,29 @@ export default function KanbanBoard({ session, readOnly, onShowMarkdown }: Props
     const entries: MenuEntry[] = [
       { id: 'add', label: 'Add card', icon: <Plus size={16} />, run: () => startAdd(lane) },
       { id: 'rename', label: 'Rename…', icon: <Pencil size={16} />, run: () => renameLanePrompt(lane) },
-      { id: 'left', label: 'Move lane left', icon: <ArrowLeft size={16} />, disabled: lane === 0, run: () => write((b) => moveLane(b, lane, lane - 1)) },
-      { id: 'right', label: 'Move lane right', icon: <ArrowRight size={16} />, disabled: lane === board.lanes.length - 1, run: () => write((b) => moveLane(b, lane, lane + 1)) },
+      { id: 'left', label: 'Move lane left', icon: <ArrowLeft size={16} />, disabled: lane === 0, run: () => onLane(lane, current.title, (b, at) => moveLane(b, at, at - 1)) },
+      {
+        id: 'right',
+        label: 'Move lane right',
+        icon: <ArrowRight size={16} />,
+        disabled: lane === board.lanes.length - 1,
+        run: () => onLane(lane, current.title, (b, at) => moveLane(b, at, at + 1)),
+      },
       {
         id: 'complete',
         label: current.complete ? 'Stop marking cards here as done' : 'Mark cards here as done',
         icon: <CheckCheck size={16} />,
-        run: () => write((b) => setLaneComplete(b, lane, !current.complete)),
+        run: () => onLane(lane, current.title, (b, at) => setLaneComplete(b, at, !current.complete)),
       },
       'separator',
-      { id: 'archive', label: 'Archive all cards', icon: <Archive size={16} />, disabled: current.cards.length === 0, run: () => write((b) => archiveLane(b, lane)) },
+      { id: 'archive', label: 'Archive all cards', icon: <Archive size={16} />, disabled: current.cards.length === 0, run: () => onLane(lane, current.title, archiveLane) },
       {
         id: 'delete',
         label: 'Delete lane…',
         icon: <Trash2 size={16} />,
         danger: true,
         run: () => {
-          const drop = () => write((b) => deleteLane(b, lane));
+          const drop = () => onLane(lane, current.title, deleteLane);
           if (current.cards.length === 0) return drop();
           void confirmAction({
             title: 'Delete lane',

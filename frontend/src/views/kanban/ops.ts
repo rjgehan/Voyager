@@ -158,6 +158,15 @@ export function findCard(board: KanbanBoard, ref: CardRef, text: string): CardRe
   return null;
 }
 
+/**
+ * Finds a lane again after the text changed under an open menu or dialog: at its old place when
+ * it still has that title there, else the first lane with that title.
+ */
+export function findLane(board: KanbanBoard, index: number, title: string): number {
+  if (board.lanes[index]?.title === title) return index;
+  return board.lanes.findIndex((l) => l.title === title);
+}
+
 // ---------- keys for the view ----------
 
 export interface BoardItem extends CardRef {
