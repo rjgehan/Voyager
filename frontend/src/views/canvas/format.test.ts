@@ -33,6 +33,15 @@ describe('parseCanvas', () => {
     expect(new Set(ids).size).toBe(3);
     expect(parseCanvas(text).nodes.map((n) => n.id)).toEqual(ids);
   });
+
+  it('never gives a repaired node the id a later node has, so edges keep their ends', () => {
+    const doc = parseCanvas(
+      '{"nodes":[{"type":"text","text":"no id","x":0,"y":0,"width":10,"height":10},{"id":"repaired-0","type":"text","text":"real","x":50,"y":0,"width":10,"height":10},{"id":"c","type":"text","text":"c","x":100,"y":0,"width":10,"height":10}],"edges":[{"id":"e","fromNode":"repaired-0","toNode":"c"}]}',
+    );
+    expect(doc.nodes.find((n) => n.text === 'real')!.id).toBe('repaired-0');
+    expect(new Set(doc.nodes.map((n) => n.id)).size).toBe(3);
+    expect(doc.edges[0].fromNode).toBe('repaired-0');
+  });
 });
 
 describe('serializeCanvas', () => {
