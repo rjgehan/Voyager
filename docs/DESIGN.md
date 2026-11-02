@@ -645,6 +645,10 @@ record LinkOcc(String raw, String target, @Nullable String subpath, @Nullable St
 
 Indented (4-space) code blocks are **not** excluded. Obsidian list continuation lines are often indented, and misclassifying them would be worse. This deviation is documented.
 
+**Markdown link destinations.** `[text](dest)` or `[text](<dest>)`, with an optional title. A destination that opens with `<` but is not `<…>` (`[a](<)`, which typing `[a](` with auto-closed parentheses and then `<` gives, or `[a](<b)`) is no link, as in CommonMark.
+
+**A scanner defect never costs a note.** Should scanning throw, the note is indexed as plain text (no links, tags, headings or frontmatter) and the defect is logged at ERROR (`FileIndexer`). A save indexes the bytes it has just written and a startup leaves out a file it cannot index, so a throwing scan would otherwise make the note unsaveable (every later save re-indexes the disk first) and, after a restart, invisible.
+
 #### 5.5.3 Frontmatter and properties
 
 - Frontmatter is present only if line 0 is exactly `---` (trailing whitespace allowed) and a later line is exactly `---`. Otherwise it is absent; an unterminated block is not frontmatter.
@@ -658,7 +662,7 @@ Indented (4-space) code blocks are **not** excluded. Obsidian list continuation 
 
 #### 5.5.4 Headings and block ids
 
-- ATX headings: up to 3 leading spaces, then 1–6 `#`, then a space, tab or end of line. Text is trimmed and closing `#`s are removed.
+- ATX headings: up to 3 leading spaces, then 1–6 `#`, then a space, tab or end of line. Text is trimmed and closing `#`s are removed. (The closing sequence is matched from the start of a run of blanks only, and markdown links are found by trying only the first `[` before each `]`: both scan a line in linear time, with the same matches as the plain patterns.)
 - Setext headings: a non-blank paragraph line followed by `===` (level 1) or `---` (level 2). The `---` rule never applies on line 1 when frontmatter could start there.
 - `HeadingOcc(level, text, line)`.
 - Block ids: `(?:^|\s)\^([A-Za-z0-9-]+)\s*$` at the end of a line outside excluded zones. Which block an id names, and adding one, are §5.37 and §6.37 (ROADMAP item 20).
@@ -800,7 +804,7 @@ Tokens are maximal runs of `[\p{L}\p{N}]`, except that each Han, Hiragana or Kat
 **Evaluation** (`SearchEvaluation`), in three steps so the index lock is never held while regular expressions run:
 
 1. *Resolve*, under the index read lock. Word and phrase clauses become term patterns (with prefix expansion and typo variants) and are answered from the postings, phrases verified on the kept token sequences; tags from `TagIndex`, `path:` and `file:` substrings from the records. When the query has a regular expression or a scope, every document is snapshotted: its immutable `NoteRecord` and the body arrays the index keeps (never changed once stored, so they may be read after the lock is released).
-2. *Evaluate*, without a lock. The tree is evaluated over bit sets, cheapest clauses first; an expensive clause (a regular expression or a scope) only runs over the documents still in play, in parallel above 64 documents. A scope first narrows to the documents that contain everything its clauses need (from the postings), then checks lines or sections on the token sequences (a mask per local term, no tokenizing); regular expressions run on the text with the unit's bounds as the matcher region.
+2. *Evaluate*, without a lock. The tree is evaluated over bit sets, cheapest clauses first; an expensive clause (a regular expression or a scope) only runs over the documents still in play, in parallel above 64 documents. A scope first narrows to the documents that contain everything its clauses need (from the postings), then checks lines or sections on the token sequences (a mask per local term, no tokenizing); regular expressions run on the text with the unit's bounds as the matcher region. A scope inside a scope is answered for the whole note, once per note (not again for every unit of the outer scope, which multiplied the work by the number of lines at each level), and every unit checks the time budget, since word clauses never read the budgeted text. A phrase longer than the 64 terms a kept sequence can check is first narrowed by its first 64 terms on the sequences, and only the notes left are tokenized again.
 3. *Score*, under the read lock again: the matching documents that still exist are scored and sorted.
 
 **Regular expressions are kept safe.** Java's engine backtracks, and modern JDKs only defuse some catastrophic patterns (`(.*?,){15}P` on a line of numbers still takes minutes). So: a pattern is at most 500 characters; patterns are case-insensitive (Unicode) and `MULTILINE` unless they say `(?-i)`; and every match reads its text through a `CharSequence` that checks the query's deadline every 2,048 characters read (`SearchRegex`), so even one pathological match stops within milliseconds of the budget. The budget (`notes.search.timeout`, 2 s) covers the whole query, regular expressions and scopes together; running out, or a `StackOverflowError` from a deeply recursive pattern, is a `400` with a message that suggests simplifying the pattern. At most `notes.search.max-concurrent-expensive` (2) such queries run at once; others wait up to the budget, then get `503 busy`. Snippets reuse the budget and simply stop highlighting regular-expression matches once it is spent.
@@ -1070,7 +1074,7 @@ This is `MoveService.move(from, to, updateLinks, dryRun, identity, origin)`. `up
 
 1. **Without any lock**, walk the vault, compare `(size, mtime)` with the index, and hash text files only when they differ.
 2. Detect added and removed files and folders, skipped names (§4.4) and directories the app cannot write (`Files.isWritable`); the last two are reported in `/api/status` (`vault.skipped`, `vault.unwritableDirs`). Also measure the size of `.git` for `disk.repoBytes`.
-3. Apply each change with `reconcile(path)`: under the vault read lock and that path's lock, re-checking the disk first, because the file may have changed again since the walk.
+3. Apply each change with `reconcile(path)`: under the vault read lock and that path's lock, re-checking the disk first, because the file may have changed again since the walk. A folder that exists but cannot be listed (its owner or permissions changed) is left as it is, with a WARN: what it holds is unknown, not gone, so its files are never announced or committed as deleted.
 4. If more than 50 changes are found, publish a single `resync {reason:"bulk-change"}` instead of individual events.
 
 Hashing during step 1 therefore never blocks saves.
@@ -1110,7 +1114,7 @@ Hashing during step 1 therefore never blocks saves.
 - **Heartbeat.** Every 20 s (`notes.sse.heartbeat`) the server sends a **named event without an `id:` line**: `event: ping` with `data: {"serverTime":"…"}`. SSE comment lines (`: ping`) are discarded by the `EventSource` parser and never reach script, so they cannot feed the client's watchdog or Live indicator; an idle vault would then force a reconnect every 45 s. Omitting `id:` leaves the browser's last event id unchanged. A comment line `: keepalive` is sent along with it for proxies. A failed write is how dead clients are detected.
 - The emitter timeout is 30 min (`notes.sse.timeout`). The emitter registers `onTimeout(emitter::complete)` and `onError(e -> emitter.complete())`; without them, Spring raises `AsyncRequestTimeoutException` on an already-committed response every 30 minutes. After the timeout, `EventSource` reconnects silently and replay fills the gap.
 - `retry: 3000` is sent with `hello`.
-- On `ContextClosedEvent`, every emitter is completed so graceful shutdown is not held up.
+- On `ContextClosedEvent`, every emitter is completed so graceful shutdown is not held up, and a stream requested afterwards (a client reconnecting while the extra vaults close) is ended at once.
 - **`status.changed`** is published when anything shown by `/api/status` changes state: git starts or stops failing, the startup import finishes, the watcher degrades to polling, settings become read-only, or free space on the vault's filesystem crosses 1 GiB (logged as `STORAGE_LOW`). Clients refetch `/api/status`.
 
 **Headers:** `Cache-Control: no-cache, no-transform` and `X-Accel-Buffering: no`. `text/event-stream` is not in the compression MIME list. Go's `ReverseProxy` in `tailscale serve` flushes `text/event-stream` immediately.

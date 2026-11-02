@@ -503,6 +503,12 @@ public final class SearchIndex {
 	void retainPhrase(BitSet docs, TermPattern pattern, IntPredicate verify) {
 		int size = pattern.terms().size();
 		if (size > MAX_SEQUENCE_PHRASE) {
+			// Its first terms must occur in sequence as well: the kept sequences rule out nearly every document before
+			// the survivors are tokenized again. Tokenizing every candidate (every note, for a pasted paragraph of
+			// common words) took seconds under the index's read lock, with no time budget, while saves waited.
+			TermPattern head = new TermPattern(pattern.terms().subList(0, MAX_SEQUENCE_PHRASE), false,
+					pattern.variants().subList(0, MAX_SEQUENCE_PHRASE));
+			retainPhrase(docs, head, (docId) -> true);
 			for (int docId : docs.stream().toArray()) {
 				if (!verify.test(docId)) {
 					docs.clear(docId);
