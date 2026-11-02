@@ -353,7 +353,7 @@ Request `SettingsUpdateRequest`: `{"settings": { ...full Settings... }, "baseVer
 `200 MeResponse`:
 
 ```json
-{ "login": "rjgehan@github", "name": "R. J. Gehan", "profilePicUrl": "https://avatars.githubusercontent.com/u/123?v=4", "source": "tailscale" }
+{ "login": "octocat@github", "name": "The Octocat", "profilePicUrl": "https://avatars.githubusercontent.com/u/123?v=4", "source": "tailscale" }
 ```
 
 - Values come from `Tailscale-User-Login`, `Tailscale-User-Name` (RFC 2047-decoded) and `Tailscale-User-Profile-Pic`.
@@ -631,7 +631,7 @@ Events to other clients: `file.changed` (or `folder.created` and `file.created` 
 
 ```json
 { "id": "01JA7Q3M9K2Z", "originalPath": "Projects/Old plan.md", "type": "file",
-  "deletedAt": "2026-10-16T14:12:40.120Z", "deletedBy": "rjgehan@github", "size": 2311, "fileCount": 1 }
+  "deletedAt": "2026-10-16T14:12:40.120Z", "deletedBy": "octocat@github", "size": 2311, "fileCount": 1 }
 ```
 
 - This works for **any** file kind, and for existing names that break the new-name rules.
@@ -1258,7 +1258,7 @@ The trash lives in `<vault>/.trash/` and is **flat**: each trashed file or folde
 ```json
 { "entries": [
   { "id": "01JA7Q3M9K2Z", "originalPath": "Projects/Old plan.md", "type": "file",
-    "deletedAt": "2026-10-16T14:12:40.120Z", "deletedBy": "rjgehan@github", "size": 2311, "fileCount": 1 },
+    "deletedAt": "2026-10-16T14:12:40.120Z", "deletedBy": "octocat@github", "size": 2311, "fileCount": 1 },
   { "id": "x-4b1d9e0c7a2f5e83", "originalPath": "Scratch.md", "type": "file",
     "deletedAt": "2026-10-01T09:00:00.000Z", "deletedBy": "unknown", "size": 120, "fileCount": 1 }
 ] }
@@ -1344,13 +1344,13 @@ This is the history of one path, following renames (the equivalent of `git log -
     { "commitId": "c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2", "shortId": "c3d4e5f",
       "parentCommitId": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0",
       "path": "Projects/Roadmap.md", "time": "2026-10-16T14:20:02.000Z",
-      "authorName": "R. J. Gehan", "authorLogin": "rjgehan@github",
+      "authorName": "The Octocat", "authorLogin": "octocat@github",
       "message": "Rename Projects/Plan.md → Projects/Roadmap.md",
       "change": "renamed", "renamedFrom": "Projects/Plan.md" },
     { "commitId": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0", "shortId": "a1b2c3d",
       "parentCommitId": "f0e1d2c3b4a5968778695a4b3c2d1e0f9a8b7c6d",
       "path": "Projects/Plan.md", "time": "2026-10-16T14:05:31.000Z",
-      "authorName": "R. J. Gehan", "authorLogin": "rjgehan@github",
+      "authorName": "The Octocat", "authorLogin": "octocat@github",
       "message": "Update Projects/Plan.md", "change": "modified", "renamedFrom": null }
   ],
   "excluded": null
@@ -1456,7 +1456,7 @@ The vault-wide timeline (ROADMAP item 28): every commit, newest first (by commit
   "entries": [
     { "commitId": "c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2", "shortId": "c3d4e5f",
       "parentCommitId": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0",
-      "time": "2026-10-16T14:20:02.000Z", "authorName": "R. J. Gehan", "authorLogin": "rjgehan@github",
+      "time": "2026-10-16T14:20:02.000Z", "authorName": "The Octocat", "authorLogin": "octocat@github",
       "message": "Rename Projects/Plan.md → Projects/Roadmap.md",
       "files": [ { "path": "Projects/Roadmap.md", "change": "renamed", "renamedFrom": "Projects/Plan.md" } ],
       "filesTotal": 1 } ] }
@@ -1474,7 +1474,7 @@ What changed over a period ("what changed this week"): the net difference betwee
 ```json
 { "since": "2026-10-12T00:00:00.000Z", "until": null,
   "fromCommitId": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0", "toCommitId": "c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2",
-  "commits": 14, "authors": ["R. J. Gehan"],
+  "commits": 14, "authors": ["The Octocat"],
   "files": [ { "path": "Ideas/Plan B.md", "change": "added", "renamedFrom": null },
              { "path": "Projects/Roadmap.md", "change": "renamed", "renamedFrom": "Projects/Plan.md" } ],
   "truncated": false }
@@ -1501,7 +1501,7 @@ Files that were deleted at some point and do not exist now, so they can be broug
   "entries": [ { "path": "Projects/Old plan.md", "deletedAt": "2026-09-02T08:12:40.000Z",
                  "commitId": "d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3", "shortId": "d4e5f6a",
                  "parentCommitId": "c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2",
-                 "authorName": "R. J. Gehan", "authorLogin": "rjgehan@github", "message": "Delete Projects/Old plan.md" } ] }
+                 "authorName": "The Octocat", "authorLogin": "octocat@github", "message": "Delete Projects/Old plan.md" } ] }
 ```
 
 **Restore** with §14.4: `{"path": <path>, "commit": <parentCommitId>, "sourcePath": <path>, "baseVersion": null}`. The file and its folders are re-created, and the restore is committed; the path then leaves this list.
@@ -1853,7 +1853,7 @@ Examples of `data` payloads:
 {"path":"Projects/Old plan.md","trashed":true,"trashId":"01JA7Q3M9K2Z","origin":"c-9a8b7c6d5e4f"}
 {"path":"Projects/Beta","origin":null}
 {"from":"Projects/Plan.md","to":"Projects/Roadmap.md","type":"file","origin":"c-9a8b7c6d5e4f"}
-{"commitId":"c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2","message":"Update Projects/Plan.md","authorName":"R. J. Gehan","time":"2026-10-16T14:05:31.000Z","paths":["Projects/Plan.md"],"truncated":false}
+{"commitId":"c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2","message":"Update Projects/Plan.md","authorName":"The Octocat","time":"2026-10-16T14:05:31.000Z","paths":["Projects/Plan.md"],"truncated":false}
 {"version":"a1f3c5e7b9d0a2c4e6f8b0d2f4a6c8e0b2d4f6a8","origin":"c-1f2e3d4c5b6a"}
 {"reason":"git"}
 {"reason":"watcher-overflow"}

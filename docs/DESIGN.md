@@ -351,7 +351,7 @@ The last section is the large-file policy (§5.8 *Large files*): one line per fi
       "trashPath": "Old plan.md",
       "type": "file",
       "deletedAt": "2026-10-16T14:03:22.120Z",
-      "deletedBy": "rjgehan@github",
+      "deletedBy": "octocat@github",
       "size": 2311,
       "fileCount": 1
     }
@@ -971,7 +971,7 @@ This is `MoveService.move(from, to, updateLinks, dryRun, identity, origin)`. `up
 
 - `PersonIdent(name, login, Instant.now(), ZoneId.systemDefault())`.
   - `name` is the decoded `Tailscale-User-Name`.
-  - `login` is `Tailscale-User-Login`, used as the email, for example `rjgehan@github`.
+  - `login` is `Tailscale-User-Login`, used as the email, for example `octocat@github`.
 - The fallback is `notes.identity.default-name` / `default-login`.
 - The committer is always `NotesApp <notesapp@notes>`.
 - The deprecated `Date`/`TimeZone` constructors are not used.
@@ -1198,7 +1198,7 @@ The date token mapping table (moment, dayjs, and java.time for future server-sid
 
 | Header | Use |
 |---|---|
-| `Tailscale-User-Login` | Login, for example `rjgehan@github` |
+| `Tailscale-User-Login` | Login, for example `octocat@github` |
 | `Tailscale-User-Name` | Display name. Decoded with `Rfc2047`, because non-ASCII values arrive as one or more `=?utf-8?q?...?=` encoded words separated by spaces. |
 | `Tailscale-User-Profile-Pic` | A URL, possibly empty |
 
@@ -1206,7 +1206,7 @@ The date token mapping table (moment, dayjs, and java.time for future server-sid
 
 1. **Health paths are exempt.** `/livez`, `/readyz` and `/actuator/health` reveal nothing, and the Docker `HEALTHCHECK` calls them without a tailnet Host or identity.
 2. **Host allowlist.** The `Host` header must match an entry of `notes.allowed-hosts` (entries are `host` or `host:port`, compared case-insensitively; an entry without a port matches any port). Otherwise the response is `421 unknown-host`. This blocks DNS rebinding: a page on `evil.example` that re-resolves to `127.0.0.1` sends `Host: evil.example:8080` together with a matching `Origin`, which the Origin check alone would accept. In production the list is `notes.<tailnet>.ts.net` (from `NOTES_ALLOWED_HOSTS` in `deploy/.env`), and the app **refuses to start** when the list is empty outside the dev profile. TLS and SNI on serve already make rebinding hard in production, so this is mainly a dev-time fix and defence in depth.
-3. **Identity allowlist.** A request without a `Tailscale-User-Login` header is rejected with `403 identity-not-allowed`, unless `notes.identity.allow-default=true` (dev profile only), in which case the default identity below is used. When `notes.identity.allowed-logins` is non-empty (production: `rjgehan@github`, from `NOTES_IDENTITY_ALLOWED_LOGINS`), any other login is also rejected with `403 identity-not-allowed`. Tagged devices (which carry no identity headers) and users the node is shared with are therefore refused, even though the tailnet policy lets them connect. This is Tailscale identity, not an app login, so the no-login decision stands.
+3. **Identity allowlist.** A request without a `Tailscale-User-Login` header is rejected with `403 identity-not-allowed`, unless `notes.identity.allow-default=true` (dev profile only), in which case the default identity below is used. When `notes.identity.allowed-logins` is non-empty (production: your own login, for example `octocat@github`, from `NOTES_IDENTITY_ALLOWED_LOGINS`), any other login is also rejected with `403 identity-not-allowed`. Tagged devices (which carry no identity headers) and users the node is shared with are therefore refused, even though the tailnet policy lets them connect. This is Tailscale identity, not an app login, so the no-login decision stands.
 
 **Default identity.** With `allow-default`, a missing or empty login falls back to `notes.identity.default-name` (default `Owner`) and `default-login` (default `owner@notes`) with `source=default`.
 
@@ -4468,7 +4468,7 @@ TS_AUTHKEY=tskey-auth-XXXXXXXXXXXX-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 NOTES_ALLOWED_HOSTS=notes.<tailnet>.ts.net
 
 # Tailscale logins allowed to use the app (identity allowlist). Comma-separated.
-NOTES_IDENTITY_ALLOWED_LOGINS=rjgehan@github
+NOTES_IDENTITY_ALLOWED_LOGINS=you@github
 
 # Watchtower update reports (required). ntfy with an unguessable topic, or a self-hosted ntfy URL.
 WATCHTOWER_NOTIFICATION_URL=ntfy://ntfy.sh/notes-<random-32-chars>

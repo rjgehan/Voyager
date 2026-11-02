@@ -8,12 +8,12 @@ class Rfc2047Test {
 
 	@Test
 	void plainValuesAreUnchanged() {
-		assertThat(Rfc2047.decode("R. J. Gehan")).isEqualTo("R. J. Gehan");
+		assertThat(Rfc2047.decode("The Octocat")).isEqualTo("The Octocat");
 	}
 
 	@Test
 	void decodesQEncoding() {
-		assertThat(Rfc2047.decode("=?utf-8?q?Ren=C3=A9_Gehan?=")).isEqualTo("René Gehan");
+		assertThat(Rfc2047.decode("=?utf-8?q?Ren=C3=A9_Example?=")).isEqualTo("René Example");
 		assertThat(Rfc2047.decode("=?UTF-8?Q?Ren=c3=a9?=")).isEqualTo("René");
 	}
 

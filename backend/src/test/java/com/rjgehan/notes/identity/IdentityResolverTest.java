@@ -16,9 +16,9 @@ class IdentityResolverTest {
 
 	@Test
 	void tailscaleHeadersBecomeTheIdentity() {
-		Identity identity = resolver(Map.of()).resolve("rjgehan@github", "=?utf-8?q?Ren=C3=A9?=",
+		Identity identity = resolver(Map.of()).resolve("octocat@github", "=?utf-8?q?Ren=C3=A9?=",
 				"https://avatars.example/u/1");
-		assertThat(identity).isEqualTo(new Identity("rjgehan@github", "René", "https://avatars.example/u/1",
+		assertThat(identity).isEqualTo(new Identity("octocat@github", "René", "https://avatars.example/u/1",
 				Identity.Source.TAILSCALE));
 	}
 
@@ -39,9 +39,9 @@ class IdentityResolverTest {
 
 	@Test
 	void loginsOutsideTheAllowlistAreRefused() {
-		IdentityResolver resolver = resolver(Map.of("notes.identity.allowed-logins", "rjgehan@github"));
-		assertThat(resolver.resolve("rjgehan@github", "R", null)).isNotNull();
-		assertThat(resolver.resolve("RJGehan@GitHub", "R", null)).isNotNull();
+		IdentityResolver resolver = resolver(Map.of("notes.identity.allowed-logins", "octocat@github"));
+		assertThat(resolver.resolve("octocat@github", "R", null)).isNotNull();
+		assertThat(resolver.resolve("OctoCat@GitHub", "R", null)).isNotNull();
 		assertThat(resolver.resolve("intruder@github", "I", null)).isNull();
 	}
 
