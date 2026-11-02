@@ -294,8 +294,10 @@ export class CanvasController {
   }
 
   undo(): void {
+    // Read-only, the step stays for later (popped first, it was thrown away).
+    if (!this.state.doc || this.state.readOnly) return;
     const prev = this.undoStack.pop();
-    if (!prev || !this.state.doc || this.state.readOnly) return;
+    if (!prev) return;
     this.redoStack.push(this.state.doc);
     this.mergeKey = null;
     this.set({ doc: prev, editing: null, selection: this.pruned(prev) });
@@ -303,8 +305,9 @@ export class CanvasController {
   }
 
   redo(): void {
+    if (!this.state.doc || this.state.readOnly) return;
     const next = this.redoStack.pop();
-    if (!next || !this.state.doc || this.state.readOnly) return;
+    if (!next) return;
     this.undoStack.push(this.state.doc);
     this.mergeKey = null;
     this.set({ doc: next, editing: null, selection: this.pruned(next) });

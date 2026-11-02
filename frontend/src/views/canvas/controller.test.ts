@@ -171,6 +171,22 @@ describe('CanvasController and the document session', () => {
     expect(controller.getState().doc).toBe(doc);
     expect(moveNodes(doc, new Set([PLAN]), 0, 0)).toBe(doc);
   });
+
+  it('keeps its undo and redo steps through Mod-Z pressed while it is read-only', async () => {
+    const { controller } = await setup();
+    const set = (p: object) => (controller as unknown as { set(p: object): void }).set(p);
+    controller.updateNode(TEXT, { text: 'Changed' });
+    set({ readOnly: true });
+    controller.undo();
+    set({ readOnly: false });
+    expect(controller.getState().canUndo).toBe(true);
+    controller.undo();
+    expect(controller.getState().canRedo).toBe(true);
+    set({ readOnly: true });
+    controller.redo();
+    set({ readOnly: false });
+    expect(controller.getState().canRedo).toBe(true);
+  });
 });
 
 describe('CanvasController viewport', () => {
