@@ -73,6 +73,8 @@ cd backend;  .\mvnw.cmd verify                      # add "-DexcludedGroups=" to
 cd frontend; npm run lint; npm test; npm run build
 ```
 
+`npm test` includes the accessibility checks that need no browser (axe-core on the app shell, and the theme colours' contrast). The full audit runs axe-core in an installed Chrome or Edge on every screen, both themes, desktop and phone: `cd frontend; npm run test:a11y` (not in CI; see [docs/ACCESSIBILITY.md](docs/ACCESSIBILITY.md)).
+
 ## How deploys work
 
 1. **Pull requests** run the backend tests, the frontend lint, tests and build, and a Docker image build (amd64, not pushed), so the Dockerfile is exercised before anything reaches `main`.
@@ -90,6 +92,7 @@ Rolling back, pausing updates, backups and everything else on the server side ar
 - [docs/CASAOS.md](docs/CASAOS.md): installing on CasaOS by pasting one compose file, and its optional alerts, mirror and backups
 - [docs/CLIPPER.md](docs/CLIPPER.md): installing the web clipper (browser extension, bookmarklet, iPhone Shortcut)
 - [docs/DESKTOP.md](docs/DESKTOP.md): the Windows and macOS desktop app (install, Gatekeeper steps, usage, building and releases)
+- [docs/ACCESSIBILITY.md](docs/ACCESSIBILITY.md): WCAG 2.2 AA status, how it is tested, known gaps
 - [docs/ROADMAP.md](docs/ROADMAP.md): what comes after v1
 
 ## Licence
