@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Date | 2026-10-17 |
-| Status | **Everything approved, 2026-10-17** ("build all of the features"): items 1–41, built on the `build/roadmap` branch in waves and merged to `main` once verified. |
+| Status | **Everything approved, 2026-10-17** ("build all of the features"): items 1–41, built on the `build/roadmap` branch in waves and merged to `main` once verified. Item 42 (sharing with family) approved 2026-11-02. |
 | Decisions (2026-10-17) | **Server:** homeserver, as designed. **Formula engine** (items 6 and 39): GPL-3.0 with HyperFormula; the repository becomes GPL-3.0. **Reminder delivery** (item 9): undecided, so every route is built and each one is switched on in Settings. **Public publishing** (item 26): built switched off; nothing is exposed until you enable it. **No iOS app**; the phone uses the web app. **Desktop app** (item 41): Electron, because rgpc has no Rust toolchain. |
 | Build order | Wave 1: 10, 6, 4, 5, then 1, 2, 23 and 38. Wave 2: 3, 39, 40 (with 17), 13, 12, 7, 19, 8, 22. Wave 3: everything else except 37 and 41. Wave 4: 37 and 41, then end-to-end verification. |
 
@@ -90,6 +90,7 @@ DESIGN.md has the details.
 | 37 | Multiple vaults *(built 2026-10-22, `feat/vaults`)* | M | L | |
 | 38 | Ops polish: JDK 25 runtime, faster start, app-error alerts, status page | M | S | |
 | 41 | **Desktop app (Windows and macOS) with live sync** *(new, 2026-10-17)* | M | M | 7 for quick capture; 8 for offline |
+| 42 | **Share a note with family** *(new, approved 2026-11-02; `feat/family-share`)* | M | M | 37 for multiple vaults |
 
 ---
 
@@ -1230,11 +1231,26 @@ Scheduling uses `ts-fsrs` 5.4.2 (MIT). Review state is stored in `.notesapp/srs.
 - **Resume:** after sleep or unlock the shell asks the page to reconnect its event stream at once (`EventStream.reconnect()`), rather than waiting for the 45 s watchdog.
 - **macOS:** the dmg is universal and ad-hoc signed (so Apple Silicon runs it) but not notarised: DESKTOP.md has the Gatekeeper steps. Windows is not code-signed: SmartScreen asks once.
 
+### 42. Share a note with family *(new, approved 2026-11-02)*
+
+**One line:** give someone else on your tailnet read-only or editable access to one note or one folder, without giving them the whole vault.
+
+| Value | Effort | Depends on |
+|---|---|---|
+| M | M | 37 for multiple vaults |
+
+- **No accounts.** Who someone is still comes from Tailscale: family join your tailnet, or you share the NotesApp machine with their own Tailscale account. `NOTES_IDENTITY_ALLOWED_LOGINS` names you, the owner; any other login sees only what is shared with it.
+- **A share** is a note or a folder, *view* or *edit*, for named people (their Tailscale logins) and/or a link anyone on the tailnet can use (`/s/<random>`), with an optional expiry. Made and revoked from the note's ⋯ menu, the explorer and Settings › Sharing; stored in `.notesapp/shares.json` with link tokens hashed.
+- **A guest page** shows only the shared note or folder: Live Preview editing with the same autosave, conflict and live-sync protocol for edit shares (history records the guest as the author), read-only rendering for view shares. No search, tree, backlinks, settings or AI; attachments outside the share only when the shared note embeds them.
+- **Deny by default on the server**: every endpoint outside the guest surface refuses a guest, every guest request is checked against the share's scope, and guessing is rate-limited.
+
+**Status:** being built on `feat/family-share` (DESIGN §5.40 and §6.45, API.md §42, CASAOS.md and DEPLOY.md *Sharing with family*).
+
 ---
 
 ## Explicitly not planned
 
 - **Obsidian Sync protocol compatibility.** Proprietary. Your devices sync through this server instead.
 - **Running Obsidian community plugins.** Different runtime. The popular ones are covered natively above: Excalidraw, Kanban, Tasks, Dataview and Spaced Repetition.
-- **Multi-user accounts.** The tailnet is the security boundary. Sharing with another tailnet user works through Tailscale device sharing **plus** adding their login to `NOTES_IDENTITY_ALLOWED_LOGINS`, with history recording the correct author.
+- **Multi-user accounts.** The tailnet is the security boundary. Other tailnet users get exactly what you share with them (item 42), with history recording the correct author; there are no app accounts or passwords.
 - **Exposing the app to the public internet.** Only item 26's separate, read-only publish server ever goes through Funnel.

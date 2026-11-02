@@ -137,9 +137,9 @@ sequenceDiagram
 | Tailscale policy / WireGuard | **Mandatory policy** (DEPLOY.md), replacing the default allow-all: one grant `{"src":["autogroup:member"],"dst":["tag:notes"],"ip":["tcp:443"]}`, plus grants for the device-to-device flows the user already relies on. `tag:notes` gets **no grant as a source**, so code running in the app's network namespace (a compromised dependency, a future server-side fetch) cannot reach `rgpc`, `mac` or `beach`. Policy `tests` assert that `tag:notes` cannot reach `rgpc:*` and that a tagged source cannot reach `tag:notes:443`. |
 | `tailscale serve` | Terminates TLS. It **deletes any client-supplied** `Tailscale-User-*` headers and then sets the real ones for requests from user-owned devices. Tagged source devices get no identity headers. |
 | **Kernel-mode tailscaled + `server.address=127.0.0.1`** | Userspace mode, the container default, forwards *any* tailnet TCP port to `127.0.0.1:<port>`. That would expose `:8080` directly and let a peer forge identity headers. In kernel mode, tailnet packets for `100.x.y.z:8080` reach a kernel socket table where nothing listens on that address, so they are refused. This combination is mandatory, and the app refuses to start outside the dev profile when it sees no kernel Tailscale interface (§5.13). |
-| App | Host allowlist (`421`), identity allowlist (`notes.identity.allowed-logins`; anything else, including tagged devices and users the node is shared with, gets `403`), CSRF defence (custom header, Origin check), path-traversal guard, internal folders never exposed, safe serving of user files, no CORS, `no-store` on API responses. |
+| App | Host allowlist (`421`), identity allowlist (`notes.identity.allowed-logins`, the owners; tagged devices get `403`, and every other login, a family member's or a user the node is shared with, reaches only the guest surface of §5.40: what a share gives it, else `403`), CSRF defence (custom header, Origin check), path-traversal guard, internal folders never exposed, safe serving of user files, no CORS, `no-store` on API responses. |
 
-There is no app-level login. Tailscale identity admits requests (the allowlist), and is used for display and for the git author. "Inside the boundary" therefore means: a user-owned device of an allowed login, reaching `notes:443` through the policy.
+There is no app-level login. Tailscale identity admits requests (the allowlist), and is used for display and for the git author. "Inside the boundary" therefore means: a user-owned device of an allowed login, reaching `notes:443` through the policy. A share (ROADMAP item 42, §5.40) lets another login in for one note or folder, through a separate guest surface.
 
 **Outbound.** The app makes two kinds of internet connection, each only when it is configured. One is the optional mirror push (ROADMAP item 2, §5.8 *Mirror*) to the `https://` URL in `NOTES_MIRROR_URL`, authenticated with a token from a compose secret. It goes out through the host's normal network, which the tailnet policy does not restrict. With the mirror on, the vault's history (every note and every attachment under the large-file threshold) leaves the tailnet for that repository. The other is Ask your vault and summaries (ROADMAP item 18, §5.25): HTTPS to Anthropic (through the Claude Code CLI with the user's subscription, or `api.anthropic.com` with an API key), only when `settings.ai.enabled` is on, the provider's credential exists, and someone asks. Each request carries the question and the text of the notes it needs (never of excluded folders), so that text leaves the tailnet for Anthropic.
 
@@ -410,16 +410,16 @@ The last section is the large-file policy (§5.8 *Large files*): one line per fi
 | *(root)* | `NotesappApplication` | Existing main class, plus `@ConfigurationPropertiesScan` and `@EnableScheduling`. |
 | `config` | `NotesProperties` | `@ConfigurationProperties("notes")` record tree (§5.16). |
 | | `WebConfig` | `WebMvcConfigurer`: registers `ApiGuardInterceptor` on `/api/**`, the `/assets/**` immutable resource handler, and `IdentityArgumentResolver`. |
-| | `SpaController` | Serves `classpath:/static/index.html` (no-cache) for client routes `/`, `/n/**`, `/search`, `/trash`, `/settings`, `/settings/**` and `/x/**` (pages registered by extensions, §6.8). |
+| | `SpaController` | Serves `classpath:/static/index.html` (no-cache) for client routes `/`, `/n/**`, `/search`, `/trash`, `/settings`, `/settings/**` and `/x/**` (pages registered by extensions, §6.8), and `share.html`, the guest page, for `/s/**` (§5.40). |
 | | `SecurityHeadersFilter` | `OncePerRequestFilter`, highest precedence: sets the security headers in §5.14, `Cache-Control: no-store` on API JSON, and `X-Notes-Build`. |
 | | `FunnelRequestFilter` | Next: `403 funnel-request` for any request carrying `Tailscale-Funnel-Request`, health included (§5.28). |
-| | `HostAndIdentityFilter` | Next in precedence: the Host allowlist (`421 unknown-host`) and the identity allowlist (`403 identity-not-allowed`); health paths are exempt (§5.13). |
+| | `HostAndIdentityFilter` | Next in precedence: the Host allowlist (`421 unknown-host`) and the identity allowlist (`403 identity-not-allowed`), which lets other logins reach the guest surface only (§5.40); health paths are exempt (§5.13). |
 | | `RequestSizeFilter` | Rejects JSON bodies over `notes.limits.max-json-body` with `413` before they are read (§5.14). |
 | | `ApiGuardInterceptor` | Mutating `/api/**` requests: requires `X-Client-Id`, validates Origin and `Sec-Fetch-Site`. |
 | | `JsonConfig` | `JsonMapperBuilderCustomizer`: serializes every `Instant` truncated to milliseconds with the fixed pattern `uuuu-MM-dd'T'HH:mm:ss.SSS'Z'` (API.md §1.5). Jackson's default `ISO_INSTANT` would emit 0, 3, 6 or 9 fractional digits. |
 | | `TimeConfig` | `Clock` bean (UTC), injected everywhere so tests can control time. |
 | `identity` | `Identity` | record `(login, name, profilePicUrl, source)`. |
-| | `IdentityResolver` | Reads and decodes the `Tailscale-User-*` headers, with fallback to the configured default identity. |
+| | `IdentityResolver` | Reads and decodes the `Tailscale-User-*` headers, with fallback to the configured default identity; tells owners from guests (§5.40). |
 | | `IdentityArgumentResolver` | Lets controllers declare an `Identity` parameter. |
 | | `Rfc2047` | Decodes RFC 2047 Q/B encoded words. |
 | `vault` | `VaultPaths` | NFC normalization, `EXISTING`/`NEW` modes with the safety and new-name rules, API path to on-disk path through the index, and the symlink escape check. Returns `ApiPath(nfc, disk)`. |
@@ -475,6 +475,7 @@ The last section is the large-file policy (§5.8 *Large files*): one line per fi
 | `search` | `SavedSearchService` | Saved searches in `.notesapp/searches.json`, with a version token (API.md §12.4). |
 | `settings` | `Settings` (+ nested records), `SettingsService`, `SettingsSeed` | Load, validate and save `.notesapp/settings.json`, with a version token, unknown-field preservation and read-only mode (§5.12); a missing file starts from the defaults plus every `SettingsSeed` (§5.23). |
 | `publish` | `PublishService`, `PublishRenderer`, `PublishPage`, `SnapshotStore`, `PublishServer` | Public publishing (§5.28): `.notesapp/publish.json`, the snapshot renderer, the snapshots outside the vault and the separate publish server on 8081. |
+| `share` | `ShareService`, `ShareStore`, `ShareAccess`, `ShareScope`, `ShareRateLimiter`, `GuestEventFilter` | Sharing with family (§5.40): `.notesapp/shares.json`, keys and recipients, the scope and embedded media, the guests' rate limit and their filtered event streams. `api.ShareController` and `api.GuestController` are the owner's and the guests' endpoints. |
 | `bookmarks` | `BookmarkService`, `BookmarkCodec` | Load, check and save `.notesapp/bookmarks.json` with a version token; re-key bookmarks after moves and trash restores (§5.21). |
 | `vault` | `HeadingRenameService` | Rewrites `[[Note#Heading]]` links (and heading bookmarks) after a heading is renamed (§5.22). |
 | `startup` | `VaultStartup` | `SmartInitializingSingleton` that runs the ordered startup sequence (§5.17). |
@@ -1206,7 +1207,7 @@ The date token mapping table (moment, dayjs, and java.time for future server-sid
 
 1. **Health paths are exempt.** `/livez`, `/readyz` and `/actuator/health` reveal nothing, and the Docker `HEALTHCHECK` calls them without a tailnet Host or identity.
 2. **Host allowlist.** The `Host` header must match an entry of `notes.allowed-hosts` (entries are `host` or `host:port`, compared case-insensitively; an entry without a port matches any port). Otherwise the response is `421 unknown-host`. This blocks DNS rebinding: a page on `evil.example` that re-resolves to `127.0.0.1` sends `Host: evil.example:8080` together with a matching `Origin`, which the Origin check alone would accept. In production the list is `notes.<tailnet>.ts.net` (from `NOTES_ALLOWED_HOSTS` in `deploy/.env`), and the app **refuses to start** when the list is empty outside the dev profile. TLS and SNI on serve already make rebinding hard in production, so this is mainly a dev-time fix and defence in depth.
-3. **Identity allowlist.** A request without a `Tailscale-User-Login` header is rejected with `403 identity-not-allowed`, unless `notes.identity.allow-default=true` (dev profile only), in which case the default identity below is used. When `notes.identity.allowed-logins` is non-empty (production: `rjgehan@github`, from `NOTES_IDENTITY_ALLOWED_LOGINS`), any other login is also rejected with `403 identity-not-allowed`. Tagged devices (which carry no identity headers) and users the node is shared with are therefore refused, even though the tailnet policy lets them connect. This is Tailscale identity, not an app login, so the no-login decision stands.
+3. **Identity allowlist.** A request without a `Tailscale-User-Login` header is rejected with `403 identity-not-allowed`, unless `notes.identity.allow-default=true` (dev profile only), in which case the default identity below is used. When `notes.identity.allowed-logins` is non-empty (production: `rjgehan@github`, from `NOTES_IDENTITY_ALLOWED_LOGINS`), it names the **owners**: any other login is a **guest** and reaches only the guest surface of §5.40 (what a share gives it, and the page that shows it); everything else answers it `403 identity-not-allowed`, as before. Tagged devices (which carry no identity headers) are refused everywhere; users the node is shared with, and other members of the tailnet, see only what is shared with them (ROADMAP item 42). This is Tailscale identity, not an app login, so the no-login decision stands.
 
 **Default identity.** With `allow-default`, a missing or empty login falls back to `notes.identity.default-name` (default `Owner`) and `default-login` (default `owner@notes`) with `source=default`.
 
@@ -1240,7 +1241,7 @@ The date token mapping table (moment, dayjs, and java.time for future server-sid
 
 **2. `FunnelRequestFilter`**: any request carrying `Tailscale-Funnel-Request` (it came through Tailscale Funnel) is refused with `403 funnel-request`, health endpoints included; only the separate publish server may be behind Funnel (§5.28).
 
-**2a. `HostAndIdentityFilter`**: the Host and identity allowlists of §5.13 (`421`, `403`).
+**2a. `HostAndIdentityFilter`**: the Host and identity allowlists of §5.13 (`421`, `403`); a login outside the list reaches only the guest surface of §5.40.
 
 **3. `RequestSizeFilter`** on JSON endpoints (every `/api/**` path except the raw uploads `/api/files/raw`, `/api/attachments` and `/api/capture/file`): a `Content-Length` above `notes.limits.max-json-body` (16 MiB) is rejected with `413 too-large` before the body is read; chunked bodies are counted while reading and cut off at the same limit. Without it, one buggy client or a pasted multi-hundred-MB string would be deserialized in full before the text size check, exhaust the heap, and, through `ExitOnOutOfMemoryError`, kill in-flight saves. The limit must stay above the largest text size limit plus JSON escaping overhead; the app checks this at startup.
 
@@ -1343,7 +1344,7 @@ public record NotesProperties(
                        @DefaultValue("1GB") DataSize minFreeSpace) {}
   public record Identity(@DefaultValue("Owner") String defaultName, @DefaultValue("owner@notes") String defaultLogin,
                          @DefaultValue("false") boolean allowDefault /* true only in the dev profile */,
-                         @DefaultValue List<String> allowedLogins /* NOTES_IDENTITY_ALLOWED_LOGINS; empty = any tailnet user */) {}
+                         @DefaultValue List<String> allowedLogins /* NOTES_IDENTITY_ALLOWED_LOGINS: the owners; empty = every tailnet user is one, and sharing is unavailable (§5.40) */) {}
   public record Security(@DefaultValue("true") boolean requireTailscaleInterface /* false in dev and tests */,
                          @DefaultValue("false") boolean allowUserspaceTailscale) {}
   public record Tasks(@DefaultValue("90d") Duration archiveAfter /* closed tasks older than this roll into archives (§5.20) */,
@@ -1870,6 +1871,76 @@ One process serves several independent vaults. The design keeps the single-vault
 | Nightly backups (item 1) | server-wide: the snapshot covers the whole `notes-data` volume, so every vault, with each vault's `.notesapp/tmp` and `.notesapp/cache` excluded |
 | App-error alerts, status page extras, Tailscale watchdog | server-wide |
 | Share sheet, quick-capture shortcut, web clipper, desktop app's capture window | the default vault (`/capture`, `/clip`); an extra vault's own `/v/<name>/capture` and its Settings › Quick capture URLs (`/api/v/<name>/capture`) capture into it |
+| Sharing with family (item 42) | per vault: each vault's `.notesapp/shares.json`, reached only under its own prefix (`/v/<name>/s/…`, `/api/v/<name>/s/…`); the default vault's guest landing lists every vault's shares, and the guest rate limit is server-wide (§5.40) |
+
+### 5.40 Sharing with family (ROADMAP item 42)
+
+**Decision (2026-11-02).** Read-only or editable access to **one note or one folder** for someone else on the tailnet, without the rest of the vault. There is still no app login: who someone is comes from Tailscale's identity headers (§5.13), and what they may reach comes from a share the owner made. As with publishing (§5.28), non-owners get a separate, minimal surface, and everything else is refused before any controller runs.
+
+**Owners and guests.** `notes.identity.allowed-logins` (`NOTES_IDENTITY_ALLOWED_LOGINS`) now names the **owners**: the identities that have the whole app, exactly as before. Every other Tailscale identity is a **guest**, admitted to the guest surface only, where it sees only what a share gives it.
+- With an **empty list** (the CasaOS layout's default, where the variable is commented out) every tailnet identity is an owner, as before, so a family member added to the tailnet or given the shared machine would get the whole vault. Sharing is therefore **unavailable** until the list is set: `GET /api/shares` says so (`available: false`, `reason: "no-owner-list"`), creating a share answers `409 sharing-unavailable`, and Settings › Sharing explains the fix (CASAOS.md and DEPLOY.md, *Sharing with family*).
+- The dev profile's default identity (no login header with `allow-default`) is an owner.
+- A request without an identity (a tagged device) is refused as before; a share link does not change that.
+
+**Admission** (`HostAndIdentityFilter`; §5.13 step 3). `IdentityResolver.resolveAny` returns the identity of any login and `isOwner` applies the list. An owner continues as before. A guest continues only to the **guest surface**, decided on the path Spring MVC matches (`RequestPaths.of`, so percent-escapes and `;` parameters cannot disguise a path), and never for a path with a `.` or `..` segment:
+
+| Guest surface | Methods |
+|---|---|
+| `/api/s` and `/api/s/**`, and so `/api/v/<name>/s/**`, which vault routing has already turned into `/api/s/**` (§5.39) | any; the CSRF guard of §5.14 applies as for owners |
+| `/s`, `/s/**`, `/v/<name>/s`, `/v/<name>/s/**`: the guest page | `GET`, `HEAD` |
+| `/assets/**`, `/favicon.svg`, `/theme-boot.js`: the guest page's static files (the app's public code) | `GET`, `HEAD` |
+| `/` | `GET`, `HEAD`: `303` to `/s`, so the server's plain address works for family |
+
+Everything else answers a guest `403 identity-not-allowed`, as any login outside the list got before: the owner's app and its whole API (files, tree, search, backlinks, graph, tags, history, trash, settings, bookmarks, tasks, AI, publishing, the shares themselves, status, the event stream), raw files, the service worker and the manifest. The identity is stored on the request as before; a controller that cares asks `IdentityResolver.isOwner`, and `IdentityArgumentResolver`'s fallback (a request that skipped the filter) admits owners only. `ShareAuthorizationIntegrationTest` asks Spring for **every handler mapping** of the application and requests each one (path variables filled in, every declared method) as a guest and as a stranger: everything outside the guest surface must answer `403 identity-not-allowed`, so an endpoint added later is covered without touching the test.
+
+**A share** (`share.ShareService`, per vault) lives in `.notesapp/shares.json`:
+
+```json
+{
+  "shares": [
+    {
+      "id": "k2v8q4m1x7ab",
+      "path": "Family/Groceries.md",
+      "kind": "note",
+      "mode": "edit",
+      "recipients": ["mom@example.com"],
+      "link": { "hash": "<64 hex digits: SHA-256 of the token>", "createdAt": "2026-11-02T10:05:00.000Z" },
+      "expiresAt": "2026-12-01T00:00:00.000Z",
+      "createdAt": "2026-11-02T10:05:00.000Z",
+      "createdBy": "you@example.com",
+      "createdByName": "You"
+    }
+  ]
+}
+```
+
+- `kind` is `note` (a Markdown note; not a drawing's `.excalidraw.md`) or `folder` (any folder but the vault's root, with everything under it); `mode` is `read` or `edit`. The same path may have several shares (view for one person, edit for another).
+- **Who.** `recipients` are Tailscale logins (1 to 254 characters with an `@`, no spaces), compared ignoring case as the allowlist is; a recipient's address is `/s/<id>`, which works only for them. And/or a **capability link**, `/s/<token>`: 32 bytes from `SecureRandom` in base64url (43 characters), usable by anyone admitted to the tailnet who has it. Only the token's SHA-256 is stored, so neither the file nor its git history nor a mirror reveals a working link; the token is returned once, when the link is made, and a lost link is replaced, never shown again.
+- `id`: 12 random lower-case letters and digits. It names the share and is not a secret.
+- `expiresAt` (optional, in the future when set): after it the share answers like a revoked one, until the owner extends or revokes it.
+- The file is written atomically and committed with the next batch, author the owner, like `publish.json`; it is hidden from the tree and never served (§5.14 item 5). Hand edits are taken as far as they are well formed (an entry with a bad id, path, kind or mode is dropped; a bad recipient, hash or date is dropped from its entry). It is parsed once and cached by blob id.
+- **Moves.** A move or rename through the app re-keys the shares (`MoveService` calls `ShareService.moved`), so addresses keep working. A deleted target leaves its share in place (`state: "missing"`; guests get `404 not-found` for the file) until it is restored or the share is revoked. At most 200 shares, 20 recipients each.
+
+**Keys and the rate limit** (`share.ShareAccess`, `share.ShareRateLimiter`). Every guest endpoint takes a key in its path, `/api/s/<key>/…`. A 12-character key is a share id, allowed for its recipients; a 43-character key is a link token, found by its SHA-256; an owner may use either key of any share, to see what family sees. An unknown key, a key of any other shape, an expired share and an id used by someone who is not a recipient all answer the same `404 share-not-found`. Each such answer, and each `403 outside-share` (below), counts against the guest's login in the server-wide limiter: after **20 in 15 minutes**, every guest request of that login answers `429 too-many-attempts` with `Retry-After` until the oldest failure leaves the window, and the lockout is logged once (`WARN SHARE_RATE_LIMITED`). A token has 256 bits, so this is not what protects links; it keeps a curious tailnet member from probing ids, file names and paths at speed. Owners are never limited, and tokens are never logged.
+
+**Scope** (`share.ShareScope`). A request's `path` first passes the vault's path rules (`VaultPaths.normalize`: NFC, no `..` or `.`, no hidden segment, no leading `/`, no `\`) and is then compared as a string, case-sensitively, before any file is touched, so a guest gets the same `403 outside-share` whether a file outside exists or not.
+- **In scope**: a note share's own path; a folder share's paths strictly under the folder (`Family/x`, never `Family2/x` or `Family` itself).
+- **Readable text** (`GET /api/s/<key>/files`): in-scope text files, through `FileService.readText`.
+- **Raw** (`GET /api/s/<key>/files/raw`, served by `RawResponses` with its sandbox CSP, §5.14 item 6): in-scope files, plus **embedded media**: images, audio, video and PDFs outside the scope that an in-scope note embeds now (`![[photo.png]]`, `![](photo.png)`), resolved by the index as the editor resolves them (`VaultIndex.outgoingLinks`); computed per share and cached per index generation. A note embedded from outside the scope (a transclusion) is not followed: the guest page says it is not shared.
+- **Writable** (edit shares): in-scope Markdown notes, through the save of API.md §4 (`FileService.saveText`: version tokens and `409 version-conflict` with the current text, which is in scope by construction), and in a folder share new Markdown notes inside the folder (`FileService.createText`). A save never recreates a deleted note of a note share (`404 not-found`). Guests cannot delete, rename, move, upload or make folders. A `read` share answers every write `403 share-read-only`.
+- **Embeds a guest adds.** The embedded-media rule must not let an edit share read any vault file by typing its name. A guest's save or create is scanned (`MarkdownScanner`) and every embed is checked: one resolving inside the scope is fine; one resolving outside is accepted only when its target is embedded media of the share now or was within the last 24 hours (so cutting and pasting a photo, or undoing its deletion, keeps working); an unresolved one only when the note's current text already has an embed with the same target. Anything else answers `403 outside-share` and counts toward the rate limit, whether the file exists or not. The 24-hour memory is kept in memory: a restart only forgets the grace period. Known limit: a link's resolution can change later (a same-named file inside the share deleted, so the embed now resolves to a file outside); that needs the guest to know a private file's name and the owner to delete the inside one, and is accepted.
+
+**Live sync** (`GET /api/s/<key>/events`, the protocol of API.md §16). The guest's stream is a connection of the vault's `EventHub` with a `ConnectionFilter`. Its `hello` always says `resync: true` (nothing is replayed), so the page refetches the share on every (re)connection and no replay count has to agree with a filter. Each event is mapped on the connection's own writer thread, never under the hub's lock: `file.created`, `file.changed` and `file.deleted` for in-scope paths and the share's embedded media pass unchanged; `entry.moved` passes when the share itself moved with it or both ends are in scope; a move or folder event otherwise touching the scope becomes `share.changed` (refetch the share); `resync` passes; nothing else (settings, history, tasks, bookmarks, status, reminders and the rest) reaches a guest. The filter checks the share again at each event and heartbeat, and `ShareService` asks the hub to re-check after every change, so a revoked or expired share, or a removed recipient, ends the stream at once; the page's next request finds `404 share-not-found`.
+
+**History.** A guest's save goes through the same batcher with the guest's identity, so the commit's author is the guest's Tailscale name and login, and the note's history and the vault timeline show who wrote what. Changes to the shares themselves are committed under the owner.
+
+**APIs** (API.md §42). Owner-only, like the rest of the owner API (they are not under `/api/s/`): `GET /api/shares`, `POST /api/shares`, `PUT /api/shares/{id}`, `DELETE /api/shares/{id}` (revoke: the entry is removed and its streams end), with `shares.changed` for the owner's other tabs. Guest: `GET /api/s` (the shares naming this login, in every running vault), `GET /api/s/<key>` (the share: what, mode, who shared it, its files and folders, its embedded media and the stream's `eventId`), `GET`, `PUT` and `POST /api/s/<key>/files`, `GET /api/s/<key>/files/raw` and `GET /api/s/<key>/events`. Responses reuse the owner API's records (`FileEntry`, `TextFile`, `WriteResult`, the SSE frames), so the page's save, conflict and sync code is the owner's.
+
+**Multiple vaults** (§5.39). `ShareService` and `GuestController` are per vault: an extra vault's shares live in its own `shares.json` and are reached only at `/v/<name>/s/<key>` and `/api/v/<name>/s/<key>/…`, so a key never opens another vault. The default vault's `GET /api/s` lists the identity's named shares in every running vault (through `VaultRegistry`). The rate limiter is `@ServerWide`.
+
+**The guest page** is a separate Vite entry, `share.html` (§6.45), which `SpaController` serves for `/s`, `/s/**`, `/v/<name>/s` and `/v/<name>/s/**` (more specific than `/v/<name>/**`). It never registers the service worker, links no manifest, and loads only its own chunks. The service worker never answers `/s/` navigations (they are not app routes), so an owner's installed app does not get in the way of a link.
+
+**Tests.** `ShareServiceTest` (file format, hashing, hand edits, limits, moves, expiry), `ShareScopeTest` (scope and traversal: `..`, `.`, percent-encoded, NFD, case, hidden and absolute paths, `\`, sibling folders with the same prefix), `ShareRateLimiterTest`, `IdentityResolverTest` (owners and guests), `HostAndIdentityFilterTest` (the guest surface), `ShareAuthorizationIntegrationTest` (every handler mapping as guest and stranger; every guest endpoint as owner, recipient, link holder, another recipient and stranger; traversal through every guest endpoint; embedded media and the embeds a guest adds; read and edit; the rate limit; revocation and expiry, streams included), `ShareIntegrationTest` (the owner API, history authors, conflicts, the filtered event stream, moves, the landing, sharing unavailable without an owner list), and a case in `MultipleVaultsIntegrationTest` (keys never cross vaults; the landing lists both).
 
 ---
 
@@ -4196,6 +4267,25 @@ The server side is §5.39. A page shows **one vault for its whole life** (`state
 - **Settings › Vaults** (`VaultsSettings.tsx`) lists the vaults (default, this vault, starting or failed) with **Open**, explains what stays with the default vault, and creates a vault from a name checked as the server checks it; the list polls every 2 s while a vault starts.
 - **Features merged after item 37** need nothing of their own: the properties panel and editor (§6.41), the formula engine (§6.42), the script host's `queryNotes` (§6.43) and the `/` menu all reach the API through `apiFetch`, and the tabs and panes (§6.40) persist under `vaultKey`. The properties block's collapsed state and Settings › Scripts in notes are device preferences, shared by the vaults like the theme.
 - **Tests.** `state/vault.test.ts` (addresses, keys, titles, reminder links), `sw/core.test.ts` and `sw/push.test.ts` (vault routes, images and reminder actions), `components/vaults/Vaults.test.tsx` (switcher shown only with another vault, options and states, full-load switching, creation and its validation).
+
+### 6.45 Sharing with family (ROADMAP item 42)
+
+The server side is §5.40.
+
+**The owner's side** (`components/share`, `features/shares.ts`).
+- **Share dialog** (`ShareDialog`, a lazy overlay registered with `registerOverlay`): opened by **Share with family…** in the note's ⋯ menu, **Share…** in the explorer's menu of a note or folder, and the palette command `file.share` (the open note). It lists the shares of that path (who, *Can view* or *Can edit*, link, expiry, state) with **Copy address**, **New link**, **Remove link** and **Revoke** (confirmed), and makes a new one: *Can view* / *Can edit*, the people's Tailscale logins (separated by commas or spaces, checked as the server checks them), **Also make a link** (anyone on the tailnet who has it) and an expiry (never, a day, a week, a month). After creating, it shows each address as a full URL of this server (`https://<host>/s/<id>`, or `/v/<name>/s/…` in an extra vault) and, once only, the link, with Copy buttons and the warning that the link is not shown again. When sharing is unavailable it says why (no owner list) instead of the form.
+- **Settings › Sharing** (`ShareSettings`): availability (with the `NOTES_IDENTITY_ALLOWED_LOGINS` fix when the list is empty), how family get access (they need Tailscale and either a place in the tailnet or the shared machine; CASAOS.md and DEPLOY.md), and every share: target, kind, mode, people, link, expiry and state (*Active*, *Expired*, *Missing*), with **Open**, **Edit…** (the dialog) and **Revoke**.
+- `shares.changed` (and the owner's own changes) invalidate the `['shares']` query. The register module is small; the dialog and the settings section are lazy chunks, so the main chunk does not grow.
+
+**The guest page** (`share.html` → `src/share/main.tsx`). None of the owner's app runs there: no service worker, no settings, tree, workspace, extensions, palette or search. `share/importGraph.test.ts` walks the entry's static imports and fails when one of the owner's singletons becomes reachable (`sync/instance`, `sync/liveSync`, `api/hooks`, `api/endpoints`, `App`, `extensions/builtins`, `workspace/store`, `features/navigation`, `render/liveRich`, `render/liveEmbeds`); `editor/encryptedSections.ts` finds a note's session through `sync/sessionLookup.ts`, which the owner's `sync/instance.ts` and the guest page each provide, instead of importing the owner's registry.
+- **Landing** (`/s`): *Shared with you*, the shares naming this login in every vault, and *Signed in as <login>*, so a family member can tell the owner which login to add. Nothing shared yet says exactly that.
+- **A share** (`/s/<key>`, `/v/<name>/s/<key>`): a header with the shared note's or folder's name, *Can edit* or *View only*, *Shared by <name>* and the save state. A folder share lists its files by folder (notes open in the page; images, audio, video, PDFs and other files open from the server in a new tab) beside the note on a desktop and as its own screen on a phone, with **New note** in an edit share. The page's title is the share's name.
+- **The note** is the owner's Live Preview editor (`noteExtensions`) with a guest `NoteContext` (`share/guestContext.ts`): the share's files (and its embedded media) are the tree, so links between shared notes resolve and open in the page, and other links show unresolved and say *Not shared* when followed; embeds render from the guest raw endpoint (images with their sizes, audio and video with controls; a PDF or other file as a chip that opens it), an embedded note outside the share as *Not shared*; properties show as their YAML (editable as text in an edit share); no uploads (pasting or dropping a file says so), no scripts, no block ids added to other notes, no heading completion for other notes. Callouts, math and Mermaid render with the reading pipeline. A view share mounts it locked (`preview: 'locked'`: nothing editable, checkboxes off).
+- **Saving and sync** are the owner's: a `DocumentRegistry` (`DocumentSession`: autosave, version tokens, conflicts, drafts) over guest endpoints, drafts in IndexedDB `notesapp-share-<share id>` (`vaultKey`ed), an `EventStream` on `/api/s/<key>/events` and `applyEvent` on a `QueryClient` of the page's own whose tree is the share's files and embedded media. `share.changed`, every reconnection (the stream always resyncs) and a `file.changed` of a shared note refetch the share. A conflict shows a banner with **Keep mine**, **Take theirs** and **Copy mine**; a deleted note says so.
+- **Ended or refused**: `404 share-not-found` (revoked, expired, not for this login) shows *This share is not available* and stops the stream; `429 too-many-attempts` says when to try again; `403 outside-share` on a save shows the server's reason in the save state.
+- The page uses the app's tokens, editor and reading styles and follows the device's theme, and works at 375 px (the folder list becomes its own screen).
+
+**Tests.** `share/guestApi.test.ts` (paths, vault prefix, keys), `share/guestContext.test.ts` (resolution, embeds, *Not shared*), `share/GuestApp.test.tsx` (landing, a note share, a folder share, read-only, ended and rate-limited states), `share/importGraph.test.ts`, `components/share/Share.test.tsx` (the dialog: create with people, link shown once, revoke; Settings › Sharing; unavailable).
 
 ## 7. Infrastructure
 
