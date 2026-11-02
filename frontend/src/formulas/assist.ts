@@ -21,6 +21,9 @@ export interface AssistField {
 
 export type AssistKey = 'ArrowUp' | 'ArrowDown' | 'Enter' | 'Tab' | 'Escape';
 
+/** Further than this (in px), a touch on the list is a swipe that scrolls it, not a tap. */
+const TAP_SLOP = 10;
+
 export class FormulaAssist {
   private readonly field: AssistField;
   private readonly catalog: () => readonly FunctionInfo[] | null;
@@ -32,6 +35,8 @@ export class FormulaAssist {
   private from = 0;
   /** Escape closed the list for this word: it stays closed until the word changes. */
   private dismissed: string | null = null;
+  /** Where a touch on the box began, and how far the list was scrolled then. */
+  private touch: { x: number; y: number; scroll: number } | null = null;
 
   constructor(field: AssistField, catalog: () => readonly FunctionInfo[] | null) {
     this.field = field;
@@ -49,6 +54,7 @@ export class FormulaAssist {
     // The field keeps the focus (and a phone its keyboard): no press here moves it.
     this.box.addEventListener('pointerdown', (e) => e.preventDefault());
     this.box.addEventListener('mousedown', (e) => e.preventDefault());
+    this.box.addEventListener('touchstart', this.onTouchStart, { passive: true });
     this.box.addEventListener('touchend', this.onTouchEnd, { passive: false });
     this.box.addEventListener('click', this.onClick);
     document.body.appendChild(this.box);
@@ -179,11 +185,21 @@ export class FormulaAssist {
     return li ? Number(li.dataset.index) : null;
   }
 
+  private onTouchStart = (e: TouchEvent) => {
+    const t = e.touches[0];
+    this.touch = t ? { x: t.clientX, y: t.clientY, scroll: this.list.scrollTop } : null;
+  };
+
   private onTouchEnd = (e: TouchEvent) => {
     const i = this.indexAt(e.target);
+    const start = this.touch;
+    this.touch = null;
+    const t = e.changedTouches[0];
+    // A swipe that scrolled the list picks nothing (the finger lifts over some function).
+    const swiped = start !== null && (this.list.scrollTop !== start.scroll || (t !== undefined && Math.hypot(t.clientX - start.x, t.clientY - start.y) > TAP_SLOP));
     // No click (nor its focus change) follows: the keyboard stays up.
     e.preventDefault();
-    if (i !== null) this.accept(i);
+    if (i !== null && !swiped) this.accept(i);
   };
 
   private onClick = (e: MouseEvent) => {

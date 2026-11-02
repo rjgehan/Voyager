@@ -132,6 +132,15 @@ describe('formulas in Live Preview (ROADMAP 39)', () => {
     expect([...view.dom.querySelectorAll('.cm-formula-inline')].map((e) => e.textContent)).toEqual(['20,700']);
   });
 
+  it('leaves inline code over a soft line break as code, and the note opens (and edits)', () => {
+    const doc = 'A sum: `=1+\n2` and `=2+2` here.\n\nEnd';
+    const view = editor(doc, { cursor: doc.length });
+    expect([...view.dom.querySelectorAll('.cm-formula-inline')].map((e) => e.textContent)).toEqual(['4']);
+    view.dispatch({ changes: { from: doc.length, insert: '!' } });
+    view.dispatch({ selection: EditorSelection.cursor(0) });
+    expect(view.state.doc.toString().endsWith('End!')).toBe(true);
+  });
+
   it('always shows results in a locked note, and errors inline with their message', () => {
     const doc = 'Total: `=1/0` and `=2+2` here\n\n| a |\n|---|\n| =A1+1 |';
     const view = editor(doc, { locked: true, cursor: 9 });

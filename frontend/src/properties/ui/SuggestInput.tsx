@@ -25,6 +25,8 @@ export function SuggestInput({ value, onValueChange, onCommit, onCancel, suggest
   const [dismissed, setDismissed] = useState(false);
   const [active, setActive] = useState(0);
   const pendingCaret = useRef<number | null>(null);
+  /** Escape cancelled the edit: the blur that follows does not commit what was typed. */
+  const cancelled = useRef(false);
   const listId = useId();
   const items = useMemo(() => (focused && !dismissed && suggest ? suggest(value, caret) : []), [focused, dismissed, suggest, value, caret]);
   const open = items.length > 0;
@@ -73,6 +75,7 @@ export function SuggestInput({ value, onValueChange, onCommit, onCancel, suggest
     } else if (e.key === 'Escape') {
       e.preventDefault();
       e.stopPropagation();
+      cancelled.current = true;
       onCancel?.();
     }
   };
@@ -95,11 +98,16 @@ export function SuggestInput({ value, onValueChange, onCommit, onCancel, suggest
           onValueChange(e.target.value);
         }}
         onSelect={(e) => setCaret(e.currentTarget.selectionStart ?? 0)}
-        onFocus={() => setFocused(true)}
+        onFocus={() => {
+          cancelled.current = false;
+          setFocused(true);
+        }}
         onBlur={() => {
           setFocused(false);
           setDismissed(false);
-          onCommit(value, 'blur');
+          // The field still holds the cancelled text until it renders again (a blur right after Escape).
+          if (cancelled.current) cancelled.current = false;
+          else onCommit(value, 'blur');
         }}
         onKeyDown={onKeyDown}
       />

@@ -106,6 +106,29 @@ describe('PropertiesEditor', () => {
     expect(yaml.endsWith('owner:\n')).toBe(true);
   });
 
+  it('Escape cancels a text or number edit (the blur it causes commits nothing)', () => {
+    render(<Harness />);
+    const title = screen.getByLabelText('title') as HTMLInputElement;
+    act(() => title.focus());
+    fireEvent.change(title, { target: { value: 'Draft' } });
+    fireEvent.keyDown(title, { key: 'Escape' });
+    expect(yaml).toBe(YAML);
+    expect((screen.getByLabelText('title') as HTMLInputElement).value).toBe('Plan');
+
+    const rating = screen.getByLabelText('rating') as HTMLInputElement;
+    act(() => rating.focus());
+    fireEvent.change(rating, { target: { value: '7' } });
+    fireEvent.keyDown(rating, { key: 'Escape' });
+    expect(yaml).toBe(YAML);
+    expect(rating.value).toBe('4');
+
+    // The next edit commits as usual.
+    act(() => rating.focus());
+    fireEvent.change(rating, { target: { value: '5' } });
+    act(() => rating.blur());
+    expect(yaml).toContain('rating: 5\n');
+  });
+
   it('shows a value that does not fit its type as written', () => {
     yaml = 'due: soon\n';
     render(<Harness />);
