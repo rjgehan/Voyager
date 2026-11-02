@@ -35,6 +35,9 @@ export interface SheetActions {
   sortSheetDesc(): void;
   toggleFilter(): void;
   openConditionalFormatting(): void;
+  insertCheckboxes(): void;
+  insertDropdown(): void;
+  openDataValidation(): void;
 }
 
 let active: SheetActions | null = null;

@@ -50,7 +50,7 @@ function Panel({ label, anchor, className, onClose, children }: Omit<Props, 'pho
     const top = below + rect.height > window.innerHeight - 8 ? Math.max(8, anchor.y - rect.height - 2) : below;
     el.style.left = `${Math.max(8, Math.min(anchor.x, window.innerWidth - rect.width - 8))}px`;
     el.style.top = `${top}px`;
-    if (!el.contains(document.activeElement)) el.querySelector<HTMLElement>('[data-autofocus], input, button')?.focus({ preventScroll: true });
+    if (!el.contains(document.activeElement)) (el.querySelector<HTMLElement>('[data-autofocus]') ?? el.querySelector<HTMLElement>('input, button'))?.focus({ preventScroll: true });
     return () => returnFocus(previous, el);
   }, [anchor, previous]);
 

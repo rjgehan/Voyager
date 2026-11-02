@@ -8,6 +8,7 @@ import { columnLetters, MAX_COLUMNS, MAX_ROWS, toA1 } from '../../sheets/a1';
 import { effectiveFormat, shownCell, type ShownCell } from '../../sheets/display';
 import { usedExtent } from '../../sheets/edits';
 import type { CellStyle } from '../../sheets/conditional';
+import type { ValidationLook } from '../../sheets/validation';
 import { filterView } from '../../sheets/filter';
 import { cellText, type Sheet } from '../../sheets/format';
 import type { CellRange } from '../../sheets/refs';
@@ -200,6 +201,8 @@ export interface CellOptions {
   /** Conditional formatting of a cell (DESIGN §6.21.12), and what it needs to set a font. */
   styleAt?: ((col: number, row: number) => CellStyle | undefined) | null;
   fontSize?: number;
+  /** Data validation of a cell (DESIGN §6.21.13): checkboxes show as Glide's checkboxes. */
+  looks?: ((col: number, row: number) => ValidationLook | undefined) | null;
 }
 
 /** The font of a cell in bold or italic (its row's or column's bold included). */
@@ -217,6 +220,18 @@ export function gridCell(sheet: Sheet, col: number, row: number, opts: CellOptio
   const cell = sheet.cells[toA1(col, row)];
   const shown = shownCell(sheet, col, row);
   const style = opts.styleAt?.(col, row);
+  const look = opts.looks?.(col, row);
+  if (look?.kind === 'checkbox' && !look.invalid) {
+    // A checkbox cell: ticked for TRUE; the view toggles it on a click (Glide's own toggle is not used).
+    return {
+      kind: GridCellKind.Boolean,
+      data: look.checked === true,
+      allowOverlay: false,
+      readonly: opts.readonly,
+      contentAlign: 'center',
+      ...(style?.bg ? { themeOverride: { bgCell: style.bg } } : {}),
+    };
+  }
   let themeOverride: Partial<Theme> | undefined = shown.color ? { textDark: opts.colors[shown.color] } : undefined;
   if (style) {
     // A rule's colours win over a number format's, never over an error's.

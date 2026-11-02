@@ -15,6 +15,7 @@ import {
   Download,
   Funnel,
   Hash,
+  ListChecks,
   PaintBucket,
   Import,
   MoveHorizontal,
@@ -38,10 +39,24 @@ import { setActiveSheet, type SheetActions } from '../../sheets/activeSheet';
 import { guessChartOptions } from '../../sheets/charts';
 import { columnFiltered, dataRegion, filterRange, looksLikeHeader } from '../../sheets/filter';
 import type { Separator } from '../../sheets/csv';
-import { effectiveFormat } from '../../sheets/display';
+import { effectiveFormat, formatShown, shownCell } from '../../sheets/display';
 import { clearEdits, clipStillHolds, copyRange, fillDownEdits, fillEdits, fillRightEdits, pasteEdits, typedEdit, usedExtent, type SheetClip } from '../../sheets/edits';
 import type { CellEdit, FormatEdit, Workbook } from '../../sheets/engine';
-import { cellText, cellValue, isCellError, sameName, sheetById, sheetByName, sheetNameProblem, type ChartProps, type FilterColumn, type Sheet, type SheetFilter } from '../../sheets/format';
+import {
+  cellText,
+  cellValue,
+  isCellError,
+  sameName,
+  sheetById,
+  sheetByName,
+  sheetNameProblem,
+  type ChartProps,
+  type FilterColumn,
+  type Sheet,
+  type SheetFilter,
+  type ValidationType,
+} from '../../sheets/format';
+import { dropdownItems, isValid, validationLooks, validations } from '../../sheets/validation';
 import { changeDecimals, isGeneral } from '../../sheets/numfmt';
 import { absoluteRangeText, parseRangeText, rangeText, type CellRange } from '../../sheets/refs';
 import { typedInput } from '../../sheets/input';
@@ -56,6 +71,8 @@ import { ChartsPane } from './ChartsPane';
 import { FormulaBar, type EditTarget, type FormulaBarHandle, type Move } from './FormulaBar';
 import { cellSelection, clampSelection, displayRange, gridLayout, HEADER_BAND, rowView, sheetRange, sheetRows, TOUCH_HEADER_BAND, type CellAt, type SheetSelection } from './gridModel';
 import { ConditionalDialog } from './ConditionalDialog';
+import { DropdownList } from './DropdownList';
+import { ValidationDialog } from './ValidationDialog';
 import { FilterMenu } from './FilterMenu';
 import {
   addToWorkbook,
@@ -106,6 +123,7 @@ const FORMAT_LIMIT = 10000;
 
 type Dialog =
   | { kind: 'named' | 'width' | 'format' | 'conditional' }
+  | { kind: 'validation'; start?: ValidationType }
   | { kind: 'chart'; id: string | null; initial: ChartProps }
   | { kind: 'import'; file: File; type: ImportKind; separator: Separator; text?: string; book?: ImportedBook };
 
@@ -177,6 +195,9 @@ export function SheetEditor({ path, snapshot, workbook, version }: Props) {
   const [sortMenu, setSortMenu] = useState<{ x: number; y: number } | null>(null);
   /** The filter menu of a column, open under its button. */
   const [filterMenu, setFilterMenu] = useState<{ col: number; anchor: ScreenRect } | null>(null);
+  /** A dropdown cell's list (sheet coordinates), open under the cell. */
+  const [dropdown, setDropdown] = useState<{ at: CellAt; anchor: ScreenRect } | null>(null);
+  const [validationMenu, setValidationMenu] = useState<{ x: number; y: number } | null>(null);
   /** The cut waiting to be pasted, shown with a dashed outline while it is still the last copy. */
   const [cutMark, setCutMark] = useState<SheetClip | null>(null);
   /** The range a formula being typed points at. */
@@ -228,6 +249,8 @@ ${JSON.stringify(sheet.filter ?? null)}`;
   const activeFormat = effectiveFormat(sheet, activeAt.col, activeAt.row);
   /** The selection's range in the sheet (the smallest that holds its rows, with a filter view). */
   const selectedRange = sheetRange(view, selection.range);
+  // How data validation shows cells (checkboxes, dropdowns, invalid values), with every change.
+  const looks = useMemo(() => validationLooks(model.file, sheetById(model.file, sheetId) ?? model.file.sheets[0]), [model, sheetId]);
   const single = selection.range.width === 1 && selection.range.height === 1;
   const wholeColumns = selection.range.row === 0 && selection.range.height >= layout.rows;
   const wholeRows = !wholeColumns && selection.range.col === 0 && selection.range.width >= layout.cols;
@@ -288,7 +311,18 @@ ${JSON.stringify(sheet.filter ?? null)}`;
     const s = sheetById(workbook.file, target.sheet);
     if (!s) return;
     // Typed input brings the format it implies (`10%`, `=TODAY()`) into a cell without one.
-    if (text !== editText(s, target)) run(() => workbook.setCells([typedEdit(s, target.col, target.row, text)], { implyFormats: true }));
+    if (text !== editText(s, target)) {
+      const typed = typedEdit(s, target.col, target.row, text);
+      // A strict validation refuses other input, as Google Sheets' "Reject the input".
+      const rule = validations(s)?.(target.col, target.row)?.validation;
+      const value = typed.content?.v;
+      if (rule?.strict && value !== undefined && !isValid(workbook.file, s, rule, value, formatShown(value, typed.fmt ?? effectiveFormat(s, target.col, target.row)).text)) {
+        toast(`“${text}” is not one of the values ${toA1(target.col, target.row)} takes.`, { kind: 'error' });
+        if (!touch) focusGrid();
+        return;
+      }
+      run(() => workbook.setCells([typed], { implyFormats: true }));
+    }
     if (move === 'none' || s.id !== sheet.id) return;
     // Moves go along the grid's rows (with a filter view, the rows it shows).
     const next = step({ col: target.col, row: view.displayRow(target.row) ?? selection.active.row }, move);
@@ -484,6 +518,50 @@ ${JSON.stringify(sheet.filter ?? null)}`;
     });
     if (ok) run(() => workbook.setChart(sheet.id, id, null));
   };
+
+  // ---------- data validation: checkboxes and dropdowns ----------
+
+  /** Ticks or unticks a checkbox cell (sheet coordinates). */
+  const toggleCheckbox = (at: CellAt) => {
+    if (!editable) return;
+    const v = cellValue(sheet.cells[toA1(at.col, at.row)]);
+    setCells([{ sheet: sheet.id, ref: toA1(at.col, at.row), content: { v: v !== true } }]);
+  };
+
+  /** Space: the selection's checkboxes all ticked, or all unticked when they all were (one undo step). */
+  const toggleSelectionCheckboxes = () => {
+    if (!editable || !looks) return;
+    const r = selection.range;
+    const cells: CellAt[] = [];
+    for (let d = r.row; d < r.row + Math.min(r.height, 10000); d++) {
+      const row = view.sheetRow(d);
+      for (let col = r.col; col < r.col + r.width; col++) {
+        const look = looks(col, row);
+        if (look?.kind === 'checkbox' && !look.invalid) cells.push({ col, row });
+      }
+    }
+    const tick = !cells.every((c) => cellValue(sheet.cells[toA1(c.col, c.row)]) === true);
+    setCells(cells.map((c) => ({ sheet: sheet.id, ref: toA1(c.col, c.row), content: { v: tick } })));
+  };
+
+  /** Inserts checkboxes on the selection (Google Sheets' Insert > Checkbox): a checkbox validation. */
+  const insertCheckboxes = () => run(() => workbook.addItem('validation', sheet.id, { range: rangeText(selectedRange), type: 'checkbox' }));
+
+  const dropdownRule = dropdown ? validations(sheet)?.(dropdown.at.col, dropdown.at.row)?.validation : undefined;
+  const pickDropdown = (item: string) => {
+    if (!dropdown) return;
+    const { at } = dropdown;
+    setDropdown(null);
+    run(() => workbook.setCells([typedEdit(sheet, at.col, at.row, item)], { implyFormats: true }));
+    focusGrid();
+  };
+
+  const validationItems: MenuEntry[] = [
+    { id: 'checkbox', label: 'Insert checkboxes', run: insertCheckboxes },
+    { id: 'dropdown', label: 'Insert dropdown…', run: () => setDialog({ kind: 'validation', start: 'list' }) },
+    'separator',
+    { id: 'rules', label: 'Data validation rules…', run: () => setDialog({ kind: 'validation' }) },
+  ];
 
   // ---------- sorting and filters ----------
 
@@ -846,6 +924,9 @@ ${JSON.stringify(sheet.filter ?? null)}`;
       sortSheetDesc: () => sortSheetBy(true),
       toggleFilter,
       openConditionalFormatting: () => setDialog({ kind: 'conditional' }),
+      insertCheckboxes,
+      insertDropdown: () => setDialog({ kind: 'validation', start: 'list' }),
+      openDataValidation: () => setDialog({ kind: 'validation' }),
     };
   });
   useEffect(() => {
@@ -883,6 +964,9 @@ ${JSON.stringify(sheet.filter ?? null)}`;
       sortSheetDesc: call('sortSheetDesc'),
       toggleFilter: call('toggleFilter'),
       openConditionalFormatting: call('openConditionalFormatting'),
+      insertCheckboxes: call('insertCheckboxes'),
+      insertDropdown: call('insertDropdown'),
+      openDataValidation: call('openDataValidation'),
     });
   }, [path]);
 
@@ -915,6 +999,9 @@ ${JSON.stringify(sheet.filter ?? null)}`;
     onFill: (source, dest) => setCells(fillEdits(sheet, source, dest, { handle: true, rowAt })),
     onFilterButton: (col, rect) => setFilterMenu({ col, anchor: rect }),
     onFreeze: (axis, count) => setFrozen(axis === 'rows' ? count : sheet.frozen.rows, axis === 'cols' ? count : sheet.frozen.cols),
+    onToggleCheckbox: toggleCheckbox,
+    onToggleSelection: toggleSelectionCheckboxes,
+    onDropdown: (at, rect) => setDropdown({ at, anchor: rect }),
     onUndo: undo,
     onRedo: redo,
     onEscape: () => {
@@ -1039,6 +1126,17 @@ ${JSON.stringify(sheet.filter ?? null)}`;
         <ToolButton title="Conditional formatting" pressed={Object.keys(sheet.conditional ?? {}).length > 0} onClick={() => setDialog({ kind: 'conditional' })}>
           <PaintBucket size={16} />
         </ToolButton>
+        <ToolButton
+          title="Checkboxes and dropdowns"
+          pressed={Object.keys(sheet.validation ?? {}).length > 0}
+          onClick={(e) => {
+            const r = e.currentTarget.getBoundingClientRect();
+            if (editable) setValidationMenu({ x: r.left, y: r.bottom + 4 });
+            else setDialog({ kind: 'validation' });
+          }}
+        >
+          <ListChecks size={16} />
+        </ToolButton>
         <span className="sheet-toolbar-sep" aria-hidden />
         <ToolButton title="Insert chart" disabled={!editable} onClick={insertChart}>
           <ChartColumn size={16} />
@@ -1077,6 +1175,7 @@ ${JSON.stringify(sheet.filter ?? null)}`;
         <SheetGrid
           sheet={sheet}
           layout={layout}
+          looks={looks}
           filter={gridFilter}
           version={version}
           selection={selection}
@@ -1149,6 +1248,21 @@ ${JSON.stringify(sheet.filter ?? null)}`;
           }}
           onClose={() => setDialog(null)}
         />
+      )}
+      {validationMenu && <ContextMenu x={validationMenu.x} y={validationMenu.y} label="Checkboxes and dropdowns" items={validationItems} onClose={() => setValidationMenu(null)} />}
+      {dropdown && dropdownRule && (
+        <DropdownList
+          items={dropdownItems(workbook.file, sheet, dropdownRule)}
+          current={shownCell(sheet, dropdown.at.col, dropdown.at.row).text}
+          cell={toA1(dropdown.at.col, dropdown.at.row)}
+          anchor={dropdown.anchor}
+          phone={phone}
+          onPick={pickDropdown}
+          onClose={() => setDropdown(null)}
+        />
+      )}
+      {dialog?.kind === 'validation' && (
+        <ValidationDialog workbook={workbook} sheet={sheet} selection={rangeText(selectedRange)} editable={editable} start={dialog.start} onClose={() => setDialog(null)} />
       )}
       {dialog?.kind === 'conditional' && (
         <ConditionalDialog workbook={workbook} sheet={sheet} selection={rangeText(selectedRange)} editable={editable} onClose={() => setDialog(null)} />

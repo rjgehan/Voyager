@@ -963,3 +963,58 @@ describe('conditional formatting (DESIGN §6.21.12)', () => {
     expect(vault.readFile(path).content).toContain('"version": 1');
   });
 });
+
+describe('checkboxes and dropdowns (DESIGN §6.21.13)', () => {
+  const click = (col: number, gridRow: number, x: number, touch = false) => {
+    const e = { localEventX: x, localEventY: 12, bounds: { x: col * 100, y: 50 + gridRow * 24, width: 100, height: 24 }, isTouch: touch, preventDefault: vi.fn() };
+    act(() => gridProps().onCellClicked!([col, gridRow], e as never));
+    return e;
+  };
+
+  it('inserts checkboxes that a click on the box or a tap anywhere ticks, and Space ticks the selection', async () => {
+    const path = await openGrid();
+    select(3, 0, 1, 3); // D2:D4
+    fireEvent.click(screen.getByRole('button', { name: 'Checkboxes and dropdowns' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Insert checkboxes' }));
+    expect(Object.values((await saved(path)).sheets[0].validation!)).toEqual([{ range: 'D2:D4', type: 'checkbox' }]);
+    expect(gridProps().getCellContent([3, 0])).toMatchObject({ kind: 'boolean', data: false });
+    // A click beside the box only selects; on the box it ticks.
+    expect(click(3, 0, 10).preventDefault).not.toHaveBeenCalled();
+    expect(click(3, 0, 50).preventDefault).toHaveBeenCalled();
+    expect((await saved(path)).sheets[0].cells.D2).toEqual({ v: true });
+    click(3, 0, 10, true);
+    expect((await saved(path)).sheets[0].cells.D2).toEqual({ v: false });
+    select(3, 0, 1, 3);
+    const e = { key: ' ', ctrlKey: false, metaKey: false, shiftKey: false, altKey: false, cancel: vi.fn(), preventDefault: vi.fn(), stopPropagation: vi.fn(), bounds: undefined, keyCode: 32, rawEvent: undefined, location: undefined };
+    act(() => gridProps().onKeyDown!(e));
+    expect(e.cancel).toHaveBeenCalled();
+    const cells = (await saved(path)).sheets[0].cells;
+    expect([cells.D2, cells.D3, cells.D4]).toEqual([{ v: true }, { v: true }, { v: true }]);
+  });
+
+  it('adds a dropdown whose list writes the cell, marks other values, and refuses them when strict', async () => {
+    const path = await openGrid();
+    select(0, 0, 1, 2); // A2:A3
+    fireEvent.click(screen.getByRole('button', { name: 'Checkboxes and dropdowns' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Insert dropdown…' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Data validation rules' });
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Item 1' }), { target: { value: 'Rent' } });
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Item 2' }), { target: { value: 'Gas' } });
+    fireEvent.click(within(dialog).getByRole('radio', { name: 'Reject the input' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Done' }));
+    expect(screen.queryByRole('dialog', { name: 'Data validation rules' })).toBeNull();
+    expect(Object.values((await saved(path)).sheets[0].validation!)).toEqual([{ range: 'A2:A3', type: 'list', values: ['Rent', 'Gas'], strict: true }]);
+    // The chevron's end of the cell opens the list.
+    expect(click(0, 1, 95).preventDefault).toHaveBeenCalled();
+    const list = await screen.findByRole('listbox', { name: 'Values for A3' });
+    fireEvent.click(within(list).getByRole('option', { name: 'Gas' }));
+    expect((await saved(path)).sheets[0].cells.A3).toEqual({ v: 'Gas' });
+    // Typed input that is not an item is refused.
+    select(0, 0);
+    fireEvent.focus(formulaInput());
+    fireEvent.change(formulaInput(), { target: { value: 'Water' } });
+    fireEvent.keyDown(formulaInput(), { key: 'Enter' });
+    expect(await screen.findByText(/“Water” is not one of the values A2 takes/)).toBeInTheDocument();
+    expect((await saved(path)).sheets[0].cells.A2).toEqual({ v: 'Rent' });
+  });
+});
