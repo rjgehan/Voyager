@@ -82,9 +82,13 @@ describe.each(['desktop', 'phone'] as const)('the app at %s width', (size) => {
     // The first note loads the editor's modules: allow for a cold start.
     await waitFor(() => expect(document.querySelector('.cm-content')).not.toBeNull(), { timeout: 10_000 });
     expect(screen.getByRole('main')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Skip to content' })).toBeInTheDocument();
     expect(document.querySelector('.cm-content')).toHaveAttribute('aria-label', 'Note text');
     expect(await axeViolations(document.body, { page: true })).toEqual([]);
+    // The skip link is the first focusable element and takes the focus into the note.
+    const skip = screen.getByRole('link', { name: 'Skip to content' });
+    expect(document.querySelector('a[href], button, input, [tabindex="0"]')).toBe(skip);
+    fireEvent.click(skip);
+    expect(document.activeElement).toBe(document.querySelector('.cm-content'));
   });
 
   it.each(['/settings/files', '/settings/editor', '/settings/hotkeys', '/trash', '/search?q=plan'])('has no axe violations on %s', async (url) => {

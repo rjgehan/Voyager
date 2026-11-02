@@ -53,16 +53,23 @@ export function Modal({ label, onClose, children, className, variant = 'dialog',
         e.preventDefault();
         e.stopPropagation();
         onCloseRef.current();
-        return;
       }
-      if (e.key !== 'Tab' || !panel.current) return;
+    };
+    // Tab is trapped after the dialog's own controls have seen it (bubbling), so a control that uses
+    // Tab itself (an editor that indents with it) keeps it.
+    const onTab = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab' || e.defaultPrevented || !panel.current) return;
       // Only the topmost dialog keeps the focus.
       const dialogs = document.querySelectorAll('.modal-panel');
       if (dialogs[dialogs.length - 1] !== panel.current) return;
       trapTab(e, panel.current);
     };
     window.addEventListener('keydown', onKey, true);
-    return () => window.removeEventListener('keydown', onKey, true);
+    window.addEventListener('keydown', onTab);
+    return () => {
+      window.removeEventListener('keydown', onKey, true);
+      window.removeEventListener('keydown', onTab);
+    };
   }, []);
 
   // Portaled to the body, so no sticky or transformed ancestor can trap it in its stacking context.

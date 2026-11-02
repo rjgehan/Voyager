@@ -13,6 +13,7 @@ import { registerPanel } from '../../extensions';
 import { registerBuiltins } from '../../extensions/builtins';
 import { axeViolations } from '../../test/axe';
 import { ContextMenu } from '../overlays/ContextMenu';
+import { Modal } from '../overlays/Modal';
 import { PanelTabs } from './Panels';
 import { TopBar } from './TopBar';
 
@@ -70,6 +71,37 @@ describe('panel tabs (ARIA tabs pattern)', () => {
     expect(last).toHaveFocus();
     fireEvent.keyDown(strip, { key: 'Home' });
     expect(screen.getAllByRole('tab')[0]).toHaveFocus();
+    expect(await axeViolations()).toEqual([]);
+  });
+});
+
+describe('modal dialog', () => {
+  it('keeps Tab inside, but leaves Tab to a control that uses it', async () => {
+    // jsdom lays nothing out: treat attached elements as shown.
+    vi.spyOn(HTMLElement.prototype, 'offsetParent', 'get').mockImplementation(function (this: HTMLElement) {
+      return this.isConnected ? this.parentElement : null;
+    });
+    render(
+      <>
+        <button type="button">Behind</button>
+        <Modal label="Rename" onClose={() => {}}>
+          <input aria-label="Name" />
+          <textarea aria-label="Indenting" onKeyDown={(e) => e.key === 'Tab' && e.preventDefault()} />
+          <button type="button">OK</button>
+        </Modal>
+      </>,
+    );
+    const ok = screen.getByRole('button', { name: 'OK' });
+    ok.focus();
+    expect(fireEvent.keyDown(ok, { key: 'Tab' })).toBe(false);
+    expect(screen.getByRole('textbox', { name: 'Name' })).toHaveFocus();
+    fireEvent.keyDown(document.activeElement!, { key: 'Tab', shiftKey: true });
+    expect(ok).toHaveFocus();
+    // A control that handles Tab itself (an editor indenting) keeps the focus.
+    const indenting = screen.getByRole('textbox', { name: 'Indenting' });
+    indenting.focus();
+    fireEvent.keyDown(indenting, { key: 'Tab' });
+    expect(indenting).toHaveFocus();
     expect(await axeViolations()).toEqual([]);
   });
 });
