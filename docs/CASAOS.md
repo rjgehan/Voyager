@@ -27,7 +27,7 @@ An older layout with its own Tailscale container is kept as an appendix (*Advanc
 
 ## 2. Install
 
-1. In the compose file, replace `homeserver.<tailnet>.ts.net` (twice, in `NOTES_ALLOWED_HOSTS`) with the host's name from step 1.1. Optionally uncomment `NOTES_IDENTITY_ALLOWED_LOGINS` and put your Tailscale login there (the email shown in the admin console; comma-separate several); unset, anyone on your tailnet who reaches the app is let in. Set `TZ` if you are not on New York time.
+1. In the compose file, replace `homeserver.<tailnet>.ts.net` (twice, in `NOTES_ALLOWED_HOSTS`) with the host's name from step 1.1. Optionally uncomment `NOTES_IDENTITY_ALLOWED_LOGINS` and put your Tailscale login there (the email shown in the admin console; comma-separate several); unset, anyone on your tailnet who reaches the app is let in, with the whole vault, and nothing can be shared with family (*Sharing with family* below). Set `TZ` if you are not on New York time.
 2. CasaOS → **App Store → Custom Install** (the `+` at the top right) → **Import** → paste the file → **Submit**, then **Install**. The CasaOS tile turns green within a minute.
 3. **HTTPS on the tailnet**, once over SSH (it survives reboots):
    ```sh
@@ -187,6 +187,30 @@ To turn it off: `sudo tailscale funnel --https=10000 off` (the internet loses ac
 
 Settings › Vaults › **New vault** creates a separate vault (for example `work`), with its own notes, search, history, trash, settings, bookmarks, tasks and reminders, at `https://homeserver.<tailnet>.ts.net:8443/v/work/` (the same `tailscale serve` covers it; nothing changes in CasaOS). Its folder is `/DATA/AppData/notesapp/data/vaults/work`, created by the app as uid 1000; a folder you make yourself must be owned by uid 1000 too (`sudo install -d -o 1000 -g 1000 /DATA/AppData/notesapp/data/vaults/work`, then restart the app). A vault switcher appears at the top of the sidebar (the drawer on the iPhone) once there are two vaults. Your existing vault, its address and the home-screen app do not change. Publishing, the GitHub mirror, the share sheet and the web clipper stay with the existing vault. To rename or delete a vault: stop the app in CasaOS, rename or remove its folder with the **Files** app, start the app. To stop the app from creating vaults, add `NOTES_VAULTS_ALLOW_CREATE` = `false` to the `notes` container's environment. DEPLOY.md *Multiple vaults* has the details.
 
+### Sharing with family
+
+Share **one note or one folder** with someone else, to view or to edit, without the rest of your vault (a shopping list with your partner, recipes with your parents). There are no accounts: NotesApp knows people by their Tailscale login, and a family member sees only what you shared with that login. DESIGN.md §5.40 has the design.
+
+1. **Name yourself the owner.** CasaOS → NotesApp → **Settings**, the `notes` container: set `NOTES_IDENTITY_ALLOWED_LOGINS` to your own Tailscale login (the email the admin console shows for you; comma-separate several people who should have *everything*), **Save**. Without it, everyone who can reach NotesApp already has the whole vault, so sharing stays off and **Settings › Sharing** says why. Never put family on this list: everyone on it has everything.
+2. **Give them a way in.** Their phone or computer needs Tailscale, signed in to some account. Either:
+   - **Share this machine** (recommended): admin console → **Machines** → the host → **⋯** → **Share…**, and send the invite to their email (or copy an invite link). They install Tailscale, sign in with their own account (Google, Apple, Microsoft, GitHub or email), and accept. They see only this machine, nothing else of your tailnet; their login is the account they accepted with. Sharing is on every Tailscale plan; your own tailnet does not grow.
+   - **Invite them to your tailnet** (admin console → **Users** → **Invite users**): they then join as members, which counts toward your plan's users and, under the default *allow everything* policy, lets them reach **every** device of your tailnet. Only do this together with step 3.
+3. **Let them reach NotesApp and nothing else.** Tailscale's default policy allows every connection, and `"src": ["*"]` includes the people you share a machine with: they could open every port of the host (the CasaOS dashboard, your other apps). In the admin console → **Access controls**, replace the allow-all rule (`{"src": ["*"], "dst": ["*"], "ip": ["*"]}` in `grants`, or `{"action": "accept", "src": ["*"], "dst": ["*:*"]}` in older `acls`) with:
+   ```json
+   "hosts": { "homeserver": "100.x.y.z" },   // the host's Tailscale IPv4 (tailscale ip -4)
+   "grants": [
+     // You: everything, as before (list each login of yours).
+     { "src": ["you@example.com"], "dst": ["*"], "ip": ["*"] },
+     // Everyone else: NotesApp's HTTPS port on the host, nothing more.
+     { "src": ["autogroup:shared", "autogroup:member"], "dst": ["homeserver"], "ip": ["tcp:8443"] },
+   ],
+   ```
+   (`autogroup:shared` is everyone you share a machine with; `autogroup:member` matters only if you invite members, and they keep reaching their own devices only if you add `{ "src": ["autogroup:member"], "dst": ["autogroup:self"], "ip": ["*"] }`.) The **Preview rules** tab shows what each person can reach. Your own access does not change.
+4. **Share.** In NotesApp: a note's **⋯** menu → **Share with family…**, a folder's (or note's) menu in the file list → **Share…**, or the command palette. Choose **Can view** or **Can edit**, type their Tailscale login (they can read it off the page in step 5 if you are not sure), optionally **Also make a link** and an end date, then **Share**, and send them the address the dialog shows. A link works for anyone who can reach NotesApp, so treat it like a key: it is shown once (the server keeps only a fingerprint of it), and **New link** or **Remove link** replaces or ends it.
+5. **What they see.** The address opens the note (or the folder's notes) in their browser: editable for *Can edit*, with your autosave, conflict handling and live updates, and your note's history records them as its author; read-only for *Can view*. `https://homeserver.<tailnet>.ts.net:8443` itself shows them everything shared with them and the login they are signed in with. On an iPhone, **Share → Add to Home Screen** keeps it one tap away. They never see your other notes, search, settings, history or anything else.
+
+**Settings › Sharing** lists every share with its people, link, end date and state; **Stop sharing** ends it at once, open pages included. To cut someone off from the host entirely, remove the machine share (or the user) in the admin console. Guessing addresses is rate-limited: a login refused 20 times in 15 minutes is locked out for a while, and with *App alerts* set up you get a notification (`SHARE_RATE_LIMITED`).
+
 ### Nightly backups
 
 A second CasaOS app, [`deploy/casaos-backup-compose.yml`](../deploy/casaos-backup-compose.yml), takes encrypted [restic](https://restic.net) snapshots of the vault, its history (and, with the advanced layout, the Tailscale identity) every night, to a second disk and optionally to Backblaze B2 or Amazon S3 (DEPLOY.md *Backups* explains the design: NotesApp is stopped for the seconds the local snapshot takes). It adds two containers:
@@ -254,7 +278,10 @@ Use `offsite` instead of `local` when the second disk is gone. Check the result 
 |---|---|
 | `notesapp` keeps restarting | CasaOS → app → **Logs**. `NOTES_ALLOWED_HOSTS ... must list`: the variable is empty. `No kernel-mode Tailscale interface`: `NOTES_SECURITY_REQUIRE_TAILSCALE_INTERFACE` must be `"false"` in this layout. *Access denied* or *not writable* on `/data`: the data folder isn't owned by uid 1000 (section 1, step 2). |
 | Image pull fails with `denied` / `unauthorized` | The package is private and the server isn't logged in to GHCR (section 1, step 3). |
-| `403` in the browser | Your Tailscale login doesn't match `NOTES_IDENTITY_ALLOWED_LOGINS`, or you're on a tagged device. |
+| `403` in the browser | Your Tailscale login doesn't match `NOTES_IDENTITY_ALLOWED_LOGINS`, or you're on a tagged device. (A login outside the list sees only what is shared with it: the server's address sends it to its list of shares.) |
+| A family member sees *This share is not available* | The share was stopped or ended, its link was replaced, or it names another login: they open `https://homeserver.<tailnet>.ts.net:8443` to see the login they are signed in with, and you check it in Settings › Sharing. |
+| Settings › Sharing says sharing is off | `NOTES_IDENTITY_ALLOWED_LOGINS` is empty (*Sharing with family*, step 1). |
+| A family member gets no answer at all from the address | Tailscale isn't connected on their device, the machine share wasn't accepted, or your access controls don't give them `tcp:8443` on the host (*Sharing with family*, steps 2 and 3). |
 | `421` in the browser | The host name you opened doesn't match `NOTES_ALLOWED_HOSTS` (a placeholder left in, or a typo in the tailnet name). Opening `http://<server-ip>:18095` always answers 421 or 403: use the `https://…ts.net:8443` address. |
 | `403` from `http://127.0.0.1:18095` but the HTTPS address works | Expected: only `tailscale serve` adds the identity headers. |
 | `https://…:8443` does not load | `tailscale serve status` must show `:8443` → `http://127.0.0.1:18095` (section 2, step 3); `curl -sI http://127.0.0.1:18095` on the host must answer. |

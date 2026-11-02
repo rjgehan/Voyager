@@ -90,7 +90,7 @@ DESIGN.md has the details.
 | 37 | Multiple vaults *(built 2026-10-22, `feat/vaults`)* | M | L | |
 | 38 | Ops polish: JDK 25 runtime, faster start, app-error alerts, status page | M | S | |
 | 41 | **Desktop app (Windows and macOS) with live sync** *(new, 2026-10-17)* | M | M | 7 for quick capture; 8 for offline |
-| 42 | **Share a note with family** *(new, approved 2026-11-02; `feat/family-share`)* | M | M | 37 for multiple vaults |
+| 42 | **Share a note with family** *(new, approved 2026-11-02; built 2026-11-02, `feat/family-share`)* | M | M | 37 for multiple vaults |
 
 ---
 
@@ -1244,7 +1244,13 @@ Scheduling uses `ts-fsrs` 5.4.2 (MIT). Review state is stored in `.notesapp/srs.
 - **A guest page** shows only the shared note or folder: Live Preview editing with the same autosave, conflict and live-sync protocol for edit shares (history records the guest as the author), read-only rendering for view shares. No search, tree, backlinks, settings or AI; attachments outside the share only when the shared note embeds them.
 - **Deny by default on the server**: every endpoint outside the guest surface refuses a guest, every guest request is checked against the share's scope, and guessing is rate-limited.
 
-**Status:** being built on `feat/family-share` (DESIGN §5.40 and §6.45, API.md §42, CASAOS.md and DEPLOY.md *Sharing with family*).
+**Status:** built (2026-11-02, branch `feat/family-share`): DESIGN §5.40 (server) and §6.45 (app), API.md §42, CASAOS.md and DEPLOY.md *Sharing with family*. Decisions and additions:
+- **Owners and guests.** `NOTES_IDENTITY_ALLOWED_LOGINS` now names the owners; any other Tailscale login is admitted only to the guest surface (`/api/s/**`, the guest page `/s/**` and its static files; `/` redirects to `/s`). With the list empty (the CasaOS default) everyone is an owner as before and sharing is off, with the fix shown in Settings › Sharing. Tagged devices stay refused; a link does not change that.
+- **Keys.** A share is reached by its id (for its named recipients) or a 256-bit link token (for anyone on the tailnet who has it); only the token's SHA-256 is stored, and the link is shown once. Unknown keys, other logins and expired shares all get the same `404`; refused guest requests are rate-limited per login (20 per 15 minutes, server-wide, with an alert).
+- **Scope, deny by default.** Every guest request checks its path against the share before any file is touched; embedded media outside the share is readable only while a shared note embeds it, and a guest cannot add an embed that reaches outside (refused, whatever exists). Guests edit and create notes (edit shares) but cannot delete, move, rename or upload. A test walks every handler mapping as a guest and a stranger.
+- **The guest page** is a separate entry (`share.html`): the owner's Live Preview editor, save, conflict and live-sync code on the share's own endpoints and filtered event stream, without the service worker, settings, tree, search or any other part of the app; the landing page lists what is shared with the login (every vault).
+- **Development**: `scripts/dev-identity-proxy.mjs` stands in for `tailscale serve` to try owner and guest side by side; nothing in the app trusts it.
+- **Not verified on a real iPhone**: the guest page on iOS Safari and from the Home Screen (checked in a 375 × 812 emulated viewport), and a real second Tailscale account (checked with the dev proxy injecting identities).
 
 ---
 
