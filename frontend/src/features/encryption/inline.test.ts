@@ -8,7 +8,7 @@ import { usePrefs } from '../../state/prefs';
 import { documents } from '../../sync/instance';
 import { checkIdle, noteActivity } from './autoLock';
 import { decryptPayload, deriveKey } from './cipher';
-import { encryptSelection, openSection } from './inline';
+import { encryptSelection, insertSection, openSection } from './inline';
 import { isUnlocked, resetKeyringForTests } from './keyring';
 import { decodePayload, findSections } from './meld';
 
@@ -100,6 +100,29 @@ describe('inline encrypted sections (item 27)', () => {
     const section = findSections(text)[0];
     expect(section.hint).toBe('router');
     expect(await decrypt(section.base64)).toBe('hunter2');
+    documents.release(s, 'inline-test');
+  }, 20_000);
+});
+
+describe('inserting encrypted text while the note changes (item 27)', () => {
+  it('goes where the selection was, never over text another device added before it meanwhile', async () => {
+    const { s, vault } = await session('Wifi: SECRET thanks\n');
+    const done = insertSection(s, { from: 6, to: 12 });
+    await answer('passphrase', async (d) => {
+      expect(await d.submit(PASS, 'router')).toBeNull();
+      d.resolve(true);
+    });
+    // While the secret is typed, another device adds a line at the top of the note.
+    vault.externalWrite(s.path, 'Added on the phone\nWifi: SECRET thanks\n');
+    await s.onRemoteChanged({ version: vault.readFile(s.path).version });
+    expect(s.getText()).toBe('Added on the phone\nWifi: SECRET thanks\n');
+    await answer('secret', (d) => d.resolve({ action: 'save', text: 'hunter2', hint: 'router' }));
+    await done;
+    const text = s.getText();
+    expect(text.startsWith('Added on the phone\nWifi: %%')).toBe(true);
+    expect(text).not.toContain('SECRET');
+    expect(text.endsWith(' thanks\n')).toBe(true);
+    expect(await decrypt(findSections(text)[0].base64)).toBe('hunter2');
     documents.release(s, 'inline-test');
   }, 20_000);
 });
