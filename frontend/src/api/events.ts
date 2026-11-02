@@ -20,10 +20,15 @@ const CLOSED = 2;
 export interface EventStreamDeps {
   clientId: string;
   open(clientId: string, lastEventId: string | null): EventSourceLike;
-  /** Applies one event (anything but hello, ping and resync) to the caches. */
+  /**
+   * Applies one event (anything but hello and ping) to the caches. `resync` comes once a resync
+   * has finished (after the events that followed the snapshot): the caches are current again, and
+   * handlers that keep state of their own (script results) learn that anything may have changed.
+   */
   apply(name: string, data: unknown, id: string): void;
-  /** Refetches the tree and returns its `eventId`; other server state is invalidated first. */
+  /** Refetches the tree and returns its `eventId`. */
   refetchTree(): Promise<string>;
+  /** Invalidates the other server state (once the tree snapshot is in, during a resync). */
   invalidateAll(): void;
   /** Every open document compares its version with the fresh tree. */
   revalidateDocuments(): void;
@@ -141,7 +146,7 @@ export class EventStream {
 
   /** "Reload vault from server" (app.resync): the resync procedure on demand. */
   resyncNow(): Promise<void> {
-    return this.resync();
+    return this.resync(null);
   }
 
   // ---------- connection ----------
@@ -259,7 +264,7 @@ export class EventStream {
       if (this.remaining === 0 && !this.buffering) this.setCaughtUp(true);
     }
     if (name === 'resync') {
-      void this.resync();
+      void this.resync({ data, id });
       return;
     }
     if (this.buffering) {
@@ -274,7 +279,7 @@ export class EventStream {
     this.deps.onBuild(hello.buildSha);
     if (hello.resync) {
       this.remaining = 0;
-      void this.resync();
+      void this.resync(null);
       return;
     }
     this.remaining = Math.max(0, hello.replayed);
@@ -291,11 +296,11 @@ export class EventStream {
 
   // ---------- resync (API.md §16.5 step 5) ----------
 
-  private async resync(): Promise<void> {
+  /** `trigger`: the `resync` event that asked for it (null for `hello {resync: true}` or on demand). */
+  private async resync(trigger: { data: unknown; id: string } | null): Promise<void> {
     const generation = ++this.resyncGeneration;
     this.buffering = true;
     this.setCaughtUp(false);
-    this.deps.invalidateAll();
     let treeEventId: string;
     try {
       treeEventId = await this.deps.refetchTree();
@@ -303,12 +308,16 @@ export class EventStream {
       // The server is unreachable; try again while still buffering.
       if (generation === this.resyncGeneration && !this.stopped) {
         setTimeout(() => {
-          if (generation === this.resyncGeneration && !this.stopped) void this.resync();
+          if (generation === this.resyncGeneration && !this.stopped) void this.resync(trigger);
         }, RESYNC_RETRY_MS);
       }
       return;
     }
     if (generation !== this.resyncGeneration || this.stopped) return;
+    // The other server state is refetched only now: buffered events up to the snapshot's id are
+    // discarded below, and a refetch started before the snapshot (alongside the tree request)
+    // could predate one of them, which would then be lost for that state until its next change.
+    this.deps.invalidateAll();
     const snapshot = parseEventId(treeEventId);
     const pending = this.buffer;
     this.buffer = [];
@@ -319,6 +328,8 @@ export class EventStream {
       if (snapshot && id && id.boot === snapshot.boot && id.seq <= snapshot.seq) continue;
       this.deliver(e.name, e.data, e.id);
     }
+    // Handlers registered for `resync` (DESIGN §6.8) hear about it once the caches are current.
+    this.deliver('resync', trigger?.data ?? null, trigger?.id ?? '');
     // The resync revalidates every document itself.
     this.revalidateOnCatchUp = false;
     if (this.remaining === 0) this.setCaughtUp(true);

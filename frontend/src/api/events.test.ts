@@ -204,7 +204,6 @@ describe('EventStream', () => {
     const t = setup();
     t.stream.start(null);
     t.current().hello({ resync: true, eventId: 'b.2' }, 'b.2');
-    expect(t.deps.invalidateAll).toHaveBeenCalled();
     expect(t.stream.isBuffering).toBe(true);
     t.current().emit('file.changed', {}, 'b.3');
     t.current().emit('file.created', {}, 'b.4');
@@ -213,10 +212,46 @@ describe('EventStream', () => {
     expect(t.applied()).toEqual([]);
     t.tree('b.4');
     await vi.waitFor(() => expect(t.stream.isBuffering).toBe(false));
-    expect(t.applied()).toEqual(['file.deleted@b.5', 'file.changed@other.1']);
+    expect(t.applied()).toEqual(['file.deleted@b.5', 'file.changed@other.1', 'resync@']);
+    expect(t.deps.invalidateAll).toHaveBeenCalledTimes(1);
     expect(t.caughtUp()).toBe(true);
     expect(t.deps.revalidateDocuments).toHaveBeenCalledTimes(1);
     expect(t.stream.lastEventId).toBe('other.1');
+    t.stream.stop();
+  });
+
+  it('invalidates the other server state once the tree snapshot is in, so an event the snapshot discards is never lost for it', async () => {
+    const t = setup();
+    t.stream.start(null);
+    t.current().hello({ resync: true }, 'b.2');
+    // Bookmarks change while the tree request runs. The snapshot (b.3) reflects it, so the event is
+    // discarded: only a refetch of the other server state that starts after the snapshot sees it.
+    t.current().emit('bookmarks.changed', {}, 'b.3');
+    const before = t.deps.invalidateAll.mock.calls.length;
+    t.tree('b.3');
+    await vi.waitFor(() => expect(t.stream.isBuffering).toBe(false));
+    expect(t.applied()).toEqual(['resync@']);
+    expect(t.deps.invalidateAll.mock.calls.length).toBeGreaterThan(before);
+    t.stream.stop();
+  });
+
+  it('tells the event handlers about a finished resync (a `resync` event, or `hello {resync: true}`)', async () => {
+    const t = setup();
+    t.stream.start('b.1');
+    t.current().hello({}, 'b.1');
+    t.current().emit('resync', { reason: 'bulk-change' }, 'b.2');
+    t.current().emit('file.created', {}, 'b.3');
+    expect(t.applied()).toEqual([]);
+    t.tree('b.2');
+    // Extensions with state of their own (script results) learn that anything may have changed,
+    // after the events that followed the snapshot.
+    await vi.waitFor(() => expect(t.applied()).toEqual(['file.created@b.3', 'resync@b.2']));
+    expect(t.deps.apply).toHaveBeenLastCalledWith('resync', { reason: 'bulk-change' }, 'b.2');
+    t.current().fail(2);
+    vi.advanceTimersByTime(RECONNECT_BACKOFF_MS[0]);
+    t.current().hello({ resync: true }, 'c.1');
+    t.tree('c.1');
+    await vi.waitFor(() => expect(t.applied()).toEqual(['file.created@b.3', 'resync@b.2', 'resync@']));
     t.stream.stop();
   });
 
@@ -228,7 +263,7 @@ describe('EventStream', () => {
     expect(t.deps.refetchTree).toHaveBeenCalledTimes(1);
     t.current().emit('file.created', {}, 'b.3');
     t.tree('b.2');
-    await vi.waitFor(() => expect(t.applied()).toEqual(['file.created@b.3']));
+    await vi.waitFor(() => expect(t.applied()).toEqual(['file.created@b.3', 'resync@b.2']));
     t.stream.stop();
   });
 

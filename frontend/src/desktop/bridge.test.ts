@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useUi } from '../state/ui';
-import { handleCommand, installDesktopBridge, isAppPath, type BridgeActions, type DesktopCommand, type NotesDesktop } from './bridge';
+import { setCurrentVaultForTests } from '../state/vault';
+import { handleCommand, installDesktopBridge, isAppPath, openAppPath, type BridgeActions, type DesktopCommand, type NotesDesktop } from './bridge';
 
 function actions() {
   return {
@@ -31,7 +32,10 @@ function fakeShell(over: Partial<NotesDesktop> = {}) {
   return { shell, send: (cmd: DesktopCommand) => listener?.(cmd), listening: () => listener !== null };
 }
 
-afterEach(() => useUi.getState().setConnection('live'));
+afterEach(() => {
+  useUi.getState().setConnection('live');
+  setCurrentVaultForTests(null);
+});
 
 describe('isAppPath', () => {
   it('accepts in-app absolute paths only', () => {
@@ -64,6 +68,26 @@ describe('handleCommand', () => {
     expect(a.navigate).not.toHaveBeenCalled();
     expect(a.openToday).not.toHaveBeenCalled();
     expect(a.reconnect).not.toHaveBeenCalled();
+  });
+});
+
+describe('openAppPath (multiple vaults, DESIGN §6.44)', () => {
+  it("opens another vault's path with a full load, never as a route of the vault shown", () => {
+    const nav = vi.fn();
+    const load = vi.fn();
+    // The main window shows the extra vault `work`; the capture window (default vault) asks for its note.
+    setCurrentVaultForTests('work');
+    openAppPath('/n/Inbox.md', nav, load);
+    expect(nav).not.toHaveBeenCalled();
+    expect(load).toHaveBeenCalledWith('/n/Inbox.md');
+    // A path of the vault shown is a route of its router (without the `/v/work` prefix).
+    openAppPath('/v/work/n/Plans.md#Goals', nav, load);
+    expect(nav).toHaveBeenCalledWith('/n/Plans.md#Goals');
+    setCurrentVaultForTests(null);
+    openAppPath('/v/work/n/Plans.md', nav, load);
+    expect(load).toHaveBeenLastCalledWith('/v/work/n/Plans.md');
+    openAppPath('/n/Inbox.md', nav, load);
+    expect(nav).toHaveBeenLastCalledWith('/n/Inbox.md');
   });
 });
 

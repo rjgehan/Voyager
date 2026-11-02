@@ -110,16 +110,31 @@ async function newKey(title: string, message: string): Promise<{ write: WriteKey
   return ok ? made : null;
 }
 
-/** Asks for a passphrase, then the secret, and inserts it encrypted at `range`. */
+/**
+ * Asks for a passphrase, then the secret, and inserts it encrypted at `range` (replacing it). The
+ * range is followed through edits made while the dialogs are open (another device's included);
+ * selected text that changed meanwhile is kept, the section going in before it.
+ */
 export async function insertSection(session: DocumentSession, range: { from: number; to: number }): Promise<void> {
-  const key = await newKey('New encrypted text', 'Choose the passphrase for this text. You can use the same one for several sections.');
-  if (!key) return;
-  const result = await editSecret({ title: 'New encrypted text', text: '', hint: key.hint, isNew: true });
-  if (!result || result.action !== 'save') return;
-  const section = formatSection(await encryptText(result.text, key.write), result.hint);
-  if (!session.isEditable()) return;
-  const len = session.getText().length;
-  session.applyEdit({ from: Math.min(range.from, len), to: Math.min(range.to, len), insert: section }, { selection: { anchor: Math.min(range.from, len) + section.length } });
+  const original = session.getText().slice(range.from, range.to);
+  const tracked = session.trackRange(range.from, range.to);
+  if (tracked === null) return;
+  try {
+    const key = await newKey('New encrypted text', 'Choose the passphrase for this text. You can use the same one for several sections.');
+    if (!key) return;
+    const result = await editSecret({ title: 'New encrypted text', text: '', hint: key.hint, isNew: true });
+    if (!result || result.action !== 'save') return;
+    const section = formatSection(await encryptText(result.text, key.write), result.hint);
+    const at = session.takeRange(tracked);
+    if (!at || !session.isEditable()) {
+      toast('This note cannot be edited right now; the encrypted text was not inserted.');
+      return;
+    }
+    const to = session.getText().slice(at.from, at.to) === original ? at.to : at.from;
+    session.applyEdit({ from: at.from, to, insert: section }, { selection: { anchor: at.from + section.length } });
+  } finally {
+    session.takeRange(tracked);
+  }
 }
 
 /** Encrypts the selected text in place. Its plain form may already be in drafts and history. */

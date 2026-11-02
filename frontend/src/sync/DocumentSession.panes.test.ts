@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MockVault } from '../api/mock/vault';
 import { noteExtensions } from '../editor/editorSetup';
 import { applyPropertiesEdit } from '../editor/livePreview/blocks';
+import { pendingUploads } from '../editor/uploads';
 import { fakeApi, sessionDeps } from '../test/fakes';
 import { testContext } from '../test/noteEditor';
 import { DocumentSession } from './DocumentSession';
@@ -123,6 +124,55 @@ describe('a file in two panes', () => {
     expect(right.state.doc.toString()).toBe(left.state.doc.toString());
     expect(session.getSnapshot().status).toBe('dirty');
     unmount(session, left);
+    unmount(session, right);
+  });
+  it('an upload started with the note in two panes still lands after the first pane leaves the note', async () => {
+    const { vault, session } = setup('hello');
+    await session.ready;
+    const left = mount(session);
+    const right = mount(session);
+    const id = session.beginUpload({ from: 5, to: 5 }, 'a.png', 'input.paste')!;
+    // Both panes show the upload's widget.
+    expect(pendingUploads(left.state).map((u) => u.id)).toEqual([id]);
+    expect(pendingUploads(right.state).map((u) => u.id)).toEqual([id]);
+    right.dispatch({ changes: { from: 0, insert: 'Say ' }, userEvent: 'input.type' });
+    // The first pane switches to another tab while the file uploads (or a voice note transcribes).
+    unmount(session, left);
+    expect(session.finishUpload(id, '![[a.png]]')).toBe(true);
+    expect(right.state.doc.toString()).toBe('Say hello![[a.png]]');
+    expect(pendingUploads(right.state)).toEqual([]);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(vault.readFile('a.md').content).toBe('Say hello![[a.png]]');
+    // The first pane comes back with the main history: no widget is left behind there.
+    const back = mount(session);
+    expect(back.state.doc.toString()).toBe('Say hello![[a.png]]');
+    expect(pendingUploads(back.state)).toEqual([]);
+    unmount(session, back);
+    unmount(session, right);
+  });
+
+  it('a pane opened during an upload shows it, and the upload lands once only the old pane is gone', async () => {
+    const { session } = setup('hello');
+    await session.ready;
+    const left = mount(session);
+    const id = session.beginUpload({ from: 0, to: 0 }, 'a.png', 'input.drop')!;
+    const right = mount(session);
+    expect(pendingUploads(right.state).map((u) => u.id)).toEqual([id]);
+    unmount(session, left);
+    expect(session.finishUpload(id, '![[a.png]]\n')).toBe(true);
+    expect(right.state.doc.toString()).toBe('![[a.png]]\nhello');
+    unmount(session, right);
+  });
+
+  it('a range followed for work outside the editor survives the first pane leaving the note', async () => {
+    const { session } = setup('one\ntwo');
+    await session.ready;
+    const left = mount(session);
+    const right = mount(session);
+    const tracked = session.trackRange(4, 7)!;
+    right.dispatch({ changes: { from: 0, insert: 'zero\n' }, userEvent: 'input.type' });
+    unmount(session, left);
+    expect(session.takeRange(tracked)).toEqual({ from: 9, to: 12 });
     unmount(session, right);
   });
 });

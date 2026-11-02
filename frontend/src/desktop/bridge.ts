@@ -5,6 +5,7 @@
 import { eventStream } from '../sync/liveSync';
 import { navigateTo } from '../features/navigation';
 import { useUi, type ConnectionState } from '../state/ui';
+import { routeOfAppUrl } from '../state/vault';
 
 export type DesktopCommand =
   /** Tray › Open today's note. */
@@ -51,6 +52,17 @@ export function isAppPath(to: unknown): to is string {
   return typeof to === 'string' && to.startsWith('/') && !to.startsWith('//') && !to.startsWith('/\\') && to.length < 4096;
 }
 
+/**
+ * Opens an app path the shell sent. The shell knows only the server's addresses (its capture
+ * window is the default vault's `/capture`), while this page may show an extra vault (DESIGN
+ * §6.44): a path of the vault shown is a route of its router, another vault's path loads that app.
+ */
+export function openAppPath(to: string, nav: (route: string) => void = navigateTo, load: (url: string) => void = (url) => window.location.assign(url)): void {
+  const route = routeOfAppUrl(to);
+  if (route === null) load(to);
+  else nav(route);
+}
+
 export interface BridgeActions {
   openToday(): Promise<unknown>;
   navigate(to: string): void;
@@ -74,7 +86,7 @@ export function handleCommand(cmd: DesktopCommand, actions: BridgeActions): void
 const defaultActions: BridgeActions = {
   // Loaded on first use, like the rest of the daily-note code paths.
   openToday: () => import('../features/daily').then((m) => m.openTodaysDailyNote()),
-  navigate: (to) => navigateTo(to),
+  navigate: (to) => openAppPath(to),
   reconnect: () => eventStream.reconnect(),
 };
 
