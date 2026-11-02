@@ -155,7 +155,7 @@ NotesApp/                              (monorepo; branch main)
 │       ├── ci.yml                     WP-Infra  tests on PRs, pushes and weekly; PR image build; on main calls publish.yml
 │       └── publish.yml                WP-Infra  reusable: multi-arch image to GHCR
 ├── backend/                           WP-Backend
-│   ├── pom.xml                        Boot 4.1.1 parent, Java 21, + JGit, snakeyaml-engine
+│   ├── pom.xml                        Boot 4.1.2 parent, Java 21, + JGit, snakeyaml-engine
 │   ├── mvnw, mvnw.cmd, .mvn/wrapper/  Maven 3.10.0 via wrapper 3.3.4 (only-script)
 │   ├── src/main/java/com/rjgehan/notes/...      (packages in §5.2)
 │   ├── src/main/resources/application.properties
@@ -369,7 +369,7 @@ The last section is the large-file policy (§5.8 *Large files*): one line per fi
 
 ### 5.1 Baseline and dependencies
 
-- Spring Boot **4.1.1**, Spring Framework 7.0.9, Java 21 (`--release 21`), embedded Tomcat 11, Jackson 3 (`tools.jackson.*`; annotations stay `com.fasterxml.jackson.annotation.*`), JUnit 6.
+- Spring Boot **4.1.2**, Spring Framework 7.0.10, Java 21 (`--release 21`), embedded Tomcat 11 (11.0.27), Jackson 3 (`tools.jackson.*`; annotations stay `com.fasterxml.jackson.annotation.*`), JUnit 6.
 - `pom.xml` changes (WP-Backend task 1). The two dependencies are the only new runtime dependencies; the build changes are required by §5.16 (`appVersion`) and §8.1 (perf tests, integration-test naming).
   ```xml
   <properties>
