@@ -30,7 +30,7 @@ import static org.awaitility.Awaitility.await;
 @NotesIntegrationTest
 class IdentityIntegrationTest {
 
-	private static final String LOGIN = "rjgehan@github";
+	private static final String LOGIN = "octocat@github";
 
 	@TempDir
 	static Path vault;
@@ -83,10 +83,10 @@ class IdentityIntegrationTest {
 	@Test
 	void anAllowedLoginIsAdmittedAndAttributed() {
 		String[] identity = { "Tailscale-User-Login", LOGIN, "Tailscale-User-Name",
-				"=?utf-8?q?R=2E_J=2E_G=C3=A9han?=", "Tailscale-User-Profile-Pic", "" };
+				"=?utf-8?q?O=2E_T=2E_Oct=C3=B6cat?=", "Tailscale-User-Profile-Pic", "" };
 		JsonNode me = this.api.get("/api/me", identity).ok(200);
 		assertThat(me.get("login").asString()).isEqualTo(LOGIN);
-		assertThat(me.get("name").asString()).isEqualTo("R. J. Géhan");
+		assertThat(me.get("name").asString()).isEqualTo("O. T. Octöcat");
 		assertThat(me.has("profilePicUrl")).isTrue();
 		assertThat(me.get("profilePicUrl").isNull()).isTrue();
 		assertThat(me.get("source").asString()).isEqualTo("tailscale");
@@ -100,7 +100,7 @@ class IdentityIntegrationTest {
 		this.api.postEmpty("/api/history/commit", identity).ok(200);
 		JsonNode entry = this.api.get("/api/history?path=Mine.md", identity).ok(200).get("entries").get(0);
 		assertThat(entry.get("authorLogin").asString()).isEqualTo(LOGIN);
-		assertThat(entry.get("authorName").asString()).isEqualTo("R. J. Géhan");
+		assertThat(entry.get("authorName").asString()).isEqualTo("O. T. Octöcat");
 		JsonNode trashed = this.api.delete("/api/files?path=Mine.md", identity).ok(200);
 		assertThat(trashed.get("deletedBy").asString()).isEqualTo(LOGIN);
 	}

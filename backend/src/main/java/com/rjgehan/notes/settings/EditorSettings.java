@@ -1,5 +1,9 @@
 package com.rjgehan.notes.settings;
 
-/** {@code settings.editor}: UI preferences that apply on every device. */
-public record EditorSettings(EditorMode defaultMode, boolean readableLineLength, boolean strictLineBreaks) {
+/**
+ * {@code settings.editor}: UI preferences that apply on every device.
+ *
+ * @param noteWidth how wide a note's text runs (it replaced {@code readableLineLength})
+ */
+public record EditorSettings(EditorMode defaultMode, NoteWidth noteWidth, boolean strictLineBreaks) {
 }

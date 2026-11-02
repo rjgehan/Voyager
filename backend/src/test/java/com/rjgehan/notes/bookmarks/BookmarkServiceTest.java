@@ -353,6 +353,84 @@ class BookmarkServiceTest {
 	}
 
 	@Test
+	void savedSearchesBecomeSearchBookmarksTitledWithTheirNamesWithoutDuplicates() throws Exception {
+		start();
+		put("""
+				[{"type":"search","ctime":1,"query":"tag:#work"},
+				 {"type":"group","ctime":2,"title":"G","items":[{"type":"search","ctime":3,"query":"path:Daily"}]}]""");
+		write(BookmarkService.SAVED_SEARCHES_FILE, """
+				{ "schemaVersion": 1, "searches": [
+				  { "id": "a", "name": "Work", "query": " tag:#work ", "sort": "relevance" },
+				  { "id": "b", "name": "Dailies", "query": "path:Daily", "sort": "mtime" },
+				  { "id": "c", "name": " Open loops ", "query": "tag:#todo -done", "sort": "mtime" },
+				  { "id": "d", "name": "Again", "query": "tag:#todo -done", "sort": "relevance" },
+				  { "id": "e", "name": "Nothing", "query": "   " },
+				  { "id": "f", "name": "No query" },
+				  { "id": "g", "query": "\\"exact phrase\\"" } ] }
+				""");
+		this.vault.hub.published.clear();
+
+		assertThat(service().migrateSavedSearches()).isEqualTo(2);
+
+		List<JsonNode> items = flatten(service().get().items());
+		assertThat(items).extracting((item) -> item.path("query").asString(""))
+			.containsExactly("tag:#work", "", "path:Daily", "tag:#todo -done", "\"exact phrase\"");
+		JsonNode open = items.get(3);
+		assertThat(open.get("type").asString()).isEqualTo("search");
+		assertThat(open.get("title").asString()).isEqualTo("Open loops");
+		assertThat(open.get("ctime").asLong()).isEqualTo(this.vault.clock.millis());
+		assertThat(open.has("sort")).isFalse();
+		assertThat(items.get(4).has("title")).isFalse();
+		assertThat(this.dir.resolve(BookmarkService.SAVED_SEARCHES_FILE)).doesNotExist();
+		assertThat(Files.readString(this.dir.resolve(BookmarkService.MIGRATED_SAVED_SEARCHES_FILE)))
+			.contains("\" Open loops \"");
+		// No client is connected at startup: nothing is announced.
+		assertThat(this.vault.hub.published).isEmpty();
+		// It runs once.
+		assertThat(service().migrateSavedSearches()).isZero();
+		assertThat(flatten(service().get().items())).hasSize(5);
+	}
+
+	@Test
+	void savedSearchesJoinTheBookmarksObsidianLeftAndAKeptFileIsNeverReplaced() throws Exception {
+		start();
+		write(BookmarkService.OBSIDIAN_FILE, "{\"items\":[{\"type\":\"folder\",\"ctime\":1,\"path\":\"Projects\"}]}");
+		write(BookmarkService.MIGRATED_SAVED_SEARCHES_FILE, "an earlier migration\n");
+		write(BookmarkService.SAVED_SEARCHES_FILE,
+				"{\"searches\":[{\"id\":\"a\",\"name\":\"Plans\",\"query\":\"plans\",\"sort\":\"relevance\"}]}");
+
+		assertThat(service().migrateSavedSearches()).isEqualTo(1);
+
+		assertThat(service().get().items()).extracting((item) -> item.get("type").asString())
+			.containsExactly("folder", "search");
+		assertThat(this.dir.resolve(BookmarkService.FILE)).exists();
+		assertThat(Files.readString(this.dir.resolve(BookmarkService.MIGRATED_SAVED_SEARCHES_FILE)))
+			.isEqualTo("an earlier migration\n");
+		try (Stream<Path> kept = Files.list(this.dir.resolve(".notesapp"))) {
+			assertThat(kept.map((p) -> p.getFileName().toString()))
+				.anyMatch((name) -> name.matches("searches\\.json\\.migrated-\\d{8}T\\d{6}Z"));
+		}
+	}
+
+	@Test
+	void savedSearchesWaitForABrokenBookmarksFileAndAnUnreadableListIsSetAside() throws Exception {
+		start();
+		write(BookmarkService.FILE, "not json");
+		write(BookmarkService.SAVED_SEARCHES_FILE, "{\"searches\":[{\"id\":\"a\",\"name\":\"P\",\"query\":\"plans\"}]}");
+		assertThat(service().migrateSavedSearches()).isZero();
+		assertThat(Files.readString(this.dir.resolve(BookmarkService.FILE))).isEqualTo("not json");
+		assertThat(this.dir.resolve(BookmarkService.SAVED_SEARCHES_FILE)).exists();
+
+		write(BookmarkService.FILE, "{\"items\":[]}");
+		write(BookmarkService.SAVED_SEARCHES_FILE, "{ broken");
+		assertThat(service().migrateSavedSearches()).isZero();
+		assertThat(Files.readString(this.dir.resolve(BookmarkService.FILE))).isEqualTo("{\"items\":[]}");
+		assertThat(this.dir.resolve(BookmarkService.SAVED_SEARCHES_FILE)).doesNotExist();
+		assertThat(Files.readString(this.dir.resolve(BookmarkService.MIGRATED_SAVED_SEARCHES_FILE)))
+			.isEqualTo("{ broken");
+	}
+
+	@Test
 	void belowCountsSegmentsNotCharacters() {
 		assertThat(BookmarkService.below("Projects/Deep/Note.md", "projects")).isEqualTo("Deep/Note.md");
 		assertThat(BookmarkService.below("A/B/C", "a/b")).isEqualTo("C");

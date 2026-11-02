@@ -49,9 +49,6 @@ import type {
   RestoreRequest,
   RestoreResult,
   SaveFileRequest,
-  SavedSearch,
-  SavedSearchesResponse,
-  SavedSearchesUpdateRequest,
   SearchResponse,
   Settings,
   SettingsResponse,
@@ -183,8 +180,6 @@ export class MockVault {
   private settingsVersion = '';
   private bookmarks: BookmarkItem[] = [];
   private bookmarksVersion = blobId(encoder.encode(JSON.stringify([])));
-  private savedSearches: SavedSearch[] = [];
-  private savedSearchesVersion: string | null = null;
   private readonly startedAt = Date.now();
 
   constructor(seed = true) {
@@ -1169,36 +1164,6 @@ export class MockVault {
         ...(isCanvasPath(note.path) ? { title: basenameOf(note.path), kind: kindOf(note.path) } : {}),
       }));
     return mockSearch(docs, q, limit, sort, prefix);
-  }
-
-  // ---------- saved searches (API.md §12.4) ----------
-
-  getSavedSearches(): SavedSearchesResponse {
-    return { searches: structuredClone(this.savedSearches), version: this.savedSearchesVersion };
-  }
-
-  putSavedSearches(req: SavedSearchesUpdateRequest, origin: string): SavedSearchesResponse {
-    const ids = new Set<string>();
-    req.searches.forEach((s, i) => {
-      if (!/^[A-Za-z0-9-]{1,64}$/.test(s.id) || ids.has(s.id)) fail('bad-request', 'Invalid saved searches', { errors: [{ field: `searches[${i}].id`, message: 'invalid' }] });
-      if (!s.name.trim() || !s.query.trim()) fail('bad-request', 'Invalid saved searches', { errors: [{ field: `searches[${i}].name`, message: 'required' }] });
-      ids.add(s.id);
-    });
-    const version = blobId(encoder.encode(JSON.stringify(req.searches)));
-    if (version === this.savedSearchesVersion) return this.getSavedSearches();
-    if ((req.baseVersion || null) !== this.savedSearchesVersion) {
-      fail('version-conflict', 'The saved searches changed on the server', {
-        path: '.notesapp/searches.json',
-        currentVersion: this.savedSearchesVersion,
-        currentContent: JSON.stringify({ schemaVersion: 1, searches: this.savedSearches }),
-        currentMtime: null,
-        movedTo: null,
-      });
-    }
-    this.savedSearches = structuredClone(req.searches);
-    this.savedSearchesVersion = version;
-    this.hub.publish('searches.changed', { version, origin }, origin);
-    return this.getSavedSearches();
   }
 
   /** The link graph (API.md §11.4), built from scratch on every call; the version hashes it. */

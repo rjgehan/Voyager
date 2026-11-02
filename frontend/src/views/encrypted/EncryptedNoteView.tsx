@@ -7,6 +7,7 @@ import { EditorState } from '@codemirror/state';
 import { EditorView, placeholder } from '@codemirror/view';
 import { KeyRound, Lock, LockOpen, ShieldAlert } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useVaultSettings } from '../../api/hooks';
 import { SaveStatus } from '../../components/SaveStatus';
 import { NO_RECOVERY } from '../../components/overlays/EncryptionDialogs';
 import { decryptedNoteExtensions } from '../../editor/editorSetup';
@@ -16,6 +17,7 @@ import { createKey, lock, onLock, openCached, readPayload, unlock } from '../../
 import { FormatError, parseEncryptedFile, saltId, type EncryptedFile, type Payload } from '../../features/encryption/meld';
 import { decryptToMarkdown, ENCRYPTED_NOTE_WARNING, encryptedFileText } from '../../features/encryption/notes';
 import { lastSegment } from '../../features/paths';
+import { noteWidthProps } from '../../features/settings';
 import { askPassphrase } from '../../state/dialogs';
 import { usePrefs } from '../../state/prefs';
 import { useDocumentSession, useSessionSnapshot } from '../../sync/useTextDocument';
@@ -53,6 +55,7 @@ function payloadOf(file: EncryptedFile): Payload | string {
 export default function EncryptedNoteView({ path }: FileViewProps) {
   const session = useDocumentSession(path);
   const snapshot = useSessionSnapshot(session);
+  const width = noteWidthProps(useVaultSettings().editor);
   const remoteCount = useSyncExternalStore(session.subscribe, session.getRemoteChangeCount);
   const [phase, setPhase] = useState<Phase>({ kind: 'loading' });
   const host = useRef<HTMLDivElement>(null);
@@ -296,7 +299,7 @@ export default function EncryptedNoteView({ path }: FileViewProps) {
   // ---------- render ----------
 
   return (
-    <div className="markdown-view is-readable encrypted-view">
+    <div className={`markdown-view${width.className} encrypted-view`} style={width.style}>
       <header className="file-view-header">
         <h1 className="file-view-title">{name.replace(/\.mdenc$/i, '')}</h1>
         <div className="encrypted-actions">

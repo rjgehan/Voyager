@@ -207,7 +207,7 @@ NotesApp/                              (monorepo; branch main)
 | `Tasks/*.tasks`, `Tasks/Archive/*.tasks` | Task lists and their archives (§5.20). Any `.tasks` file in the vault is a list; new lists are created in `Tasks/`. | yes (as documents) | committed |
 | `.notesapp/settings.json` | App settings (§5.12) | hidden | committed, so settings have history |
 | `.notesapp/bookmarks.json` | Bookmarks (§5.21), in Obsidian's `bookmarks.json` format | hidden | committed, like the settings |
-| `.notesapp/searches.json` | Saved searches (§5.5.10, API.md §12.4) | hidden | committed, so they sync and have history |
+| `.notesapp/searches.json.migrated` | The saved searches of an earlier build, kept after they became search bookmarks at startup (§5.17, API.md §12.4) | hidden | committed |
 | `.notesapp/trash.json` | Trash metadata (§5.7) | hidden | **excluded** |
 | `.notesapp/reminders.json` | The reminder scheduler's state: baseline, zone, delivered reminders, snoozes (§5.26) | hidden | **excluded** |
 | `.notesapp/srs.json` | Flashcard answers, their cached FSRS state and the flashcard settings (§5.34) | hidden | committed |
@@ -351,7 +351,7 @@ The last section is the large-file policy (§5.8 *Large files*): one line per fi
       "trashPath": "Old plan.md",
       "type": "file",
       "deletedAt": "2026-10-16T14:03:22.120Z",
-      "deletedBy": "rjgehan@github",
+      "deletedBy": "octocat@github",
       "size": 2311,
       "fileCount": 1
     }
@@ -472,10 +472,9 @@ The last section is the large-file policy (§5.8 *Large files*): one line per fi
 | `events` | `EventHub` | SSE connections, the 1024-event replay ring, the publish lock, echo suppression, `ping` heartbeats (§5.10). |
 | | `VaultEvent` | Sealed interface with one record per event type, matching API.md §16. |
 | | `EventIds` | Formats and parses `bootId.seq`. |
-| `search` | `SavedSearchService` | Saved searches in `.notesapp/searches.json`, with a version token (API.md §12.4). |
 | `settings` | `Settings` (+ nested records), `SettingsService`, `SettingsSeed` | Load, validate and save `.notesapp/settings.json`, with a version token, unknown-field preservation and read-only mode (§5.12); a missing file starts from the defaults plus every `SettingsSeed` (§5.23). |
 | `publish` | `PublishService`, `PublishRenderer`, `PublishPage`, `SnapshotStore`, `PublishServer` | Public publishing (§5.28): `.notesapp/publish.json`, the snapshot renderer, the snapshots outside the vault and the separate publish server on 8081. |
-| `bookmarks` | `BookmarkService`, `BookmarkCodec` | Load, check and save `.notesapp/bookmarks.json` with a version token; re-key bookmarks after moves and trash restores (§5.21). |
+| `bookmarks` | `BookmarkService`, `BookmarkCodec` | Load, check and save `.notesapp/bookmarks.json` with a version token; re-key bookmarks after moves and trash restores (§5.21); turn an earlier build's saved searches into search bookmarks at startup (§5.17). |
 | `vault` | `HeadingRenameService` | Rewrites `[[Note#Heading]]` links (and heading bookmarks) after a heading is renamed (§5.22). |
 | `startup` | `VaultStartup` | `SmartInitializingSingleton` that runs the ordered startup sequence (§5.17). |
 | | `TailscaleInterfaceCheck` | Refuses to start outside the dev profile when no kernel Tailscale interface is visible (§5.13). |
@@ -496,7 +495,7 @@ The last section is the large-file policy (§5.8 *Large files*): one line per fi
 | | `AppAlerts` | Counts the markers; deduplicates, rate-limits and sends them to ntfy on its own thread (§5.18.1). |
 | | `BackupStatusReader` | Reads the backup run's `status.json` for the status page (§7.10). |
 | | `RuntimeInfo` | The JVM's version and heap, and whether it uses the AOT cache (§7.1). |
-| `api` | `TreeController`, `FileController`, `AttachmentController`, `FolderController`, `MoveController`, `NoteController`, `LinkController`, `SearchController`, `SavedSearchController`, `TagController`, `TrashController`, `HistoryController`, `TimelineController`, `TemplateController`, `SettingsController`, `BookmarkController`, `HeadingController`, `MeController`, `StatusController`, `StatusDetailsController`, `AlertsController`, `MirrorController`, `GraphController`, `CompatController`, `EventController`, `TaskController`, `TaskListController`, `TranscriptionController`, `AiController` | Thin controllers. They validate input, call services and map results to DTOs. |
+| `api` | `TreeController`, `FileController`, `AttachmentController`, `FolderController`, `MoveController`, `NoteController`, `LinkController`, `SearchController`, `TagController`, `TrashController`, `HistoryController`, `TimelineController`, `TemplateController`, `SettingsController`, `BookmarkController`, `HeadingController`, `MeController`, `StatusController`, `StatusDetailsController`, `AlertsController`, `MirrorController`, `GraphController`, `CompatController`, `EventController`, `TaskController`, `TaskListController`, `TranscriptionController`, `AiController` | Thin controllers. They validate input, call services and map results to DTOs. |
 | | `IdempotencyCache` | Per-boot LRU for the `Idempotency-Key` header (§5.4). |
 | `api.dto` | Records named exactly as listed in API.md §19 | Wire DTOs. |
 | `api.error` | `ErrorCode` (enum of the API.md §3 codes), `NotesException` (extends `ErrorResponseException`), `VersionConflictException`, `ApiExceptionHandler` (extends `ResponseEntityExceptionHandler`) | RFC 9457 errors (§5.15). |
@@ -826,7 +825,7 @@ Tokens are maximal runs of `[\p{L}\p{N}]`, except that each Han, Hiragana or Kat
 - Results are cached in `.notesapp/cache/search-text/<sha1(path)>-<size>-<mtimeMillis>.txt` (outside git, §4.6), so a restart re-extracts nothing; a move renames the entry. When the first backlog after startup is done, entries of files that no longer exist are deleted.
 - Memory: the text is kept in memory like a note's (Latin-1 text takes one byte per character).
 
-**Saved searches** (`SavedSearchService`, API.md §12.4) live in `.notesapp/searches.json` (`{"schemaVersion": 1, "searches": [{id, name, query, sort}]}`), written atomically like settings with the version protocol on its blob id, marked dirty for the next history batch, and announced with `searches.changed`. The whole list is replaced on each save; the client re-applies its change after a `409`.
+**Saved searches are search bookmarks** (§5.21, API.md §12.4; the user's decision). Earlier builds kept a separate list in `.notesapp/searches.json`; the startup step of §5.17 turns it into search bookmarks once and renames the file `searches.json.migrated`.
 
 #### 5.5.11 Tags
 
@@ -971,7 +970,7 @@ This is `MoveService.move(from, to, updateLinks, dryRun, identity, origin)`. `up
 
 - `PersonIdent(name, login, Instant.now(), ZoneId.systemDefault())`.
   - `name` is the decoded `Tailscale-User-Name`.
-  - `login` is `Tailscale-User-Login`, used as the email, for example `rjgehan@github`.
+  - `login` is `Tailscale-User-Login`, used as the email, for example `octocat@github`.
 - The fallback is `notes.identity.default-name` / `default-login`.
 - The committer is always `NotesApp <notesapp@notes>`.
 - The deprecated `Date`/`TimeZone` constructors are not used.
@@ -1181,7 +1180,7 @@ The date token mapping table (moment, dayjs, and java.time for future server-sid
 | | `timeFormat` | `HH:mm` |
 | | `folderTemplates` | `[]` (a list of `{folder, template}`; optional in the file, ROADMAP item 30) |
 | `editor` | `defaultMode` | `edit` |
-| | `readableLineLength` | `true` |
+| | `noteWidth` | `600`: how wide a note's text runs, 600 to 1400 CSS pixels or `"full"` (Settings, Editor, *Note width*, §6.6). It replaced the on/off `readableLineLength`, which a file without `noteWidth` still gives (`true`: 600, the width it used, `false`: full); the first save writes `noteWidth` instead. A `PUT` without `noteWidth` (a page from an earlier build) keeps the stored width unless its `readableLineLength` switched (API.md §5). |
 | | `strictLineBreaks` | `false` (as in Obsidian, a single newline renders as a line break; since ROADMAP 10b this affects embedded notes, the rich blocks of Live Preview (§6.6.1) and rich paste only, §6.7) |
 | `ai` (§5.25; optional in the file and in requests, see API.md §5) | `enabled` | `false`: nothing is sent to Anthropic until it is on |
 | | `model` | `claude-sonnet-5-5` (also `claude-opus-5-5`, `claude-haiku-5-5`) |
@@ -1199,7 +1198,7 @@ The date token mapping table (moment, dayjs, and java.time for future server-sid
 
 | Header | Use |
 |---|---|
-| `Tailscale-User-Login` | Login, for example `rjgehan@github` |
+| `Tailscale-User-Login` | Login, for example `octocat@github` |
 | `Tailscale-User-Name` | Display name. Decoded with `Rfc2047`, because non-ASCII values arrive as one or more `=?utf-8?q?...?=` encoded words separated by spaces. |
 | `Tailscale-User-Profile-Pic` | A URL, possibly empty |
 
@@ -1207,7 +1206,7 @@ The date token mapping table (moment, dayjs, and java.time for future server-sid
 
 1. **Health paths are exempt.** `/livez`, `/readyz` and `/actuator/health` reveal nothing, and the Docker `HEALTHCHECK` calls them without a tailnet Host or identity.
 2. **Host allowlist.** The `Host` header must match an entry of `notes.allowed-hosts` (entries are `host` or `host:port`, compared case-insensitively; an entry without a port matches any port). Otherwise the response is `421 unknown-host`. This blocks DNS rebinding: a page on `evil.example` that re-resolves to `127.0.0.1` sends `Host: evil.example:8080` together with a matching `Origin`, which the Origin check alone would accept. In production the list is `notes.<tailnet>.ts.net` (from `NOTES_ALLOWED_HOSTS` in `deploy/.env`), and the app **refuses to start** when the list is empty outside the dev profile. TLS and SNI on serve already make rebinding hard in production, so this is mainly a dev-time fix and defence in depth.
-3. **Identity allowlist.** A request without a `Tailscale-User-Login` header is rejected with `403 identity-not-allowed`, unless `notes.identity.allow-default=true` (dev profile only), in which case the default identity below is used. When `notes.identity.allowed-logins` is non-empty (production: `rjgehan@github`, from `NOTES_IDENTITY_ALLOWED_LOGINS`), any other login is also rejected with `403 identity-not-allowed`. Tagged devices (which carry no identity headers) and users the node is shared with are therefore refused, even though the tailnet policy lets them connect. This is Tailscale identity, not an app login, so the no-login decision stands.
+3. **Identity allowlist.** A request without a `Tailscale-User-Login` header is rejected with `403 identity-not-allowed`, unless `notes.identity.allow-default=true` (dev profile only), in which case the default identity below is used. When `notes.identity.allowed-logins` is non-empty (production: your own login, for example `octocat@github`, from `NOTES_IDENTITY_ALLOWED_LOGINS`), any other login is also rejected with `403 identity-not-allowed`. Tagged devices (which carry no identity headers) and users the node is shared with are therefore refused, even though the tailnet policy lets them connect. This is Tailscale identity, not an app login, so the no-login decision stands.
 
 **Default identity.** With `allow-default`, a missing or empty login falls back to `notes.identity.default-name` (default `Owner`) and `default-login` (default `owner@notes`) with `source=default`.
 
@@ -1421,7 +1420,7 @@ For phone testing against dev (§9.1 step 4), `NOTES_ALLOWED_HOSTS` overrides th
 
 1. Resolve `notes.vault-dir`, create it if it is missing, and check that it is writable (fail fast with a clear message). Create `.notesapp/` and empty `.notesapp/tmp/`.
 2. Outside the dev profile: the kernel-mode check (§5.13) and the non-empty `notes.allowed-hosts` check.
-3. `SettingsService.load()`, creating defaults if needed (§5.12).
+3. `SettingsService.load()`, creating defaults if needed (§5.12). Then `BookmarkService.migrateSavedSearches()`: an earlier build's `.notesapp/searches.json` becomes search bookmarks at the end of `.notesapp/bookmarks.json` (each name as the title; a query that already has a search bookmark, or an entry without a usable query, is skipped; the sort is dropped), and the file is renamed `searches.json.migrated` (a time stamp is added when that name is taken), so it runs once. A `bookmarks.json` that is not JSON leaves both files until it is fixed; any failure is logged and never stops the start. The files are written directly, without an event (no client is connected yet), and the bootstrap commit of step 8 records them (API.md §12.4).
 4. `GitStore.openOrInit()`: remove stale lock files, apply the config (including `core.hooksPath`), write `info/exclude`, log the branch and remotes (§5.8).
 5. **Welcome note.** Only when the repository was **created in this boot** (or has no commits), the vault has no visible files, and `notes.welcome-note=true`: write `Welcome.md` from the classpath. A user who later deletes everything does not get it back.
 6. `IndexBuilder.build()`: walk the vault, parse notes in parallel, and build the links, tags and search index. Text files above their size limit are listed but not content-indexed. Log the counts and the duration. Then `GitStore.syncLargeFiles()` writes the large-file section of `info/exclude` from the index and a walk of the working tree (§4.6, §5.8 *Large files*), before anything can commit.
@@ -1580,6 +1579,7 @@ A real task manager whose data lives in the vault as JSON, not as `- [ ]` lines.
   - `TrashService` calls `restored(originalPath, target, type)` when an entry comes back at another path (an explicit `to`, or a free name): bookmarks of the original path follow it, but only when nothing exists at the original path, so a bookmark whose path a new note has taken keeps pointing at that note.
   - A delete leaves bookmarks alone, exactly as it leaves links: the client shows them as missing until the target comes back (§6.23). Moves and deletes made outside the app are not followed, as for links (§5.9).
   - A re-key writes the file under the bookmarks lock (taken after the vault lock; the `PUT` path never takes the vault lock, so the order is fixed), marks it dirty with the mover's identity, and publishes `bookmarks.changed` with `origin: null`. The calling client's `MoveResult` says nothing about bookmarks, so the event must reach it too; a failure is logged and never fails the move.
+- **Saved searches** (the user's decision: bookmarks only). A search is kept as a `search` bookmark; there is no other list. At startup, `migrateSavedSearches()` folds an earlier build's `.notesapp/searches.json` into the bookmarks once (§5.17 step 3, API.md §12.4).
 - **Why a whole-list `PUT`** rather than per-item endpoints: Obsidian's items have no ids, the list is small, and the settings already prove the version protocol. Clients apply each change as a function of the latest list and re-apply it after a `409` (§6.23), so concurrent changes from two devices both survive.
 
 ### 5.22 Heading links after a heading is renamed (ROADMAP item 21)
@@ -1605,7 +1605,7 @@ An existing Obsidian vault is imported by copying it into the vault directory be
 | `newLinkFormat`, `useMarkdownLinks` | `files.newLinkFormat`, `useWikilinks` (inverted) |
 | `alwaysUpdateLinks: true` | `files.autoUpdateLinks: true` (`false` means "ask" in Obsidian; NotesApp's Move dialog always shows the updates, so it is left alone) |
 | `userIgnoreFilters` | `files.excludedPaths` (paths only; `/regex/` entries are reported, not used) |
-| `strictLineBreaks`, `readableLineLength`, `defaultViewMode` (`source`, `preview`) | `editor.strictLineBreaks`, `readableLineLength`, `defaultMode` (`edit`, `read`) |
+| `strictLineBreaks`, `readableLineLength`, `defaultViewMode` (`source`, `preview`) | `editor.strictLineBreaks`, `noteWidth` (on: 600, off: `full`), `defaultMode` (`edit`, `read`) |
 | `daily-notes.json` `format` (empty is `YYYY-MM-DD`), `folder`, `template` (`.md` added), `autorun` | `dailyNotes.format`, `folder`, `template`, `openOnStartup` |
 | `templates.json` `folder`, `dateFormat`, `timeFormat` (empty is the default) | `templates.*` |
 
@@ -1838,7 +1838,7 @@ The client edits a note's properties in the note (§6.41); the server adds the v
 
 ### 5.39 Multiple vaults (ROADMAP item 37)
 
-One process serves several independent vaults. The design keeps the single-vault code untouched: every service that holds vault state (VaultFs, the index and search, links, the git store and batcher, the watcher and rescans, the trash, settings, bookmarks, saved searches, tasks and their archiver, reminders, flashcards, habits, the event hub and replay buffer, idempotency keys, the controllers) is still a plain singleton, and **each extra vault gets an application context of its own** built from the same components. Isolation is structural: no bean of one vault can reach another vault's files, and every background thread (watcher, batcher, schedulers, PDF text) belongs to exactly one vault.
+One process serves several independent vaults. The design keeps the single-vault code untouched: every service that holds vault state (VaultFs, the index and search, links, the git store and batcher, the watcher and rescans, the trash, settings, bookmarks, tasks and their archiver, reminders, flashcards, habits, the event hub and replay buffer, idempotency keys, the controllers) is still a plain singleton, and **each extra vault gets an application context of its own** built from the same components. Isolation is structural: no bean of one vault can reach another vault's files, and every background thread (watcher, batcher, schedulers, PDF text) belongs to exactly one vault.
 
 **Vaults and names.**
 - The **default vault** is the main application at `notes.vault-dir` (`/data/vault`), named `notes.vaults.default-name` (`main`). Its URLs do not change: `/`, `/n/...` and `/api/...`, so existing bookmarks, the installed PWA, the desktop app, shortcuts and the clipper keep working with no migration. It also answers as `/api/v/main/...`.
@@ -1862,7 +1862,7 @@ One process serves several independent vaults. The design keeps the single-vault
 
 | Feature | Scope |
 |---|---|
-| Files, index, search, links, tags, graph, history and timeline, trash, settings, bookmarks, saved searches, templates, daily notes, tasks and the task archiver, calendar, kanban, flashcards, habits, compatibility report, transcription of a vault's recordings, the event stream, status (`/api/status`) | per vault: each in its own folder (`.notesapp/…`, `.git`, `.trash`) |
+| Files, index, search, links, tags, graph, history and timeline, trash, settings, bookmarks, templates, daily notes, tasks and the task archiver, calendar, kanban, flashcards, habits, compatibility report, transcription of a vault's recordings, the event stream, status (`/api/status`) | per vault: each in its own folder (`.notesapp/…`, `.git`, `.trash`) |
 | Properties (item 13), and note queries for scripts and Dataview (items 40 and 17) | per vault: each vault has its own `.notesapp/types.json`, property list and rename, `types.changed` events and `/api/v/<name>/notes/query`. Scripts run in the browser, so they read only the vault of the page they are in. The script sandbox worker is one built file under `/assets/` for every vault, with its own CSP there (§6.43.1) |
 | Reminders | per vault: each vault's scheduler reads its own tasks and settings and keeps `.notesapp/reminders.json`. Delivery is shared: ntfy (`ntfy.json`) and Web Push (`push.json`, one subscription per device for all vaults). A notification opens and acts on its own vault (`/v/<name>/x/tasks/…`, `/api/v/<name>/reminders/…`); the in-app route reaches only tabs of that vault. |
 | Ask your vault | per vault (prompts, exclusions and the on/off switch are vault settings); the provider credentials and the monthly spend ledger are server-wide, so each vault's budget applies to the server's total spend |
@@ -2071,7 +2071,6 @@ frontend/src/
 | `['meta', path]` | `GET /api/notes/meta` | 30 s | `[[Note#` heading completion for **other** notes. Headings of the open note (Outline panel, `[[#`) come from its live Lezer tree (§6.6). |
 | `['backlinks', path, unlinked]` | `GET /api/notes/backlinks` | 0 | Refetched when the panel is visible |
 | `['search', q, sort, fuzzy]` | `GET /api/search` | 10 s | Input debounced 200 ms; a `400` is not retried |
-| `['savedSearches']` | `GET /api/searches` | Infinity | Invalidated by `searches.changed`; replaced from each `PUT` response |
 | `['tags']` | `GET /api/tags` | 30 s | |
 | `['history', path]` | `GET /api/history` | 0 | |
 | `['historyContent', commit, path]` | `GET /api/history/content` | Infinity | Immutable |
@@ -2119,7 +2118,6 @@ Per-device preferences (theme, spellcheck, autocorrect, remote images, syntax vi
 | `history.committed` | Invalidate `['history', p]` for each `p` in `paths`, `['vaultHistory']`, and `['status']`. |
 | `settings.changed` | Invalidate `['settings']`. |
 | `bookmarks.changed` | Invalidate `['bookmarks']`. Sent with `origin: null` after a move or restore, so the mover refetches too. |
-| `searches.changed` | Invalidate `['savedSearches']`. |
 | `status.changed` | Invalidate `['status']`. |
 | `ping` | Nothing; it only feeds the watchdog and the Live indicator (§6.18). |
 | Names registered with `registerEventHandler` (§6.8) | The registered handler. |
@@ -2176,7 +2174,7 @@ Per-device preferences (theme, spellcheck, autocorrect, remote images, syntax vi
 - **Highlighting.** `features/searchQuery.ts` parses the API.md §12.1 grammar exactly as the server does; `highlightTerms` takes the positive words and phrases and the positive regular expressions (converted to JavaScript: case-insensitive unless `(?-i)`, skipped when JavaScript cannot compile them). The editor and the reading view highlight both.
 - **Typo tolerance.** When the response has `corrections`, a line reads "Including similar words: ~~recieve~~ → receive. Exact words only"; the link repeats the query with `fuzzy=false` (the query key is `['search', q, sort, fuzzy]`). The replacements are appended to the `q=` of the hit route, so the opened note highlights them too.
 - **Errors.** A `400` (an invalid or runaway regular expression) is shown in place of the results with its `detail`, and is not retried.
-- **Saved searches** (`['savedSearches']`, staleTime Infinity, invalidated by `searches.changed`). With the field empty, the panel lists them above the syntax help; a click fills the field and the sort. A toolbar button saves the current query and sort under a name (prompted; the query is the default) or, when that query and sort are already saved, removes it after confirmation. Rename and delete sit on each row. Every change goes through `updateSavedSearches(change)`: it applies the change to the latest list and `PUT`s it with the cached version, and on `409` fetches the list and re-applies the change (three attempts), so two devices editing at once both keep their change.
+- **Keeping a search.** The star in the toolbar bookmarks the query as typed (a search bookmark, §6.23), or removes that bookmark; the Bookmarks pane lists, renames, groups and opens it on every device. There is no separate saved-searches list (API.md §12.4): with the field empty, the panel shows the syntax help.
 
 ### 6.5 Component tree
 
@@ -2236,6 +2234,8 @@ Per-device preferences (theme, spellcheck, autocorrect, remote images, syntax vi
 | 17 | `vimCompartment` (`editor/vimMode.ts`) | Empty, or vim mode when this device turned it on (§6.36): a lazy chunk at `Prec.highest` |
 
 The document is always **LF-only**; there is no `lineSeparator` facet. CRLF files are converted at the session boundary (§6.9), because CodeMirror counts a line break as one position whatever the separator, and `Text.toString()` always joins with `\n`.
+
+**Note width.** `editor.noteWidth` (§5.12; Settings, Editor, *Note width*: a slider from 600 to 1400 px in steps of 50, whose last stop is *Full width*) sets how wide a note's text runs. `noteWidthProps(settings.editor)` (`features/settings.ts`) gives the note's column `is-readable` with `--note-width: <n>px`, which caps it at that width plus the gutters and centres it, or nothing at full width. Live Preview and source mode share that column (so do the note's embeds, which never run wider than its text), and so do the encrypted-note view (§6.33) and the pending new note (§6.15). A Kanban board note always takes the full width. A width from an older server (`readableLineLength` without `noteWidth`) reads as 600 or full.
 
 **Opening links.** `nav.openLink(target)` handles clicks, `Mod-Enter`, reading-view clicks and the mobile "Follow" button.
 
@@ -2818,7 +2818,7 @@ Excalidraw drawings are textual views over the file's `DocumentSession`, so auto
 - A floating bar above the selection: colour (presets, none, custom), edit, open, rename, an edge's label and arrow direction, group, zoom to selection, delete. The node menus add **Convert to note…** (the card's text becomes a new note in the new-note folder, and the card a file node showing it), copy, cut, duplicate, bring to front and send to back; the board menu adds cards, notes and files (a picker), images and media (uploaded as attachments of the canvas), web pages, paste, select all and zoom to fit. The bottom toolbar has add card, add note or file, add media, add web page, undo, redo and zoom; phones keep only zoom to fit, since they pinch.
 - Keys on the board: Delete, Escape, Enter (edit or open), `Mod-Z`, `Mod-Shift-Z` and `Mod-Y`, `Mod-A`, `Mod-D`, `Mod-G`, `Mod-=`, `Mod--` and `Mod-0`, `Shift-1` (fit), `Shift-2` (selection); arrows nudge (Shift: 20 px), one undo step per run. Copy, cut and paste use the clipboard events, and the clipboard holds JSON Canvas (`{"nodes":[…],"edges":[…]}`, which Obsidian pastes too); pasted text becomes a card, a URL a link node, images uploaded file nodes. Drops from the explorer add file nodes; OS files are uploaded.
 - **Card editor** (`CardEditor.tsx`): a small CodeMirror with the note language, highlighting, `[[`, `[[Note#` and `#` completion (tooltips on the page body, unscaled and unclipped), closing brackets, `Mod-B/I/K/L` and `Mod-Enter`; pasted or dropped images become attachments of the canvas, embedded in the card. It mounts inside the tap (`flushSync`), so iOS opens the keyboard; on touch screens the board first zooms to 100 % with the card near the top, and the canvas toolbar gives way to the editing toolbar (§6.16), whose image button inserts through the card's context. Esc or a tap outside ends editing; a whole typing session is one undo step.
-- The viewport is remembered per canvas and device (the world point at the middle of the stage, and the zoom, so it survives another screen size; a resize keeps the centre). A first visit fits the board; `?q=` from a search hit selects and shows the first card containing the terms. The name above the board renames the file and takes over a title typed while a new canvas was being created; `create` gives "New canvas here" in folder menus and "Create new canvas" in the palette, with Obsidian's empty board as the content. On phones the name is hidden (the top bar shows it) until it has the focus.
+- The viewport is remembered per canvas and device (the world point at the middle of the stage, and the zoom, so it survives another screen size; a resize keeps the centre). A first visit fits the board: the whole board within the stage's margins and above the floating toolbar (whose height is measured with the stage). Zoom runs from 5 % to 400 %, except that a board too big for 5 % on a small screen (a 600-card board on a phone) gets the zoom it needs to fit, down to 0.5 %, and pinching and the zoom buttons reach that zoom too (the floor is recomputed for the board and the stage); `?q=` from a search hit selects and shows the first card containing the terms. The name above the board renames the file and takes over a title typed while a new canvas was being created; `create` gives "New canvas here" in folder menus and "Create new canvas" in the palette, with Obsidian's empty board as the content. On phones the name is hidden (the top bar shows it) until it has the focus.
 - Palette commands while a canvas is open: add card, note or file, media and web page; group selection; zoom to fit and to the selection; undo and redo.
 
 **`![[Board.canvas]]`** (`CanvasEmbed.tsx`, the descriptor's `loadEmbed`) draws a static, scaled picture of the board (groups, cards with their first lines, images, edges), the full width and 400 px high by default; `|W` or `|WxH` sets the size. Clicking it opens the canvas. A file node showing a canvas uses the same picture.
@@ -3142,6 +3142,7 @@ The version view of §6.11 also gains **Compare with**: in the History panel it 
   - It commits on `Enter` or blur; `Esc` reverts; nothing is sent when the name is unchanged.
   - Validation follows the new-name rules (§4.4) and is shown inline before sending. A `/` is rejected ("Use Move to… to change folders"). Server errors are shown as given.
 - **New note.** `POST /api/files {path: joinPath(folder, 'Untitled.md'), content: '', onConflict: 'rename'}` with an `Idempotency-Key` (`joinPath('', x) === x`, so the root folder works). The flow is **optimistic**: the tap immediately navigates to a pending view whose inline title input is focused synchronously within the same tap (so iOS opens the keyboard), the POST runs in the background, and the route switches to the created path when it returns. A title committed before then waits for the POST and becomes a rename.
+  - **Writing before the note exists.** Below the title the pending view has the note's body, a plain textarea in the note's text style. Enter in the title focuses it inside the key press (so the iOS keyboard stays up), and so does a tap below the title; either way the title's blur commits it ("Creating the note…"). What is typed or pasted there is kept outside the store by pending id (`setPendingBody`, `state/pendingNote.ts`), so a keystroke re-renders nothing. Once the note exists (renamed, its template retitled and its `{{cursor}}` placed), `handOverBody` waits for the note's session to load and then, in one task, inserts the text typed by then at the note's caret (the template's cursor, else the end of the note), puts the caret where it was in the body, removes the pending view and opens the note with the focus in its text; nothing typed meanwhile is lost. A note without a body still opens as soon as it exists. Text left behind when the user navigates away goes into the note too, without opening it. A drawing or another file without a text body has no body field.
 
 ### 6.16 Mobile layout (iPhone Safari first)
 
@@ -3149,7 +3150,7 @@ The version view of §6.11 also gains **Compare with**: in the History panel it 
 |---|---|
 | **Phone** `< 768 px` wide, or a touch screen under 500 px tall | Single column. A phone on its side (an iPhone in landscape is 812–956 px wide) keeps this layout: `PHONE_QUERY` in `features/platform.ts` is `(max-width: 767px), (max-height: 500px) and (pointer: coarse)`, and every phone rule of the stylesheets uses the same query. **TopBar:** ☰ (left drawer), title with the connection dot, **+** (quick capture, §6.27), a switcher/search button (quick switcher; its sheet has a "Search in notes" row), edit/read toggle, a **tabs button** with the number of open tabs (the tab switcher, §6.40), and ⋯ (Command palette, Backlinks, Outline, History, Bookmark, Rename, Move, Delete, Template, Today, Help, Reload). Phones show one pane. **Drawer:** full-height, 88 % width, slides in from the left; Files, Search, Bookmarks, Tags and Recent files tabs (plus registered left panels), **New note**, **Today** and **Capture** buttons, the registered pages as tiles (`DrawerActions`: four to a row, an icon over a label of at most two lines, scrolling within a third of the screen when they do not fit), so the file tree keeps most of the drawer, and a footer with **Settings**, **Trash**, **Help** (§6.45) and the **theme toggle**. Right-side panels open as a **bottom sheet** (70 % height), dismissed by dragging its handle, or by swiping down only when its content is scrolled to the top, so scrolling the sheet never closes it; a swipe that starts on something with gestures of its own (`touch-action: none`: the local graph, drag handles; sliders) never drags the sheet. A panel without a list of its own (the calendar) scrolls in the panel body. |
 | **Tablet** `768–1199 px` | The ribbon is a collapsed icon rail (48 px) that is always visible, so every desktop entry point (switcher, search, Today, template, new note, palette, Help, Trash, Settings) stays one tap away on an iPad. When the page buttons do not fit (44 px buttons on an iPad in landscape), their group scrolls and Help, Trash, Settings and the theme toggle stay at the bottom. Both sidebars are overlays over the editor, toggled from the rail or the TopBar. |
-| **Desktop** `≥ 1200 px` | Ribbon (48 px), left sidebar (default 280 px, resizable 200–480), workspace (readable width 598 px, 46 em of the 13 px UI size, when `readableLineLength`), right sidebar (300 px, resizable). Status bar at the bottom. |
+| **Desktop** `≥ 1200 px` | Ribbon (48 px), left sidebar (default 280 px, resizable 200–480), workspace (a note's text at most `editor.noteWidth` wide, 600 px by default, §6.6; pages use the same 600 px `--readable-width`), right sidebar (300 px, resizable). Status bar at the bottom. |
 
 **iOS and touch specifics:**
 
@@ -4499,13 +4500,13 @@ Public publishing (§5.28) is off in the shipped file: no Funnel and no second p
 #   Reusable: OFF · Ephemeral: off · Pre-approved: on · Tags: tag:notes
 # Used only for the FIRST login; afterwards the node identity lives in the tailscale-state volume.
 # DELETE this line after the first successful login (DEPLOY.md). Tagged nodes have key expiry disabled by default.
-TS_AUTHKEY=tskey-auth-XXXXXXXXXXXX-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+TS_AUTHKEY=tskey-auth-CHANGE-ME
 
 # Host names the app answers to (Host allowlist, DESIGN §5.13). Your tailnet's MagicDNS name:
 NOTES_ALLOWED_HOSTS=notes.<tailnet>.ts.net
 
 # Tailscale logins allowed to use the app (identity allowlist). Comma-separated.
-NOTES_IDENTITY_ALLOWED_LOGINS=rjgehan@github
+NOTES_IDENTITY_ALLOWED_LOGINS=you@github
 
 # Watchtower update reports (required). ntfy with an unguessable topic, or a self-hosted ntfy URL.
 WATCHTOWER_NOTIFICATION_URL=ntfy://ntfy.sh/notes-<random-32-chars>
@@ -4934,6 +4935,8 @@ Run this manually on `rgpc` (Chrome) and `iphone` (Safari) after integration and
 39. Never typing syntax (§6.6.1), both devices: type `# `, `- `, `1. `, `> `, `[] `: each becomes its block at once, and one Undo after `[] ` gives back `[] `. Type `---` then Enter under a paragraph: a rule. Type ```` ``` ```` then Enter: a closed code block. Type `| Name | Date |` then Enter: a table with its first empty cell open. `Mod-B` with nothing selected, then type: the text is bold and the file has `**text**`; `Mod-B` again and type: plain. Select text (rgpc): the toolbar appears above it once the mouse is up; each button toggles. iPhone: the keyboard toolbar's bold, italic, heading, list, checkbox, table and link buttons work without closing the keyboard. Paste from a web page, a Google Doc (headings, bold, a nested list, a checklist, a table) and Word: Markdown comes in; `Mod-Shift-V`: plain text; a screenshot: an attachment; a VS Code selection: its text. Paste a Wikipedia paragraph with citations: each `[1]` stays a link (not a note link). Paste a Google Doc line whose bold spans several runs: one bold run, no `****`. Paste a GitHub code block with blank lines: they stay. Paste rich text inside a code block: plain text. Paste a rule (`<hr>`) on the line under a paragraph: the paragraph stays a paragraph.
 40. Embeds, footnotes, comments, properties and code (§6.6.1, 10b), both devices: `![[image.png|300]]`, a PDF, an audio file and `![[Other note]]` show in Live Preview and locked; with "Load remote images" off, a web image waits for a click. Backspace after an embed deletes it whole. A footnote reference shows its number; hovering (rgpc) or tapping (iPhone) shows its text with working links. `%%hidden%%` and a `%%` block disappear (dimmed or shown in reveal-at-cursor mode); typing `%%` never hides the rest of the note. The frontmatter shows as properties; the edit button (or ArrowUp from the line under it) shows the YAML, and leaving it shows the block. A code block's fences hide until the caret goes into it. Typing next to any of these blocks never lands inside them, and Backspace never joins a line to them.
 41. A long note (10c), rgpc and iPhone: open a 10,000-line note (headings, lists, tables, footnotes, code), type at its start, middle and end, and scroll and jump with the outline: no lag. Select All, then `Mod-B`: done within a couple of seconds, and the code blocks are untouched; Undo takes it back in one step.
+42. New note while the server is slow (§6.15), iPhone: tap New note, type a title, press the keyboard's *next*, and keep typing while "Creating the note…" shows (the keyboard stays up throughout): the note opens with the title and every character typed, the caret after them, the keyboard still up. Tapping below the title instead of *next* does the same.
+43. Note width (§6.6), both devices: Settings, Editor, *Note width*: the slider moves from 600 px to 1400 px and then *Full width*; an open note follows in Live Preview and in Markdown source, with its embeds inside its text column. A canvas opened for the first time on the iPhone shows the whole board above its toolbar (§6.8.2).
 
 ---
 

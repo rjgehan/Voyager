@@ -9,6 +9,7 @@ import com.rjgehan.notes.settings.AttachmentLocation;
 import com.rjgehan.notes.settings.EditorMode;
 import com.rjgehan.notes.settings.LinkFormat;
 import com.rjgehan.notes.settings.NewNoteLocation;
+import com.rjgehan.notes.settings.NoteWidth;
 import com.rjgehan.notes.settings.Settings;
 import com.rjgehan.notes.settings.SettingsService;
 import org.junit.jupiter.api.Test;
@@ -111,6 +112,19 @@ class ObsidianSettingsTest {
 		assertThat(row(mapping, "app.json › newLinkFormat").status()).isEqualTo(Status.UNSUPPORTED);
 		assertThat(row(mapping, "app.json › alwaysUpdateLinks").status()).isEqualTo(Status.SAME);
 		assertThat(mapping.rows()).noneMatch((r) -> r.source().endsWith("defaultViewMode"));
+	}
+
+	@Test
+	void readableLineLengthBecomesTheNoteWidth() {
+		ObsidianSettings.Mapping off = ObsidianSettings.map(app("{\"readableLineLength\": false}"), Settings.defaults());
+		assertThat(off.proposed().editor().noteWidth()).isEqualTo(NoteWidth.FULL);
+		CompatSetting row = row(off, "app.json › readableLineLength");
+		assertThat(row.status()).isEqualTo(Status.DIFFERENT);
+		assertThat(row.current()).isEqualTo("600");
+		assertThat(row.proposed()).isEqualTo("full");
+		ObsidianSettings.Mapping on = ObsidianSettings.map(app("{\"readableLineLength\": true}"), Settings.defaults());
+		assertThat(on.proposed().editor().noteWidth()).isEqualTo(NoteWidth.READABLE);
+		assertThat(row(on, "app.json › readableLineLength").status()).isEqualTo(Status.SAME);
 	}
 
 	@Test

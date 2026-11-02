@@ -72,7 +72,7 @@ DESIGN.md has the details.
 | 19 | Web clipper *(built 2026-10-21, `feat/clipper`)* | M | M | 7 |
 | 20 | Block references and block embeds *(built 2026-10-21, `feat/block-refs`)* | M | M | |
 | 21 | Update `[[Note#Heading]]` links when a heading is renamed | M | S | |
-| 22 | Search upgrades: OR, regex, saved searches, PDF text | M | M | |
+| 22 | Search upgrades: OR, regex, saved searches *(now search bookmarks, item 12)*, PDF text | M | M | |
 | 23 | Large-attachment policy for git history | M | S | 1 |
 | 24 | Obsidian vault import and compatibility kit | M | S | |
 | 25 | Canvas (JSON Canvas, Obsidian-compatible) | M | L | |
@@ -738,6 +738,7 @@ JGit push over HTTPS with a fine-grained PAT that has `contents: write`, scoped 
 - **One list, saved whole** with the version protocol, as the settings are; each change is re-applied on top of another device's after a conflict, so neither is lost.
 - **Recent files are per device** (they were already kept for the quick switcher), now with the time each was opened, in their own pane; the switcher's empty state marks bookmarked files with a star.
 - **On the phone** both panes are drawer tabs, and ⋯ has Bookmark. Headings are starred from the Outline; searches from the search panel or page.
+- **The one way to keep a search (2026-11-02).** Item 22's separate saved searches were folded in: their entries became search bookmarks at startup, titled with their names (API.md §12.4).
 
 **One line:** star notes, headings and searches, and see recently opened files in a sidebar pane.
 
@@ -922,7 +923,8 @@ Results update through SSE.
 - The grammar has `OR`, parentheses, `/regex/` (also as `file:`, `path:` and `tag:` values), `line:(…)` and `section:(…)`; the client parses it the same way to highlight hits.
 - Regular expressions are safe: at most 500 characters, one 2 s budget per query enforced while the engine reads the text (catastrophic backtracking ends in a clear `400`), at most two such queries at once, and never under the index lock. Search p95 on the 10k-note perf vault stays under 100 ms with the new forms included.
 - Typo tolerance: a word that is not in the index matches words one or two edits away (never short words or numbers); the panel says so and offers "Exact words only".
-- Saved searches live in `.notesapp/searches.json`, so they sync to every device and have history; the panel lists them when the field is empty.
+- Saved searches lived in `.notesapp/searches.json`, so they synced to every device and had history; the panel listed them when the field was empty.
+- **Folded into bookmarks (2026-11-02, the user's decision: bookmarks only).** The separate list is gone (its Save search button, the panel's Saved searches section, `/api/searches`, `searches.changed`); a search is kept with the star, as a search bookmark (item 12). At startup the server turns an existing `searches.json` into search bookmarks (names become titles, duplicates are skipped, the sort is dropped) and renames it `searches.json.migrated` (API.md §12.4, DESIGN §5.17).
 - PDF text is extracted with PDFBox 3.0.8 (Apache-2.0) in the background, within size, page, character and time limits, cached in `.notesapp/cache/search-text/`, and hits open the PDF at the matching page.
 - `.sheet` and `.excalidraw` text is indexed by the `DocumentIndexer` of items 5 and 6 (their branches), not here.
 

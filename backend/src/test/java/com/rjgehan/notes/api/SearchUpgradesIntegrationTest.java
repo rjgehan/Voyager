@@ -1,5 +1,6 @@
 package com.rjgehan.notes.api;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -26,7 +27,10 @@ import org.springframework.test.web.servlet.client.RestTestClient;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
-/** Item 22 over HTTP: OR and groups, regular expressions, scopes, PDF text and saved searches (API.md §12). */
+/**
+ * Item 22 over HTTP: OR and groups, regular expressions, scopes and PDF text (API.md §12), and the saved searches of an
+ * earlier build turned into search bookmarks at startup.
+ */
 @NotesIntegrationTest
 class SearchUpgradesIntegrationTest {
 
@@ -34,7 +38,13 @@ class SearchUpgradesIntegrationTest {
 	static Path vault;
 
 	@DynamicPropertySource
-	static void properties(DynamicPropertyRegistry registry) {
+	static void properties(DynamicPropertyRegistry registry) throws IOException {
+		// Saved searches as an earlier build left them, before the application starts.
+		Files.createDirectories(vault.resolve(".notesapp"));
+		Files.writeString(vault.resolve(".notesapp/searches.json"), """
+				{ "schemaVersion": 1, "searches": [
+				  { "id": "s-open", "name": "Open loops", "query": "tag:#todo -done", "sort": "relevance" } ] }
+				""", StandardCharsets.UTF_8);
 		IntegrationProperties.register(registry, () -> vault);
 	}
 
@@ -117,47 +127,18 @@ class SearchUpgradesIntegrationTest {
 	}
 
 	@Test
-	void savedSearchesSyncThroughTheVault() throws Exception {
-		JsonNode empty = this.api.get("/api/searches").ok(200);
-		assertThat(empty.get("searches").isEmpty()).isTrue();
-		assertThat(empty.get("version").isNull()).isTrue();
-
-		Map<String, Object> open = Map.of("id", "s-open", "name", "Open loops", "query", "tag:#todo -done", "sort",
-				"relevance");
-		JsonNode created = this.api.putJson("/api/searches",
-				Map.of("searches", List.of(open), "baseVersion", "")).ok(200);
-		String version = created.get("version").asString();
-		assertThat(version).hasSize(40);
-		assertThat(created.get("searches").get(0).get("name").asString()).isEqualTo("Open loops");
-		String file = Files.readString(vault.resolve(".notesapp/searches.json"), StandardCharsets.UTF_8);
-		assertThat(file).contains("\"schemaVersion\" : 1").contains("tag:#todo -done");
-
-		JsonNode listed = this.api.get("/api/searches").ok(200);
-		assertThat(listed.get("version").asString()).isEqualTo(version);
-		assertThat(listed.get("searches").get(0).get("query").asString()).isEqualTo("tag:#todo -done");
-
-		Map<String, Object> recent = Map.of("id", "s-recent", "name", "Recent", "query", "path:Daily", "sort",
-				"mtime");
-		Api.Reply stale = this.api.putJson("/api/searches",
-				Map.of("searches", List.of(recent), "baseVersion", "0".repeat(40)));
-		assertThat(stale.problem(409)).isEqualTo("version-conflict");
-		assertThat(stale.json().get("currentVersion").asString()).isEqualTo(version);
-
-		JsonNode updated = this.api.putJson("/api/searches",
-				Map.of("searches", List.of(open, recent), "baseVersion", version)).ok(200);
-		assertThat(updated.get("searches").size()).isEqualTo(2);
-		// Saving the same list again is not a conflict, whatever the base.
-		this.api.putJson("/api/searches",
-				Map.of("searches", List.of(open, recent), "baseVersion", version)).ok(200);
-
-		Api.Reply invalid = this.api.putJson("/api/searches", Map.of("searches",
-				List.of(Map.of("id", "bad id!", "name", "", "query", "x", "sort", "size")), "baseVersion",
-				updated.get("version").asString()));
-		assertThat(invalid.problem(400)).isEqualTo("bad-request");
-		assertThat(invalid.json().get("errors").valueStream().map((e) -> e.get("field").asString()))
-			.contains("searches[0].id", "searches[0].name", "searches[0].sort");
-		assertThat(this.api.putJson("/api/searches", Map.of("searches", List.of(open), "baseVersion", ""),
-				"X-Client-Id", null).problem(403)).isEqualTo("client-id-required");
+	void savedSearchesOfAnEarlierBuildAreSearchBookmarksAndTheirApiIsGone() throws Exception {
+		JsonNode items = this.api.get("/api/bookmarks").ok(200).get("items");
+		assertThat(items.size()).isEqualTo(1);
+		assertThat(items.get(0).get("type").asString()).isEqualTo("search");
+		assertThat(items.get(0).get("title").asString()).isEqualTo("Open loops");
+		assertThat(items.get(0).get("query").asString()).isEqualTo("tag:#todo -done");
+		assertThat(vault.resolve(".notesapp/searches.json")).doesNotExist();
+		assertThat(Files.readString(vault.resolve(".notesapp/searches.json.migrated"), StandardCharsets.UTF_8))
+			.contains("Open loops");
+		assertThat(this.api.get("/api/searches").problem(404)).isEqualTo("not-found");
+		assertThat(this.api.putJson("/api/searches", Map.of("searches", List.of(), "baseVersion", "")).status())
+			.isIn(404, 405);
 	}
 
 }

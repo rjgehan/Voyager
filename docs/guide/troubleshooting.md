@@ -48,7 +48,7 @@ On a computer, clicking another cell replaces the cell you just put in. To make 
 
 ### Where did saved searches go?
 
-Searches are kept as **bookmarks**: type the search, then click the star next to the number of results. See [Bookmarks](search-and-bookmarks.md#bookmarks).
+Searches are kept as **bookmarks** only: type the search, then click the star next to the number of results. The saved searches of an earlier version became search bookmarks when the server was updated, so they are in the **Bookmarks** tab. See [Bookmarks](search-and-bookmarks.md#bookmarks).
 
 ### Clicking a link made a new, empty note
 

@@ -80,14 +80,19 @@ export interface CanvasState {
 
 export const MIN_ZOOM = 0.05;
 export const MAX_ZOOM = 4;
+/**
+ * Below MIN_ZOOM only as far as it takes to see the whole board (a big board on a phone, DESIGN
+ * §6.8.2): the fit, pinching and the zoom buttons can then reach it, never further.
+ */
+export const FIT_MIN_ZOOM = 0.005;
 const UNDO_LIMIT = 200;
 /** Typing is written to the session after this pause (and on blur, save, route change, pagehide). */
 const TEXT_WRITE_DELAY_MS = 250;
 
 const EMPTY_SELECTION: Selection = { nodes: new Set(), edges: new Set() };
 
-export function clampZoom(z: number): number {
-  return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z));
+export function clampZoom(z: number, min = MIN_ZOOM): number {
+  return Math.min(MAX_ZOOM, Math.max(min, z));
 }
 
 /** Where the clipboard of this page keeps its last canvas copy (the system clipboard may refuse reads). */
@@ -108,6 +113,10 @@ export class CanvasController {
   private mergeTried: string | null = null;
   private stage = { width: 800, height: 600 };
   private measured = false;
+  /** How much of the stage's bottom the floating toolbar covers: a fit keeps the board above it. */
+  private bottomInset = 0;
+  /** `minZoom()` for a document and stage, cached (it is asked on every frame of a pan). */
+  private floor: { doc: CanvasDoc | null; width: number; height: number; inset: number; zoom: number } | null = null;
   private pasteCount = 0;
 
   constructor(view?: Viewport) {
@@ -385,8 +394,33 @@ export class CanvasController {
     return this.stage;
   }
 
+  /** The floating toolbar's height above the stage's bottom edge (0 when it takes no room). */
+  setBottomInset(px: number): void {
+    this.bottomInset = Math.max(0, px);
+  }
+
+  /**
+   * The smallest zoom: MIN_ZOOM, or less when the whole board needs less to fit the stage, down to
+   * FIT_MIN_ZOOM.
+   */
+  minZoom(): number {
+    const doc = this.state.doc;
+    const { width, height } = this.stage;
+    const f = this.floor;
+    if (f && f.doc === doc && f.width === width && f.height === height && f.inset === this.bottomInset) return f.zoom;
+    const bounds = doc && this.measured ? boundsOf(doc.nodes.map(nodeRect)) : null;
+    const zoom = bounds ? Math.min(MIN_ZOOM, this.fitFor(bounds, MAX_ZOOM).zoom) : MIN_ZOOM;
+    this.floor = { doc, width, height, inset: this.bottomInset, zoom };
+    return zoom;
+  }
+
+  /** `z` within this board's zoom range. */
+  clampZoom(z: number): number {
+    return clampZoom(z, this.minZoom());
+  }
+
   setView(view: Viewport): void {
-    const v = { x: view.x, y: view.y, zoom: clampZoom(view.zoom) };
+    const v = { x: view.x, y: view.y, zoom: this.clampZoom(view.zoom) };
     const cur = this.state.view;
     if (v.x !== cur.x || v.y !== cur.y || v.zoom !== cur.zoom) this.set({ view: v });
   }
@@ -399,7 +433,7 @@ export class CanvasController {
   /** Zooms by `factor` keeping the world point under `screen` (stage coordinates) in place. */
   zoomAt(factor: number, screen: Point): void {
     const v = this.state.view;
-    const zoom = clampZoom(v.zoom * factor);
+    const zoom = this.clampZoom(v.zoom * factor);
     const k = zoom / v.zoom;
     this.setView({ zoom, x: screen.x - (screen.x - v.x) * k, y: screen.y - (screen.y - v.y) * k });
   }
@@ -428,19 +462,31 @@ export class CanvasController {
     return this.screenToWorld({ x: this.stage.width / 2, y: this.stage.height / 2 });
   }
 
-  /** Fits `rect` (default: everything) into the stage with a margin, never above `maxZoom`. */
+  /**
+   * Fits `rect` (default: everything) into the stage with a margin, above the floating toolbar,
+   * never above `maxZoom`. A board too big for MIN_ZOOM (a phone) gets the zoom it needs.
+   */
   zoomToRect(rect: Rect | null, maxZoom = 1): void {
     if (!rect) {
       this.setView({ x: this.stage.width / 2, y: this.stage.height / 2, zoom: 1 });
       return;
     }
-    const margin = Math.min(80, Math.min(this.stage.width, this.stage.height) * 0.1);
-    const zoom = clampZoom(Math.min(maxZoom, (this.stage.width - 2 * margin) / Math.max(1, rect.width), (this.stage.height - 2 * margin) / Math.max(1, rect.height)));
+    const { zoom, top, bottom } = this.fitFor(rect, maxZoom);
+    const middle = top + (this.stage.height - top - bottom) / 2;
     this.setView({
-      zoom,
+      zoom: clampZoom(zoom, FIT_MIN_ZOOM),
       x: this.stage.width / 2 - (rect.x + rect.width / 2) * zoom,
-      y: this.stage.height / 2 - (rect.y + rect.height / 2) * zoom,
+      y: middle - (rect.y + rect.height / 2) * zoom,
     });
+  }
+
+  /** The zoom that fits `rect` between the stage's margins (the bottom one clear of the toolbar). */
+  private fitFor(rect: Rect, maxZoom: number): { zoom: number; top: number; bottom: number } {
+    const { width, height } = this.stage;
+    const margin = Math.min(80, Math.min(width, height) * 0.1);
+    const bottom = Math.max(margin, this.bottomInset > 0 ? this.bottomInset + 12 : 0);
+    const fit = Math.min(maxZoom, (width - 2 * margin) / Math.max(1, rect.width), (height - margin - bottom) / Math.max(1, rect.height));
+    return { zoom: clampZoom(fit, FIT_MIN_ZOOM), top: margin, bottom };
   }
 
   zoomToFit(): void {
@@ -461,7 +507,7 @@ export class CanvasController {
     if (!node) return;
     const r = nodeRect(node);
     const v = this.state.view;
-    const zoom = clampZoom(Math.max(v.zoom, Math.min(minZoom, (this.stage.width - 32) / r.width)));
+    const zoom = this.clampZoom(Math.max(v.zoom, Math.min(minZoom, (this.stage.width - 32) / r.width)));
     const visible = this.visibleRect();
     const inside = zoom === v.zoom && r.x >= visible.x && r.y >= visible.y && r.x + r.width <= visible.x + visible.width && r.y + r.height <= visible.y + visible.height;
     if (inside) return;

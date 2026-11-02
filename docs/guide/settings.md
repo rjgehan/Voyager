@@ -23,7 +23,7 @@ The **template folder**, the formats of `{{date}}` and `{{time}}`, and **Folder 
 
 ## Editor
 
-- **Readable line length**: keeps lines at a comfortable width on wide screens.
+- **Note width**: how wide a note's text runs on a wide screen, in Live Preview, Markdown source and embedded notes. Drag the slider from 600 to 1400 pixels (in steps of 50); its last step, **Full width**, uses the whole pane. It starts at 600, or at Full width when your Obsidian vault had Readable line length turned off.
 - **Strict line breaks**: how single line breaks show in notes embedded in other notes. A note itself always shows its lines as you typed them.
 
 ## Hotkeys

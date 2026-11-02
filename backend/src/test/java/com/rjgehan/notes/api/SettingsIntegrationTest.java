@@ -126,17 +126,19 @@ class SettingsIntegrationTest {
 		assertThat(defaults.get("templates").get("timeFormat").asString()).isEqualTo("HH:mm");
 		assertThat(defaults.get("editor").get("defaultMode").asString()).isEqualTo("edit");
 		assertThat(defaults.get("editor").get("strictLineBreaks").asBoolean()).isFalse();
+		assertThat(defaults.get("editor").get("noteWidth").asInt()).isEqualTo(600);
+		assertThat(defaults.get("editor").has("readableLineLength")).isFalse();
 		String base = current.get("version").asString();
 
 		ObjectNode changed = (ObjectNode) defaults.deepCopy();
-		((ObjectNode) changed.get("editor")).put("readableLineLength", false);
+		((ObjectNode) changed.get("editor")).put("noteWidth", "full");
 		String next;
 		try (SseRecorder others = SseRecorder.open(this.port, "observer-client-01", null);
 				SseRecorder mine = SseRecorder.open(this.port, Api.CLIENT_ID, null)) {
 			JsonNode saved = this.api.putJson("/api/settings", Map.of("settings", changed, "baseVersion", base)).ok(200);
 			next = saved.get("version").asString();
 			assertThat(next).isNotEqualTo(base);
-			assertThat(saved.get("settings").get("editor").get("readableLineLength").asBoolean()).isFalse();
+			assertThat(saved.get("settings").get("editor").get("noteWidth").asString()).isEqualTo("full");
 			others.awaitEvent("settings.changed");
 			JsonNode event = others.frames()
 				.stream()
@@ -156,7 +158,7 @@ class SettingsIntegrationTest {
 		Reply stale = this.api.putJson("/api/settings", Map.of("settings", defaults, "baseVersion", base));
 		assertThat(stale.problem(409)).isEqualTo("version-conflict");
 		assertThat(stale.json().get("currentVersion").asString()).isEqualTo(next);
-		assertThat(stale.json().get("currentContent").asString()).contains("\"readableLineLength\": false");
+		assertThat(stale.json().get("currentContent").asString()).contains("\"noteWidth\": \"full\"");
 		assertThat(stale.json().has("currentMtime")).isTrue();
 		assertThat(stale.json().has("movedTo")).isTrue();
 
@@ -177,10 +179,10 @@ class SettingsIntegrationTest {
 		Files.writeString(file, text.replace("\"schemaVersion\": 1", "\"futureField\": [1, 2],\n  \"schemaVersion\": 1"));
 		JsonNode external = this.api.get("/api/settings").ok(200);
 		ObjectNode again = (ObjectNode) external.get("settings").deepCopy();
-		((ObjectNode) again.get("editor")).put("readableLineLength", true);
+		((ObjectNode) again.get("editor")).put("noteWidth", 1000);
 		String diskVersion = Hashing.blobId(Files.readAllBytes(file));
 		this.api.putJson("/api/settings", Map.of("settings", again, "baseVersion", diskVersion)).ok(200);
-		assertThat(Files.readString(file)).contains("\"futureField\"").contains("\"readableLineLength\": true");
+		assertThat(Files.readString(file)).contains("\"futureField\"").contains("\"noteWidth\": 1000");
 	}
 
 }

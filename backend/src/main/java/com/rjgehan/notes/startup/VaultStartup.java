@@ -7,6 +7,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.stream.Stream;
 
+import com.rjgehan.notes.bookmarks.BookmarkService;
 import com.rjgehan.notes.config.NotesProperties;
 import com.rjgehan.notes.history.GitBootstrap;
 import com.rjgehan.notes.history.GitStore;
@@ -27,7 +28,7 @@ import org.springframework.stereotype.Component;
  * <ol>
  * <li>prepare the vault and empty {@code .notesapp/tmp};</li>
  * <li>outside the dev profile, the kernel-mode Tailscale and Host allowlist checks;</li>
- * <li>load the settings;</li>
+ * <li>load the settings, and turn the saved searches of an earlier build into search bookmarks;</li>
  * <li>open or initialize the git repository;</li>
  * <li>write {@code Welcome.md} on a first run;</li>
  * <li>build the index, then write the large-file section of {@code info/exclude} from it.</li>
@@ -49,6 +50,8 @@ public class VaultStartup implements SmartInitializingSingleton {
 
 	private final SettingsService settings;
 
+	private final BookmarkService bookmarks;
+
 	private final GitStore git;
 
 	private final WelcomeContent welcome;
@@ -58,13 +61,14 @@ public class VaultStartup implements SmartInitializingSingleton {
 	private final GitBootstrap gitBootstrap;
 
 	public VaultStartup(NotesProperties properties, Environment environment, VaultFs fs,
-			TailscaleInterfaceCheck tailscaleCheck, SettingsService settings, GitStore git, WelcomeContent welcome,
-			IndexBuilder indexBuilder, GitBootstrap gitBootstrap) {
+			TailscaleInterfaceCheck tailscaleCheck, SettingsService settings, BookmarkService bookmarks, GitStore git,
+			WelcomeContent welcome, IndexBuilder indexBuilder, GitBootstrap gitBootstrap) {
 		this.properties = properties;
 		this.environment = environment;
 		this.fs = fs;
 		this.tailscaleCheck = tailscaleCheck;
 		this.settings = settings;
+		this.bookmarks = bookmarks;
 		this.git = git;
 		this.welcome = welcome;
 		this.indexBuilder = indexBuilder;
@@ -77,6 +81,7 @@ public class VaultStartup implements SmartInitializingSingleton {
 			boolean emptyDirectory = prepareVault();
 			checkDeployment();
 			this.settings.load();
+			this.bookmarks.migrateSavedSearches();
 			this.git.openOrInit();
 			boolean firstRun = isFirstRun(emptyDirectory);
 			boolean noVisibleFiles = firstRun && VaultWalk.walk(this.fs, "", "").files().isEmpty();

@@ -109,11 +109,6 @@ export function useSearch(q: string, sort: 'relevance' | 'mtime' = 'relevance', 
   });
 }
 
-/** Saved searches (API.md §12.4), kept current by `searches.changed`. */
-export function useSavedSearches() {
-  return useQuery({ queryKey: queryKeys.savedSearches(), queryFn: () => api.getSavedSearches(), staleTime: STALE.savedSearches });
-}
-
 export function useTags() {
   return useQuery({ queryKey: queryKeys.tags(), queryFn: () => api.getTags(), staleTime: STALE.tags });
 }

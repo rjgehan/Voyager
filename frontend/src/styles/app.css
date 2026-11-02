@@ -627,7 +627,7 @@ body.is-resizing {
 }
 
 .markdown-view.is-readable {
-  max-width: calc(var(--readable-width) + 2 * var(--content-gutter));
+  max-width: calc(var(--note-width, var(--readable-width)) + 2 * var(--content-gutter));
   margin: 0 auto;
 }
 

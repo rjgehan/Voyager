@@ -49,7 +49,7 @@ class HostAndIdentityFilterTest {
 	@Test
 	void admitsAllowedHostAndIdentity() throws Exception {
 		MockFilterChain chain = new MockFilterChain();
-		MockHttpServletRequest request = request("/api/tree", "notes.example.ts.net", "rjgehan@github");
+		MockHttpServletRequest request = request("/api/tree", "notes.example.ts.net", "octocat@github");
 		MockHttpServletResponse response = run(filter(Map.of()), request, chain);
 		assertThat(response.getStatus()).isEqualTo(200);
 		assertThat(chain.getRequest()).isNotNull();
@@ -59,7 +59,7 @@ class HostAndIdentityFilterTest {
 	@Test
 	void foreignHostGets421() throws Exception {
 		MockFilterChain chain = new MockFilterChain();
-		MockHttpServletResponse response = run(filter(Map.of()), request("/api/tree", "evil.example", "rjgehan@github"),
+		MockHttpServletResponse response = run(filter(Map.of()), request("/api/tree", "evil.example", "octocat@github"),
 				chain);
 		assertThat(response.getStatus()).isEqualTo(421);
 		assertThat(response.getContentType()).isEqualTo("application/problem+json");
@@ -96,7 +96,7 @@ class HostAndIdentityFilterTest {
 
 	@Test
 	void loginOutsideTheAllowlistGets403() throws Exception {
-		MockHttpServletResponse response = run(filter(Map.of("notes.identity.allowed-logins", "rjgehan@github")),
+		MockHttpServletResponse response = run(filter(Map.of("notes.identity.allowed-logins", "octocat@github")),
 				request("/", "localhost:8080", "stranger@github"), new MockFilterChain());
 		assertThat(response.getStatus()).isEqualTo(403);
 	}
