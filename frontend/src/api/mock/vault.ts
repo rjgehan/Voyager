@@ -1182,7 +1182,8 @@ export class MockVault {
     const tags = (f.tag ?? []).map((t) => t.replace(/^#/, '').toLowerCase());
     const folder = (f.folder ?? '').replace(/^\/+|\/+$/g, '');
     const linksTo = f.linksTo ? (resolve(f.linksTo, '', index) ?? f.linksTo) : null;
-    const searched = f.q ? new Set(this.search(f.q, 100000, 'relevance', false).results.map((r) => r.path)) : null;
+    // The mock's search returns at most 200 hits, plenty for a mock vault.
+    const searched = f.q ? new Set(this.search(f.q, 200, 'relevance', false).results.map((r) => r.path)) : null;
     const props = (f.prop ?? []).map((p) => {
       const m = /^([^=!]+?)\s*(!?=)\s*(.*)$/.exec(p);
       return m ? { name: m[1].trim().toLowerCase(), op: m[2], value: m[3].trim().toLowerCase() } : { name: p.trim().toLowerCase(), op: null, value: '' };
