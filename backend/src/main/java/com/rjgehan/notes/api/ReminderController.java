@@ -107,6 +107,11 @@ public class ReminderController {
 		catch (DateTimeException ex) {
 			throw NotesException.badRequest("zone must be an IANA time zone such as Europe/Berlin");
 		}
+		// ZoneId also parses offsets ("Z", "+02:00", "GMT+1"), which are no IANA ids (API.md §28.1): the status would
+		// report them, and a fixed offset never follows daylight saving time.
+		if (!ZoneId.getAvailableZoneIds().contains(zone.getId())) {
+			throw NotesException.badRequest("zone must be an IANA time zone such as Europe/Berlin");
+		}
 		this.scheduler.setZone(zone);
 		return ResponseEntity.noContent().build();
 	}

@@ -183,6 +183,23 @@ class WebPushTest {
 	}
 
 	@Test
+	void eachVaultsDailyNudgeHasItsOwnTagAndTopic() throws Exception {
+		PushStore store = new PushStore(this.dir.resolve("push.json"), MAPPER);
+		WebPushRoute.Sender none = (subscription, payload, vapid, subject, topic, now) -> {
+			throw new AssertionError("nothing is sent");
+		};
+		WebPushRoute main = new WebPushRoute(store, none, MAPPER, TestVault.newClock(), "mailto:a@b.invalid", "");
+		WebPushRoute work = new WebPushRoute(store, none, MAPPER, TestVault.newClock(), "mailto:a@b.invalid",
+				"/v/work");
+		ReminderMessage nudge = new ReminderMessage("daily:2026-10-16", "daily", null, null, "Today’s daily note",
+				"Start today’s daily note.", "/?open=daily");
+		assertThat(MAPPER.readTree(main.payload(nudge)).get("tag").asString()).isEqualTo("daily:2026-10-16");
+		assertThat(MAPPER.readTree(work.payload(nudge)).get("tag").asString()).isEqualTo("v/work:daily:2026-10-16");
+		assertThat(WebPushRoute.topic(work.tag(nudge.key()))).isNotEqualTo(WebPushRoute.topic(main.tag(nudge.key())))
+			.hasSize(16);
+	}
+
+	@Test
 	void theNtfyRouteSendsTheTitleOnlyUnlessToldOtherwise() {
 		List<com.rjgehan.notes.notify.NtfyClient.Message> sent = new CopyOnWriteArrayList<>();
 		List<String> topics = new CopyOnWriteArrayList<>();
