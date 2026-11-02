@@ -38,6 +38,7 @@ import {
   type GridLayout,
   type SheetSelection,
 } from './gridModel';
+import { FreezeHandles } from './FreezeHandles';
 import type { SheetTheme } from './theme';
 
 export interface SheetGridHandlers {
@@ -62,6 +63,8 @@ export interface SheetGridHandlers {
   onGrow(rows: number, cols: number): void;
   /** A press on a filter button (of column `col`), at a rectangle on the screen. */
   onFilterButton(col: number, rect: ScreenRect): void;
+  /** A freeze bar was dragged: freeze `count` rows or columns. */
+  onFreeze(axis: 'rows' | 'cols', count: number): void;
 }
 
 export interface ScreenRect {
@@ -221,6 +224,10 @@ export function SheetGrid({ sheet, layout, filter, version, selection, marked, p
   const cellOptions = useMemo(() => ({ overlay: editable && !touch, readonly: !editable, colors: theme.colors }), [editable, touch, theme.colors]);
   // Grid rows are display rows: the sheet's rows below the frozen ones, as a filter shows them.
   const view = layout.view;
+  // The row numbers' width, set rather than measured, so the freeze bars know where the cells start.
+  const markerWidth = Math.max(touch ? 44 : 36, 12 + 8 * String(view.sheetRow(layout.rows - 1) + 1).length);
+  let frozenWidth = 0;
+  for (let c = 0; c < layout.frozenCols; c++) frozenWidth += sizing.get(c) ?? layout.columnWidth(c);
   const getCellContent = useCallback(([col, row]: Item): GridCell => gridCell(model.sheet, col, view.sheetRow(row + f), cellOptions), [model, f, cellOptions, view]);
 
   const rowHeight = useCallback((row: number) => layout.rowHeight(view.sheetRow(row + f)), [layout, f, view]);
@@ -326,6 +333,11 @@ export function SheetGrid({ sheet, layout, filter, version, selection, marked, p
           ctx.lineWidth = 2;
           ctx.strokeRect(rect.x + 1, y + 1, rect.width - 2, h - 2);
         }
+      }
+      // The freeze bar's line under the frozen rows, as Google Sheets draws it.
+      if (f > 0) {
+        ctx.fillStyle = g.headerBottomBorderColor ?? '#474747';
+        ctx.fillRect(rect.x, bandTop + layout.frozenHeight - 3, rect.width, 3);
       }
       ctx.restore();
     },
@@ -578,7 +590,7 @@ export function SheetGrid({ sheet, layout, filter, version, selection, marked, p
         getCellContent={getCellContent}
         rowHeight={rowHeight}
         headerHeight={headerHeight}
-        rowMarkers={{ kind: 'clickable-number', startIndex: f + 1, headerDisabled: true }}
+        rowMarkers={{ kind: 'clickable-number', startIndex: f + 1, headerDisabled: true, width: markerWidth }}
         freezeColumns={layout.frozenCols}
         getRowThemeOverride={getRowThemeOverride}
         drawHeader={drawHeader}
@@ -617,6 +629,9 @@ export function SheetGrid({ sheet, layout, filter, version, selection, marked, p
         overscrollX={40}
         overscrollY={40}
       />
+      {editable && (
+        <FreezeHandles layout={layout} markerWidth={markerWidth} frozenWidth={frozenWidth} touch={touch} gridRef={gridRef} wrapper={wrapper} onFreeze={(axis, n) => handlers.onFreeze(axis, n)} />
+      )}
     </div>
   );
 }

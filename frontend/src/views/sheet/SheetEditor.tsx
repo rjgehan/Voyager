@@ -8,6 +8,7 @@ import {
   ArrowRightToLine,
   BetweenHorizontalStart,
   Bold,
+  Check,
   ChartColumn,
   DecimalsArrowLeft,
   DecimalsArrowRight,
@@ -818,8 +819,8 @@ ${JSON.stringify(sheet.filter ?? null)}`;
       fillDown,
       fillRight,
       toggleBoldRows: toggleBold,
-      freezeRows: () => setFrozen(selection.active.row + 1, sheet.frozen.cols),
-      freezeColumns: () => setFrozen(sheet.frozen.rows, selection.active.col + 1),
+      freezeRows: () => setFrozen(activeAt.row + 1, sheet.frozen.cols),
+      freezeColumns: () => setFrozen(sheet.frozen.rows, activeAt.col + 1),
       unfreeze: () => setFrozen(0, 0),
       addSheet,
       insertRowsAbove: () => insertRows(false),
@@ -909,6 +910,7 @@ ${JSON.stringify(sheet.filter ?? null)}`;
     onClear: (range) => setCells(clearEdits(sheet, range, rowAt)),
     onFill: (source, dest) => setCells(fillEdits(sheet, source, dest, { handle: true, rowAt })),
     onFilterButton: (col, rect) => setFilterMenu({ col, anchor: rect }),
+    onFreeze: (axis, count) => setFrozen(axis === 'rows' ? count : sheet.frozen.rows, axis === 'cols' ? count : sheet.frozen.cols),
     onUndo: undo,
     onRedo: redo,
     onEscape: () => {
@@ -935,12 +937,22 @@ ${JSON.stringify(sheet.filter ?? null)}`;
   const widthColumns: number[] = Array.from({ length: Math.min(selection.range.width, 200) }, (_, i) => selection.range.col + i);
   const widthLabel = widthColumns.length === 1 ? columnLetters(widthColumns[0]) : `${columnLetters(widthColumns[0])}–${columnLetters(widthColumns[widthColumns.length - 1])}`;
   const boldOn = wholeColumns ? sheet.cols[columnLetters(selection.range.col)]?.bold === true : sheet.rows[String(selection.range.row + 1)]?.bold === true;
+  // Google Sheets' View > Freeze: none, 1, 2, or up to the active cell's row or column; the current one ticked.
+  const tick = (on: boolean) => (on ? <Check size={14} aria-hidden /> : <span className="sheet-menu-blank" aria-hidden />);
+  const upToRow = activeAt.row + 1;
+  const upToCol = activeAt.col + 1;
+  const rowChoice = (n: number, label: string): MenuEntry => ({ id: `rows${n}`, label, icon: tick(sheet.frozen.rows === n), run: () => setFrozen(n, sheet.frozen.cols) });
+  const colChoice = (n: number, label: string): MenuEntry => ({ id: `cols${n}`, label, icon: tick(sheet.frozen.cols === n), run: () => setFrozen(sheet.frozen.rows, n) });
   const freezeItems: MenuEntry[] = [
-    { id: 'rows', label: `Freeze rows 1–${selection.active.row + 1}`, run: () => setFrozen(selection.active.row + 1, sheet.frozen.cols) },
-    { id: 'cols', label: `Freeze columns A–${columnLetters(selection.active.col)}`, run: () => setFrozen(sheet.frozen.rows, selection.active.col + 1) },
+    rowChoice(0, 'No rows'),
+    rowChoice(1, '1 row'),
+    rowChoice(2, '2 rows'),
+    ...(upToRow > 2 ? [rowChoice(upToRow, `Up to row ${upToRow}`)] : []),
     'separator',
-    { id: 'unrows', label: 'Unfreeze rows', disabled: sheet.frozen.rows === 0, run: () => setFrozen(0, sheet.frozen.cols) },
-    { id: 'uncols', label: 'Unfreeze columns', disabled: sheet.frozen.cols === 0, run: () => setFrozen(sheet.frozen.rows, 0) },
+    colChoice(0, 'No columns'),
+    colChoice(1, '1 column'),
+    colChoice(2, '2 columns'),
+    ...(upToCol > 2 ? [colChoice(upToCol, `Up to column ${columnLetters(activeAt.col)}`)] : []),
   ];
   /** A toolbar action, after which the grid takes the keys again. */
   const tool = (action: 'undo' | 'redo' | 'bold' | 'down' | 'right') => {

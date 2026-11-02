@@ -143,6 +143,72 @@
   overscroll-behavior: contain;
 }
 
+/* The freeze bars of the grid's corner (DESIGN §6.21.15): thin grey bars, wider to press. */
+.sheet-freeze-handle {
+  position: absolute;
+  z-index: 3;
+  touch-action: none;
+}
+
+.sheet-freeze-handle.is-rows {
+  cursor: row-resize;
+}
+
+.sheet-freeze-handle.is-cols {
+  cursor: col-resize;
+}
+
+.sheet-freeze-handle::after {
+  position: absolute;
+  border-radius: 2px;
+  background: var(--text-faint);
+  content: '';
+}
+
+.sheet-freeze-handle.is-rows::after {
+  top: calc(50% - 2px);
+  right: 2px;
+  left: 2px;
+  height: 4px;
+}
+
+.sheet-freeze-handle.is-cols::after {
+  top: 2px;
+  bottom: 2px;
+  left: calc(50% - 2px);
+  width: 4px;
+}
+
+.sheet-freeze-handle:hover::after {
+  background: var(--interactive-accent);
+}
+
+.sheet-freeze-line {
+  position: absolute;
+  z-index: 3;
+  background: var(--interactive-accent);
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.sheet-freeze-line.is-rows {
+  right: 0;
+  left: 0;
+  height: 4px;
+}
+
+.sheet-freeze-line.is-cols {
+  top: 0;
+  bottom: 0;
+  width: 4px;
+}
+
+/* A menu item without a tick, aligned with those that have one. */
+.sheet-menu-blank {
+  display: inline-block;
+  width: 14px;
+}
+
 /* Glide's cell editor is portaled here, above the workspace. */
 .sheet-portal {
   position: fixed;

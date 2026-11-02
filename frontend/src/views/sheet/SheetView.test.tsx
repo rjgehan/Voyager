@@ -354,7 +354,7 @@ describe('the spreadsheet view', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Bold rows' }));
     expect((await saved(path)).sheets[0].rows['3']).toEqual({ bold: true });
     fireEvent.click(screen.getByRole('button', { name: 'Freeze rows or columns' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Freeze columns A–B' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: '2 columns' }));
     expect((await saved(path)).sheets[0].frozen).toEqual({ rows: 1, cols: 2 });
     expect(gridProps().freezeColumns).toBe(2);
     fireEvent.change(nameBox(), { target: { value: 'total' } });
@@ -910,5 +910,30 @@ describe('sorting and filters (DESIGN §6.21.11)', () => {
     expect(file.sheets[0].cells.A2).toEqual({ v: 'Rent' });
     expect(file.sheets[0].filter?.sort).toEqual({ col: 'B' });
     expect(vault.readFile(path).content).toContain('"version": 2');
+  });
+});
+
+describe('freezing (DESIGN §6.21.15)', () => {
+  it('offers Google Sheets’ freeze choices with the current one ticked, and freezes by dragging a bar', async () => {
+    const path = await openGrid();
+    select(2, 3); // C5
+    fireEvent.click(screen.getByRole('button', { name: 'Freeze rows or columns' }));
+    const items = screen.getAllByRole('menuitem').map((m) => m.textContent);
+    expect(items).toEqual(['No rows', '1 row', '2 rows', 'Up to row 5', 'No columns', '1 column', '2 columns', 'Up to column C']);
+    expect(screen.getByRole('menuitem', { name: '1 row' }).querySelector('svg')).not.toBeNull();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Up to row 5' }));
+    expect((await saved(path)).sheets[0].frozen).toEqual({ rows: 5, cols: 0 });
+    fireEvent.click(screen.getByRole('button', { name: 'Freeze rows or columns' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'No rows' }));
+    expect((await saved(path)).sheets[0].frozen).toEqual({ rows: 0, cols: 0 });
+    // The bar beside the column letters: dragged past the middle of column B, B is frozen too.
+    const bar = screen.getByRole('separator', { name: 'Drag to freeze columns' });
+    fakeGrid.mouseArgs = () => ({ kind: 'header', location: [1, -1], localEventX: 80, localEventY: 10, bounds: { x: 136, y: 0, width: 100, height: 26 } }) as never;
+    bar.setPointerCapture = () => {};
+    fireEvent.pointerDown(bar, { pointerId: 1, button: 0, pointerType: 'mouse', clientX: 36, clientY: 10 });
+    fireEvent.pointerMove(bar, { pointerId: 1, pointerType: 'mouse', clientX: 216, clientY: 10 });
+    fireEvent.pointerUp(bar, { pointerId: 1, pointerType: 'mouse', clientX: 216, clientY: 10 });
+    fakeGrid.mouseArgs = undefined;
+    expect((await saved(path)).sheets[0].frozen).toEqual({ rows: 0, cols: 2 });
   });
 });
