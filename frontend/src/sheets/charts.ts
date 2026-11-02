@@ -146,11 +146,12 @@ export interface PieSlice {
 }
 
 /**
- * The slices of a pie: the first series' positive values, the largest first beyond the limit, with
+ * The slices of a pie: the positive values of the first series that has any, the largest first beyond the limit, with
  * the remaining ones summed as "Other". Zero, negative and empty values are left out.
  */
 export function pieSlices(data: ChartData): PieSlice[] {
-  const s = data.series[0];
+  // The first series with something to show (a text column before the numbers is passed over).
+  const s = data.series.find((x) => x.values.some((v) => v !== null && v > 0)) ?? data.series[0];
   if (!s) return [];
   const items = data.categories
     .map((label, i) => ({ label, value: s.values[i] ?? 0, shown: s.shown[i] ?? '' }))

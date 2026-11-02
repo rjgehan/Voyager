@@ -130,3 +130,15 @@ describe('stacking and scatter charts', () => {
     expect(r.data.series.map((s) => s.name)).toEqual(['a', 'b']);
   });
 });
+
+describe('pies of a range with text before the numbers', () => {
+  it('take the first series that has positive values', () => {
+    const s: Sheet = { ...emptySheet('s1', 'S'), cells: { A1: { v: 'Item' }, B1: { v: 'Kind' }, C1: { v: 'Cost' }, A2: { v: 'Rent' }, B2: { v: 'Home' }, C2: { v: 3 }, A3: { v: 'Food' }, B3: { v: 'Living' }, C3: { v: 1 } } };
+    const r = chartData(s, { type: 'pie', range: 'A1:C3', headers: true, labels: true });
+    if (!r.ok) throw new Error(r.message);
+    expect(pieSlices(r.data).map((x) => [x.label, x.share])).toEqual([
+      ['Rent', 0.75],
+      ['Food', 0.25],
+    ]);
+  });
+});

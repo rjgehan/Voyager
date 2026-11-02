@@ -26,6 +26,8 @@ export function DropdownList({ items, current, cell, anchor, phone, onPick, onCl
   return (
     <SheetPopover label={`Choose a value for ${cell}`} anchor={anchor} phone={phone} className="sheet-dropdown" onClose={onClose}>
       <div className="sheet-dropdown-body">
+        {/* On a phone the list fills the screen: it says which cell it is for, and has a way out. */}
+        {phone && <p className="sheet-filter-title">Choose a value for {cell}</p>}
         {items.length > SEARCH_FROM && <input className="text-input" type="search" aria-label="Search the list" placeholder="Search" value={search} onChange={(e) => setSearch(e.target.value)} />}
         {items.length === 0 ? (
           <p className="muted sheet-dropdown-empty">The dropdown has no items.</p>
@@ -40,6 +42,13 @@ export function DropdownList({ items, current, cell, anchor, phone, onPick, onCl
               </li>
             ))}
           </ul>
+        )}
+        {phone && (
+          <div className="dialog-actions">
+            <button type="button" className="button" onClick={onClose}>
+              Cancel
+            </button>
+          </div>
         )}
       </div>
     </SheetPopover>
