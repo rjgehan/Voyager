@@ -37,16 +37,23 @@ The app trusts the `Tailscale-User-Login` header absolutely. **Whatever can open
 
 The app shares the network namespace of a kernel-mode `tailscale` container and listens on `127.0.0.1:8080` only. `tailscale serve` (in the same namespace) terminates TLS on `:443`, deletes client-supplied `Tailscale-User-*` headers and sets the real ones. Nothing outside the namespace can connect to `127.0.0.1:8080`; tailnet packets for `100.x.y.z:8080` find no listener (kernel mode). The app refuses to start when it sees no kernel Tailscale interface (`TailscaleInterfaceCheck`), so a dropped `TS_USERSPACE: "false"` cannot silently forward every tailnet port to loopback. `NOTES_IDENTITY_ALLOWED_LOGINS` is mandatory here. **Identity headers cannot be forged** in this layout.
 
-### 3.2 CasaOS simple layout (`deploy/casaos-compose.yml`, CASAOS.md): the weakest
+### 3.2 CasaOS simple layout (`deploy/casaos-compose.yml`, CASAOS.md)
 
-Tailscale runs on the **host**; `tailscale serve --https=8443 http://127.0.0.1:18095` proxies to the container's published port. CasaOS accepts only a bare port, so Docker publishes `18095` on **every interface of the host**, IPv4 and IPv6, and the app listens on `0.0.0.0` inside the container. Consequences:
+Tailscale runs on the **host**; `tailscale serve --https=8443 http://127.0.0.1:18095` proxies to the app. Since 2026-11-02 (finding F5) the app shares the **host's network** (`network_mode: host`) and listens on `127.0.0.1:18095`, the host's loopback: no port is published, so nothing on the LAN or the tailnet can open a connection to it, IPv4 or IPv6. `NOTES_IDENTITY_ALLOWED_LOGINS` is required in this file (a placeholder that admits nobody until it is replaced). Consequences:
 
-- **A2 can forge identity.** Any device on the LAN can send `Host: homeserver.<tailnet>.ts.net` and `Tailscale-User-Login: <any or the owner's login>` to `http://<server-ip>:18095` and is admitted with full access. The tailnet name is public (certificate transparency logs list `*.ts.net` certificates), and with `NOTES_IDENTITY_ALLOWED_LOGINS` unset (the CasaOS default) any login works. The Host allowlist and the identity check stop browsers, not programs.
+- **A2 and A3 cannot reach the app** at all: a connection to `<server-ip>:18095`, the host's IPv6 addresses (link-local included) or `100.x.y.z:18095` is refused by the host's kernel.
+- **Processes on the host** can still connect to `127.0.0.1:18095` and send any identity headers. The host is inside the trust boundary in every layout (it holds the data folder and the Docker socket).
+- **A7**: other containers reach the app only if they share the host's network too; the optional NotesApp Whisper app does (on `127.0.0.1:18097`, loopback only) and the backup app does not need to.
+- The optional publish server (DESIGN §5.28) also stays on the loopback (`NOTES_PUBLISH_ADDRESS` defaults to `127.0.0.1`); Funnel reaches it through the host's `tailscale funnel`.
+
+**The older bridge variant** (a published `18095:8080` with `SERVER_ADDRESS: 0.0.0.0`, the CasaOS file before 2026-11-02) is the weakest layout: Docker publishes the port on **every interface of the host**, and
+
+- **A2 can forge identity.** Any device on the LAN can send `Host: homeserver.<tailnet>.ts.net` and `Tailscale-User-Login: <any or the owner's login>` to `http://<server-ip>:18095` and is admitted with full access. The tailnet name is public (certificate transparency logs list `*.ts.net` certificates), and with `NOTES_IDENTITY_ALLOWED_LOGINS` unset any login works. The Host allowlist and the identity check stop browsers, not programs.
 - **A3 can forge identity too**, through the host's tailnet address (`100.x.y.z:18095`), unless the tailnet policy blocks that port.
 - **A7**: other containers on the compose network reach `notesapp:8080` directly.
 - A source-address check in the app cannot close this. Connections that `tailscale serve` makes to `127.0.0.1:18095` reach the container through Docker's userland proxy and arrive from the bridge gateway, and so do connections from the LAN to the host's **IPv6** addresses (link-local ones included), which the same proxy forwards to the IPv4-only container. The two are indistinguishable inside the container.
 
-The fix is at the network level: §7.1. Until it is applied, treat this layout as **"anyone on the LAN can read and change the vault"**.
+Whoever keeps that variant must close the port at the network level (§7.1); until then, treat it as **"anyone on the LAN can read and change the vault"**.
 
 ### 3.3 CasaOS sidecar layout (`deploy/casaos-compose-sidecar.yml`)
 
@@ -100,7 +107,7 @@ Each extra vault is its own Spring context behind `/api/v/<name>/`; the prefix i
 
 | Boundary | Attackers | Controls |
 |---|---|---|
-| Network → app port | A1, A2, A3, A7 | Layout (§3): loopback-only listener or private Compose network; kernel-mode Tailscale check; **the CasaOS simple layout needs §7.1**. |
+| Network → app port | A1, A2, A3, A7 | Layout (§3): loopback-only listener or private Compose network; kernel-mode Tailscale check; the CasaOS simple layout listens on the host's loopback (§3.2), and only its older bridge variant needs §7.1. |
 | `tailscale serve` → app | A3 | Identity allowlist (`NOTES_IDENTITY_ALLOWED_LOGINS`); Host allowlist; Funnel requests refused. |
 | Browser → API | A5 | Custom-header CSRF guard, Origin and `Sec-Fetch-Site` checks, no CORS, JSON-only bodies, side-effect-free `GET`. |
 | API → disk | A3, A5 | `VaultPaths` (§5.3): NFC, no `.`/`..`, no hidden segments (`.git`, `.notesapp`, `.trash` → `403`), Windows name rules, symlink and junction escape checks, `NOFOLLOW_LINKS` everywhere. |
@@ -121,7 +128,7 @@ Each extra vault is its own Spring context behind `/api/v/<name>/`; the prefix i
 | F2 | Medium | The inline-style filter split on `;` and `:` and missed `/**/position:fixed`, `p\osition:fixed` and `--p:fixed;position:var(--p)`; Live Preview callouts render note HTML without containment. A callout in a note (a clipped page, an imported vault) could cover the whole window with a fake "session expired" screen. | Fixed: only plainly spelled declarations survive; a Live Preview callout is `contain: paint` |
 | F3 | Medium | A 780 KB PDF whose content stream inflates to one 800 MB string makes PDFBox exhaust the heap; with `-XX:+ExitOnOutOfMemoryError` the JVM exits, and since PDF text is extracted at every start until cached, **one attachment put the server in a crash loop** until it was removed over SSH. | Mitigated: an extraction marker makes such a file cost one restart, after which it is indexed by name only (DESIGN §5.5.10). See R4 |
 | F4 | Low–medium | Web Push endpoints could be any `https` URL; the server posts to them, and `POST /api/reminders/test` reported the kind of failure. Any admitted caller could make the server post to `127.0.0.1`, the LAN, the Docker gateway, `169.254.169.254` or the tailnet, and port-scan them (an open HTTP port answered "plaintext connection?", a closed one `ConnectException`). | Fixed: non-public addresses refused at subscription and, after resolving the name, at every send (API.md §28.2). See R5 |
-| F5 | **Critical in that layout** | CasaOS simple layout: port `18095` is published on every host interface, so any LAN device (and the host's tailnet address) can send forged `Tailscale-User-Login` and `Host` headers and gets full access. The app cannot tell these connections from `tailscale serve`'s (§3.2). | Documented, with the firewall rules (§7.1, CASAOS.md). See R1 |
+| F5 | **Critical in that layout** | CasaOS simple layout: port `18095` is published on every host interface, so any LAN device (and the host's tailnet address) can send forged `Tailscale-User-Login` and `Host` headers and gets full access. The app cannot tell these connections from `tailscale serve`'s (§3.2). | Fixed on 2026-11-02: the app shares the host's network and listens on `127.0.0.1:18095` only, and `NOTES_IDENTITY_ALLOWED_LOGINS` is required (§3.2, CASAOS.md). The firewall rules (§7.1) remain for the older bridge variant. See R1 |
 | F6 | Low | Outside the dev profile, an empty `NOTES_IDENTITY_ALLOWED_LOGINS` (the CasaOS default) admits every Tailscale identity, users the node is shared with included, and `allow-default` admits requests without identity, both silently. | Startup warning (DESIGN §5.13); see §7.2 |
 | F7 | Medium | Dependencies with published advisories: Tomcat 11.0.24 (four critical ones, in HTTP/2 SNI checks and the FORM/DIGEST authenticators and security constraints, none of which NotesApp uses), Jackson 3.1.5 and 2.21.5 (high: parser and databind denial of service; the app parses untrusted JSON), `lodash-es` 4.17.21 under Mermaid (high: `_.template`, `_.unset`/`_.omit`; not called with untrusted input) and `nanoid` 3.3.3/4.0.2 under Excalidraw (high: only with non-integer or negative sizes). | Fixed: Spring Boot 4.1.2 (Tomcat 11.0.27, Jackson 3.1.7 and 2.21.7, Spring Framework 7.0.10); npm overrides `lodash-es` 4.18.1, `nanoid` 3.3.20 and 5.1.16. Remaining advisories: R7 |
 | F8 | Low | `push.json` (the VAPID private key) was written with the default umask and `chmod`-ed afterwards, and a secrets folder the app created was world-readable. | Fixed: created owner-only |
@@ -146,7 +153,7 @@ Each extra vault is its own Spring context behind `/api/v/<name>/`; the prefix i
 
 | | Risk | What limits it |
 |---|---|---|
-| R1 | **CasaOS simple layout**: whoever reaches port `18095` is whoever they claim to be (F5). | §7.1. The sidecar layout (§3.3) or the main layout (§3.1) avoid it. |
+| R1 | **CasaOS layouts**: whoever reaches the app's port is whoever they claim to be (F5). With the shipped simple layout that is only the host itself; with the older bridge variant, the LAN. | The loopback listener of the simple layout (§3.2); for the bridge variant, §7.1. The sidecar layout (§3.3) and the main layout (§3.1) avoid it too. |
 | R2 | Every admitted identity has full access to every vault; there are no per-user permissions. | §7.2: name the allowed logins. |
 | R3 | Content you import is code: scripts in notes run as the note shows and can read the whole vault (§3.8). After F1 they cannot send it anywhere, but they can show misleading output. | §7.5. |
 | R4 | A crafted PDF still costs one restart (F3), and other parsers (PDFBox fonts and images, Excalidraw and canvas JSON) are bounded by size and time limits rather than memory limits. | Indexing by name after a crash; `notes.search.pdf.enabled=false` turns PDF text off. |
@@ -160,9 +167,11 @@ Changes that would remove R1, R3, R4, R5 and R6 are proposed in [ROADMAP.md](ROA
 
 ## 7. Hardening advice
 
-### 7.1 Close port 18095 to everything but the host (CasaOS simple layout)
+### 7.1 Keep port 18095 to the host (CasaOS)
 
-Apply both rules (IPv4 **and** IPv6: Docker's userland proxy also listens on the host's IPv6 addresses, link-local included):
+The shipped `deploy/casaos-compose.yml` already does: the app shares the host's network and listens on `127.0.0.1:18095` (§3.2), so there is nothing to apply. Check it from another machine: `curl -m 5 http://<server-ip>:18095` is refused at once.
+
+Only if you keep the older bridge variant (a published `18095:8080` with `SERVER_ADDRESS: 0.0.0.0`), apply both rules (IPv4 **and** IPv6: Docker's userland proxy also listens on the host's IPv6 addresses, link-local included):
 
 ```sh
 sudo iptables -I DOCKER-USER -p tcp -m conntrack --ctorigdstport 18095 --ctdir ORIGINAL -j DROP
@@ -178,7 +187,7 @@ Set `NOTES_IDENTITY_ALLOWED_LOGINS` to your own Tailscale login(s) in every layo
 
 ### 7.3 Tailnet policy
 
-Apply DEPLOY.md step 6: `tag:notes` gets no outgoing grant, and your devices reach it on the HTTPS port only. In the CasaOS simple layout, also make sure no grant lets tailnet peers reach the host's port `18095` (only the serve port, `8443`).
+Apply DEPLOY.md step 6: `tag:notes` gets no outgoing grant, and your devices reach it on the HTTPS port only. In the CasaOS bridge variant, also make sure no grant lets tailnet peers reach the host's port `18095` (only the serve port, `8443`); the shipped simple layout listens on the loopback, which the tailnet cannot reach.
 
 ### 7.4 Secrets
 

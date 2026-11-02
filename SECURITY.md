@@ -29,7 +29,7 @@ Out of scope:
 
 - Tailscale, Docker, CasaOS and other software NotesApp runs on, unless NotesApp uses or configures them insecurely;
 - attacks that need root on the server or control of the owner's device;
-- the residual risks that docs/SECURITY.md documents with their mitigation (for example a LAN device reaching port `18095` of the CasaOS layout without the firewall rule), unless you found a way around the mitigation;
+- the residual risks that docs/SECURITY.md documents with their mitigation (for example a LAN device reaching port `18095` of the older CasaOS bridge variant without the firewall rule), unless you found a way around the mitigation;
 - denial of service by the owner against their own instance, and findings from automated scanners without a demonstrated impact.
 
 Please test only against an instance you run yourself.

@@ -4,14 +4,16 @@
 #
 # Before installing, once over SSH on the server (the app runs as uid 1000):
 #   sudo mkdir -p /DATA/AppData/notesapp/data && sudo chown -R 1000:1000 /DATA/AppData/notesapp/data
-# Replace homeserver.<tailnet>.ts.net below with the host's MagicDNS name (twice).
+# Replace homeserver.<tailnet>.ts.net below with the host's MagicDNS name (twice), and you@example.com with your
+# Tailscale login (required: nobody else is let in).
 # After installing, once (HTTPS on your tailnet with your Tailscale login passed to the app; survives reboots):
 #   sudo tailscale serve --bg --https=8443 http://127.0.0.1:18095
 # Then open https://homeserver.<tailnet>.ts.net:8443
 # (--https=443 and the name without :8443 work too when nothing else on the host serves 443.)
 #
-# Port 18095 is also reachable from the LAN, where any device can forge the identity headers and use the app:
-# add the firewall rules of docs/CASAOS.md ("Who can reach port 18095"), which limit it to the host.
+# The app shares the host's network and listens on its loopback only (127.0.0.1:18095), so nothing on the LAN or
+# the tailnet reaches it except through tailscale serve: no port is published and no firewall rule is needed
+# (docs/CASAOS.md, "Who can reach port 18095").
 # Data lives under /DATA/AppData/notesapp/data: vault/ (your notes and their git history) and, only if you set
 # up the optional extras of docs/CASAOS.md, secrets/. A fresh install needs none of the extras.
 name: notesapp
@@ -26,15 +28,16 @@ services:
   notes:
     image: ghcr.io/rjgehan/notesapp:latest
     container_name: notesapp
-    ports:
-      - "18095:8080"                            # CasaOS accepts only a bare port here
+    network_mode: host                          # no published port: the app listens on the host's loopback
     environment:
       TZ: America/New_York
-      SERVER_ADDRESS: 0.0.0.0                   # listen on the container's network, for the published port
+      SERVER_ADDRESS: 127.0.0.1                 # the host's loopback: only tailscale serve (and the host) reach it
+      SERVER_PORT: "18095"                      # tailscale serve proxies https://…:8443 to http://127.0.0.1:18095
       # The names the app answers to: the host's MagicDNS name, with and without the serve port.
       NOTES_ALLOWED_HOSTS: homeserver.<tailnet>.ts.net,homeserver.<tailnet>.ts.net:8443
-      # Optional: only these Tailscale logins (comma-separated); unset = anyone on your tailnet.
-      # NOTES_IDENTITY_ALLOWED_LOGINS: you@example.com
+      # Required: your Tailscale login, the email the admin console shows (comma-separate several). Only these
+      # logins are let in; the placeholder lets nobody in.
+      NOTES_IDENTITY_ALLOWED_LOGINS: you@example.com
       NOTES_SECURITY_REQUIRE_TAILSCALE_INTERFACE: "false"   # Tailscale runs on the host, not in the container
       NOTES_TAILSCALE_WATCHDOG_ENABLED: "false"
       # Files larger than this stay in the vault and in backups but out of git history (0 = version
@@ -45,7 +48,7 @@ services:
       NOTES_MIRROR_URL: ""
       NOTES_MIRROR_TOKEN_FILE: /data/secrets/mirror-token
       # Optional transcription of voice notes (docs/CASAOS.md "Voice note transcription"): with the NotesApp
-      # Whisper app (casaos-whisper-compose.yml) installed, http://notesapp-whisper:9000. Empty = off.
+      # Whisper app (casaos-whisper-compose.yml) installed, http://127.0.0.1:18097. Empty = off.
       NOTES_TRANSCRIPTION_URL: ""
       # Multiple vaults (docs/CASAOS.md "Multiple vaults"): extra vaults are the folders under data/vaults, created
       # from Settings › Vaults; the existing vault and its address never change. Add

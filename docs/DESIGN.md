@@ -1634,7 +1634,7 @@ An existing Obsidian vault is imported by copying it into the vault directory be
 
 Voice notes are recorded in the browser and saved as attachments (§6.30); the server's only part is the optional transcription, `POST /api/transcriptions` (API.md §20), in the `transcribe` package. It is **off by default**: nothing is configured, and nothing runs, until `notes.transcription.url` (`NOTES_TRANSCRIPTION_URL`) names a speech-to-text service. DEPLOY.md *Voice notes* and CASAOS.md *Voice note transcription* set up the sidecar.
 
-**The service** is a separate container, never part of the image: [whisper-asr-webservice](https://github.com/ahmetoner/whisper-asr-webservice) (MIT; faster-whisper on the CPU, ffmpeg for any input format) as the optional `whisper` service of `deploy/docker-compose.yml` (profile `transcription`) and the second CasaOS app `deploy/casaos-whisper-compose.yml` (which joins NotesApp's network). Neither publishes a port: only the app reaches it, from the Tailscale container's network namespace, by its service or container name. It keeps no audio. A different engine works through the second protocol.
+**The service** is a separate container, never part of the image: [whisper-asr-webservice](https://github.com/ahmetoner/whisper-asr-webservice) (MIT; faster-whisper on the CPU, ffmpeg for any input format) as the optional `whisper` service of `deploy/docker-compose.yml` (profile `transcription`) and the second CasaOS app `deploy/casaos-whisper-compose.yml`. Neither publishes a port: in the Compose layout only the app reaches it, from the Tailscale container's network namespace, by its service name; on CasaOS both apps share the host's network and the service listens on the host's loopback only (`--host 127.0.0.1 --port 18097`), as the app does on `127.0.0.1:18095` (CASAOS.md). It keeps no audio. A different engine works through the second protocol.
 
 **`HttpTranscriptionEngine`** (the `TranscriptionEngine` bean; tests replace it) sends the file as `multipart/form-data`, streamed from disk, named `recording.<ext>` (the service needs the format, not the vault's name), over HTTP/1.1, with no redirects followed:
 
@@ -4426,8 +4426,10 @@ RUN set -eu; \
 # uid/gid 1000 = the 'ubuntu' user that ships in the noble base image (no useradd needed); see DESIGN §7.7 for why 1000
 USER 1000:1000
 EXPOSE 8080
+# The port the app listens on: 8080, or SERVER_PORT (the CasaOS layout shares the host's network on 18095). The shell
+# reads it when the check runs, from the container's environment.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
-  CMD curl -fsS http://127.0.0.1:8080/readyz || exit 1
+  CMD curl -fsS "http://127.0.0.1:${SERVER_PORT:-8080}/readyz" || exit 1
 ENTRYPOINT ["java", "-XX:AOTCache=/app/notesapp.aot", "-jar", "application.jar"]
 ```
 
@@ -4785,7 +4787,7 @@ If the `docker-compose` ecosystem is not available to the repository, the monthl
 
 | Where | Check | Effect |
 |---|---|---|
-| Image `HEALTHCHECK` | `curl -fsS http://127.0.0.1:8080/readyz`: 30 s interval, 60 s start period, 3 retries. The JDK 25 base image has no curl, so the Dockerfile installs it (§7.1). | Container health shows in `docker ps`; the nightly backup waits for `healthy` after restarting the app (§7.10). |
+| Image `HEALTHCHECK` | `curl -fsS http://127.0.0.1:${SERVER_PORT:-8080}/readyz` (the CasaOS layout's app listens on the host's `127.0.0.1:18095`): 30 s interval, 60 s start period, 3 retries. The JDK 25 base image has no curl, so the Dockerfile installs it (§7.1). | Container health shows in `docker ps`; the nightly backup waits for `healthy` after restarting the app (§7.10). |
 | Compose `tailscale.healthcheck` | `wget --spider http://127.0.0.1:9002/healthz`. It returns 200 once the node has a tailnet IP. | Gates `notes` startup through `depends_on: condition: service_healthy`. |
 | `notes` `depends_on.restart: true` | | Compose restarts `notes` when Compose itself restarts `tailscale`. |
 | App `TailscaleWatchdog` (`NOTES_TAILSCALE_WATCHDOG_ENABLED=true`) | Every 10 s, connect to `127.0.0.1:9002`; the URL is logged at startup. The watchdog is **armed only after one successful connection** since the JVM started, so a health endpoint that is turned off or moved never causes a crash loop. Once armed, after 6 consecutive *connection refused* results it logs ERROR (`TAILSCALE_WATCHDOG_EXIT`) and calls `System.exit(1)`. Non-200 responses do not count, so a tailscale that is merely starting or logged out never triggers it. Exits are counted in `/data/.watchdog-exits`; after 3 exits within 10 minutes it stops exiting and only logs ERROR. | Handles the shared-namespace failure mode. When the `tailscale` container **restarts** (crash, OOM, `docker restart`), it keeps its container id but gets a new network namespace, while `notes` keeps the dead one and serve returns 502. In the orphaned namespace nothing listens on 9002, so the watchdog fires, and `restart: unless-stopped` re-joins `notes` to the container's live namespace. When `tailscale` is **recreated** outside Compose (a new container id), Docker cannot restart `notes` at all; that case needs `docker compose up -d` (DEPLOY.md troubleshooting). |

@@ -103,6 +103,8 @@ RUN set -eu; \
 # uid/gid 1000 = the 'ubuntu' user that ships in the noble base image (no useradd needed); see DESIGN §7.7 for why 1000
 USER 1000:1000
 EXPOSE 8080
+# The port the app listens on: 8080, or SERVER_PORT (the CasaOS layout shares the host's network on 18095). The shell
+# reads it when the check runs, from the container's environment.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
-  CMD curl -fsS http://127.0.0.1:8080/readyz || exit 1
+  CMD curl -fsS "http://127.0.0.1:${SERVER_PORT:-8080}/readyz" || exit 1
 ENTRYPOINT ["java", "-XX:AOTCache=/app/notesapp.aot", "-jar", "application.jar"]
