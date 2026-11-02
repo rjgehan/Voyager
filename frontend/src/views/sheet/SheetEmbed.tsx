@@ -11,6 +11,7 @@ import { useTextFile } from '../../api/hooks';
 import { openPath } from '../../features/navigation';
 import { displayName, noteRoute } from '../../features/paths';
 import { columnLetters } from '../../sheets/a1';
+import { conditionalStyles } from '../../sheets/conditional';
 import { shownCell } from '../../sheets/display';
 import { compareIds, parseSheet } from '../../sheets/format';
 import { rangeText } from '../../sheets/refs';
@@ -53,6 +54,7 @@ export default function SheetEmbed({ path, subpath, display }: EmbedProps) {
     const charts = target.range === null ? Object.entries(sheet.charts).sort(([a], [b]) => compareIds(a, b)) : [];
     const rows = range ? Math.min(range.height, EMBED_ROWS) : 0;
     const cols = range ? Math.min(range.width, EMBED_COLUMNS) : 0;
+    const styleAt = conditionalStyles(sheet);
     body = (
       <>
         {range === null ? (
@@ -77,8 +79,18 @@ export default function SheetEmbed({ path, subpath, display }: EmbedProps) {
                         const shown = shownCell(sheet, col, row);
                         const bold = !boldRow && sheet.cols[columnLetters(col)]?.bold === true;
                         const classes = [`align-${shown.align}`, shown.color ? `is-${shown.color}` : '', bold ? 'is-bold' : ''].filter(Boolean).join(' ');
+                        // Conditional formatting, as the grid shows it (DESIGN §6.21.12).
+                        const style = styleAt?.(col, row);
+                        const css = style
+                          ? {
+                              background: style.bg,
+                              color: shown.color === 'error' ? undefined : style.color,
+                              fontWeight: style.bold ? 700 : undefined,
+                              fontStyle: style.italic ? ('italic' as const) : undefined,
+                            }
+                          : undefined;
                         return (
-                          <td key={col} className={classes}>
+                          <td key={col} className={classes} style={css}>
                             {shown.text}
                           </td>
                         );

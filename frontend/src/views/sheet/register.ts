@@ -68,6 +68,7 @@ export const SHEET_COMMANDS: Command[] = [
   sheetCommand('sortSheetAsc', 'Sort sheet A → Z by the selected column', (a) => a.sortSheetAsc()),
   sheetCommand('sortSheetDesc', 'Sort sheet Z → A by the selected column', (a) => a.sortSheetDesc()),
   sheetCommand('toggleFilter', 'Create or remove a filter', (a) => a.toggleFilter()),
+  sheetCommand('conditionalFormatting', 'Conditional formatting…', (a) => a.openConditionalFormatting(), { edits: false }),
   sheetCommand('importFile', 'Import CSV or Excel into this spreadsheet…', (a) => a.importFile(), { edits: false }),
   sheetCommand('exportCsv', 'Download sheet as CSV', (a) => a.exportCsv(), { edits: false }),
   sheetCommand('exportXlsx', 'Download spreadsheet as Excel (.xlsx)', (a) => a.exportXlsx(), { edits: false }),

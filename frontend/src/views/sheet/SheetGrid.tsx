@@ -21,6 +21,7 @@ import {
 } from '@glideapps/glide-data-grid';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { columnLetters } from '../../sheets/a1';
+import { conditionalStyles } from '../../sheets/conditional';
 import { shownCell } from '../../sheets/display';
 import type { Sheet } from '../../sheets/format';
 import type { CellRange } from '../../sheets/refs';
@@ -221,7 +222,12 @@ export function SheetGrid({ sheet, layout, filter, version, selection, marked, p
     return regions.length > 0 ? regions : undefined;
   }, [marked, picked, f, theme]);
 
-  const cellOptions = useMemo(() => ({ overlay: editable && !touch, readonly: !editable, colors: theme.colors }), [editable, touch, theme.colors]);
+  // Conditional formatting, worked out again with every change of the sheet.
+  const styleAt = useMemo(() => conditionalStyles(model.sheet), [model]);
+  const cellOptions = useMemo(
+    () => ({ overlay: editable && !touch, readonly: !editable, colors: theme.colors, styleAt, fontSize: theme.fontSize }),
+    [editable, touch, theme.colors, styleAt, theme.fontSize],
+  );
   // Grid rows are display rows: the sheet's rows below the frozen ones, as a filter shows them.
   const view = layout.view;
   // The row numbers' width, set rather than measured, so the freeze bars know where the cells start.
@@ -301,22 +307,23 @@ export function SheetGrid({ sheet, layout, filter, version, selection, marked, p
       for (let r = 0; r < f; r++) {
         const y = bandTop + frozenRowTop(layout, r);
         const h = layout.rowHeight(r);
-        ctx.fillStyle = g.bgCell ?? '#1e1e1e';
+        const { text, align, color } = shownCell(sheet, col, r);
+        const style = styleAt?.(col, r);
+        ctx.fillStyle = style?.bg ?? g.bgCell ?? '#1e1e1e';
         ctx.fillRect(rect.x, y, rect.width, h);
         const single = selection.range.width === 1 && selection.range.height === 1;
         if (!single && inRange(col, r, selection.range)) {
           ctx.fillStyle = g.accentLight ?? 'rgba(138, 92, 245, 0.16)';
           ctx.fillRect(rect.x, y, rect.width, h);
         }
-        const { text, align, color } = shownCell(sheet, col, r);
         if (text !== '') {
           ctx.save();
           ctx.beginPath();
           ctx.rect(rect.x, y, rect.width, h);
           ctx.clip();
-          const bold = columnBold || sheet.rows[String(r + 1)]?.bold === true;
-          ctx.font = `${bold ? '700 ' : ''}${theme.fontSize}px ${fontFamily}`;
-          ctx.fillStyle = color ? theme.colors[color] : (g.textDark ?? '#dadada');
+          const bold = columnBold || sheet.rows[String(r + 1)]?.bold === true || style?.bold === true;
+          ctx.font = `${style?.italic ? 'italic ' : ''}${bold ? '700 ' : ''}${theme.fontSize}px ${fontFamily}`;
+          ctx.fillStyle = color === 'error' ? theme.colors.error : (style?.color ?? (color ? theme.colors[color] : (g.textDark ?? '#dadada')));
           const pad = g.cellHorizontalPadding ?? 6;
           ctx.textAlign = align;
           const x = align === 'left' ? rect.x + pad : align === 'right' ? rect.x + rect.width - pad : rect.x + rect.width / 2;
@@ -341,7 +348,7 @@ export function SheetGrid({ sheet, layout, filter, version, selection, marked, p
       }
       ctx.restore();
     },
-    [theme, fontFamily, f, layout, selection, frozenActive, model, band, isFilterButton, filter, touch, buttonColors],
+    [theme, fontFamily, f, layout, selection, frozenActive, model, band, isFilterButton, filter, touch, buttonColors, styleAt],
   );
 
   // ---------- selection ----------

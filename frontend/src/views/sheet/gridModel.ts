@@ -7,6 +7,7 @@ import { CompactSelection, GridCellKind, type GridCell, type GridColumn, type Gr
 import { columnLetters, MAX_COLUMNS, MAX_ROWS, toA1 } from '../../sheets/a1';
 import { effectiveFormat, shownCell, type ShownCell } from '../../sheets/display';
 import { usedExtent } from '../../sheets/edits';
+import type { CellStyle } from '../../sheets/conditional';
 import { filterView } from '../../sheets/filter';
 import { cellText, type Sheet } from '../../sheets/format';
 import type { CellRange } from '../../sheets/refs';
@@ -196,6 +197,16 @@ export interface CellOptions {
   overlay: boolean;
   readonly: boolean;
   colors: CellColors;
+  /** Conditional formatting of a cell (DESIGN §6.21.12), and what it needs to set a font. */
+  styleAt?: ((col: number, row: number) => CellStyle | undefined) | null;
+  fontSize?: number;
+}
+
+/** The font of a cell in bold or italic (its row's or column's bold included). */
+export function cellFont(sheet: Sheet, col: number, row: number, style: CellStyle | undefined, fontSize: number): string | undefined {
+  const bold = style?.bold === true || sheet.rows[String(row + 1)]?.bold === true || sheet.cols[columnLetters(col)]?.bold === true;
+  if (!style?.bold && !style?.italic) return undefined;
+  return `${style.italic ? 'italic ' : ''}${bold ? '700 ' : ''}${fontSize}px`;
 }
 
 /**
@@ -205,7 +216,16 @@ export interface CellOptions {
 export function gridCell(sheet: Sheet, col: number, row: number, opts: CellOptions): GridCell {
   const cell = sheet.cells[toA1(col, row)];
   const shown = shownCell(sheet, col, row);
-  const themeOverride: Partial<Theme> | undefined = shown.color ? { textDark: opts.colors[shown.color] } : undefined;
+  const style = opts.styleAt?.(col, row);
+  let themeOverride: Partial<Theme> | undefined = shown.color ? { textDark: opts.colors[shown.color] } : undefined;
+  if (style) {
+    // A rule's colours win over a number format's, never over an error's.
+    themeOverride = { ...themeOverride };
+    if (style.bg) themeOverride.bgCell = style.bg;
+    if (style.color && shown.color !== 'error') themeOverride.textDark = style.color;
+    const font = cellFont(sheet, col, row, style, opts.fontSize ?? 13);
+    if (font) themeOverride.baseFontStyle = font;
+  }
   return {
     kind: GridCellKind.Text,
     data: cellText(cell, effectiveFormat(sheet, col, row)),

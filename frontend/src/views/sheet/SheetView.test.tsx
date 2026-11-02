@@ -937,3 +937,29 @@ describe('freezing (DESIGN §6.21.15)', () => {
     expect((await saved(path)).sheets[0].frozen).toEqual({ rows: 0, cols: 2 });
   });
 });
+
+describe('conditional formatting (DESIGN §6.21.12)', () => {
+  it('adds a rule in the dialog, colours the cells that meet it, and deletes it', async () => {
+    const path = await openGrid();
+    select(1, 0, 1, 4); // B2:B5
+    fireEvent.click(screen.getByRole('button', { name: 'Conditional formatting' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Conditional format rules' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add a rule' }));
+    expect(within(dialog).getByRole('textbox', { name: 'Apply to range' })).toHaveValue('B2:B5');
+    fireEvent.change(within(dialog).getByRole('combobox', { name: 'Format cells if…' }), { target: { value: 'gt' } });
+    // A condition needs its value.
+    expect(within(dialog).getByRole('button', { name: 'Done' })).toBeDisabled();
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Value' }), { target: { value: '1000' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Done' }));
+    const rules = (await saved(path)).sheets[0].conditional!;
+    expect(Object.values(rules)).toEqual([{ range: 'B2:B5', when: 'gt', value: '1000', bg: '#b7e1cd', color: '#0d652d' }]);
+    // B2 (1450) is coloured, B3 (487.5) is not.
+    const b2 = gridProps().getCellContent([1, 0]);
+    const b3 = gridProps().getCellContent([1, 1]);
+    expect('themeOverride' in b2 && b2.themeOverride?.bgCell).toBe('#b7e1cd');
+    expect('themeOverride' in b3 ? b3.themeOverride : undefined).toBeUndefined();
+    fireEvent.click(within(dialog).getByRole('button', { name: /Delete rule: Greater than 1000/ }));
+    expect((await saved(path)).sheets[0].conditional).toBeUndefined();
+    expect(vault.readFile(path).content).toContain('"version": 1');
+  });
+});

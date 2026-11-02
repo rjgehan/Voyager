@@ -622,6 +622,129 @@
   white-space: nowrap;
 }
 
+/* ---------- conditional formatting (DESIGN §6.21.12) ---------- */
+
+.sheet-cf-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.sheet-cf-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sheet-cf-open {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 40px;
+  padding: 4px 8px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  background: none;
+  color: var(--text-normal);
+  font: inherit;
+  font-size: var(--font-ui-small);
+  text-align: left;
+  cursor: pointer;
+}
+
+.sheet-cf-open:hover {
+  background: var(--background-modifier-hover);
+}
+
+.sheet-cf-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.sheet-cf-text > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sheet-cf-preview {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 22px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  font-size: var(--font-ui-small);
+}
+
+.sheet-cf-editor,
+.sheet-cf-style {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sheet-cf-style {
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.sheet-cf-presets,
+.sheet-cf-custom {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.sheet-cf-preset {
+  padding: 3px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-s);
+  background: none;
+  cursor: pointer;
+}
+
+.sheet-cf-preset[aria-pressed='true'] {
+  border-color: var(--interactive-accent);
+}
+
+.sheet-cf-color {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+
+.sheet-cf-color input,
+.sheet-cf-custom input[type='color'] {
+  width: 32px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  background: none;
+}
+
+.sheet-cf-sample {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+
 /* ---------- touch and phones ---------- */
 
 @media (pointer: coarse) {
@@ -680,9 +803,24 @@
     height: 22px;
   }
 
-  .sheet-filter-form .text-input {
+  .sheet-filter-form .text-input,
+  .sheet-cf-editor .text-input {
     min-height: 44px;
     font-size: 16px;
+  }
+
+  .sheet-cf-open,
+  .sheet-cf-item .icon-button,
+  .sheet-cf-custom .icon-button,
+  .sheet-cf-preset {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .sheet-cf-color input,
+  .sheet-cf-custom input[type='color'] {
+    width: 44px;
+    height: 44px;
   }
 }
 

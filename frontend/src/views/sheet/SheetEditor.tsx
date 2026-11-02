@@ -15,6 +15,7 @@ import {
   Download,
   Funnel,
   Hash,
+  PaintBucket,
   Import,
   MoveHorizontal,
   Redo2,
@@ -54,6 +55,7 @@ import { InlineTitle } from '../markdown/InlineTitle';
 import { ChartsPane } from './ChartsPane';
 import { FormulaBar, type EditTarget, type FormulaBarHandle, type Move } from './FormulaBar';
 import { cellSelection, clampSelection, displayRange, gridLayout, HEADER_BAND, rowView, sheetRange, sheetRows, TOUCH_HEADER_BAND, type CellAt, type SheetSelection } from './gridModel';
+import { ConditionalDialog } from './ConditionalDialog';
 import { FilterMenu } from './FilterMenu';
 import {
   addToWorkbook,
@@ -103,7 +105,7 @@ const BOLD_LIMIT = 5000;
 const FORMAT_LIMIT = 10000;
 
 type Dialog =
-  | { kind: 'named' | 'width' | 'format' }
+  | { kind: 'named' | 'width' | 'format' | 'conditional' }
   | { kind: 'chart'; id: string | null; initial: ChartProps }
   | { kind: 'import'; file: File; type: ImportKind; separator: Separator; text?: string; book?: ImportedBook };
 
@@ -843,6 +845,7 @@ ${JSON.stringify(sheet.filter ?? null)}`;
       sortSheetAsc: () => sortSheetBy(false),
       sortSheetDesc: () => sortSheetBy(true),
       toggleFilter,
+      openConditionalFormatting: () => setDialog({ kind: 'conditional' }),
     };
   });
   useEffect(() => {
@@ -879,6 +882,7 @@ ${JSON.stringify(sheet.filter ?? null)}`;
       sortSheetAsc: call('sortSheetAsc'),
       sortSheetDesc: call('sortSheetDesc'),
       toggleFilter: call('toggleFilter'),
+      openConditionalFormatting: call('openConditionalFormatting'),
     });
   }, [path]);
 
@@ -1032,6 +1036,9 @@ ${JSON.stringify(sheet.filter ?? null)}`;
         <ToolButton title={filter ? 'Remove filter' : 'Create a filter'} disabled={!editable} pressed={filter !== undefined} onClick={toggleFilter}>
           <Funnel size={16} />
         </ToolButton>
+        <ToolButton title="Conditional formatting" pressed={Object.keys(sheet.conditional ?? {}).length > 0} onClick={() => setDialog({ kind: 'conditional' })}>
+          <PaintBucket size={16} />
+        </ToolButton>
         <span className="sheet-toolbar-sep" aria-hidden />
         <ToolButton title="Insert chart" disabled={!editable} onClick={insertChart}>
           <ChartColumn size={16} />
@@ -1142,6 +1149,9 @@ ${JSON.stringify(sheet.filter ?? null)}`;
           }}
           onClose={() => setDialog(null)}
         />
+      )}
+      {dialog?.kind === 'conditional' && (
+        <ConditionalDialog workbook={workbook} sheet={sheet} selection={rangeText(selectedRange)} editable={editable} onClose={() => setDialog(null)} />
       )}
       {dialog?.kind === 'width' && (
         <ColumnWidthDialog

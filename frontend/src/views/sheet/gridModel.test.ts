@@ -153,3 +153,15 @@ describe('a filter view of the rows', () => {
     expect(rowView(sheet({ cells, filter: { range: 'A1:A6', cols: {} } }), 0).active).toBe(false);
   });
 });
+
+describe('conditional formatting in the grid', () => {
+  it('sets the fill, the text colour and the font from a rule, never over an error’s colour', () => {
+    const s = sheet({ cells: { A1: { v: 5 }, A2: { f: '=1/0', c: { e: '#DIV/0!' } } }, rows: { '1': { bold: true } } });
+    const colors = { error: 'red', red: 'red', green: 'green', blue: 'blue' };
+    const styleAt = () => ({ bg: '#b7e1cd', color: '#0d652d', italic: true });
+    const cell = gridCell(s, 0, 0, { overlay: true, readonly: false, colors, styleAt, fontSize: 13 });
+    expect('themeOverride' in cell && cell.themeOverride).toEqual({ bgCell: '#b7e1cd', textDark: '#0d652d', baseFontStyle: 'italic 700 13px' });
+    const error = gridCell(s, 0, 1, { overlay: true, readonly: false, colors, styleAt, fontSize: 13 });
+    expect('themeOverride' in error && error.themeOverride).toEqual({ textDark: 'red', bgCell: '#b7e1cd', baseFontStyle: 'italic 13px' });
+  });
+});

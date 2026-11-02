@@ -34,6 +34,7 @@ export interface SheetActions {
   sortSheetAsc(): void;
   sortSheetDesc(): void;
   toggleFilter(): void;
+  openConditionalFormatting(): void;
 }
 
 let active: SheetActions | null = null;
