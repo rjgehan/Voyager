@@ -91,6 +91,7 @@ import {
 import { ChartDialog, ColumnWidthDialog, ImportDialog, NamedRangesDialog, NumberFormatDialog, type ImportChoice } from './SheetDialogs';
 import { useFormulaAssist } from './formulaAssist';
 import { useReferencePicking } from './referencePicking';
+import { useStraightQuotes } from './straightQuotes';
 import { SheetGrid, type GridFilter, type ScreenRect, type SheetGridHandlers } from './SheetGrid';
 import { SheetTabs } from './SheetTabs';
 import { useCoarsePointer, useSheetTheme } from './theme';
@@ -259,6 +260,8 @@ ${JSON.stringify(sheet.filter ?? null)}`;
   useReferencePicking({ gridBox, gridRef, portalRef, barInput: () => bar.current?.editingInput() ?? null, layout: () => layout, onPick: setPicked });
   // Typing `=SU` suggests functions; inside a call, its signature shows.
   useFormulaAssist({ portalRef, barInput: () => bar.current?.editingInput() ?? null });
+  // iOS Smart Punctuation's curly quotes become straight while a formula is typed.
+  useStraightQuotes({ portalRef, barInput: () => bar.current?.editingInput() ?? null });
 
   useEffect(() => {
     remembered.set(path, { sheetId: sheet.id, selections, chartsOpen });

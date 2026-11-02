@@ -238,3 +238,13 @@ describe('ranges of a filter view', () => {
     expect(clipStillHolds(s, clip)).toBe(false);
   });
 });
+
+describe('formulas typed with Smart Punctuation', () => {
+  it('reads curly quotes in a typed or pasted formula as straight ones, and leaves text and plain-text cells alone', () => {
+    const s = sheet({ B1: { fmt: '@' } });
+    expect(typedEdit(s, 0, 0, '=IF(A2>0,“yes”,“no”)').content).toEqual({ f: '=IF(A2>0,"yes","no")' });
+    expect(typedEdit(s, 0, 1, '“quoted”').content).toEqual({ v: '“quoted”' });
+    expect(typedEdit(s, 1, 0, '=“kept”').content).toEqual({ v: '=“kept”' });
+    expect(pasteEdits(s, { col: 2, row: 0, width: 1, height: 1 }, '=LEN(“ab”)', null).edits).toEqual([edit('C1', { f: '=LEN("ab")' })]);
+  });
+});

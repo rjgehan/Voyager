@@ -8,6 +8,7 @@ import { effectiveFormat, shownCell } from './display';
 import type { CellEdit } from './engine';
 import { cellValue, isCellError, type CellValue, type Sheet, type SheetCell } from './format';
 import { typedInput } from './input';
+import { straightenFormula } from './smartQuotes';
 import { formatKind, isDateKind, isGeneral } from './numfmt';
 import { shiftFormula, type CellRange } from './refs';
 import { numberSeries, seriesValue } from './series';
@@ -95,7 +96,8 @@ function withFormat(sheet: Sheet, edit: CellEdit, fmt: string | undefined): Cell
  */
 export function typedEdit(sheet: Sheet, col: number, row: number, text: string): CellEdit {
   const fmt = effectiveFormat(sheet, col, row);
-  const typed = typedInput(text, { plainText: fmt === '@' });
+  // A formula typed on an iPhone (or pasted from a note) may hold Smart Punctuation's curly quotes.
+  const typed = typedInput(fmt === '@' ? text : straightenFormula(text), { plainText: fmt === '@' });
   const edit: CellEdit = { sheet: sheet.id, ref: toA1(col, row), content: typed.content };
   if (typed.fmt !== undefined && isGeneral(fmt)) edit.fmt = typed.fmt;
   return edit;

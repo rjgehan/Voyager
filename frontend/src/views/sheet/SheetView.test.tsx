@@ -1018,3 +1018,27 @@ describe('checkboxes and dropdowns (DESIGN §6.21.13)', () => {
     expect((await saved(path)).sheets[0].cells.A2).toEqual({ v: 'Rent' });
   });
 });
+
+describe('formulas typed on an iPhone (Smart Punctuation)', () => {
+  it('straightens curly quotes as a formula is typed in the formula bar, and switches autocorrect off in Glide’s editor', async () => {
+    const path = await openGrid();
+    select(3, 0); // D2
+    const input = formulaInput();
+    act(() => input.focus());
+    expect(input).toHaveAttribute('autocomplete', 'off');
+    fireEvent.input(input, { target: { value: '=IF(B2>1000,“big”,“small”)' } });
+    expect(input.value).toBe('=IF(B2>1000,"big","small")');
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect((await saved(path)).sheets[0].cells.D2).toEqual({ f: '=IF(B2>1000,"big","small")', c: 'big' });
+    // Glide's editor, portaled into the view, is not ours: it gets the attributes when it takes the focus.
+    const portal = document.querySelector('.sheet-portal')!;
+    const editor = document.createElement('textarea');
+    portal.appendChild(editor);
+    act(() => editor.focus());
+    expect([editor.getAttribute('autocorrect'), editor.getAttribute('autocapitalize'), editor.getAttribute('autocomplete'), editor.spellcheck]).toEqual(['off', 'off', 'off', false]);
+    editor.value = '=“x”';
+    fireEvent.input(editor);
+    expect(editor.value).toBe('="x"');
+    editor.remove();
+  });
+});
