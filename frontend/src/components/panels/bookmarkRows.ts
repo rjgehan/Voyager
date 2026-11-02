@@ -1,7 +1,7 @@
 // What the Bookmarks pane shows and does for a row (DESIGN §6.23), apart from the component.
 import type { BookmarkItem } from '../../api/types';
 import { findFileIgnoreCase, type VaultTree } from '../../api/vaultTree';
-import { bookmarkLabel, insertAt, isGroup, itemAt, removeAt, subpathTarget, updateAt, type ItemPath, type PlacedItem } from '../../features/bookmarks';
+import { bookmarkLabel, insertAt, isGroup, itemAt, locateItem, onItem, removeAt, subpathTarget, updateAt, type ItemPath, type PlacedItem } from '../../features/bookmarks';
 import { editBookmarks } from '../../features/bookmarkStore';
 import { afterOpen } from '../../features/focus';
 import { openPath, openSearch } from '../../features/navigation';
@@ -56,7 +56,7 @@ export function describeBookmark(item: BookmarkItem, missing: boolean): string {
 
 function missingToast(item: BookmarkItem, path: ItemPath): void {
   toast(`“${bookmarkLabel(item)}” is not in the vault: it was deleted, or moved outside NotesApp`, {
-    action: { label: 'Remove bookmark', run: () => void editBookmarks((items) => (itemAt(items, path)?.ctime === item.ctime ? removeAt(items, path) : items)) },
+    action: { label: 'Remove bookmark', run: () => void editBookmarks(onItem(item, path, removeAt)) },
   });
 }
 
@@ -107,26 +107,28 @@ export async function renameBookmark(item: BookmarkItem, path: ItemPath): Promis
   });
   if (value === null) return;
   const title = value.trim();
-  await editBookmarks((items) =>
-    updateAt(items, path, (current) => {
-      if (current.ctime !== item.ctime || current.type !== item.type) return current;
-      const next: BookmarkItem = { ...current };
-      if (title === '' || (!group && title === bookmarkLabel({ ...current, title: undefined }))) delete next.title;
-      else next.title = title;
-      return next;
-    }),
+  await editBookmarks(
+    onItem(item, path, (items, at) =>
+      updateAt(items, at, (current) => {
+        const next: BookmarkItem = { ...current };
+        if (title === '' || (!group && title === bookmarkLabel({ ...current, title: undefined }))) delete next.title;
+        else next.title = title;
+        return next;
+      }),
+    ),
   );
 }
 
-/** Removes a group; its bookmarks take its place. */
-export function removeGroup(path: ItemPath): Promise<void> {
+/** Removes a group (`item`, shown at `path`, found again when the list changed); its bookmarks take its place. */
+export function removeGroup(path: ItemPath, item?: BookmarkItem): Promise<void> {
   return editBookmarks((items) => {
-    const group = itemAt(items, path);
-    if (!group || !isGroup(group)) return items;
-    let next = removeAt(items, path);
+    const at = item ? locateItem(items, item, path) : path;
+    const group = at ? itemAt(items, at) : undefined;
+    if (!at || !group || !isGroup(group)) return items;
+    let next = removeAt(items, at);
     const children = Array.isArray(group.items) ? group.items : [];
     children.forEach((child, i) => {
-      next = insertAt(next, path.slice(0, -1), child, path[path.length - 1] + i);
+      next = insertAt(next, at.slice(0, -1), child, at[at.length - 1] + i);
     });
     return next;
   });

@@ -131,6 +131,33 @@ export function moveItem(items: readonly BookmarkItem[], from: ItemPath, parent:
   return insertAt(removeAt(items, from), target, item, at);
 }
 
+/**
+ * Whether two items are the same bookmark. Bookmarks have no id: their type, creation time and
+ * target say which one it is (a title can be renamed on another device meanwhile).
+ */
+export function sameItem(a: BookmarkItem, b: BookmarkItem): boolean {
+  return a.type === b.type && a.ctime === b.ctime && a.path === b.path && a.subpath === b.subpath && a.query === b.query && a.url === b.url;
+}
+
+/** Where `item` is in `items`: at `path` when it is still there, else wherever it moved; null when it is gone. */
+export function locateItem(items: readonly BookmarkItem[], item: BookmarkItem, path: ItemPath): ItemPath | null {
+  const there = itemAt(items, path);
+  if (there && sameItem(there, item)) return path;
+  return flattenItems(items).find((p) => sameItem(p.item, item))?.path ?? null;
+}
+
+/**
+ * An edit of the bookmark `item` (shown at `path`) that finds it again in the list it is applied
+ * to: a menu stays open, and after a conflict an edit is applied again to another device's list,
+ * where the same path may hold another bookmark. Nothing happens when the bookmark is gone.
+ */
+export function onItem(item: BookmarkItem, path: ItemPath, edit: (items: BookmarkItem[], at: ItemPath) => BookmarkItem[]): BookmarkEdit {
+  return (items) => {
+    const at = locateItem(items, item, path);
+    return at ? edit(items, at) : items;
+  };
+}
+
 /** Moves an item one place up (-1) or down (+1) within its list. */
 export function shiftItem(items: readonly BookmarkItem[], path: ItemPath, delta: -1 | 1): BookmarkItem[] {
   const parent = path.slice(0, -1);
