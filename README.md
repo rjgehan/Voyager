@@ -55,24 +55,24 @@ The complete list, from search syntax to backups, is in **[docs/FEATURES.md](doc
 ## Architecture
 
 ```mermaid
-flowchart LR
+flowchart TB
     subgraph devices["Your devices, on your tailnet"]
+        direction LR
         phone["iPhone / iPad<br/>installed PWA"]
         desk["Windows / macOS<br/>Electron app"]
         web["Any browser"]
     end
     subgraph server["Home server: one Docker image"]
         ts["Tailscale<br/>HTTPS + identity"]
-        api["Spring Boot 4<br/>REST + SSE API,<br/>serves the React SPA"]
+        api["Spring Boot 4<br/>REST + SSE API, serves the React SPA"]
         index[("In-memory index<br/>links, tags, full text")]
         vault[("Vault<br/>plain Markdown files")]
         git[("Git history<br/>JGit")]
     end
     devices -- "HTTPS over the tailnet" --> ts --> api
-    api --> index
+    api -- "reads" --> index
     api -- "atomic writes" --> vault
     api -- "a commit per change" --> git
-    vault -. "file watcher" .-> index
     api -. "live changes (SSE)" .-> devices
 ```
 

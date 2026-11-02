@@ -1,0 +1,41 @@
+name: Bug report
+description: Something in NotesApp does not work as it should.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead. Screenshots help.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open a note with a table
+        2. Type =SUM( in a cell
+        3. ...
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where
+      multiple: true
+      options:
+        - Live demo (GitHub Pages)
+        - Self-hosted, desktop browser
+        - Self-hosted, iPhone or iPad (home-screen app or Safari)
+        - Desktop app (Windows or macOS)
+        - Web clipper
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The image tag or commit (Settings › About, or the status page at /x/status), or "demo".
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or console errors
+      description: Never paste note content, tokens or your tailnet's name.
+      render: text

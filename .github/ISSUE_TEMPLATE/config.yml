@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Try the live demo
+    url: https://rjgehan.github.io/notesapp/
+    about: The app in your browser on a sample vault, to check a behaviour before reporting it.
+  - name: Documentation
+    url: https://github.com/rjgehan/notesapp#documentation
+    about: Installing, deploying, the design and the API.
