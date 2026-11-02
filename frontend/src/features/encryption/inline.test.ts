@@ -7,10 +7,10 @@ import { useDialogs, type DialogRequest } from '../../state/dialogs';
 import { usePrefs } from '../../state/prefs';
 import { documents } from '../../sync/instance';
 import { checkIdle, noteActivity } from './autoLock';
-import { decryptPayload, deriveKey } from './cipher';
+import { decryptPayload, deriveKey, encryptText } from './cipher';
 import { encryptSelection, openSection } from './inline';
 import { isUnlocked, resetKeyringForTests } from './keyring';
-import { decodePayload, findSections } from './meld';
+import { decodePayload, findSections, formatSection } from './meld';
 
 const PASS = 'correct horse battery staple';
 const V2 = 'AAECAwQFBgcICQoLDA0OD/Dg0MCwoJCAcGBQQDAgEACrsoTj31BFp/0kZclovXUwtfxEYrfkMTA+IESxsfk2+AYujp7x4gue6vCN0sWz';
@@ -100,6 +100,30 @@ describe('inline encrypted sections (item 27)', () => {
     const section = findSections(text)[0];
     expect(section.hint).toBe('router');
     expect(await decrypt(section.base64)).toBe('hunter2');
+    documents.release(s, 'inline-test');
+  }, 20_000);
+
+  it('saving a section that changed elsewhere while open keeps both versions whole', async () => {
+    // The phone encrypted the secret again and shortened the text before it: the laptop's version
+    // went in at the old offset, inside the phone's base64, and broke that section.
+    const { s, vault } = await session(`Account number and PIN: %%🔐β ${V2} 🔐%%\n`);
+    const done = openSection(s, findSections(s.getText())[0]);
+    await answer('passphrase', async (d) => {
+      expect(await d.submit(PASS, '')).toBeNull();
+      d.resolve(true);
+    });
+    const salt = decodePayload(V2, 2).salt;
+    const phone = formatSection(await encryptText('phone PIN 1111', { key: await deriveKey(PASS, salt, 2), salt }), '');
+    vault.externalWrite(s.path, `PIN: ${phone}\n`, 'other-device-2');
+    await s.onRemoteChanged({ version: vault.readFile(s.path).version });
+    expect(s.getText()).toBe(`PIN: ${phone}\n`);
+    await answer('secret', (d) => d.resolve({ action: 'save', text: 'laptop PIN 2222', hint: '' }));
+    await done;
+    const sections = findSections(s.getText());
+    expect(sections).toHaveLength(2);
+    expect(sections[0].text).toBe(phone);
+    expect(await decrypt(sections[0].base64)).toBe('phone PIN 1111');
+    expect(await decrypt(sections[1].base64)).toBe('laptop PIN 2222');
     documents.release(s, 'inline-test');
   }, 20_000);
 });

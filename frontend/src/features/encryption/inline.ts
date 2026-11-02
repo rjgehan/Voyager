@@ -57,41 +57,53 @@ export async function openSection(session: DocumentSession, section: InlineSecti
     toast(payload);
     return;
   }
-  const opened = await openPayload(payload, section.hint, 'Unlock encrypted text', () => payloadsOf(session.getText(), section));
-  if (!opened) return;
-  // The key stays referenced here until the dialog closes, even if the keyring locks meanwhile.
-  const write: WriteKey = opened.write;
-  const result = await editSecret({ title: 'Encrypted text', text: opened.text, hint: section.hint });
-  if (!result) return;
-  if (!session.isEditable()) {
-    toast('This note cannot be edited right now; the change was not saved.');
-    return;
+  // Where the section is followed through edits made while it is open (another device's too).
+  const tracked = session.trackRange(section.from, section.to);
+  try {
+    const opened = await openPayload(payload, section.hint, 'Unlock encrypted text', () => payloadsOf(session.getText(), section));
+    if (!opened) return;
+    // The key stays referenced here until the dialog closes, even if the keyring locks meanwhile.
+    const write: WriteKey = opened.write;
+    const result = await editSecret({ title: 'Encrypted text', text: opened.text, hint: section.hint });
+    if (!result) return;
+    if (!session.isEditable()) {
+      toast('This note cannot be edited right now; the change was not saved.');
+      return;
+    }
+    if (result.action === 'decrypt') {
+      const ok = await confirmAction({
+        title: 'Remove encryption?',
+        message:
+          'The text will be written into the note in plain form: it is then saved to the server, searchable, sent to Ask your vault when you use it, and kept in the note’s version history for good.',
+        confirmLabel: 'Remove encryption',
+        danger: true,
+      });
+      if (!ok) return;
+      replaceSection(session, section, tracked, result.text);
+      return;
+    }
+    const replacement = formatSection(await encryptText(result.text, write), result.hint, section.visible);
+    replaceSection(session, section, tracked, replacement);
+  } finally {
+    if (tracked !== null) session.takeRange(tracked);
   }
-  if (result.action === 'decrypt') {
-    const ok = await confirmAction({
-      title: 'Remove encryption?',
-      message:
-        'The text will be written into the note in plain form: it is then saved to the server, searchable, sent to Ask your vault when you use it, and kept in the note’s version history for good.',
-      confirmLabel: 'Remove encryption',
-      danger: true,
-    });
-    if (!ok) return;
-    replaceSection(session, section, result.text);
-    return;
-  }
-  const replacement = formatSection(await encryptText(result.text, write), result.hint, section.visible);
-  replaceSection(session, section, replacement);
 }
 
-function replaceSection(session: DocumentSession, section: InlineSection, insert: string): void {
-  const at = locate(session.getText(), section);
+function replaceSection(session: DocumentSession, section: InlineSection, tracked: number | null, insert: string): void {
+  const text = session.getText();
+  const at = locate(text, section);
   if (at) {
     session.applyEdit({ from: at.from, to: at.to, insert });
     return;
   }
-  // The section changed or moved while it was open (another device): keep the edit as a new one.
-  const pos = Math.min(section.from, session.getText().length);
-  session.applyEdit({ from: pos, insert });
+  // The section changed or moved while it was open (another device): keep the edit as a new one,
+  // after where the section went, and never inside another section (that would break both).
+  const where = tracked !== null ? session.takeRange(tracked) : null;
+  let pos = Math.min(where ? where.to : section.from, text.length);
+  const inside = findSections(text).find((s) => pos > s.from && pos < s.to);
+  if (inside) pos = inside.to;
+  const spaced = pos > 0 && !/\s/.test(text[pos - 1]) ? ' ' + insert : insert;
+  session.applyEdit({ from: pos, insert: spaced });
   toast('The encrypted text changed elsewhere while it was open; your version was inserted next to it.');
 }
 
