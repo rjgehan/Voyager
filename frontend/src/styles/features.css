@@ -844,17 +844,23 @@ mark.match {
   background: var(--background-modifier-hover);
 }
 
-/* 24 × 24 px to tap (WCAG 2.5.8); the icon stays where a 14 px chevron would be. */
+/* 24 × 24 px to tap (WCAG 2.5.8), not overlapped by the row's button; the icon stays about where a
+   14 px chevron would be. */
 .tag-chevron {
   justify-content: center;
   align-items: center;
   width: 24px;
   height: 24px;
-  margin-inline: -5px;
+  margin-inline: -5px 0;
   border: 0;
   background: transparent;
   padding: 0;
   cursor: pointer;
+}
+
+/* Rows without children line up with the 19 px a chevron takes. */
+.tag-row > .tree-chevron.is-empty {
+  width: 19px;
 }
 
 .tag-row-button {
@@ -1865,8 +1871,10 @@ mark.match {
   color: var(--text-normal);
 }
 
+/* Wraps on a narrow drawer (320 px, or a phone zoomed in) instead of scrolling sideways (WCAG 1.4.10). */
 .drawer-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   padding: 10px 10px 4px;
 }

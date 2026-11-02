@@ -437,12 +437,13 @@ body.is-resizing {
   text-overflow: ellipsis;
 }
 
-/* Muted, not faint: the badge's own tint over a hovered or selected row is two tints deep (WCAG 1.4.3). */
+/* Outlined rather than tinted, and muted rather than faint: on a hovered or selected row a tint of its
+   own made the text too faint (WCAG 1.4.3). */
 .tree-ext {
   margin-left: auto;
   padding: 0 5px;
   border-radius: var(--radius-s);
-  background: var(--background-modifier-hover);
+  box-shadow: inset 0 0 0 1px var(--background-modifier-border-hover);
   color: var(--text-muted);
   font-size: 10px;
   text-transform: uppercase;

@@ -637,7 +637,7 @@ export function RemindersSection({ settings: s, set, disabled, errors }: VaultSe
         <Info size={14} aria-hidden /> Task reminders (set in a task’s details) and the daily-note nudge reach you through the routes switched on here. A reminder counts as delivered once one of them takes it; reminders missed while the server was down follow when it starts.
       </p>
 
-      <h3 className="settings-subtitle">Web Push</h3>
+      <h2 className="settings-subtitle">Web Push</h2>
       <Row label="Send by Web Push" description="To the devices below, even with NotesApp closed. On iPhone and iPad this needs iOS 16.4 or later and NotesApp added to the Home Screen. Each message is encrypted for its device; Apple, Google or Mozilla only relay it.">
         <Toggle label="Send reminders by Web Push" checked={r.webPush} disabled={disabled} onChange={(v) => rem({ webPush: v })} />
       </Row>
@@ -682,7 +682,7 @@ export function RemindersSection({ settings: s, set, disabled, errors }: VaultSe
         </ul>
       )}
 
-      <h3 className="settings-subtitle">ntfy</h3>
+      <h2 className="settings-subtitle">ntfy</h2>
       <Row label="Send through ntfy" description="To the ntfy app, with the server and topic of the server’s ntfy.json (CASAOS.md or DEPLOY.md, “Reminders”).">
         <Toggle label="Send reminders through ntfy" checked={r.ntfy} disabled={disabled} onChange={(v) => rem({ ntfy: v })} />
       </Row>
@@ -693,7 +693,7 @@ export function RemindersSection({ settings: s, set, disabled, errors }: VaultSe
         <TestButton route="ntfy" />
       </Row>
 
-      <h3 className="settings-subtitle">In the app</h3>
+      <h2 className="settings-subtitle">In the app</h2>
       <Row label="Show in open tabs" description="A message in every open NotesApp tab, and a system notification where this browser allows it. Nothing arrives while every tab is closed.">
         <Toggle label="Show reminders in open tabs" checked={r.inApp} disabled={disabled} onChange={(v) => rem({ inApp: v })} />
       </Row>
@@ -708,7 +708,7 @@ export function RemindersSection({ settings: s, set, disabled, errors }: VaultSe
         </div>
       </Row>
 
-      <h3 className="settings-subtitle">Daily note</h3>
+      <h2 className="settings-subtitle">Daily note</h2>
       <Row label="Daily-note nudge" description="A reminder at this time when today’s daily note does not exist yet." error={errors.reminderTime}>
         <div className="setting-buttons">
           <input type="time" className="text-input" aria-label="Daily-note nudge time" value={r.dailyNoteTime} disabled={disabled} onChange={(e) => e.target.value && rem({ dailyNoteTime: e.target.value.slice(0, 5) }, false)} />
@@ -716,7 +716,7 @@ export function RemindersSection({ settings: s, set, disabled, errors }: VaultSe
         </div>
       </Row>
 
-      <h3 className="settings-subtitle">Status</h3>
+      <h2 className="settings-subtitle">Status</h2>
       <dl className="about-list">
         <div className="about-row">
           <dt>Time zone</dt>
@@ -972,7 +972,7 @@ function DeviceSection() {
       <Row label="Lock encrypted notes when the app is hidden" description="Switching to another tab or app, or locking the phone, locks them at once.">
         <Toggle label="Lock encrypted notes when the app is hidden" checked={prefs.encryptionLockOnHide} onChange={(encryptionLockOnHide) => prefs.update({ encryptionLockOnHide })} />
       </Row>
-      <h3 className="settings-subtitle">Recently discarded edits</h3>
+      <h2 className="settings-subtitle">Recently discarded edits</h2>
       {draftsFailing && (
         <p className="field-error">
           <TriangleAlert size={13} aria-hidden /> Unsaved changes are not protected on this device: the browser refused to store drafts.
