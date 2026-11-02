@@ -20,26 +20,28 @@
   --icon-copy: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect width='14' height='14' x='8' y='8' rx='2' ry='2'/%3E%3Cpath d='M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2'/%3E%3C/svg%3E");
 }
 
+/* Callout colours (Obsidian's names and hues): a title in its colour is at least 4.5:1 on the
+   callout's tinted background (WCAG 1.4.3; checked by contrast.test.ts). */
 :root,
 :root[data-theme='dark'] {
-  --callout-red: 251, 70, 76;
+  --callout-red: 251, 85, 90;
   --callout-orange: 233, 151, 63;
   --callout-green: 68, 207, 110;
   --callout-cyan: 83, 223, 221;
-  --callout-blue: 2, 122, 255;
+  --callout-blue: 45, 145, 255;
   --callout-purple: 168, 130, 255;
   --callout-gray: 158, 158, 158;
   --callout-bg-alpha: 0.1;
 }
 
 :root[data-theme='light'] {
-  --callout-red: 233, 49, 71;
-  --callout-orange: 236, 117, 0;
-  --callout-green: 8, 185, 78;
-  --callout-cyan: 0, 191, 188;
-  --callout-blue: 8, 109, 221;
-  --callout-purple: 120, 82, 238;
-  --callout-gray: 158, 158, 158;
+  --callout-red: 209, 22, 45;
+  --callout-orange: 169, 84, 0;
+  --callout-green: 5, 123, 52;
+  --callout-cyan: 0, 119, 117;
+  --callout-blue: 8, 104, 211;
+  --callout-purple: 115, 75, 237;
+  --callout-gray: 108, 108, 108;
   --callout-bg-alpha: 0.1;
 }
 

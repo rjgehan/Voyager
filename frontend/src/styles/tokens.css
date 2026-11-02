@@ -1,5 +1,10 @@
 /* Theme tokens (DESIGN §6.17). Variable names mirror Obsidian's so theme snippets port easily.
-   Dark values live on :root itself, so they apply before any script runs. */
+   Dark values live on :root itself, so they apply before any script runs.
+   Contrast (WCAG 2.2 AA, docs/ACCESSIBILITY.md, checked by contrast.test.ts): every text colour is at
+   least 4.5:1 on every background, hovered and selected rows included; --text-on-accent on the accent
+   and --text-on-error on the error colour too; --focus-ring, --checkbox-border and --input-border at least 3:1. In the dark theme no
+   purple can be both a fill under white text and a text colour on the dark background, so text in
+   the accent colour uses --text-accent, and fills use --interactive-accent. */
 
 :root,
 :root[data-theme='dark'] {
@@ -16,24 +21,28 @@
   --background-modifier-cover: rgba(10, 10, 10, 0.55);
   --text-normal: #dadada;
   --text-muted: #a3a3a3;
-  --text-faint: #6e6e6e;
+  --text-faint: #9c9c9c;
   --text-on-accent: #ffffff;
+  --text-on-error: #141414;
+  --text-accent: #aa89f8;
   --text-selection: rgba(138, 92, 245, 0.33);
   --text-highlight-bg: rgba(255, 208, 0, 0.32);
-  --interactive-accent: #8a5cf5;
-  --interactive-accent-hover: #9b73f7;
-  --accent: #8a5cf5;
+  --interactive-accent: #8352f4;
+  --interactive-accent-hover: #7944f4;
+  --accent: #8352f4;
+  --focus-ring: #aa89f8;
   --link: #a68af9;
-  --link-unresolved: rgba(166, 138, 249, 0.6);
+  --link-unresolved: #a196c1;
   --tag-bg: rgba(138, 92, 245, 0.15);
   --tag-fg: #b9a2fb;
   --code-bg: #2a2a2a;
   --code-fg: #e0a87a;
-  --text-error: #fb464c;
+  --text-error: #fc6d72;
   --text-warning: #e0ac00;
   --text-success: #44cf6e;
   --blockquote-border: #8a5cf5;
-  --checkbox-border: #6e6e6e;
+  --checkbox-border: #7a7a7a;
+  --input-border: #767676;
   --scrollbar-thumb: rgba(255, 255, 255, 0.12);
   --scrollbar-thumb-hover: rgba(255, 255, 255, 0.2);
   --shadow-s: 0 1px 2px rgba(0, 0, 0, 0.3), 0 2px 8px rgba(0, 0, 0, 0.25);
@@ -42,7 +51,7 @@
   --tok-keyword: #fa99cd;
   --tok-string: #a3d77a;
   --tok-number: #e0ac00;
-  --tok-comment: #6e6e6e;
+  --tok-comment: #9c9c9c;
   --tok-function: #6bb5ff;
   --tok-type: #53dfdd;
   --tok-variable: #dadada;
@@ -62,35 +71,39 @@
   --background-modifier-cover: rgba(30, 30, 30, 0.35);
   --text-normal: #222222;
   --text-muted: #5c5c5c;
-  --text-faint: #9a9a9a;
+  --text-faint: #656565;
   --text-on-accent: #ffffff;
+  --text-on-error: #ffffff;
+  --text-accent: #6b3fd8;
   --text-selection: rgba(122, 79, 224, 0.22);
   --text-highlight-bg: rgba(255, 208, 0, 0.4);
   --interactive-accent: #7a4fe0;
   --interactive-accent-hover: #6b3fd8;
   --accent: #7a4fe0;
+  --focus-ring: #6b3fd8;
   --link: #6b3fd8;
-  --link-unresolved: rgba(107, 63, 216, 0.6);
+  --link-unresolved: #6b5ba1;
   --tag-bg: rgba(122, 79, 224, 0.1);
   --tag-fg: #6b3fd8;
   --code-bg: #f2f2f2;
-  --code-fg: #b4543c;
-  --text-error: #e93147;
-  --text-warning: #c48c00;
-  --text-success: #08b94e;
+  --code-fg: #a24b36;
+  --text-error: #c9162b;
+  --text-warning: #855f00;
+  --text-success: #057531;
   --blockquote-border: #7a4fe0;
-  --checkbox-border: #9a9a9a;
+  --checkbox-border: #878787;
+  --input-border: #878787;
   --scrollbar-thumb: rgba(0, 0, 0, 0.15);
   --scrollbar-thumb-hover: rgba(0, 0, 0, 0.25);
   --shadow-s: 0 1px 2px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.06);
   --shadow-l: 0 4px 12px rgba(0, 0, 0, 0.1), 0 16px 40px rgba(0, 0, 0, 0.12);
   --tok-property: #6b3fd8;
   --tok-keyword: #c3277a;
-  --tok-string: #2c8a2c;
-  --tok-number: #b07a00;
-  --tok-comment: #9a9a9a;
-  --tok-function: #1a6fd1;
-  --tok-type: #0f8a87;
+  --tok-string: #287c28;
+  --tok-number: #916500;
+  --tok-comment: #656565;
+  --tok-function: #196bca;
+  --tok-type: #0d7a77;
   --tok-variable: #222222;
 }
 

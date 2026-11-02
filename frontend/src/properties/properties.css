@@ -216,12 +216,14 @@
   text-overflow: ellipsis;
 }
 
+/* 24 × 24 px (WCAG 2.5.8), drawn over the chip's padding so the chip keeps its height. */
 .property-chip-remove {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 24px;
+  height: 24px;
+  margin: -3px -2px -3px 0;
   padding: 0;
   border: 0;
   border-radius: var(--radius-s);
