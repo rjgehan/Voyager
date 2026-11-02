@@ -1028,8 +1028,6 @@ export class DocumentSession {
    * null for the deleted state.
    */
   private movedTarget(movedTo: string | null, requestPath: string, baseVersion: Version | null): { path: string; authoritative: boolean } | null {
-    // Re-keyed while the request was in flight: the file is at this.path now.
-    if (this.path !== requestPath) return { path: this.path, authoritative: true };
     const known = this.deps.moves.lookup(requestPath);
     if (known && known !== requestPath) return { path: known, authoritative: false };
     if (!movedTo || movedTo === requestPath || !this.deps.moves.trustsMoveFrom(requestPath)) return null;
@@ -1043,6 +1041,15 @@ export class DocumentSession {
   private async onSaveFailed(e: unknown, text: string, covered: number, baseVersion: Version | null, requestPath: string): Promise<void> {
     if (isVersionConflict(e)) {
       const p = e.problem;
+      // Re-keyed while the request was in flight (entry.moved, own MoveResult): the answer is about
+      // the old path, where another note may live by now; the file is at this.path. A pure move
+      // keeps the blob id: retry there with the same base, and the server compares with this file.
+      if (this.path !== requestPath) {
+        this.version = baseVersion;
+        this.status = 'dirty';
+        await this.performSave();
+        return;
+      }
       if (p.currentContent !== null && p.currentVersion !== null) {
         const theirs = toLf(p.currentContent);
         if (theirs === text) {

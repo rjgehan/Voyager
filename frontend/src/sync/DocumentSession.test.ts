@@ -793,6 +793,26 @@ describe('saves racing a move (FE-2)', () => {
     expect(vault.readFile('b.md').content).toBe('hello world');
   });
 
+  it('a 409 about a new note created at the old path after the move is never shown as a conflict with that note', async () => {
+    const { vault, fake, session } = setup();
+    await session.ready;
+    const release = fake.holdSaves();
+    type(session, ' world');
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(status(session)).toBe('saving');
+    // Another device renames the note and creates a new, unrelated note under the old name.
+    vault.move({ from: 'a.md', to: 'b.md' }, 'other-device-1');
+    vault.createFile({ path: 'a.md', content: 'an unrelated note' }, 'other-device-1');
+    session.onRemoteMoved('b.md');
+    release();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(session.path).toBe('b.md');
+    expect(session.getSnapshot().conflict).toBeNull();
+    expect(status(session)).toBe('clean');
+    expect(vault.readFile('b.md').content).toBe('hello world');
+    expect(vault.readFile('a.md').content).toBe('an unrelated note');
+  });
+
   it('a 200 for the old path processed after the move never re-keys the session back', async () => {
     const { vault, fake } = setup();
     const rekeys: string[] = [];
