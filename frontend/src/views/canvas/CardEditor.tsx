@@ -4,7 +4,7 @@
 import { autocompletion, closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete';
 import { defaultKeymap, history, historyKeymap, indentWithTab, insertNewlineAndIndent } from '@codemirror/commands';
 import { syntaxHighlighting } from '@codemirror/language';
-import { EditorState } from '@codemirror/state';
+import { EditorState, Transaction } from '@codemirror/state';
 import { EditorView, keymap, placeholder, tooltips } from '@codemirror/view';
 import { useLayoutEffect, useRef } from 'react';
 import { currentSettings, currentTree, fetchNoteMeta, fetchTags } from '../../api/hooks';
@@ -19,6 +19,7 @@ import { formatting, toggleBold, toggleItalic, toggleLink } from '../../editor/f
 import { lineClassPlugin, obsidianHighlight } from '../../editor/highlight';
 import { markdownNoteLanguage } from '../../editor/language';
 import { pasteAndDrop } from '../../editor/pasteAndDrop';
+import { remoteTransaction } from '../../editor/remoteDiff';
 import { unresolvedLinks } from '../../editor/unresolved';
 import { linkTo } from '../../features/fileOps';
 import { uploadForCard } from './actions';
@@ -47,10 +48,25 @@ export function CardEditor({ text, canvasPath, onChange, onDone, onSave, onBlur,
   const callbacks = useRef({ onChange, onDone, onSave, onBlur, onEnter });
   const initial = useRef(text);
   const viewRef = useRef<EditorView | null>(null);
+  /** The `text` this editor was last given. */
+  const given = useRef(text);
 
   useLayoutEffect(() => {
     callbacks.current = { onChange, onDone, onSave, onBlur, onEnter };
   });
+
+  // The host's text changed without this editor (another device's save adopted under it): the
+  // editor shows it, outside its undo history, so the next keystroke does not write the old text
+  // back over it. A host that keeps passing the text editing started from (Kanban) changes nothing.
+  useLayoutEffect(() => {
+    if (text === given.current) return;
+    given.current = text;
+    const view = viewRef.current;
+    if (!view || view.state.doc.toString() === text) return;
+    initial.current = text;
+    const spec = remoteTransaction(view.state, text);
+    if (spec) view.dispatch(spec);
+  }, [text]);
 
   useLayoutEffect(() => {
     const parent = host.current;
@@ -125,7 +141,8 @@ export function CardEditor({ text, canvasPath, onChange, onDone, onSave, onBlur,
           EditorView.updateListener.of((u) => {
             if (u.docChanged) {
               initial.current = u.state.doc.toString();
-              callbacks.current.onChange(initial.current);
+              // The host's own text (above) is not an edit to report back.
+              if (u.transactions.some((tr) => tr.docChanged && !tr.annotation(Transaction.remote))) callbacks.current.onChange(initial.current);
             }
             if (u.focusChanged && !u.view.hasFocus) callbacks.current.onBlur();
             if (u.focusChanged && u.view.hasFocus) setActiveEditor(u.view);
