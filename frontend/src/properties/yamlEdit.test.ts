@@ -25,6 +25,12 @@ describe('properties/yamlEdit', () => {
     expect(() => setValue('a: [\n', 'a', 1)).toThrow(PropertyEditError);
   });
 
+  it('reports a property written twice: an edit of one row would change the other’s lines', () => {
+    expect(readProperties('tags: a\nstatus: open\ntags: b\n').error).toMatch(/“tags” appears twice/);
+    expect(readProperties('Tags: a\ntags: b\n').error).toMatch(/appears twice/);
+    expect(() => setValue('tags: a\ntags: b\n', 'tags', 'c')).toThrow(PropertyEditError);
+  });
+
   it('changes only the lines of the property it sets', () => {
     expect(setValue(YAML, 'status', 'done')).toBe(YAML.replace('status: open', 'status: done'));
     expect(setValue(YAML, 'tags', ['a', 'c d'])).toBe(YAML.replace('tags:\n  - a   # first\n  - b\n', 'tags:\n  - a\n  - c d\n'));
