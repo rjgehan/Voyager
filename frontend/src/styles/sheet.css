@@ -452,6 +452,110 @@
   margin-bottom: 6px;
 }
 
+/* ---------- panels under a cell: filter menus, dropdown lists ---------- */
+
+.sheet-popover {
+  position: fixed;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  width: min(300px, calc(100vw - 16px));
+  max-height: min(520px, calc(var(--vvh, 100dvh) - 16px));
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  background: var(--background-primary);
+  box-shadow: var(--shadow-l);
+  overflow: auto;
+}
+
+.sheet-filter-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+}
+
+.sheet-popover-dialog .sheet-filter-form {
+  padding: 16px;
+}
+
+.sheet-filter-title {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+
+.sheet-filter-sorts {
+  display: flex;
+  gap: 6px;
+}
+
+.sheet-filter-sort {
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 32px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  background: none;
+  color: var(--text-normal);
+  font: inherit;
+  font-size: var(--font-ui-small);
+  cursor: pointer;
+}
+
+.sheet-filter-sort[aria-pressed='true'] {
+  border-color: var(--interactive-accent);
+  background: var(--background-modifier-active-hover);
+}
+
+.sheet-filter-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.sheet-filter-bulk {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--font-ui-small);
+}
+
+.sheet-filter-bulk .muted {
+  margin-left: auto;
+}
+
+.sheet-filter-values {
+  max-height: 220px;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.sheet-popover-dialog .sheet-filter-values {
+  max-height: none;
+}
+
+.sheet-filter-value {
+  min-height: 28px;
+  padding: 0 4px;
+  color: var(--text-normal);
+}
+
+.sheet-filter-value-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ---------- touch and phones ---------- */
 
 @media (pointer: coarse) {
@@ -494,6 +598,24 @@
   }
 
   .sheet-format-input {
+    font-size: 16px;
+  }
+
+  .sheet-filter-sort,
+  .sheet-filter-value,
+  .sheet-filter-bulk .button,
+  .sheet-popover .dialog-actions .button,
+  .sheet-popover-dialog .dialog-actions .button {
+    min-height: 44px;
+  }
+
+  .sheet-filter-value input {
+    width: 22px;
+    height: 22px;
+  }
+
+  .sheet-filter-form .text-input {
+    min-height: 44px;
     font-size: 16px;
   }
 }

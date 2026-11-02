@@ -29,6 +29,11 @@ export interface SheetActions {
   importFile(): void;
   exportCsv(): void;
   exportXlsx(): void;
+  sortRangeAsc(): void;
+  sortRangeDesc(): void;
+  sortSheetAsc(): void;
+  sortSheetDesc(): void;
+  toggleFilter(): void;
 }
 
 let active: SheetActions | null = null;

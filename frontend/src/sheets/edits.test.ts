@@ -214,3 +214,27 @@ describe('a cut', () => {
     expect(clipStillHolds(sheet({ A1: { v: 1 }, B1: { f: '=A1' } }), clip)).toBe(false);
   });
 });
+
+describe('ranges of a filter view', () => {
+  // The grid shows sheet rows 3, 1, 5 (a sorted, filtered view) as its rows 1 to 3.
+  const rows = [0, 3, 1, 5];
+  const rowAt = (r: number) => rows[r] ?? r + 10;
+  const s = sheet({ A2: { v: 'b' }, B2: { f: '=A2', c: 'b' }, A4: { v: 'a' }, B4: { v: 1 }, A6: { v: 'c' } });
+
+  it('fills, clears, copies and pastes the sheet rows the grid shows, shifting formulas by their real rows', () => {
+    // Fill down from the grid's row 2 (sheet row 2) into its row 3 (sheet row 6).
+    expect(fillDownEdits(s, { col: 1, row: 2, width: 1, height: 2 }, rowAt)).toEqual([edit('B6', { f: '=A6' })]);
+    expect(clearEdits(s, { col: 0, row: 1, width: 1, height: 2 }, rowAt)).toEqual([edit('A2', null), edit('A4', null)]);
+    const clip = copyRange(s, { col: 0, row: 1, width: 2, height: 2 }, rowAt);
+    expect(clip.text).toBe('a' + String.fromCharCode(9) + '1' + String.fromCharCode(10) + 'b' + String.fromCharCode(9) + 'b');
+    expect(clip.rows).toEqual([3, 1]);
+    // Pasted at the grid's row 3 (sheet row 6) and below (sheet row 14).
+    const { edits } = pasteEdits(s, { col: 2, row: 3, width: 1, height: 1 }, clip.text, clip, { rowAt });
+    expect(edits).toEqual([edit('C6', { v: 'a' }), edit('D6', { v: 1 }), edit('C15', { v: 'b' }), edit('D15', { f: '=C15' })]);
+    // Values only: the values as they are.
+    const values = pasteEdits(s, { col: 2, row: 3, width: 1, height: 1 }, clip.text, clip, { rowAt, values: clip.values }).edits;
+    expect(values).toEqual([edit('C6', { v: 'a' }), edit('D6', { v: 1 }), edit('C15', { v: 'b' }), edit('D15', { v: 'b' })]);
+    // Rows a view picked out are copied, never moved by a cut.
+    expect(clipStillHolds(s, clip)).toBe(false);
+  });
+});

@@ -3,9 +3,13 @@
 // below the letters), column resizing, the fill handle, and keys for undo, fill and bold rows.
 // Clipboard events are the editor's (SheetEditor), so they work on frozen cells too.
 import {
+  AllCellRenderers,
   DataEditor,
   GridCellKind,
+  markerCellRenderer,
+  type DataEditorProps,
   type DataEditorRef,
+  type DrawCellCallback,
   type DrawHeaderCallback,
   type GridCell,
   type CellClickedEventArgs,
@@ -56,11 +60,58 @@ export interface SheetGridHandlers {
   onContextMenu(x: number, y: number): void;
   /** The grid scrolled close to its last row or column. */
   onGrow(rows: number, cols: number): void;
+  /** A press on a filter button (of column `col`), at a rectangle on the screen. */
+  onFilterButton(col: number, rect: ScreenRect): void;
+}
+
+export interface ScreenRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** The sheet's filter as the grid draws it: buttons on its first row, highlighted on filtered or sorted columns. */
+export interface GridFilter {
+  /** The sheet row of the buttons and the columns they are on. */
+  row: number;
+  col: number;
+  width: number;
+  /** Columns whose button shows that they filter or sort. */
+  on: ReadonlySet<number>;
+}
+
+/** The size of a filter button, and how much of the cell's right end takes its press. */
+const buttonSize = (touch: boolean) => (touch ? 24 : 16);
+const buttonHit = (touch: boolean) => (touch ? 40 : 24);
+
+/** A filter button: three lines narrowing downwards, on an accent square when its column filters or sorts. */
+function drawFilterButton(ctx: CanvasRenderingContext2D, rect: ScreenRect, on: boolean, touch: boolean, colors: { accent: string; onAccent: string; text: string }): void {
+  const size = buttonSize(touch);
+  const x = rect.x + rect.width - size - 4;
+  const y = rect.y + (rect.height - size) / 2;
+  ctx.save();
+  if (on) {
+    ctx.fillStyle = colors.accent;
+    ctx.beginPath();
+    ctx.roundRect(x, y, size, size, 3);
+    ctx.fill();
+  }
+  ctx.fillStyle = on ? colors.onAccent : colors.text;
+  const lines = [0.75, 0.5, 0.25];
+  const gap = size / 4;
+  lines.forEach((w, i) => {
+    const lw = size * w;
+    ctx.fillRect(x + (size - lw) / 2, y + gap * (i + 1) - 1, lw, touch ? 2 : 1.5);
+  });
+  ctx.restore();
 }
 
 interface Props {
   sheet: Sheet;
   layout: GridLayout;
+  /** The sheet's filter, whose buttons the grid draws, or null. */
+  filter: GridFilter | null;
   /** Changes with every workbook change, so the grid redraws. */
   version: number;
   selection: SheetSelection;
@@ -86,7 +137,7 @@ const KEYBINDINGS = { copy: false, cut: false, paste: false, downFill: false, ri
 
 const MOVES: Record<string, [number, number]> = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
 
-export function SheetGrid({ sheet, layout, version, selection, marked, picked, editable, touch, theme, handlers, gridRef, portalRef }: Props) {
+export function SheetGrid({ sheet, layout, filter, version, selection, marked, picked, editable, touch, theme, handlers, gridRef, portalRef }: Props) {
   const wrapper = useRef<HTMLDivElement>(null);
   /** The last press began on the frozen rows: Glide must not turn it into a column selection. */
   const frozenPress = useRef(false);
@@ -168,11 +219,41 @@ export function SheetGrid({ sheet, layout, version, selection, marked, picked, e
   }, [marked, picked, f, theme]);
 
   const cellOptions = useMemo(() => ({ overlay: editable && !touch, readonly: !editable, colors: theme.colors }), [editable, touch, theme.colors]);
-  const getCellContent = useCallback(([col, row]: Item): GridCell => gridCell(model.sheet, col, row + f, cellOptions), [model, f, cellOptions]);
+  // Grid rows are display rows: the sheet's rows below the frozen ones, as a filter shows them.
+  const view = layout.view;
+  const getCellContent = useCallback(([col, row]: Item): GridCell => gridCell(model.sheet, col, view.sheetRow(row + f), cellOptions), [model, f, cellOptions, view]);
 
-  const rowHeight = useCallback((row: number) => layout.rowHeight(row + f), [layout, f]);
+  const rowHeight = useCallback((row: number) => layout.rowHeight(view.sheetRow(row + f)), [layout, f, view]);
   const boldFont = `700 ${theme.fontSize}px`;
-  const getRowThemeOverride = useCallback((row: number) => (model.sheet.rows[String(row + f + 1)]?.bold ? { baseFontStyle: boldFont } : undefined), [model, f, boldFont]);
+  const getRowThemeOverride = useCallback(
+    (row: number) => (model.sheet.rows[String(view.sheetRow(row + f) + 1)]?.bold ? { baseFontStyle: boldFont } : undefined),
+    [model, f, boldFont, view],
+  );
+  // While a filter hides or sorts rows, the row numbers are the sheet's (Glide numbers its rows in order).
+  const renderers = useMemo<DataEditorProps['renderers']>(() => {
+    if (!view.active) return undefined;
+    const marker = {
+      ...markerCellRenderer,
+      draw: (args: Parameters<typeof markerCellRenderer.draw>[0], cell: Parameters<typeof markerCellRenderer.draw>[1]) =>
+        markerCellRenderer.draw({ ...args, cell: { ...args.cell, row: view.sheetRow(args.cell.row - 1) + 1 } }, cell),
+    };
+    return AllCellRenderers.map((r) => (r === markerCellRenderer ? marker : r)) as DataEditorProps['renderers'];
+  }, [view]);
+
+  const buttonColors = useMemo(
+    () => ({ accent: theme.grid.accentColor ?? '#8a5cf5', onAccent: theme.grid.accentFg ?? '#ffffff', text: theme.grid.textMedium ?? '#a3a3a3' }),
+    [theme],
+  );
+  /** Whether a sheet cell holds a filter button. */
+  const isFilterButton = useCallback((col: number, sheetRow: number) => filter !== null && sheetRow === filter.row && col >= filter.col && col < filter.col + filter.width, [filter]);
+  const drawCell = useCallback<DrawCellCallback>(
+    (args, drawContent) => {
+      drawContent();
+      const row = view.sheetRow(args.row + f);
+      if (isFilterButton(args.col, row)) drawFilterButton(args.ctx, args.rect, filter?.on.has(args.col) === true, touch, buttonColors);
+    },
+    [view, f, isFilterButton, filter, touch, buttonColors],
+  );
 
   // ---------- frozen rows, drawn in the header ----------
 
@@ -235,6 +316,7 @@ export function SheetGrid({ sheet, layout, version, selection, marked, picked, e
           ctx.fillText(text, x, y + h / 2);
           ctx.restore();
         }
+        if (isFilterButton(col, r)) drawFilterButton(ctx, { x: rect.x, y, width: rect.width, height: h }, filter?.on.has(col) === true, touch, buttonColors);
         // Grid lines: below each frozen row, and on the right of the column.
         ctx.fillStyle = g.borderColor ?? '#363636';
         ctx.fillRect(rect.x, y + h - 1, rect.width, 1);
@@ -247,7 +329,7 @@ export function SheetGrid({ sheet, layout, version, selection, marked, picked, e
       }
       ctx.restore();
     },
-    [theme, fontFamily, f, layout, selection, frozenActive, model, band],
+    [theme, fontFamily, f, layout, selection, frozenActive, model, band, isFilterButton, filter, touch, buttonColors],
   );
 
   // ---------- selection ----------
@@ -270,6 +352,10 @@ export function SheetGrid({ sheet, layout, version, selection, marked, picked, e
       const row = frozenRowAt(layout, e.localEventY - band);
       if (row === null) return;
       e.preventDefault();
+      if (isFilterButton(col, row) && e.localEventX >= e.bounds.width - buttonHit(touch)) {
+        handlers.onFilterButton(col, { x: e.bounds.x, y: e.bounds.y + band + frozenRowTop(layout, row), width: e.bounds.width, height: layout.rowHeight(row) });
+        return;
+      }
       const last = lastFrozenClick.current;
       const now = Date.now();
       const again = last !== null && last.col === col && last.row === row && now - last.at < 600;
@@ -277,7 +363,17 @@ export function SheetGrid({ sheet, layout, version, selection, marked, picked, e
       handlers.onSelect({ active: { col, row }, range: { col, row, width: 1, height: 1 } });
       if ((again || e.isDoubleClick === true || (e.isTouch && selection.active.col === col && selection.active.row === row)) && editable) requestEdit({ col, row });
     },
-    [layout, handlers, selection, editable, requestEdit, band],
+    [layout, handlers, selection, editable, requestEdit, band, isFilterButton, touch],
+  );
+
+  // A press on a filter button opens its menu instead of selecting or editing (Glide asks first).
+  const onCellClicked = useCallback(
+    ([col, row]: Item, e: CellClickedEventArgs) => {
+      if (!isFilterButton(col, view.sheetRow(row + f)) || e.localEventX < e.bounds.width - buttonHit(touch)) return;
+      e.preventDefault();
+      handlers.onFilterButton(col, e.bounds);
+    },
+    [isFilterButton, view, f, touch, handlers],
   );
 
   const onCellActivated = useCallback(
@@ -486,6 +582,9 @@ export function SheetGrid({ sheet, layout, version, selection, marked, picked, e
         freezeColumns={layout.frozenCols}
         getRowThemeOverride={getRowThemeOverride}
         drawHeader={drawHeader}
+        drawCell={drawCell}
+        renderers={renderers}
+        onCellClicked={onCellClicked}
         theme={theme.grid}
         gridSelection={gridSelection}
         highlightRegions={highlightRegions}

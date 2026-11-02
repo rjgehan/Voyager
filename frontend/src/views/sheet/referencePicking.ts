@@ -52,7 +52,8 @@ export function useReferencePicking({ gridBox, gridRef, portalRef, barInput, lay
       const l = opts.current.layout();
       if (args?.kind === 'cell') {
         const [col, row] = args.location;
-        return col >= 0 && row >= 0 ? { col, row: row + l.frozenRows } : null;
+        // References name sheet cells: with a filter view, the grid's rows are mapped to the sheet's.
+        return col >= 0 && row >= 0 ? { col, row: l.view.sheetRow(row + l.frozenRows) } : null;
       }
       if (args?.kind === 'header' && args.location[0] >= 0 && args.localEventY >= l.headerBand) {
         const row = frozenRowAt(l, args.localEventY - l.headerBand);

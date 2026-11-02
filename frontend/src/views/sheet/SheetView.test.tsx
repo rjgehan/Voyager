@@ -856,3 +856,59 @@ describe('number formats, charts, import and export (6b, 6c)', () => {
     expect(nameBox().value).toBe('B2:C3');
   });
 });
+
+describe('sorting and filters (DESIGN §6.21.11)', () => {
+  const header = (col: number, x: number, y: number) =>
+    ({ localEventX: x, localEventY: y, bounds: { x: col * 100, y: 0, width: 100, height: 50 }, isTouch: false, isDoubleClick: false, preventDefault: vi.fn() }) as never;
+
+  it('sorts a range by the active column from the toolbar, moving cells and shifting formulas', async () => {
+    const path = await openGrid();
+    select(0, 0); // A2: the data around it, below its header row
+    fireEvent.click(screen.getByRole('button', { name: 'Sort and filter' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Sort range A2:C3 by column A, A → Z' }));
+    expect(screen.getByTestId('cell-A0')).toHaveTextContent('Food');
+    const cells = (await saved(path)).sheets[0].cells;
+    expect([cells.A2, cells.A3, cells.B2, cells.C3.f]).toEqual([{ v: 'Food' }, { v: 'Rent' }, { v: 487.5 }, '=B3/Total']);
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(screen.getByTestId('cell-A0')).toHaveTextContent('Rent');
+  });
+
+  it('filters by values from a column’s button, shows the rows left, and edits the right row', async () => {
+    const path = await openGrid();
+    fireEvent.click(screen.getByRole('button', { name: 'Create a filter' }));
+    expect((await saved(path)).sheets[0].filter).toEqual({ range: 'A1:C3', cols: {} });
+    // Row 1 is frozen: its filter buttons are drawn in the header; a press on one opens the menu.
+    act(() => gridProps().onHeaderClicked!(0, header(0, 95, 26 + 10)));
+    const menu = await screen.findByRole('dialog', { name: 'Filter column A' });
+    fireEvent.click(within(menu).getByRole('checkbox', { name: /Rent/ }));
+    fireEvent.click(within(menu).getByRole('button', { name: 'OK' }));
+    expect(screen.queryByRole('dialog', { name: 'Filter column A' })).toBeNull();
+    // Grid row 0 is now sheet row 3 (Food); the total below the range follows.
+    expect(screen.getByTestId('cell-A0')).toHaveTextContent('Food');
+    expect(screen.getByTestId('cell-B2')).toHaveTextContent('1937.5');
+    expect((await saved(path)).sheets[0].filter).toEqual({ range: 'A1:C3', cols: { A: { hide: ['Rent'] } } });
+    act(() => gridProps().onCellEdited!([1, 0], { kind: 'text', data: '500', displayData: '', allowOverlay: true } as never));
+    expect((await saved(path)).sheets[0].cells.B3).toEqual({ v: 500 });
+    // The row numbers are the sheet's.
+    expect(gridProps().renderers).toBeDefined();
+    // Removing the filter shows every row again.
+    fireEvent.click(screen.getByRole('button', { name: 'Remove filter' }));
+    expect(screen.getByTestId('cell-A0')).toHaveTextContent('Rent');
+  });
+
+  it('sorts the view from a column’s menu without moving any cell', async () => {
+    const path = await openGrid();
+    fireEvent.click(screen.getByRole('button', { name: 'Create a filter' }));
+    select(1, 0);
+    fireEvent.click(screen.getByRole('button', { name: 'Sort and filter' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Filter column B…' }));
+    const menu = await screen.findByRole('dialog', { name: 'Filter column B' });
+    fireEvent.click(within(menu).getByRole('button', { name: /Sort A → Z/ }));
+    expect(screen.getByTestId('cell-A0')).toHaveTextContent('Food');
+    expect(screen.getByTestId('cell-A1')).toHaveTextContent('Rent');
+    const file = await saved(path);
+    expect(file.sheets[0].cells.A2).toEqual({ v: 'Rent' });
+    expect(file.sheets[0].filter?.sort).toEqual({ col: 'B' });
+    expect(vault.readFile(path).content).toContain('"version": 2');
+  });
+});
