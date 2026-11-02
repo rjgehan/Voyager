@@ -204,6 +204,9 @@ export default function CanvasView({ path, entry }: FileViewProps) {
     const measure = () => {
       const width = el.clientWidth;
       const height = el.clientHeight;
+      // The floating toolbar covers the bottom of the stage: a fit keeps the board above it.
+      const bar = el.querySelector<HTMLElement>('.canvas-toolbar');
+      controller.setBottomInset(bar && bar.offsetHeight > 0 ? Math.max(0, height - bar.offsetTop) : 0);
       controller.setStage(width, height);
       setStageSize((s) => (s.width === width && s.height === height ? s : { width, height }));
     };

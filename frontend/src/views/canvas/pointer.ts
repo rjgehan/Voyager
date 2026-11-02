@@ -15,7 +15,6 @@
 // snap to a 20 px grid unless Alt is held. While a gesture runs only the controller's transient
 // `gesture` changes; the document is committed once, on release.
 import type { CanvasController } from './controller';
-import { clampZoom } from './controller';
 import { nodeRect, normalizeRect, rectContains, rectsIntersect, sideAnchor, MIN_HEIGHT, MIN_WIDTH, type CanvasSide, type Point, type Rect } from './model';
 import { snap, withGroupContents } from './ops';
 import { modKey } from '../../features/platform';
@@ -285,7 +284,7 @@ export class CanvasPointer {
         if (this.pointers.size < 2) return;
         const [a, b] = [...this.pointers.values()];
         const m = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-        const zoom = clampZoom((t.view0.zoom * dist(a, b)) / t.d0);
+        const zoom = this.controller.clampZoom((t.view0.zoom * dist(a, b)) / t.d0);
         const wx = (t.m0.x - t.view0.x) / t.view0.zoom;
         const wy = (t.m0.y - t.view0.y) / t.view0.zoom;
         this.controller.setView({ zoom, x: m.x - wx * zoom, y: m.y - wy * zoom });

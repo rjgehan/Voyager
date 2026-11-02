@@ -90,6 +90,49 @@ describe('CanvasView', () => {
   });
 });
 
+describe('CanvasView on a phone (375 × 812)', () => {
+  const size = (el: HTMLElement, phone: number, other: number) => (el.classList.contains('canvas-stage') ? phone : other);
+
+  it('fits the whole board on its first open, above the toolbar', async () => {
+    vault = new MockVault(false);
+    // 25 cards in a row: wider than 5 % zoom can show on a phone.
+    const nodes = Array.from({ length: 25 }, (_, i) => ({ id: (i + 1).toString(16).padStart(16, '0'), type: 'text', text: `Card ${i + 1}`, x: i * 300, y: 0, width: 250, height: 140 }));
+    vault.createFile({ path: 'Wide.canvas', content: JSON.stringify({ nodes, edges: [] }) }, 'other-device-1');
+    installEndpoints(createMockEndpoints(vault, { latency: 0, failures: [] }));
+    localStorage.removeItem('notesapp:canvas-view:Wide.canvas');
+    const proto = HTMLElement.prototype as unknown as Record<string, unknown>;
+    // The stage below the top bar, and the toolbar floating 12 px above its bottom edge.
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get(this: HTMLElement) { return size(this, 375, 1200); } });
+    Object.defineProperty(HTMLElement.prototype, 'clientHeight', { configurable: true, get(this: HTMLElement) { return size(this, 768, 800); } });
+    Object.defineProperty(HTMLElement.prototype, 'offsetHeight', { configurable: true, get(this: HTMLElement) { return this.classList.contains('canvas-toolbar') ? 54 : 0; } });
+    Object.defineProperty(HTMLElement.prototype, 'offsetTop', { configurable: true, get(this: HTMLElement) { return this.classList.contains('canvas-toolbar') ? 768 - 66 : 0; } });
+    try {
+      const { container } = render(
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter initialEntries={['/n/Wide.canvas']}>
+            <CanvasView path="Wide.canvas" entry={vault.getTree().files.find((f) => f.path === 'Wide.canvas')!} mode="edit" />
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
+      await waitFor(() => expect(container.querySelector('.canvas-world')).not.toBeNull());
+      const world = container.querySelector<HTMLElement>('.canvas-world')!;
+      await waitFor(() => expect(world.style.transform).toMatch(/scale/));
+      const [, tx, ty, zoom] = /translate\(([-\d.e]+)px, ([-\d.e]+)px\) scale\(([-\d.e]+)\)/.exec(world.style.transform)!.map(Number);
+      expect(zoom).toBeLessThan(0.05);
+      // Every card is on the screen, and none is under the toolbar.
+      expect(tx).toBeGreaterThan(0);
+      expect(tx + 7450 * zoom).toBeLessThan(375);
+      expect(ty).toBeGreaterThan(0);
+      expect(ty + 140 * zoom).toBeLessThan(768 - 66);
+    } finally {
+      delete proto.offsetHeight;
+      delete proto.offsetTop;
+      Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get: () => 1200 });
+      Object.defineProperty(HTMLElement.prototype, 'clientHeight', { configurable: true, get: () => 800 });
+    }
+  });
+});
+
 describe('CanvasEmbed', () => {
   it('previews a canvas inside a note and links to it', async () => {
     setupVault();
