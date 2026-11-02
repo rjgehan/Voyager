@@ -3,6 +3,9 @@
 // behind it and sent with the version the previous write returned, so two quick changes never
 // conflict with each other. A conflict is therefore a real change from another device: the edit
 // is re-applied on top of the server's settings (only the fields this tab changed), once.
+// A draft is sent with the version it was made from, never with whatever the cache holds by then:
+// a change from another device that reached the cache meanwhile (settings.changed) is a conflict
+// too, so the draft's other fields can never silently revert it.
 // Debounced edits are written when the page is left, never dropped.
 import { isProblem } from '../api/client';
 import type { Settings, SettingsResponse, SettingsUpdateRequest } from '../api/types';
@@ -49,6 +52,8 @@ export class SettingsWriter {
   private readonly deps: SettingsWriterDeps;
   /** The draft shown in the form: the server's settings plus this tab's unsaved edits. */
   private latest: Settings | null = null;
+  /** The server's settings the draft was made from (its version is the draft's base version). */
+  private base: SettingsResponse | null = null;
   /** A write waiting for the one in flight. */
   private pending: Settings | null = null;
   private inFlight: Promise<void> | null = null;
@@ -78,6 +83,8 @@ export class SettingsWriter {
 
   /** A change in the form: written at once (toggles, selects) or after a pause in typing. */
   update(next: Settings, immediate: boolean): void {
+    // The first edit is made on the settings the form shows: the cached server state.
+    if (this.latest === null) this.base = this.deps.current() ?? null;
     this.latest = next;
     this.showDraft(next);
     this.clearTimer();
@@ -123,12 +130,14 @@ export class SettingsWriter {
   }
 
   private async writeOnce(next: Settings): Promise<void> {
-    const current = this.deps.current();
+    const current = this.base ?? this.deps.current();
     if (!current) return;
     try {
       const saved = await this.deps.put({ settings: next, baseVersion: current.version });
       this.deps.store(saved);
+      // Newer edits were made on top of this one: the saved settings are their base now.
       if (this.latest === next) this.showServer();
+      else this.base = saved;
       return;
     } catch (e) {
       if (!isProblem(e, 'version-conflict')) {
@@ -142,7 +151,7 @@ export class SettingsWriter {
       const saved = await this.deps.put({ settings: applyDelta(current.settings, next, fresh.settings), baseVersion: fresh.version });
       this.deps.store(saved);
       if (this.latest === next) this.showServer();
-      else if (this.latest) this.rebase(current.settings, saved.settings);
+      else if (this.latest) this.rebase(current.settings, saved);
       this.deps.notify('Settings were also changed on another device; your change was applied on top of theirs', 'info');
     } catch (e) {
       if (isProblem(e, 'version-conflict')) {
@@ -156,9 +165,10 @@ export class SettingsWriter {
   }
 
   /** Newer edits (shown, or queued) move onto the server's settings after a conflict. */
-  private rebase(base: Settings, server: Settings): void {
+  private rebase(base: Settings, server: SettingsResponse): void {
     if (this.latest) {
-      this.latest = applyDelta(base, this.latest, server);
+      this.latest = applyDelta(base, this.latest, server.settings);
+      this.base = server;
       this.showDraft(this.latest);
     }
     if (this.pending) this.pending = this.latest;
@@ -166,6 +176,7 @@ export class SettingsWriter {
 
   private showServer(): void {
     this.latest = null;
+    this.base = null;
     this.showDraft(null);
   }
 }
