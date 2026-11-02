@@ -1211,6 +1211,8 @@ The date token mapping table (moment, dayjs, and java.time for future server-sid
 
 **Default identity.** With `allow-default`, a missing or empty login falls back to `notes.identity.default-name` (default `Owner`) and `default-login` (default `owner@notes`) with `source=default`.
 
+**Startup warnings** (security audit, docs/SECURITY.md §7.2). Outside the dev profile, the default vault's startup logs a warning when `allow-default` is on (anything that reaches the port gets in) or, failing that, when `allowed-logins` is empty (every Tailscale identity serve passes on, including users the node is shared with, has full access; the CasaOS compose files leave it empty by default). Neither is refused: the main layout with a single-user tailnet is safe with an empty list.
+
 **Spoofing.** Header spoofing is not possible in production: serve deletes client-supplied copies of these headers, and the app listens only on loopback in a namespace that only serve can reach (§2.4). That alone would still admit every device that can reach `:443`, which is why the allowlists exist.
 
 **Kernel-mode check** (`TailscaleInterfaceCheck`). Outside the dev profile, at startup, the app looks for a network interface whose name starts with `tailscale` or that has an address in `100.64.0.0/10`. Userspace mode creates neither. If none is found, it logs ERROR and refuses to start, unless `notes.security.allow-userspace-tailscale=true`. A dropped `TS_USERSPACE: "false"` line (for example after copying Tailscale's example compose file) is then caught on the next deploy, instead of silently reopening `:8080` to every peer with forgeable identity headers. `depends_on: service_healthy` guarantees that the interface exists before the app starts.

@@ -64,6 +64,24 @@ class VaultStartupTest {
 	}
 
 	@Test
+	void anOpenIdentityConfigurationIsCalledOutAtStartup() {
+		// Security audit (docs/SECURITY.md §7.2): said once, not refused.
+		assertThat(VaultStartup.identityWarnings(new com.rjgehan.notes.config.NotesProperties.Identity("Owner",
+				"owner@notes", false, java.util.List.of())))
+			.singleElement()
+			.asString()
+			.contains("NOTES_IDENTITY_ALLOWED_LOGINS is empty");
+		assertThat(VaultStartup.identityWarnings(new com.rjgehan.notes.config.NotesProperties.Identity("Owner",
+				"owner@notes", true, java.util.List.of("me@github"))))
+			.singleElement()
+			.asString()
+			.contains("allow-default is on");
+		assertThat(VaultStartup.identityWarnings(new com.rjgehan.notes.config.NotesProperties.Identity("Owner",
+				"owner@notes", false, java.util.List.of("me@github"))))
+			.isEmpty();
+	}
+
+	@Test
 	void aFreshVaultGetsTheWelcomeNoteAndAnInitialCommit() throws Exception {
 		boot();
 		assertThat(root().resolve("Welcome.md")).exists();

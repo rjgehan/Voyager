@@ -121,6 +121,27 @@ public class VaultStartup implements SmartInitializingSingleton {
 			throw new IllegalStateException(
 					"notes.allowed-hosts (NOTES_ALLOWED_HOSTS) must list the host names the app answers to");
 		}
+		if (this.properties.vaults().isDefault()) {
+			identityWarnings(this.properties.identity()).forEach(logger::warn);
+		}
+	}
+
+	/**
+	 * What is too open about the identity configuration outside the dev profile (docs/SECURITY.md §7.2): it is not
+	 * refused, since a single-user tailnet behind the main layout is safe with it, but it is said once at startup.
+	 */
+	static java.util.List<String> identityWarnings(NotesProperties.Identity identity) {
+		if (identity.allowDefault()) {
+			return java.util.List.of("notes.identity.allow-default is on outside the dev profile: a request without "
+					+ "Tailscale identity headers is admitted as " + identity.defaultLogin() + ", so anything that "
+					+ "reaches the app's port gets in. It is meant for development only");
+		}
+		if (identity.allowedLogins().isEmpty()) {
+			return java.util.List.of("NOTES_IDENTITY_ALLOWED_LOGINS is empty: every Tailscale identity that reaches "
+					+ "the app (any member of the tailnet, and users the node is shared with) can read and change "
+					+ "every vault. Set it to your own login (docs/SECURITY.md, Hardening advice)");
+		}
+		return java.util.List.of();
 	}
 
 	/**
