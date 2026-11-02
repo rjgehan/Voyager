@@ -232,7 +232,7 @@
   color: var(--text-normal);
 }
 
-@media (max-width: 767px) {
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {
   .pdf-page-input,
   .pdf-zoom-select,
   .pdf-find-input {
@@ -248,7 +248,7 @@
   }
 
   .pdf-zoom-select {
-    max-width: 6em;
+    max-width: 8em;
   }
 
   /* Thumbnails cover the pages instead of narrowing them; picking one closes them. */

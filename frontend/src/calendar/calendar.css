@@ -530,7 +530,7 @@
 
 /* ---------- phones and touch ---------- */
 
-@media (max-width: 767px) {
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {
   .cal-toolbar {
     justify-content: space-between;
     width: 100%;

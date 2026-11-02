@@ -49,7 +49,7 @@
   margin: 12px max(var(--content-gutter), env(safe-area-inset-left));
 }
 
-@media (max-width: 767px) {
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {
   /* The home indicator stays clear of Excalidraw's bottom toolbar. */
   .excalidraw-host {
     margin-bottom: env(safe-area-inset-bottom);

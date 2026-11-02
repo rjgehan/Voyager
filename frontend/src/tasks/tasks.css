@@ -1083,7 +1083,7 @@ textarea[data-unsaved='true'] {
   }
 }
 
-@media (max-width: 767px) {
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {
   .tasks-page .page-header {
     flex-wrap: wrap;
   }
@@ -1851,7 +1851,7 @@ a.task-embed-title:hover {
   }
 }
 
-@media (max-width: 767px) {
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {
   .tasks-nav {
     margin: 10px calc(-1 * var(--content-gutter)) -6px;
     padding: 0 var(--content-gutter) 2px;

@@ -178,9 +178,33 @@ export function MobileToolbar() {
     update.current();
   };
 
+  // The row scrolls: a fade at an edge says more tools are that way (at 375 px exactly eight fit,
+  // so nothing showed that thirteen more were there).
+  const scroller = useRef<HTMLDivElement>(null);
+  const [more, setMore] = useState({ before: false, after: false });
+  const measure = () => {
+    const el = scroller.current;
+    if (!el) return;
+    const before = el.scrollLeft > 1;
+    const after = el.scrollLeft + el.clientWidth < el.scrollWidth - 1;
+    setMore((m) => (m.before === before && m.after === after ? m : { before, after }));
+  };
+  useEffect(() => {
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  });
+
   return (
     <div className={`mobile-toolbar${visible ? ' is-visible' : ''}`} role="toolbar" aria-label="Editing tools" aria-hidden={!visible}>
-      <div className="mobile-toolbar-scroll" onPointerDown={() => setInUse(true)} onPointerUp={() => setInUse(false)} onPointerCancel={() => setInUse(false)}>
+      <div
+        ref={scroller}
+        className={`mobile-toolbar-scroll${more.before ? ' has-more-before' : ''}${more.after ? ' has-more-after' : ''}`}
+        onScroll={measure}
+        onPointerDown={() => setInUse(true)}
+        onPointerUp={() => setInUse(false)}
+        onPointerCancel={() => setInUse(false)}
+      >
         {TOOLS.filter((t) => (markdown || !t.markdown) && (cell ? !t.lines : !t.cell)).map((tool) => {
           const Icon = tool.icon;
           return (

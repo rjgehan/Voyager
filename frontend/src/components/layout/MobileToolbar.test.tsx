@@ -187,4 +187,24 @@ describe('MobileToolbar', () => {
     expect(startVoiceNote).toHaveBeenCalledWith(session);
     expect(document.activeElement).not.toBe(view.contentDOM);
   });
+
+  it('fades the edge past which more tools are, so the scrolling row shows it has more', () => {
+    view = mountEditor('Some text');
+    const { container } = render(<MobileToolbar />);
+    const row = container.querySelector<HTMLElement>('.mobile-toolbar-scroll')!;
+    // jsdom has no layout: the row is 375 px wide and holds 22 buttons of 46 px.
+    Object.defineProperty(row, 'clientWidth', { configurable: true, value: 375 });
+    Object.defineProperty(row, 'scrollWidth', { configurable: true, value: 1012 });
+    act(() => view.focus());
+    expect(row).toHaveClass('has-more-after');
+    expect(row).not.toHaveClass('has-more-before');
+    row.scrollLeft = 300;
+    fireEvent.scroll(row);
+    expect(row).toHaveClass('has-more-before');
+    expect(row).toHaveClass('has-more-after');
+    row.scrollLeft = 637;
+    fireEvent.scroll(row);
+    expect(row).toHaveClass('has-more-before');
+    expect(row).not.toHaveClass('has-more-after');
+  });
 });
