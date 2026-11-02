@@ -95,7 +95,11 @@ export function publishedDate(value: string | null | undefined): string | null {
   const m = /^(\d{4}-\d{2}-\d{2})/.exec(value.trim());
   if (m) return m[1];
   const t = Date.parse(value);
-  return Number.isNaN(t) ? null : new Date(t).toISOString().slice(0, 10);
+  if (Number.isNaN(t)) return null;
+  // A date-time without a zone is read in this device's zone: its day is the one written. (In UTC
+  // it was the next day for an evening time west of UTC, the day before for a morning one east.)
+  if (!/\d[Zz]\b|\b(?:GMT|UTC)\b|[+-]\d{2}:?\d{2}\s*$/.test(value.trim())) return localDate(new Date(t));
+  return new Date(t).toISOString().slice(0, 10);
 }
 
 function oneLine(s: string | null | undefined, max: number): string | null {
