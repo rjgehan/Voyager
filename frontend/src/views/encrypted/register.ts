@@ -3,8 +3,10 @@
 // in the main bundle with the small format/key modules; the view is a lazy chunk.
 import { FileLock, KeyRound, Lock, LockOpen } from 'lucide-react';
 import { currentTree } from '../../api/hooks';
+import type { EditorView } from '@codemirror/view';
 import { activeEditor } from '../../editor/activeEditor';
 import type { EditorKit } from '../../editor/kit';
+import { isTableCell } from '../../editor/livePreview/table/facets';
 import { editorKit, loadEditorKit } from '../../editor/kitHandle';
 import { installAutoLock } from '../../features/encryption/autoLock';
 import { encryptSelection, insertSection } from '../../features/encryption/inline';
@@ -21,6 +23,20 @@ function noteSession(path: string | null) {
   if (path === null || !isMarkdownViewPath(path)) return null;
   const session = documents.get(path);
   return session && session.isEditable() ? session : null;
+}
+
+/**
+ * The note's selection in `view`, the note's editor. A Live Preview table cell's editor has offsets
+ * of its own (the cell's text), which would land on unrelated text of the note; encrypted text
+ * cannot go inside a table, so the command says so instead.
+ */
+function noteSelection(view: EditorView): { from: number; to: number } | null {
+  if (isTableCell(view)) {
+    toast('Encrypted text cannot go inside a table: leave the table cell first.');
+    return null;
+  }
+  const { from, to } = view.state.selection.main;
+  return { from, to };
 }
 
 export function registerEncryption(): void {
@@ -83,9 +99,8 @@ export function registerEncryption(): void {
     run: (c) => {
       const view = activeEditor();
       const session = noteSession(c.activePath);
-      if (!view || !session) return;
-      const { from, to } = view.state.selection.main;
-      return insertSection(session, { from, to });
+      const range = view && session ? noteSelection(view) : null;
+      return range && session ? insertSection(session, range) : undefined;
     },
   });
   registerCommand({
@@ -99,9 +114,8 @@ export function registerEncryption(): void {
     run: (c) => {
       const view = activeEditor();
       const session = noteSession(c.activePath);
-      if (!view || !session) return;
-      const { from, to } = view.state.selection.main;
-      return encryptSelection(session, { from, to });
+      const range = view && session ? noteSelection(view) : null;
+      return range && session ? encryptSelection(session, range) : undefined;
     },
   });
   registerCommand({
