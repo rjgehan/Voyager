@@ -19,6 +19,7 @@ import com.rjgehan.notes.config.NotesProperties;
 import com.rjgehan.notes.settings.FilesSettings;
 import com.rjgehan.notes.settings.SettingsService;
 import com.rjgehan.notes.vault.PathNames;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -66,11 +67,14 @@ public class SearchService {
 		long started = System.nanoTime();
 		VaultIndex.SearchOutcome outcome = evaluate(query, prefix, fuzzy, order.equals("mtime"));
 		List<SearchHit> results = new ArrayList<>();
-		for (VaultIndex.SearchHit hit : outcome.hits().subList(0, Math.min(limit, outcome.hits().size()))) {
+		List<VaultIndex.SearchHit> page = outcome.hits().subList(0, Math.min(limit, outcome.hits().size()));
+		List<SearchIndex.@Nullable Body> bodies = this.index.bodies(page);
+		for (int i = 0; i < page.size(); i++) {
+			VaultIndex.SearchHit hit = page.get(i);
 			NoteRecord note = hit.note();
 			String basename = PathNames.basenameOf(PathNames.nameOf(note.path()));
 			SnippetBuilder.Snippets snippets = SnippetBuilder.build(basename, note.searchText(), note.parse(),
-					outcome.patterns(), outcome.regexes(), outcome.budget(), hit.kind() == FileKind.PDF);
+					outcome.patterns(), outcome.regexes(), outcome.budget(), hit.kind() == FileKind.PDF, bodies.get(i));
 			results.add(new SearchHit(note.path(), basename, hit.kind(), Math.round(hit.score() * 100) / 100.0,
 					hit.mtime(), snippets.titleRanges(), snippets.matches(), snippets.moreMatches()));
 		}

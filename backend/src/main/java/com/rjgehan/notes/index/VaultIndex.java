@@ -561,6 +561,22 @@ public class VaultIndex {
 				evaluation.budget());
 	}
 
+	/**
+	 * The kept body (token sequence) of each hit's document, read under the lock with the document itself: null for a
+	 * hit whose document changed or moved since the search, or that has no kept sequence. Lets snippets be built
+	 * without tokenizing whole documents again ({@link SnippetBuilder}).
+	 */
+	public List<SearchIndex.@Nullable Body> bodies(List<SearchHit> hits) {
+		return read(() -> {
+			List<SearchIndex.@Nullable Body> bodies = new ArrayList<>(hits.size());
+			for (SearchHit hit : hits) {
+				NoteRecord current = document(hit.note().path());
+				bodies.add((current == hit.note()) ? this.search.body(current.docId()) : null);
+			}
+			return bodies;
+		});
+	}
+
 	/** A note, or a file's extracted text. */
 	private @Nullable NoteRecord document(String path) {
 		NoteRecord note = this.notes.get(path);
