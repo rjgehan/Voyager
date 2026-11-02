@@ -1,4 +1,4 @@
-// The demo's banner (DESIGN §6.45).
+// The demo's banner (DESIGN §6.46).
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BANNER_CLASS, showDemoBanner } from './banner';
 import { REPO_URL } from './mode';

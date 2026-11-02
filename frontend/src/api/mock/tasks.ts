@@ -1,5 +1,5 @@
 // The task API (API.md §20) for the in-memory mock (dev with VITE_MOCK_API=1 and the GitHub Pages
-// demo, DESIGN §6.45). Lists and tasks are read from the vault's `.tasks` files on every request,
+// demo, DESIGN §6.46). Lists and tasks are read from the vault's `.tasks` files on every request,
 // views are computed with the client's own rules (tasks/model.ts, which mirror the server's), and
 // changes are written back to the files in their canonical layout (DESIGN §5.20), so the files, the
 // tree, search and history all see them. Simpler than the server where a single tab needs nothing

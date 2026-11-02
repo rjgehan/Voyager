@@ -1,4 +1,4 @@
-// The live demo on GitHub Pages (DESIGN §6.45): the app built with `vite build --mode demo`, which
+// The live demo on GitHub Pages (DESIGN §6.46): the app built with `vite build --mode demo`, which
 // runs on the in-memory mock API with a showcase vault and no server. VITE_DEMO is replaced at
 // build time, so in every other build these are constants and the demo's code is left out.
 

@@ -1,4 +1,4 @@
-// The GitHub Pages demo's showcase vault (DESIGN §6.45): every file must open in its view, and the
+// The GitHub Pages demo's showcase vault (DESIGN §6.46): every file must open in its view, and the
 // vault must show each headline feature with data dated around today.
 import { describe, expect, it } from 'vitest';
 import { createMockServer } from '../api/mock/server';

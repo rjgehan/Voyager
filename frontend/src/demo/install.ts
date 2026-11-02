@@ -1,4 +1,4 @@
-// Starts the GitHub Pages demo (DESIGN §6.45): the in-memory mock API over the showcase vault, with
+// Starts the GitHub Pages demo (DESIGN §6.46): the in-memory mock API over the showcase vault, with
 // the banner that says what this is. Loaded by main.tsx before anything fetches, in the demo build only.
 import { installMockApi } from '../api/mock';
 import { GRAPH_KEY } from '../features/graph/options';

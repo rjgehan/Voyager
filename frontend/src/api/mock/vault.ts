@@ -187,7 +187,7 @@ export class MockVault {
   private savedSearchesVersion: string | null = null;
   private readonly startedAt = Date.now();
 
-  /** `true` seeds the dev vault (seed.ts), `false` nothing, a list those files (the demo's, DESIGN §6.45). */
+  /** `true` seeds the dev vault (seed.ts), `false` nothing, a list those files (the demo's, DESIGN §6.46). */
   constructor(seed: boolean | readonly SeedFile[] = true) {
     this.settingsVersion = blobId(encoder.encode(JSON.stringify(this.settings)));
     if (seed === false) return;

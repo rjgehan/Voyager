@@ -5,7 +5,7 @@ interface ImportMetaEnv {
   readonly VITE_BUILD_SHA: string;
   /** "1" enables the in-memory mock API (dev only). */
   readonly VITE_MOCK_API?: string;
-  /** "1" in the GitHub Pages demo build (`vite build --mode demo`, `.env.demo`; DESIGN §6.45). */
+  /** "1" in the GitHub Pages demo build (`vite build --mode demo`, `.env.demo`; DESIGN §6.46). */
   readonly VITE_DEMO?: string;
   /** Where the build serves Excalidraw's fonts, `/assets/excalidraw-<version>/` (vite.config.ts). */
   readonly VITE_EXCALIDRAW_ASSETS: string;

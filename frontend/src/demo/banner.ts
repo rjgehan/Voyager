@@ -1,4 +1,4 @@
-// The demo's banner (DESIGN §6.45): one slim line above the app saying that everything runs in this
+// The demo's banner (DESIGN §6.46): one slim line above the app saying that everything runs in this
 // browser tab and nothing is saved, with a link to the repository. Plain DOM, so it shows before
 // React renders; closing it gives the app its full height back for this page load.
 import { REPO_URL } from './mode';

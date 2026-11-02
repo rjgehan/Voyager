@@ -1,4 +1,4 @@
-// The showcase vault of the GitHub Pages demo (DESIGN §6.45): a small, made-up but lived-in vault
+// The showcase vault of the GitHub Pages demo (DESIGN §6.46): a small, made-up but lived-in vault
 // that puts each headline feature one click from the Welcome note. Dates are relative to the day the
 // page is opened, so Today, the calendar, the habits and the daily notes always look current.
 // Nothing here is personal data. The dev mock keeps its own seed (api/mock/seed.ts), which

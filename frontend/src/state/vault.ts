@@ -5,7 +5,7 @@
 // Storage that outlives the page (drafts, the offline note cache, the capture queue, the open tabs,
 // recent files) is keyed by vault with `vaultKey`.
 //
-// The app itself is served at the root, except the GitHub Pages demo (DESIGN §6.45), which is built
+// The app itself is served at the root, except the GitHub Pages demo (DESIGN §6.46), which is built
 // with a Vite `base` such as `/notesapp/`: its addresses carry that prefix before any vault prefix.
 // API paths never do (the demo's mock answers them in the page).
 import { vaultFromPathname } from '../sw/vaultPath';

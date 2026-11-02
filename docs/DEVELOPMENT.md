@@ -38,7 +38,7 @@ Open <http://localhost:5173>.
 
 - **Another vault:** set `$env:NOTES_VAULT_DIR = "C:\path\to\a\copy"` before starting the backend. Point it at a copy, never at a vault you care about.
 - **Frontend without a backend:** `$env:VITE_MOCK_API = "1"; npm run dev` uses the in-memory mock API (a small vault in the page, with tasks, flashcards, habits and the calendar answered by `api/mock/server.ts`).
-- **The live demo locally:** `npm run build:demo`, then `npm run preview:demo` and open <http://localhost:4173/notesapp/>. It is the GitHub Pages build (DESIGN §6.45): the mock API with the showcase vault, under the `/notesapp/` base path.
+- **The live demo locally:** `npm run build:demo`, then `npm run preview:demo` and open <http://localhost:4173/notesapp/>. It is the GitHub Pages build (DESIGN §6.46): the mock API with the showcase vault, under the `/notesapp/` base path.
 - **Ports 8080 or 5173 taken:** start the backend with `"-Dspring-boot.run.arguments=--server.port=18080 --notes.allowed-hosts=localhost:5180,127.0.0.1:5180"`, then the frontend with `$env:NOTES_DEV_BACKEND = "http://127.0.0.1:18080"; npm run dev -- --port 5180 --strictPort`. The allowed hosts must name the Vite origin, because the proxy keeps the browser's `Host`.
 - **Phone against dev:** possible over the tailnet, but read [DESIGN §9.1](DESIGN.md#91-integration-step-after-all-three-work-packages) step 4 first; never bind Vite to `0.0.0.0`.
 

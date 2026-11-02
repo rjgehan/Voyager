@@ -58,7 +58,7 @@ describe('vault addresses (ROADMAP item 37, DESIGN §6.44)', () => {
     expect(routeOfAppUrl('/v/play/x/tasks')).toBeNull();
   });
 
-  it('puts the demo’s base path before every app address, never before API paths (DESIGN §6.45)', () => {
+  it('puts the demo’s base path before every app address, never before API paths (DESIGN §6.46)', () => {
     setAppBaseForTests('/notesapp/');
     expect(vaultBasename()).toBe('/notesapp');
     expect(appUrl('/n/a.md')).toBe('/notesapp/n/a.md');

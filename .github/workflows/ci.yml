@@ -64,7 +64,7 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
-      - run: npx vite build --mode demo         # the GitHub Pages demo (pages.yml, DESIGN §6.45) builds too
+      - run: npx vite build --mode demo         # the GitHub Pages demo (pages.yml, DESIGN §6.46) builds too
 
   clipper:                                   # the web clipper (ROADMAP item 19): extension, bookmarklet, Shortcut script
     runs-on: ubuntu-24.04
