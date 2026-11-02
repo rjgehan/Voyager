@@ -18,6 +18,31 @@ const RECENT = 20;
 /** Notes (and their aliases) outrank other files with the same match quality. */
 const NOTE_BOOST = 0.05;
 
+/** The items of a tree, and the lower-case names that count as an exact match, made once per tree. */
+interface Base {
+  items: SwitcherItem[];
+  exact: Set<string>;
+}
+
+const bases = new WeakMap<VaultTree, Base>();
+
+/** One array per tree, so the fuzzy ranking reuses its snapshots of it (features/fuzzy.ts). */
+function base(tree: VaultTree): Base {
+  let made = bases.get(tree);
+  if (!made) {
+    const items = baseItems(tree);
+    const exact = new Set<string>();
+    for (const i of items) {
+      exact.add(i.label.toLowerCase());
+      exact.add(stripMd(i.path).toLowerCase());
+      exact.add(i.path.toLowerCase());
+    }
+    made = { items, exact };
+    bases.set(tree, made);
+  }
+  return made;
+}
+
 function baseItems(tree: VaultTree): SwitcherItem[] {
   const items: SwitcherItem[] = [];
   for (const entry of tree.files) {
@@ -37,7 +62,7 @@ function baseItems(tree: VaultTree): SwitcherItem[] {
  */
 export function switcherItems(tree: VaultTree, query: string, recent: readonly string[], withSearchRow = false): SwitcherItem[] {
   const q = query.trim();
-  const all = baseItems(tree);
+  const { items: all, exact: names } = base(tree);
   let rows: SwitcherItem[];
   if (q === '') {
     const byPath = new Map(all.filter((i) => i.kind !== 'alias').map((i) => [i.path, i]));
@@ -47,8 +72,7 @@ export function switcherItems(tree: VaultTree, query: string, recent: readonly s
       .slice(0, RECENT);
   } else {
     rows = fuzzyRank(q, all, [(i) => i.label, (i) => i.path], LIMIT, (i) => (i.kind === 'file' ? 0 : NOTE_BOOST)).map((r) => r.item);
-    const lower = q.toLowerCase();
-    const exact = all.some((i) => i.label.toLowerCase() === lower || stripMd(i.path).toLowerCase() === lower || i.path.toLowerCase() === lower);
+    const exact = names.has(q.toLowerCase());
     if (!exact) rows.push({ kind: 'create', key: 'create', label: `Create “${q}”`, detail: '', path: q });
   }
   if (withSearchRow && q !== '') rows.push({ kind: 'search', key: 'search', label: `Search in notes for “${q}”`, detail: '', path: q });
