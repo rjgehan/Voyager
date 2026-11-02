@@ -316,14 +316,16 @@ function inward(cell: CellSource, side: 'before' | 'after', margin: number): Cel
 
 /**
  * Keeps a rewritten row a row of its table: an outer pipe where a blank edge cell or block markup
- * at the line start would change how the line parses, at least one pipe, and a space between a
- * cell ending in a backslash and the pipe after it (which `\|` would escape).
+ * at the line start (a delimiter row's lone `-` too) would change how the line parses, a trailing pipe after a lone cell (Lezer
+ * reads `| a` over `| -` as no table, `| a |` and `a |` as one), and a space between a cell ending
+ * in a backslash and the pipe after it (which `\|` would escape).
  */
 function settleRow(row: RowSource, margin: number, delimiter = false): RowSource {
   if (row.cells.length === 0) return row;
   const n = row.cells.length;
-  const lead = row.lead || row.cells[0].text === '' || (!delimiter && BLOCK_START.test(row.cells[0].text));
-  const piped = withOuterPipes(row, lead, row.trail || row.cells[n - 1].text === '' || (!lead && n === 1), margin);
+  // A delimiter row starting `- ` would be a list item.
+  const lead = row.lead || row.cells[0].text === '' || (delimiter ? row.cells[0].text === '-' : BLOCK_START.test(row.cells[0].text));
+  const piped = withOuterPipes(row, lead, row.trail || row.cells[n - 1].text === '' || n === 1, margin);
   const cells = piped.cells.map((c, i): CellSource => {
     // Without an outer pipe, whitespace before the first cell is the row's indentation.
     if (i === 0 && !piped.lead && c.before !== '') c = { ...c, before: '' };
@@ -509,11 +511,18 @@ export function insertColumn(m: TableModel, at: number): TableModel {
   };
 }
 
-/** Removes a column (a table keeps at least one). Short rows without the cell are left as they are. */
+/**
+ * Removes a column (a table keeps at least one). Short rows without the cell are left as they are;
+ * a short row that held only that cell keeps an empty one, so it stays a row (`|  |`), not a blank
+ * line that would end the table.
+ */
 export function deleteColumn(m: TableModel, column: number): TableModel {
   if (m.columns <= 1 || column < 0 || column >= m.columns) return m;
-  const remove = (row: RowSource, delimiter = false): RowSource =>
-    column < row.cells.length ? settleRow({ ...row, cells: reorder(row.cells, (c) => c.splice(column, 1)) }, m.style.margin, delimiter) : row;
+  const remove = (row: RowSource, delimiter = false): RowSource => {
+    if (column >= row.cells.length) return row;
+    const cells = reorder(row.cells, (c) => c.splice(column, 1));
+    return settleRow({ ...row, cells: cells.length > 0 ? cells : [blankCell(m.style.margin)] }, m.style.margin, delimiter);
+  };
   return {
     ...m,
     header: remove(m.header),
@@ -573,7 +582,7 @@ export function setAlign(m: TableModel, column: number, align: Align): TableMode
   const old = cells[column];
   const dashes = Math.max(1, old.text.replace(/:/g, '').length);
   cells[column] = { ...old, text: (align === 'left' || align === 'center' ? ':' : '') + '-'.repeat(dashes) + (align === 'right' || align === 'center' ? ':' : '') };
-  return refit({ ...m, align: align2, delimiter: { ...m.delimiter, cells } }, [column]);
+  return refit({ ...m, align: align2, delimiter: settleRow({ ...m.delimiter, cells }, m.style.margin, true) }, [column]);
 }
 
 /** The text of a new, empty table with `columns` columns and `rows` body rows, padded. */
