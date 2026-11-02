@@ -45,6 +45,38 @@ describe('safe areas', () => {
   });
 });
 
+describe('text fields on a touch screen', () => {
+  /** The bodies of the rules inside `@media (pointer: coarse)` and `@supports (-webkit-touch-callout: none)` blocks of mobile.css. */
+  function floorRules(): string[] {
+    const css = sheets['styles/mobile.css'];
+    const out: string[] = [];
+    for (const m of css.matchAll(/@(?:media \(pointer: coarse\)|supports \(-webkit-touch-callout: none\))\s*\{\s*([^{}]+)\{([^{}]*)\}\s*\}/g)) {
+      if (/font-size/.test(m[2])) out.push(`${m[1].replace(/\s+/g, ' ').trim()} { ${m[2].trim()} }`);
+    }
+    return out;
+  }
+
+  it('are at least 16 px whatever their class or inherited size, so iOS never zooms into them', () => {
+    const rules = floorRules();
+    // Once for a touch screen, once for iOS with a trackpad.
+    expect(rules).toHaveLength(2);
+    for (const rule of rules) {
+      expect(rule).toMatch(/^:is\( input:not\(\[type='checkbox'\], \[type='radio'\], \[type='range'\]/);
+      expect(rule).toMatch(/textarea, select \)/);
+      expect(rule).toMatch(/font-size: max\(16px, 1em\) !important;/);
+      // What sizes itself to what it edits keeps its size.
+      expect(rule).toMatch(/:not\(\.excalidraw \*, \.annotationLayer \*\)/);
+    }
+  });
+
+  it('no other rule forces a field’s size, so the floor is never outranked', () => {
+    const forced = Object.entries(sheets).flatMap(([file, css]) =>
+      file === 'styles/mobile.css' ? [] : [...css.matchAll(/font(-size)?:[^;{}]*!important/g)].map((m) => `${file}: ${m[0]}`),
+    );
+    expect(forced).toEqual([]);
+  });
+});
+
 describe('the tablet rail', () => {
   it('scrolls its page buttons when they do not fit, keeping Trash, Settings and the theme at the bottom', () => {
     const pages = declarations('styles/app.css', '.ribbon-group:first-child');

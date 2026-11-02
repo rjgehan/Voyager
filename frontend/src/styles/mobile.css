@@ -7,6 +7,34 @@ select {
   font-size: max(16px, 1em);
 }
 
+/*
+ * On a touch screen the floor wins over the classes: `.text-input` and `.select` are 14 px, and
+ * many fields take the 13 px UI size through `font: inherit`, so iOS zoomed into the settings,
+ * the task fields, the search box and the dialogs (DESIGN §6.16). 1em is the parent's size here,
+ * so a field that inherits a larger size (a note's title) keeps it. Excalidraw's text editor and
+ * PDF form fields are sized inline to match what they edit. The second copy is for iOS with a
+ * trackpad, whose pointer is fine (only iOS Safari knows -webkit-touch-callout).
+ */
+@media (pointer: coarse) {
+  :is(
+      input:not([type='checkbox'], [type='radio'], [type='range'], [type='color'], [type='file'], [type='button'], [type='submit'], [type='reset'], [type='image']),
+      textarea,
+      select
+    ):not(.excalidraw *, .annotationLayer *) {
+    font-size: max(16px, 1em) !important;
+  }
+}
+
+@supports (-webkit-touch-callout: none) {
+  :is(
+      input:not([type='checkbox'], [type='radio'], [type='range'], [type='color'], [type='file'], [type='button'], [type='submit'], [type='reset'], [type='image']),
+      textarea,
+      select
+    ):not(.excalidraw *, .annotationLayer *) {
+    font-size: max(16px, 1em) !important;
+  }
+}
+
 @media (pointer: coarse) {
   :root {
     --tap-target: 44px;
