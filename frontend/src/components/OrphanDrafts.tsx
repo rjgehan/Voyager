@@ -43,7 +43,7 @@ export function OrphanDraftList() {
   if (!items || items.length === 0) return null;
   return (
     <>
-      <h3 className="settings-subtitle">Unsaved text of renamed or deleted notes</h3>
+      <h2 className="settings-subtitle">Unsaved text of renamed or deleted notes</h2>
       <ul className="discarded-list">
         {items.map((d) => (
           <li key={`${d.path}\u0000${d.clientId}`} className="discarded-item">

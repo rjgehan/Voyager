@@ -38,6 +38,10 @@ function TabButton({ pane, tab, active, paneActive, onDropAt }: { pane: Pane; ta
       e.preventDefault();
       const sibling = (e.key === 'ArrowRight' ? e.currentTarget.nextElementSibling : e.currentTarget.previousElementSibling) as HTMLElement | null;
       if (sibling?.getAttribute('role') === 'tab') sibling.focus();
+    } else if (e.key === 'Home' || e.key === 'End') {
+      e.preventDefault();
+      const tabs = e.currentTarget.parentElement?.querySelectorAll<HTMLElement>('[role="tab"]');
+      tabs?.[e.key === 'Home' ? 0 : tabs.length - 1]?.focus();
     }
   };
 
@@ -46,6 +50,9 @@ function TabButton({ pane, tab, active, paneActive, onDropAt }: { pane: Pane; ta
       role="tab"
       aria-selected={active}
       tabIndex={active ? 0 : -1}
+      // The × below is for the pointer only (a control inside a tab is not allowed, WCAG 4.1.2):
+      // the keyboard closes a tab with Delete, or from its menu (Shift-F10).
+      aria-keyshortcuts="Delete Shift+F10"
       className={`ws-tab${active ? ' is-active' : ''}${paneActive && active ? ' is-focused' : ''}${tab.pinned ? ' is-pinned' : ''}${label.missing ? ' is-missing' : ''}${drop ? ` drop-${drop}` : ''}`}
       title={label.title}
       draggable
@@ -86,11 +93,9 @@ function TabButton({ pane, tab, active, paneActive, onDropAt }: { pane: Pane; ta
       {tab.pinned ? (
         <Pin size={12} className="ws-tab-pin" aria-label="Pinned" />
       ) : (
-        <button
-          type="button"
+        <span
           className="ws-tab-close"
-          tabIndex={-1}
-          aria-label={`Close ${label.title}`}
+          aria-hidden
           title="Close tab"
           onClick={(e) => {
             e.stopPropagation();
@@ -98,7 +103,7 @@ function TabButton({ pane, tab, active, paneActive, onDropAt }: { pane: Pane; ta
           }}
         >
           <X size={13} aria-hidden />
-        </button>
+        </span>
       )}
     </div>
   );

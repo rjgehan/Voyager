@@ -337,7 +337,7 @@
 
 .cm-editor .cm-completionMatchedText {
   text-decoration: none;
-  color: var(--interactive-accent);
+  color: var(--text-accent);
   font-weight: 600;
 }
 
@@ -450,15 +450,22 @@
 
 /* ---------- Live Preview (DESIGN §6.6.1) ---------- */
 
-/* Links show as their text. Wikilinks are underlined on hover, web links always, as in the
-   reading view; unresolved links keep v1's faded, dashed look (.cm-unresolved). */
+/* Links show as their text, underlined as in the reading view (faintly until hover): the link
+   colour alone is too close to the text's to tell them apart (WCAG 1.4.1). Unresolved links
+   keep v1's dimmer, dashed look (.cm-unresolved). */
 .cm-live-preview .cm-lp-link {
-  text-decoration-line: none;
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  text-decoration-color: color-mix(in srgb, var(--link) 45%, transparent);
 }
 
 .cm-live-preview .cm-lp-link:hover {
-  text-decoration-line: underline;
-  text-underline-offset: 2px;
+  text-decoration-color: var(--link);
+}
+
+.cm-live-preview .cm-unresolved .cm-lp-link {
+  text-decoration-line: none;
 }
 
 .cm-live-preview .cm-lp-url,
@@ -621,7 +628,7 @@
 
 .cm-format-button[aria-pressed='true'] {
   background: var(--background-modifier-active-hover);
-  color: var(--interactive-accent);
+  color: var(--text-accent);
 }
 
 /* ---------- tables as grids (DESIGN §6.6.1) ---------- */

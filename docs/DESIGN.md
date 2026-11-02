@@ -2085,6 +2085,7 @@ frontend/src/
 │   ├── slash.ts, slashItems.ts  the / menu: its completion source, registry and the editor's items (§6.6.2)
 │   ├── listRenumber.ts, markupPairs.ts, headingFold.ts  editor niceties (§6.6.2)
 │   ├── editorSetup.ts        noteExtensions(): the full extension list (§6.6)
+│   ├── a11y.ts               editorLabel(): the editors' accessible names (§6.19)
 │   ├── editorCommands.ts     toggle checkbox, bold, italic, insert link, follow link
 │   ├── vimMode.ts            vim's compartment, the editor command keys facet, the mode store (§6.36)
 │   ├── vim.ts                vim mode's lazy chunk: @replit/codemirror-vim, ex commands, key order (§6.36)
@@ -2144,9 +2145,13 @@ frontend/src/
 │   ├── clip/                 ClipPage (/clip, the web clipper's hand-over), ClipperSettings (§6.27.1)
 │   ├── ConflictBanner.tsx, ConnectionIndicator.tsx, SaveStatus.tsx, ErrorBoundary.tsx, OfflineBanners.tsx
 │   └── pages/                HomePage, SearchPage (mobile), TrashPage, SettingsPage (lazy), NotFoundPage
-├── styles/                   tokens.css (themes), app.css, editor.css, reading.css, mobile.css; rich.css (loaded with the reading-view chunk)
-└── test/setup.ts
+├── styles/                   tokens.css (themes), app.css, editor.css, reading.css, mobile.css; rich.css (loaded with the reading-view chunk);
+│                             contrast.test.ts (the tokens' WCAG contrast, §6.17)
+├── a11y.test.tsx             axe-core on the whole shell in jsdom (§6.19, docs/ACCESSIBILITY.md)
+└── test/                     setup.ts; axe.ts (axeViolations for tests); fakes and fixtures
 ```
+
+`frontend/scripts/a11y-audit.mjs` (`npm run test:a11y`) is the browser accessibility audit: axe-core through playwright-core in an installed Chrome or Edge, over the mock API (§6.19, docs/ACCESSIBILITY.md).
 
 ### 6.3 State management and cache invalidation
 
@@ -3206,13 +3211,15 @@ The version view of §6.11 also gains **Compare with**: in the History panel it 
 
 | Context | Keys |
 |---|---|
-| Global | The command hotkeys above. `Esc` closes the topmost overlay or the drawer. `Mod-O`, `Mod-P`, `Mod-Shift-F`, `Mod-,` and `Mod-Alt-←/→` work even while the editor has focus, and so do commands registered with `globalHotkey` (quick add, `Mod-Alt-Q`, §6.22), and every key chosen under Settings, "Hotkeys" (§6.25). Off Apple platforms AltGr arrives as Ctrl+Alt: in a text field, a key that types a character with it (AltGr+Q is @ in German, AltGr+T is ț in Romanian) types that character rather than running a hotkey. |
+| Global | The command hotkeys above. `Tab` first reaches **Skip to content** (§6.19). `Esc` closes the topmost overlay or the drawer. `Mod-O`, `Mod-P`, `Mod-Shift-F`, `Mod-,` and `Mod-Alt-←/→` work even while the editor has focus, and so do commands registered with `globalHotkey` (quick add, `Mod-Alt-Q`, §6.22), and every key chosen under Settings, "Hotkeys" (§6.25). Off Apple platforms AltGr arrives as Ctrl+Alt: in a text field, a key that types a character with it (AltGr+Q is @ in German, AltGr+T is ț in Romanian) types that character rather than running a hotkey. |
 | Task list page | `Enter` or `Space` on a task opens its inline editor (`Esc` or Done closes it); `Alt-↑/↓` move it among its siblings; `Alt-→` makes it a subtask of the task above, `Alt-←` moves it out of its parent (§6.22) |
 | Editor | CodeMirror defaults: undo `Mod-Z`; redo `Mod-Shift-Z` or `Mod-Y`; indent `Tab`; outdent `Shift-Tab`; find `Mod-F`; next and previous match `Mod-G` / `Mod-Shift-G`; completion `Ctrl-Space`; accept with `Enter`. Plus `Mod-B/I/K/L/E/S/Enter`, `Mod-Shift-X/H` (§6.6.1; `Mod-E` is inline code in the text and unlocks a locked note) and `Mod-Shift-V` (paste as plain text). In Live Preview the typing shortcuts of §6.6.1 apply; `Backspace`, `Delete` (and by word), `ArrowLeft` and `Enter` follow its cursor rules, and the arrow keys open a table's cells. In a table cell: `Tab`/`Shift-Tab` next and previous cell (a new row after the last), `Enter`/`Shift-Enter` the cell below and above, arrows across cell edges, `Esc` back to the note, `Shift-F10` the cell's menu (§6.6.1). **`Esc` then `Tab`** moves focus out of the editor (CodeMirror's tab escape, needed because `Tab` indents); a one-time hint says so the first time the editor gets keyboard focus. With **Vim key bindings** on (Settings › This device, §6.36): vim's keys, with the app's keys above taking precedence, in Live Preview and in source mode; `:w` saves, `:q` leaves the editor. |
 | Explorer (focused) | `↑/↓` move; `←/→` collapse and expand; `Enter` opens; `F2` renames; `Delete` deletes (with confirmation); `Mod-Alt-N` creates a new note in the focused folder |
 | Quick switcher / palette | `↑/↓`, `Enter`, `Shift-Enter` (create), `Mod-Enter` (open in a new tab, §6.40), `Esc` |
-| Tabs and panes (§6.40) | New tab `Mod-Alt-T`, close tab `Mod-Alt-W`, reopen closed tab `Mod-Shift-T`, next and previous tab `Mod-Alt-PageDown`/`PageUp`, next and previous pane `Mod-Alt-]`/`[`; Mod-click or middle click opens in a new tab (Mod-Shift-click in an editable note); in a strip `←/→`, `Enter`, `Delete`, `Shift-F10` |
+| Tabs and panes (§6.40) | New tab `Mod-Alt-T`, close tab `Mod-Alt-W`, reopen closed tab `Mod-Shift-T`, next and previous tab `Mod-Alt-PageDown`/`PageUp`, next and previous pane `Mod-Alt-]`/`[`; Mod-click or middle click opens in a new tab (Mod-Shift-click in an editable note); in a strip `←/→`, `Home`, `End`, `Enter`, `Delete`, `Shift-F10` |
 | Conflict banner | Buttons reachable with `Tab`; `Esc` dismisses Compare |
+| Sidebar panel tabs | `←/→` or `↑/↓` previous and next panel, `Home`/`End` first and last (§6.19) |
+| Menus | `↑/↓` (wrapping), `Home`, `End`, `Enter`; `Esc` or `Tab` closes and returns focus (§6.19) |
 
 ### 6.15 File explorer
 
@@ -3273,16 +3280,21 @@ The version view of §6.11 also gains **Compare with**: in the History panel it 
 | `--background-modifier-hover` | `rgba(255,255,255,0.06)` | `rgba(0,0,0,0.05)` |
 | `--text-normal` | `#dadada` | `#222222` |
 | `--text-muted` | `#a3a3a3` | `#5c5c5c` |
-| `--text-faint` | `#6e6e6e` | `#9a9a9a` |
-| `--interactive-accent` / `--accent` | `#8a5cf5` | `#7a4fe0` |
+| `--text-faint` | `#9c9c9c` | `#656565` |
+| `--interactive-accent` / `--accent` (fills: buttons, checked boxes) | `#8352f4` | `#7a4fe0` |
+| `--interactive-accent-hover` | `#7944f4` (darker, so white text stays readable) | `#6b3fd8` |
+| `--text-accent` (text in the accent colour) | `#aa89f8` | `#6b3fd8` |
+| `--focus-ring` | `#aa89f8` | `#6b3fd8` |
+| `--text-on-accent` / `--text-on-error` | `#ffffff` / `#141414` | `#ffffff` / `#ffffff` |
 | `--link` | `#a68af9` | `#6b3fd8` |
-| `--link-unresolved` | `#a68af9` at 60 % opacity, dashed underline | the same at 60 % |
+| `--link-unresolved` | `#a196c1`, dashed underline | `#6b5ba1`, dashed underline |
 | `--tag-bg` / `--tag-fg` | `rgba(138,92,245,0.15)` / `#b9a2fb` | `rgba(122,79,224,0.1)` / `#6b3fd8` |
-| `--code-bg` | `#2a2a2a` | `#f2f2f2` |
-| `--text-error` / `--text-warning` / `--text-success` | `#fb464c` / `#e0ac00` / `#44cf6e` | `#e93147` / `#c48c00` / `#08b94e` |
+| `--code-bg` / `--code-fg` | `#2a2a2a` / `#e0a87a` | `#f2f2f2` / `#a24b36` |
+| `--text-error` / `--text-warning` / `--text-success` | `#fc6d72` / `#e0ac00` / `#44cf6e` | `#c9162b` / `#855f00` / `#057531` |
+| `--checkbox-border` / `--input-border` | `#7a7a7a` / `#767676` | `#878787` / `#878787` |
 
 - **Fonts:** `--font-text: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif` and `--font-mono: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace`. No web fonts.
-- **Contrast** meets WCAG AA for body text in both themes. The faint colour is used only for syntax marks.
+- **Contrast (WCAG 2.2 AA, §6.19).** Every text colour, the faint one and the syntax colours included, is at least 4.5:1 on every background of its theme (the primary and secondary backgrounds, their `-alt` variants, form fields and code blocks, and hovered and selected rows on the primary and secondary backgrounds); text on the accent and on the error colour too. The focus ring, checkbox borders and field borders are at least 3:1. In the dark theme no purple can be both a fill under white text and a text colour on the dark background, so text in the accent colour uses `--text-accent` and fills use `--interactive-accent`. `src/styles/contrast.test.ts` checks every pair, so a token change that breaks one fails the tests.
 
 ### 6.18 Connection and offline indicator
 
@@ -3324,19 +3336,29 @@ On recovery, any `resync` is processed, the replay countdown reaches `caughtUp` 
   - *Live sync*: the open SSE connections and this device's connection.
 - **Layout and themes.** Cards in a responsive grid (`auto-fit`, at least 26 rem wide) that becomes one column on tablets and phones; under 768 px each row's label sits above its value. Buttons and file links are 44 px tall on touch screens. Colours come from the theme tokens (§6.17), so both themes work.
 
-### 6.19 Accessibility basics
+### 6.19 Accessibility (WCAG 2.2 AA)
 
-- **Landmarks:** `nav` (sidebar), `main` (workspace) and `complementary` (right panel).
+The target is WCAG 2.2 Level AA. [ACCESSIBILITY.md](ACCESSIBILITY.md) has the status, how it is tested and the known gaps.
+
+- **Landmarks:** `nav` (ribbon, sidebar), `main` (workspace) and `complementary` (right panel). **"Skip to content"** is the first Tab stop, shown only while focused: it moves focus past the ribbon and the sidebar into the active pane (its editor, or its scroll container) without touching the URL.
 - **Explorer:** follows the ARIA tree pattern (`role=tree`/`treeitem`, `aria-expanded`, roving tabindex).
+- **Panel tabs** (the sidebars' icon strips): the ARIA tabs pattern, one Tab stop, `←/→` (and `↑/↓`), `Home`, `End` select the previous, next, first and last panel; only the selected tab names its tab panel in `aria-controls`.
+- **Workspace tabs** (§6.40): `role=tab` with no control inside it (WCAG 4.1.2): the × is drawn for the pointer only, and the keyboard closes a tab with `Delete` or from its menu (`Shift-F10`), which `aria-keyshortcuts` announces. `←/→`, `Home` and `End` move between tabs.
+- **Menus** (context menus, the phone's ⋯ menu): `role=menu`; `↑/↓` wrap, `Home`/`End` go to the ends, `Esc` and `Tab` close the menu and focus goes back to what opened it.
 - **Switcher and palette:** follow the ARIA combobox and listbox pattern (`aria-activedescendant`).
-- **Dialogs:** use `role=dialog`, `aria-modal`, trap focus, and return focus on close.
-- **Live regions:** save status and toasts use `aria-live="polite"`; the conflict banner uses `role="alert"`.
-- **Focus and motion:** a visible `:focus-visible` ring; `prefers-reduced-motion` disables drawer and sheet animations.
+- **Grids:** the calendar month (§6.32) and the habit heatmaps (§6.35) are ARIA grids with one Tab stop and arrow keys (a roving tabindex).
+- **Dialogs:** use `role=dialog`, `aria-modal`, a label, trap focus (only the topmost dialog), and return focus on close. When what had the focus is gone (a dialog opened from the command palette), focus goes to the active pane, never to the page's body. The phone drawer, the bottom sheet and the tablet's sidebar overlays are modal too: Tab stays inside them, and the ribbon and the workspace behind them are `inert` while they are open. ☰ says whether the drawer is open (`aria-expanded`).
+- **Live regions:** save status, toasts and the desktop connection indicator use `aria-live="polite"` (`role=status`); the status bar's save summary is not one, so a save is announced once; the conflict banner and form errors use `role="alert"`, and a field names its error in `aria-describedby`. A toast waits while the pointer is over it or the focus is in it, so its action (Undo) can be reached in time (WCAG 2.2.1).
+- **Focus:** a visible `:focus-visible` ring (2 px, `--focus-ring`, at least 3:1 on every background, §6.17), menu items and tree rows included; the inline title, styled as a heading, shows a line under it while focused.
+- **Motion:** with `prefers-reduced-motion: reduce`, every transition and animation ends at once and nothing scrolls smoothly; only loading spinners keep turning.
 - **Focus after navigation:** after a keyboard-initiated navigation to a note, focus moves to the editor (or the reading view's container); after a pointer navigation, the note's name is announced through a polite live region. Focus never stays stranded on the switcher's trigger.
-- **Editor escape:** `Esc` then `Tab` leaves the editor (§6.14).
-- **Icons:** every icon-only button has an `aria-label` and a tooltip.
-- **Touch targets in Compare:** under `(pointer: coarse)`, the merge view's per-chunk accept and reject controls are enlarged to 44 px.
+- **Editor:** every CodeMirror editor has an accessible name ("Note text", "File text", "Decrypted note text", "Table cell", "Card text", and the history views' "Changes since this version", "Text of this version", "Merged text"; `editor/a11y.ts`). `Esc` then `Tab` leaves the editor (§6.14).
+- **Links** in notes are underlined (wikilinks faintly until hover), because the link colour alone is too close to the text's (WCAG 1.4.1); unresolved links keep a dashed underline.
+- **Icons:** every icon-only button has an `aria-label` and a tooltip; a button that shows text (a count, a day) has a name that starts with that text (WCAG 2.5.3).
+- **Touch targets:** at least 24 × 24 px everywhere (WCAG 2.5.8) and 44 × 44 px on touch screens (§6.16). Under `(pointer: coarse)`, the merge view's per-chunk accept and reject controls are enlarged to 44 px.
+- **Scrolling regions** that hold no control (a wide Mermaid diagram on a phone, the search help) take the focus themselves, so the keyboard can scroll them.
 - **Checkboxes** in the reading view get an `aria-label` from their list item's text (§6.7).
+- **Tests:** `npm test` runs axe-core on the whole shell in jsdom (`src/a11y.test.tsx`) and checks the theme tokens' contrast (`src/styles/contrast.test.ts`); `npm run test:a11y` runs axe-core in a real browser on every page, panel, dialog and view at desktop and phone sizes in both themes, with keyboard and reflow checks (ACCESSIBILITY.md).
 
 ### 6.20 Error UX
 
@@ -4013,7 +4035,7 @@ The code is in `frontend/src/habits/`: `model.ts` (habits from notes, schedules)
 
 - **Streaks.** For a day schedule, the current streak counts done days back from today (from yesterday while today is still open); a scheduled day that was missed ends it once more than `maxGap` such days follow each other (Habit Tracker 21's gap tolerance), and days the schedule skips neither count nor break it, though a done day still counts. An N-a-week habit counts weeks (Monday to Sunday) that met the target; the current week counts once met.
 - **Rate.** The share of scheduled days done over the last 30 days (four full weeks, each capped at its target, for N a week), from the habit's start: its `created` date, else its first check-in.
-- **Calendar.** 53 weeks, Monday on top, the latest week on the right (a phone opens on it and scrolls back). For one habit a day is done (the habit's colour), missed (an outline), not scheduled (faint), or before the start. For all habits each day has one of five levels of one hue: the share of the habits due that day that were done. Days have no tap targets of their own: a tap or focus on a day shows it in a readout above the grid, with **Mark done** or **Mark not done** for one habit.
+- **Calendar.** 53 weeks, Monday on top, the latest week on the right (a phone opens on it and scrolls back). For one habit a day is done (the habit's colour), missed (an outline), not scheduled (faint), or before the start. For all habits each day has one of five levels of one hue: the share of the habits due that day that were done. Days have no tap targets of their own: a tap or focus on a day shows it in a readout above the grid, with **Mark done** or **Mark not done** for one habit. The grid is one Tab stop (§6.19): `↑/↓` move a day, `←/→` a week, `Home`/`End` go to the first and last day.
 
 **Writes** (`write.ts`, `frontmatterEdit.ts`). A check-in adds the day to `entries`, sorted, in block style as Obsidian writes lists; undoing it removes the day, and when a daily note checked the day its property becomes `false`. Only that property's lines change: the YAML is parsed with `yaml`'s Document API for the property's exact range, the lines are replaced (a missing property is appended, a note without frontmatter gets one), and every other byte, comment and quoting stays. Broken YAML is never rewritten (a toast says why). A note that has a session on this device (open in a view, or cached) is edited through it, so the editor, drafts and autosave stay in charge; a note in conflict there is left alone with a toast. Any other note is read, edited and saved with its version, and a `409 version-conflict` re-applies the edit to the newer text (up to four times): the edits are set operations, so re-applying is always right. Edits of one note run one after another. The page shows a check-in at once (the query is patched) and refetches once it is written.
 
@@ -4139,7 +4161,7 @@ interface Workspace { panes: Record<id, Pane>; layout: Layout; activePane; close
 - **Only each pane's shown tab is mounted** (lazy: restored and background tabs cost nothing until shown). Scroll positions are remembered per tab and route and restored when a tab is shown again; editing state, undo included, survives in the session (§6.3).
 - An inactive pane gets a `NavigationContext` whose navigator moves **its own tab**: a `<Navigate>` or `useNavigate()` inside it never touches the URL. A pointer or focus entering a pane makes it active first (`onPointerDownCapture`, `onFocusCapture`), so the click that follows acts in the active pane as before.
 - `PaneContext` (`{ paneId, active }`) gates what belongs to the page rather than to a pane: only the active pane's editor becomes the active editor (palette commands, the mobile toolbar) and takes focus when it mounts, answers Outline clicks and mode-switch scroll requests, records the file in Recent files and sets `document.title`; only its scroll container answers focus requests and carries `id="workspace-scroll"`. Outside a pane (tests, embeds) a component acts as the active pane's.
-- The strip: icon and title per tab (`labels.ts`: the file's name and its view's icon, or the page's title), × (or a pin), middle click closes, double click on the empty strip or **+** opens a new tab, a context menu (Close, Close others, Close tabs to the right, Pin/Unpin, Split right, Split down, Reopen closed tab, Close pane), and Split right, Split down and Close pane buttons. The active pane's shown tab carries an accent line when there are several panes. Keyboard: `←/→` move between tabs, `Enter` shows one, `Delete` closes it, `Shift-F10` or the menu key opens its menu.
+- The strip: icon and title per tab (`labels.ts`: the file's name and its view's icon, or the page's title), × (or a pin), middle click closes, double click on the empty strip or **+** opens a new tab, a context menu (Close, Close others, Close tabs to the right, Pin/Unpin, Split right, Split down, Reopen closed tab, Close pane), and Split right, Split down and Close pane buttons. The active pane's shown tab carries an accent line when there are several panes. Keyboard: `←/→` move between tabs (`Home`/`End` to the first and last), `Enter` shows one, `Delete` closes it, `Shift-F10` or the menu key opens its menu. The × is for the pointer only (no control inside a tab, §6.19).
 
 **One file in two panes** (`DocumentSession.routeTransactions`). A file shown in two panes has one `DocumentSession` (the registry is per path, §6.3); its holders keep it open until no pane shows it, and the last release flushes it.
 

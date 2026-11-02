@@ -3,7 +3,7 @@
 // holds the per-device preferences and the recently discarded edits.
 import { ArrowLeft, CircleHelp, Copy, Info, Laptop, RotateCcw, Trash2, TriangleAlert } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useId, useState, type ReactNode } from 'react';
 import { Link, NavLink, useLocation } from 'react-router';
 import { errorMessage } from '../../api/client';
 import { api } from '../../api/endpoints';
@@ -166,16 +166,36 @@ function useSettingsDraft(response: SettingsResponse | undefined) {
 
 // ---------- controls ----------
 
+/** The ids of a row's description and error, which its control names in aria-describedby (WCAG 1.3.1, 3.3.1). */
+const RowDescription = createContext<{ describedBy?: string; invalid: boolean }>({ invalid: false });
+
 function Row({ label, description, error, warning, children }: { label: string; description?: ReactNode; error?: string; warning?: string | null; children: ReactNode }) {
+  const id = useId();
+  const note = error ? `${id}-error` : warning ? `${id}-warning` : null;
+  const describedBy = [description ? `${id}-description` : null, note].filter(Boolean).join(' ') || undefined;
   return (
     <div className="setting-row">
       <div className="setting-info">
         <div className="setting-label">{label}</div>
-        {description && <div className="setting-description">{description}</div>}
-        {error && <div className="field-error">{error}</div>}
-        {!error && warning && <div className="field-warning">{warning}</div>}
+        {description && (
+          <div className="setting-description" id={`${id}-description`}>
+            {description}
+          </div>
+        )}
+        {error && (
+          <div className="field-error" id={`${id}-error`} role="alert">
+            {error}
+          </div>
+        )}
+        {!error && warning && (
+          <div className="field-warning" id={`${id}-warning`}>
+            {warning}
+          </div>
+        )}
       </div>
-      <div className="setting-control">{children}</div>
+      <div className="setting-control">
+        <RowDescription.Provider value={{ describedBy, invalid: !!error }}>{children}</RowDescription.Provider>
+      </div>
     </div>
   );
 }
@@ -187,6 +207,7 @@ function Row({ label, description, error, warning, children }: { label: string; 
 export function TextSetting({ value, onChange, disabled, placeholder, label, trim = false }: { value: string; onChange(v: string): void; disabled: boolean; placeholder?: string; label: string; trim?: boolean }) {
   const [text, setText] = useState(value);
   const [shown, setShown] = useState(value);
+  const row = useContext(RowDescription);
   if (value !== shown) {
     // A change from outside (saved, another device) replaces the text; this field's own trimmed
     // value does not.
@@ -200,6 +221,8 @@ export function TextSetting({ value, onChange, disabled, placeholder, label, tri
       placeholder={placeholder}
       disabled={disabled}
       aria-label={label}
+      aria-describedby={row.describedBy}
+      aria-invalid={row.invalid || undefined}
       onChange={(e) => {
         setText(e.target.value);
         onChange(trim ? e.target.value.trim() : e.target.value);
@@ -212,16 +235,18 @@ export function TextSetting({ value, onChange, disabled, placeholder, label, tri
 }
 
 function Toggle({ checked, onChange, disabled, label }: { checked: boolean; onChange(v: boolean): void; disabled?: boolean; label: string }) {
+  const row = useContext(RowDescription);
   return (
-    <button type="button" role="switch" aria-checked={checked} aria-label={label} className={`toggle${checked ? ' is-on' : ''}`} disabled={disabled} onClick={() => onChange(!checked)}>
+    <button type="button" role="switch" aria-checked={checked} aria-label={label} aria-describedby={row.describedBy} className={`toggle${checked ? ' is-on' : ''}`} disabled={disabled} onClick={() => onChange(!checked)}>
       <span className="toggle-knob" />
     </button>
   );
 }
 
 function Select<T extends string>({ value, options, onChange, disabled, label }: { value: T; options: Array<[T, string]>; onChange(v: T): void; disabled?: boolean; label: string }) {
+  const row = useContext(RowDescription);
   return (
-    <select className="select" value={value} disabled={disabled} aria-label={label} onChange={(e) => onChange(e.target.value as T)}>
+    <select className="select" value={value} disabled={disabled} aria-label={label} aria-describedby={row.describedBy} aria-invalid={row.invalid || undefined} onChange={(e) => onChange(e.target.value as T)}>
       {options.map(([v, text]) => (
         <option key={v} value={v}>
           {text}
@@ -639,7 +664,7 @@ export function RemindersSection({ settings: s, set, disabled, errors }: VaultSe
         <Info size={14} aria-hidden /> Task reminders (set in a task’s details) and the daily-note nudge reach you through the routes switched on here. A reminder counts as delivered once one of them takes it; reminders missed while the server was down follow when it starts.
       </p>
 
-      <h3 className="settings-subtitle">Web Push</h3>
+      <h2 className="settings-subtitle">Web Push</h2>
       <Row label="Send by Web Push" description="To the devices below, even with NotesApp closed. On iPhone and iPad this needs iOS 16.4 or later and NotesApp added to the Home Screen. Each message is encrypted for its device; Apple, Google or Mozilla only relay it.">
         <Toggle label="Send reminders by Web Push" checked={r.webPush} disabled={disabled} onChange={(v) => rem({ webPush: v })} />
       </Row>
@@ -684,7 +709,7 @@ export function RemindersSection({ settings: s, set, disabled, errors }: VaultSe
         </ul>
       )}
 
-      <h3 className="settings-subtitle">ntfy</h3>
+      <h2 className="settings-subtitle">ntfy</h2>
       <Row label="Send through ntfy" description="To the ntfy app, with the server and topic of the server’s ntfy.json (CASAOS.md or DEPLOY.md, “Reminders”).">
         <Toggle label="Send reminders through ntfy" checked={r.ntfy} disabled={disabled} onChange={(v) => rem({ ntfy: v })} />
       </Row>
@@ -695,7 +720,7 @@ export function RemindersSection({ settings: s, set, disabled, errors }: VaultSe
         <TestButton route="ntfy" />
       </Row>
 
-      <h3 className="settings-subtitle">In the app</h3>
+      <h2 className="settings-subtitle">In the app</h2>
       <Row label="Show in open tabs" description="A message in every open NotesApp tab, and a system notification where this browser allows it. Nothing arrives while every tab is closed.">
         <Toggle label="Show reminders in open tabs" checked={r.inApp} disabled={disabled} onChange={(v) => rem({ inApp: v })} />
       </Row>
@@ -710,7 +735,7 @@ export function RemindersSection({ settings: s, set, disabled, errors }: VaultSe
         </div>
       </Row>
 
-      <h3 className="settings-subtitle">Daily note</h3>
+      <h2 className="settings-subtitle">Daily note</h2>
       <Row label="Daily-note nudge" description="A reminder at this time when today’s daily note does not exist yet." error={errors.reminderTime}>
         <div className="setting-buttons">
           <input type="time" className="text-input" aria-label="Daily-note nudge time" value={r.dailyNoteTime} disabled={disabled} onChange={(e) => e.target.value && rem({ dailyNoteTime: e.target.value.slice(0, 5) }, false)} />
@@ -718,7 +743,7 @@ export function RemindersSection({ settings: s, set, disabled, errors }: VaultSe
         </div>
       </Row>
 
-      <h3 className="settings-subtitle">Status</h3>
+      <h2 className="settings-subtitle">Status</h2>
       <dl className="about-list">
         <div className="about-row">
           <dt>Time zone</dt>
@@ -974,7 +999,7 @@ function DeviceSection() {
       <Row label="Lock encrypted notes when the app is hidden" description="Switching to another tab or app, or locking the phone, locks them at once.">
         <Toggle label="Lock encrypted notes when the app is hidden" checked={prefs.encryptionLockOnHide} onChange={(encryptionLockOnHide) => prefs.update({ encryptionLockOnHide })} />
       </Row>
-      <h3 className="settings-subtitle">Recently discarded edits</h3>
+      <h2 className="settings-subtitle">Recently discarded edits</h2>
       {draftsFailing && (
         <p className="field-error">
           <TriangleAlert size={13} aria-hidden /> Unsaved changes are not protected on this device: the browser refused to store drafts.

@@ -125,7 +125,11 @@ function PublishFields({ path, data, onClose }: { path: string; data: PublishRes
                   />
                 </span>
               </div>
-              {error && <p className="field-error">{error}</p>}
+              {error && (
+                <p className="field-error" role="alert">
+                  {error}
+                </p>
+              )}
             </>
           )}
         </>

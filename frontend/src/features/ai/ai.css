@@ -43,7 +43,7 @@
 }
 
 .ai-small-button.is-active {
-  color: var(--interactive-accent);
+  color: var(--text-accent);
 }
 
 .ai-messages {
@@ -316,7 +316,7 @@
 }
 
 .ai-send {
-  color: var(--interactive-accent);
+  color: var(--text-accent);
 }
 
 .ai-footnote {

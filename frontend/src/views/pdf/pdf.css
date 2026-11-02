@@ -51,7 +51,7 @@
 
 .pdf-toolbar .icon-button[aria-pressed='true'] {
   background: var(--background-modifier-hover);
-  color: var(--interactive-accent);
+  color: var(--text-accent);
 }
 
 .pdf-page-input {

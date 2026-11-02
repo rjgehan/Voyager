@@ -50,6 +50,8 @@ cd frontend; npx tsc -b; npm run lint; npm test; npm run build; npx vite build -
 cd clipper;  npm test                              # and desktop: npm test
 ```
 
+`npm test` includes the accessibility checks that need no browser (axe-core on the app shell, and the theme colours' contrast). The full audit runs axe-core in an installed Chrome or Edge on every screen, both themes, desktop and phone: `cd frontend; npm run test:a11y` (not in CI; see [ACCESSIBILITY.md](ACCESSIBILITY.md)).
+
 ## How a change reaches the server
 
 1. **Pull requests** run the backend tests, the frontend lint, tests and build, and a Docker image build (amd64, not pushed), so the Dockerfile is exercised before anything reaches `main`.

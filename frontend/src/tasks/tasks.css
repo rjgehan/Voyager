@@ -144,7 +144,7 @@ button.link-button {
 }
 
 .tasks-list-icon {
-  color: var(--interactive-accent);
+  color: var(--text-accent);
 }
 
 .tasks-list-chevron {
@@ -361,7 +361,7 @@ button.link-button {
 }
 
 .task-date.tone-soon {
-  color: var(--interactive-accent);
+  color: var(--text-accent);
 }
 
 .task-tag {
@@ -1398,7 +1398,7 @@ textarea[data-unsaved='true'] {
 }
 
 .tasks-week-day.is-today .tasks-week-date {
-  color: var(--interactive-accent);
+  color: var(--text-accent);
 }
 
 .tasks-week-load {
@@ -1412,7 +1412,7 @@ textarea[data-unsaved='true'] {
 
 .tasks-week-load.has-tasks {
   background: color-mix(in srgb, var(--interactive-accent) 18%, transparent);
-  color: var(--interactive-accent);
+  color: var(--text-accent);
 }
 
 .tasks-day {
@@ -1420,7 +1420,7 @@ textarea[data-unsaved='true'] {
 }
 
 .tasks-day .tasks-group-title.tone-today {
-  color: var(--interactive-accent);
+  color: var(--text-accent);
 }
 
 .tasks-day-add {

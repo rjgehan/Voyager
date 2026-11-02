@@ -31,6 +31,7 @@ import { trackedRangesField } from './tracked';
 import { uploadsField } from './uploads';
 import { uploadWidgets } from './uploadsView';
 import { editorCommandKeys, vimSlot, type CommandKey } from './vimMode';
+import { editorLabel } from './a11y';
 
 export interface EditorHooks {
   /** A local (non-remote) document change: the session marks itself dirty. */
@@ -191,6 +192,7 @@ const clickNavigation: Extension = [
  */
 function tableCellExtensions(ctx: NoteContext, hooks: EditorHooks, config: LivePreviewConfig): Extension[] {
   return [
+    editorLabel('Table cell'),
     noteContext.of(ctx),
     isIOS ? [] : drawSelection(),
     cellLanguage,
@@ -219,6 +221,7 @@ function tableCellExtensions(ctx: NoteContext, hooks: EditorHooks, config: LiveP
 export function noteExtensions(ctx: NoteContext, hooks: EditorHooks): Extension[] {
   const preview = hooks.livePreview;
   return [
+    editorLabel('Note text'),
     noteContext.of(ctx),
     common(hooks),
     preview?.locked ? [] : placeholder('Start writing…'),
@@ -255,11 +258,13 @@ export function noteExtensions(ctx: NoteContext, hooks: EditorHooks): Extension[
 export function decryptedNoteExtensions(hooks: EditorHooks & { save(): void }, preview: LivePreviewConfig | null): Extension[] {
   const editable = preview !== null && !preview.locked;
   return [
+    editorLabel('Decrypted note text'),
     plainTextExtensions(hooks, markdownNoteLanguage()),
     lineClassPlugin,
     preview ? livePreview(preview) : [],
     editable
       ? tableCellSetup.of(() => [
+          editorLabel('Table cell'),
           isIOS ? [] : drawSelection(),
           cellLanguage,
           syntaxHighlighting(obsidianHighlight),
@@ -281,6 +286,7 @@ export function decryptedNoteExtensions(hooks: EditorHooks & { save(): void }, p
 /** Plain text files (`text` view): the same editing basics, with an optional language. */
 export function plainTextExtensions(hooks: EditorHooks & { save(): void }, language: LanguageSupport | null): Extension[] {
   return [
+    editorLabel('File text'),
     common(hooks),
     language ?? [],
     language ? syntaxHighlighting(obsidianHighlight) : [],

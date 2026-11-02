@@ -47,7 +47,7 @@ a {
 }
 
 :focus-visible {
-  outline: 2px solid var(--interactive-accent);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 1px;
   border-radius: var(--radius-s);
 }
@@ -243,7 +243,7 @@ body.is-resizing {
 
 /* A toggle that is on (lock editing, source mode). */
 .icon-button[aria-pressed='true'] {
-  color: var(--interactive-accent);
+  color: var(--text-accent);
 }
 
 /* ---------- sidebars and panels ---------- */
@@ -422,8 +422,8 @@ body.is-resizing {
 }
 
 .tree-row:focus-visible {
-  outline: 1px solid var(--interactive-accent);
-  outline-offset: -1px;
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
 }
 
 .tree-row-folder {
@@ -463,7 +463,7 @@ body.is-resizing {
 }
 
 .tree-row.is-active .tree-icon {
-  color: var(--interactive-accent);
+  color: var(--text-accent);
 }
 
 .tree-name {
@@ -471,12 +471,14 @@ body.is-resizing {
   text-overflow: ellipsis;
 }
 
+/* Outlined rather than tinted, and muted rather than faint: on a hovered or selected row a tint of its
+   own made the text too faint (WCAG 1.4.3). */
 .tree-ext {
   margin-left: auto;
   padding: 0 5px;
   border-radius: var(--radius-s);
-  background: var(--background-modifier-hover);
-  color: var(--text-faint);
+  box-shadow: inset 0 0 0 1px var(--background-modifier-border-hover);
+  color: var(--text-muted);
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -785,6 +787,25 @@ body.is-resizing {
   white-space: nowrap;
 }
 
+/* "Skip to content" (DESIGN §6.19): off screen until it has the keyboard focus. */
+.skip-link {
+  position: fixed;
+  top: calc(var(--vv-top, 0px) + 8px);
+  left: 8px;
+  z-index: 1000;
+  padding: 8px 12px;
+  border-radius: var(--radius-m);
+  background: var(--background-primary);
+  color: var(--text-normal);
+  box-shadow: var(--shadow-l);
+  transform: translateY(calc(-100% - 16px));
+}
+
+.skip-link:focus,
+.skip-link:focus-visible {
+  transform: none;
+}
+
 .save-status.tone-success svg {
   color: var(--text-success);
 }
@@ -1065,7 +1086,8 @@ body.is-resizing {
 
 .menu-item:focus-visible {
   background: var(--background-modifier-hover);
-  outline: none;
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
 }
 
 @media (hover: hover) {
@@ -1250,7 +1272,7 @@ body.is-resizing {
 .toast-action {
   border: 0;
   background: transparent;
-  color: var(--interactive-accent);
+  color: var(--text-accent);
   font-weight: 600;
   cursor: pointer;
   padding: 4px 6px;
@@ -1294,6 +1316,23 @@ body.is-resizing {
   .toast {
     transition: none;
     animation: none;
+  }
+
+  /* Everything else too (WCAG 2.3.3, DESIGN §6.19): transitions and animations end at once, and
+     nothing scrolls smoothly. A loading spinner keeps turning: it says that something is running. */
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0s !important;
+    scroll-behavior: auto !important;
+  }
+
+  .spin {
+    animation-duration: 1s !important;
+    animation-iteration-count: infinite !important;
   }
 }
 

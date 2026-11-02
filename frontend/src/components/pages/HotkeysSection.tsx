@@ -109,7 +109,11 @@ export function HotkeysSection() {
               <div className="setting-info">
                 <div className="setting-label">{c.name}</div>
                 {custom && <div className="setting-description">Default: {def ? keyLabel(def) : 'no key'}</div>}
-                {active?.error && <div className="field-error">{active.error}</div>}
+                {active?.error && (
+                  <div className="field-error" role="alert">
+                    {active.error}
+                  </div>
+                )}
                 {active?.pending && (
                   <div className="field-warning hotkey-conflict" role="alert">
                     {keyLabel(active.pending.spec)} is used by {active.pending.others.map((o) => `“${o.name}”`).join(', ')}.{' '}

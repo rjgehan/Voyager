@@ -65,7 +65,7 @@ export function PublishSettings() {
       ) : (
         <PublishOffNotice />
       )}
-      <h3 className="settings-subtitle">Published notes</h3>
+      <h2 className="settings-subtitle">Published notes</h2>
       {notes.length === 0 ? (
         <p className="muted">No notes are published.</p>
       ) : (

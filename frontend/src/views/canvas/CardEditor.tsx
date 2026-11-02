@@ -26,6 +26,7 @@ import { openLink, openTag } from '../../features/navigation';
 import { editorBlocks } from '../../features/blockRefs';
 import { recentPaths } from '../../features/recent';
 import { usePrefs } from '../../state/prefs';
+import { editorLabel } from '../../editor/a11y';
 
 interface Props {
   text: string;
@@ -89,6 +90,7 @@ export function CardEditor({ text, canvasPath, onChange, onDone, onSave, onBlur,
         doc: initial.current,
         selection: { anchor: initial.current.length },
         extensions: [
+          editorLabel('Card text'),
           noteContext.of(ctx),
           history(),
           markdownNoteLanguage(),

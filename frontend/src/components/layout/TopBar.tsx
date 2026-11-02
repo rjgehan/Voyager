@@ -9,6 +9,7 @@ import { useTree } from '../../api/hooks';
 import { pageRoute, registeredPages, useExtensionsVersion } from '../../extensions';
 import { isFileBookmarked, toggleFileBookmark, useBookmarks } from '../../features/bookmarkStore';
 import { getCommand, runCommand, useCommandsVersion } from '../../features/commands';
+import { menuKey } from '../../features/focus';
 import { mirrorMisconfigured, pushMirrorNow } from '../../features/mirror';
 import { toggleSourceMode, useNoteMode, viewModeFor } from '../../features/noteMode';
 import { navigateOverOverlays, useOverlayHistory } from '../../features/overlayHistory';
@@ -41,7 +42,14 @@ function MoreMenu({ path, mode, onClose }: { path: string | null; mode: ViewMode
     const onDown = (e: PointerEvent) => {
       if (!ref.current?.contains(e.target as Node) && !(e.target as HTMLElement).closest?.('.menu-anchor')) onClose();
     };
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      // Focus goes back to ⋯ when it was inside the menu.
+      const inside = ref.current?.contains(document.activeElement);
+      const anchor = ref.current?.closest('.menu-anchor')?.querySelector<HTMLElement>('button');
+      onClose();
+      if (inside) anchor?.focus();
+    };
     window.addEventListener('pointerdown', onDown);
     window.addEventListener('keydown', onKey);
     ref.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
@@ -70,7 +78,20 @@ function MoreMenu({ path, mode, onClose }: { path: string | null; mode: ViewMode
   // Notes shown by another view (an `.excalidraw.md` drawing) have no outline or template target.
   const note = !!entry && isMarkdownViewPath(entry.path);
   return (
-    <div ref={ref} className="menu" role="menu" aria-label="More">
+    <div
+      ref={ref}
+      className="menu"
+      role="menu"
+      aria-label="More"
+      onKeyDown={(e) => {
+        if (menuKey(e, ref.current)) return;
+        if (e.key === 'Tab') {
+          e.preventDefault();
+          onClose();
+          ref.current?.closest('.menu-anchor')?.querySelector<HTMLElement>('button')?.focus();
+        }
+      }}
+    >
       {historyWarning && (
         <div className="menu-warning" role="note">
           <TriangleAlert size={14} aria-hidden /> {historyWarning}
@@ -115,7 +136,8 @@ function TopBarSaveStatus({ path }: { path: string }) {
 /** The phone's way to its tabs (DESIGN §6.40): the count of open tabs; a tap shows them all. */
 function TabsButton() {
   const count = useWorkspace((s) => Object.values(s.ws.panes).reduce((n, p) => n + p.tabs.length, 0));
-  const label = count === 1 ? 'Show open tabs (1 tab)' : 'Show open tabs (' + count + ' tabs)';
+  // The name starts with the count the button shows (WCAG 2.5.3).
+  const label = count === 1 ? '1 open tab, show tabs' : `${count} open tabs, show tabs`;
   return (
     <button type="button" className="icon-button top-bar-tabs" aria-label={label} title="Tabs" onClick={() => useUi.getState().setOverlay(TAB_SWITCHER)}>
       <span className="top-bar-tab-count" aria-hidden>
@@ -134,6 +156,7 @@ export function TopBar() {
   const mode = useNoteMode();
   const pending = usePendingNote((s) => s.pending);
   const setDrawerOpen = useUi((s) => s.setDrawerOpen);
+  const drawerOpen = useUi((s) => s.drawerOpen);
   const sheetOpen = useUi((s) => s.sheetOpen);
   const setSheetOpen = useUi((s) => s.setSheetOpen);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -155,7 +178,7 @@ export function TopBar() {
 
   return (
     <header className="top-bar">
-      <button type="button" className="icon-button" aria-label="Open sidebar" title="Open sidebar" onClick={() => setDrawerOpen(true)}>
+      <button type="button" className="icon-button" aria-label="Open sidebar" title="Open sidebar" aria-haspopup="dialog" aria-expanded={drawerOpen} onClick={() => setDrawerOpen(true)}>
         <Menu size={20} />
       </button>
       <div className="top-bar-title">

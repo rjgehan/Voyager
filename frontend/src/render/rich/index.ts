@@ -176,7 +176,12 @@ function showDiagram(target: HTMLElement, svg: DocumentFragment, theme: Theme): 
   // Mermaid sizes the SVG `width: 100%` with its natural width as `max-width`.
   const natural = parseFloat(svg.querySelector('svg')?.style.maxWidth ?? '');
   if (natural > 0) svg.querySelector('svg')!.style.minWidth = `${Math.round(natural * MIN_DIAGRAM_SCALE)}px`;
-  child(target, 'mermaid-svg', target.firstElementChild).replaceChildren(svg);
+  const box = child(target, 'mermaid-svg', target.firstElementChild);
+  box.replaceChildren(svg);
+  // A wide diagram scrolls sideways on a phone: the keyboard can scroll it too (WCAG 2.1.1).
+  box.tabIndex = 0;
+  box.setAttribute('role', 'group');
+  box.setAttribute('aria-label', 'Diagram');
   target.dataset.renderedTheme = theme;
   target.classList.remove('has-error', 'is-loading');
   target.classList.add('is-rendered');

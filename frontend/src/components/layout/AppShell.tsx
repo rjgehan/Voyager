@@ -2,7 +2,7 @@
 // Phone: TopBar + workspace, left panels in a drawer, right panels in a bottom sheet.
 // Tablet: icon rail + workspace, both sidebars as overlays. Desktop: ribbon, resizable sidebars,
 // workspace and status bar. Touch devices get the editing toolbar as the last grid row. The shell
-// also hosts the overlays, the app-level file input and the polite live region.
+// also hosts the overlays, the app-level file input, the polite live region and the skip link.
 import { CalendarDays, CircleHelp, FilePlus, Inbox, Moon, RefreshCw, Settings, Sun, Trash, TriangleAlert } from 'lucide-react';
 import { lazy, Suspense, useCallback, useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 import { setFilePicker } from '../../features/attachments';
@@ -131,6 +131,28 @@ function LiveRegion() {
 }
 
 /**
+ * "Skip to content" (WCAG 2.4.1, DESIGN §6.19): the first Tab stop, shown only while focused. It
+ * moves focus past the ribbon and the sidebar into the active pane: its editor, or its scroll
+ * container. A script handles it, so the URL gets no `#fragment` the router would see.
+ */
+function SkipLink() {
+  return (
+    <a
+      href="#workspace-scroll"
+      className="skip-link"
+      onClick={(e) => {
+        e.preventDefault();
+        const pane = document.getElementById('workspace-scroll');
+        const target = pane?.querySelector<HTMLElement>('.cm-content[contenteditable="true"]') ?? pane;
+        target?.focus();
+      }}
+    >
+      Skip to content
+    </a>
+  );
+}
+
+/**
  * The phone drawer's New note, Today and Capture buttons, and the registered pages as a grid of
  * tiles (DESIGN §6.16): a list of them took 11 rows and left the file tree one row.
  */
@@ -205,6 +227,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const phone = breakpoint === 'phone';
   const showLeft = desktop && ui.leftOpen;
   const showRight = desktop && ui.rightOpen;
+  // The drawer and the sheet are modal (DESIGN §6.19): what they cover is inert while they are open.
+  const covered = !desktop && (ui.drawerOpen || ui.sheetOpen) ? true : undefined;
 
   const left = <PanelTabs side="left" active={ui.leftTab} onSelect={ui.setLeftTab} />;
   const right = <PanelTabs side="right" active={ui.rightTab} onSelect={ui.setRightTab} />;
@@ -214,7 +238,8 @@ export function AppShell({ children }: { children: ReactNode }) {
       className={`app-shell is-${breakpoint}${showLeft ? ' has-left' : ''}${showRight ? ' has-right' : ''}`}
       style={{ '--left-width': `${ui.leftWidth}px`, '--right-width': `${ui.rightWidth}px` } as CSSProperties}
     >
-      {!phone && <Ribbon />}
+      <SkipLink />
+      {!phone && <Ribbon inert={covered} />}
       {showLeft && (
         <nav className="sidebar sidebar-left" aria-label="Sidebar">
           <VaultSwitcher />
@@ -222,7 +247,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <Resizer side="left" width={ui.leftWidth} min={LEFT_WIDTH.min} max={LEFT_WIDTH.max} onResize={ui.setLeftWidth} />
         </nav>
       )}
-      <main className="workspace">
+      <main className="workspace" inert={covered}>
         {!desktop && <TopBar />}
         <Banners />
         {children}

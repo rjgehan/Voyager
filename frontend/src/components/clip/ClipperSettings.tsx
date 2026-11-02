@@ -84,7 +84,7 @@ export function ClipperSettings() {
         so Tailscale must be connected.
       </p>
 
-      <h3 className="settings-subtitle">Bookmarklet (any desktop browser)</h3>
+      <h2 className="settings-subtitle">Bookmarklet (any desktop browser)</h2>
       {bookmarklet.state === 'missing' && <p className="field-warning">{MISSING}</p>}
       {href && (
         <>
@@ -99,7 +99,7 @@ export function ClipperSettings() {
         </>
       )}
 
-      <h3 className="settings-subtitle">Browser extension (Chrome, Edge, Firefox)</h3>
+      <h2 className="settings-subtitle">Browser extension (Chrome, Edge, Firefox)</h2>
       <p className="setting-note setting-prose">
         The extension adds a toolbar button and <em>Clip this page / the selection to NotesApp</em> to the right-click menu, works on every site,
         can save the article&rsquo;s images as attachments, and can save without the preview. It is not in a store: build it from the repository
@@ -109,7 +109,7 @@ export function ClipperSettings() {
       </p>
       <CopyValue value={origin} label="the address" />
 
-      <h3 className="settings-subtitle">iPhone and iPad (Safari&rsquo;s share sheet)</h3>
+      <h2 className="settings-subtitle">iPhone and iPad (Safari&rsquo;s share sheet)</h2>
       {script.state === 'missing' && <p className="field-warning">{MISSING}</p>}
       <ol className="capture-steps">
         <li>

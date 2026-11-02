@@ -77,13 +77,8 @@
   text-decoration-color: var(--link);
 }
 
-.markdown-rendered a.internal-link {
-  text-decoration-line: none;
-}
-
-.markdown-rendered a.internal-link:hover {
-  text-decoration-line: underline;
-}
+/* Wikilinks are underlined like web links (the underline fainter until hover): the link colour
+   alone is too close to the text's to tell them apart (WCAG 1.4.1). */
 
 .markdown-rendered a.is-unresolved,
 .properties a.is-unresolved {

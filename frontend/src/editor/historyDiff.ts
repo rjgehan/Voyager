@@ -8,6 +8,7 @@ import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { obsidianHighlight } from './highlight';
 import { markdownNoteLanguage } from './language';
 import { remoteChanges } from './remoteDiff';
+import { editorLabel } from './a11y';
 
 export interface DiffViewHandle {
   view: EditorView;
@@ -42,6 +43,7 @@ export function createHistoryDiffView(parent: HTMLElement, historical: string, c
     state: EditorState.create({
       doc: current,
       extensions: [
+        editorLabel('Changes since this version'),
         EditorView.lineWrapping,
         EditorState.readOnly.of(true),
         EditorView.editable.of(false),
@@ -65,7 +67,7 @@ export function createReadOnlyView(parent: HTMLElement, text: string, opts: { ma
     parent,
     state: EditorState.create({
       doc: text,
-      extensions: [EditorView.lineWrapping, EditorState.readOnly.of(true), EditorView.editable.of(false), language(opts.markdown ?? true)],
+      extensions: [editorLabel('Text of this version'), EditorView.lineWrapping, EditorState.readOnly.of(true), EditorView.editable.of(false), language(opts.markdown ?? true)],
     }),
   });
 }
@@ -81,6 +83,7 @@ export function createCompareView(parent: HTMLElement, doc: string, theirs: stri
     state: EditorState.create({
       doc,
       extensions: [
+        editorLabel('Merged text'),
         history(),
         EditorView.lineWrapping,
         language(opts.markdown ?? true),

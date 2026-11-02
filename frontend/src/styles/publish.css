@@ -103,7 +103,7 @@
 }
 
 .publish-toggle.is-on {
-  color: var(--interactive-accent);
+  color: var(--text-accent);
 }
 
 .publish-toggle.is-stale {

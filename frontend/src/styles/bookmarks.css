@@ -92,14 +92,14 @@
 .recent-star,
 .picker-item-star {
   flex: none;
-  color: var(--interactive-accent);
+  color: var(--text-accent);
   fill: currentColor;
 }
 
 .bookmark-toggle.is-on,
 .outline-star.is-on,
 .search-star.is-on {
-  color: var(--interactive-accent);
+  color: var(--text-accent);
 }
 
 /* Outline: each heading has a star, shown on hover or focus (always on touch). */

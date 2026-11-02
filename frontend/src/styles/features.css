@@ -3,12 +3,14 @@
 
 /* ---------- form controls ---------- */
 
+/* A field's border is what shows it is a field: --input-border is 3:1 on the page (WCAG 1.4.11), and
+   the focused field gets a 2 px ring in --focus-ring. */
 .text-input,
 .select {
   width: 100%;
   min-height: 32px;
   padding: 5px 10px;
-  border: 1px solid var(--background-modifier-border);
+  border: 1px solid var(--input-border);
   border-radius: var(--radius-s);
   background: var(--background-modifier-form-field);
   color: var(--text-normal);
@@ -18,8 +20,8 @@
 .text-input:focus,
 .select:focus {
   outline: none;
-  border-color: var(--interactive-accent);
-  box-shadow: 0 0 0 2px var(--text-selection);
+  border-color: var(--focus-ring);
+  box-shadow: 0 0 0 1px var(--focus-ring);
 }
 
 .text-input[aria-invalid='true'] {
@@ -77,7 +79,7 @@ textarea.text-input {
 .button-danger {
   border-color: transparent;
   background: var(--text-error);
-  color: #fff;
+  color: var(--text-on-error);
 }
 
 /* Hover only where there is a hover: on iOS a tap leaves :hover on until the next tap (DESIGN §6.16). */
@@ -219,7 +221,7 @@ textarea.text-input {
   display: none;
   border: 0;
   background: transparent;
-  color: var(--interactive-accent);
+  color: var(--text-accent);
   font-size: 16px;
   cursor: pointer;
 }
@@ -516,6 +518,11 @@ textarea.text-input {
   outline: none;
 }
 
+/* The title looks like a heading; a line under it shows that it has the focus (WCAG 2.4.7). */
+.inline-title-input:focus-visible {
+  box-shadow: 0 2px 0 0 var(--focus-ring);
+}
+
 .inline-title-input[aria-invalid='true'] {
   text-decoration: underline wavy var(--text-error);
   text-underline-offset: 6px;
@@ -793,11 +800,23 @@ mark.match {
   }
 }
 
+/* 24 × 24 px to tap (WCAG 2.5.8), not overlapped by the row's button; the icon stays about where a
+   14 px chevron would be. */
 .tag-chevron {
+  justify-content: center;
+  align-items: center;
+  width: 24px;
+  height: 24px;
+  margin-inline: -5px 0;
   border: 0;
   background: transparent;
   padding: 0;
   cursor: pointer;
+}
+
+/* Rows without children line up with the 19 px a chevron takes. */
+.tag-row > .tree-chevron.is-empty {
+  width: 19px;
 }
 
 .tag-row-button {
@@ -1868,8 +1887,10 @@ mark.match {
   color: var(--text-normal);
 }
 
+/* Wraps on a narrow drawer (320 px, or a phone zoomed in) instead of scrolling sideways (WCAG 1.4.10). */
 .drawer-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   padding: 10px 10px 4px;
 }

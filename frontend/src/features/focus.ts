@@ -68,13 +68,23 @@ export function isKeyboardClick(e: { detail: number }): boolean {
 /**
  * Returns focus to `previous` when an overlay closes, unless something outside `container` has
  * deliberately taken the focus meanwhile (a command that focused the inline title, a note view
- * that focused its editor).
+ * that focused its editor). When `previous` is gone (a dialog opened from the command palette,
+ * which has closed), the active pane takes the focus, so it is never left on the page's body.
  */
 export function returnFocus(previous: HTMLElement | null, container: HTMLElement | null): void {
-  if (!previous || !previous.isConnected || previous === document.body) return;
+  if (!previous || previous === document.body) return;
   const active = document.activeElement;
   if (active && active !== document.body && !(container?.contains(active) ?? false)) return;
-  previous.focus({ preventScroll: true });
+  if (previous.isConnected) {
+    previous.focus({ preventScroll: true });
+    return;
+  }
+  // After the overlay's own elements have left the page.
+  queueMicrotask(() => {
+    if (document.activeElement && document.activeElement !== document.body) return;
+    const pane = document.getElementById('workspace-scroll');
+    (pane?.querySelector<HTMLElement>('.cm-content[contenteditable="true"]') ?? pane)?.focus({ preventScroll: true });
+  });
 }
 
 // ---------- input modality ----------
@@ -99,4 +109,55 @@ export function installInputModality(): () => void {
 
 export function lastInputWasKeyboard(): boolean {
   return lastInput === 'keyboard';
+}
+
+// ---------- focus containment (DESIGN §6.19) ----------
+
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), textarea:not([disabled]), select:not([disabled]), [contenteditable="true"], [tabindex]:not([tabindex="-1"])';
+
+/** The elements of `container` that Tab can reach, in order (hidden ones left out). */
+export function tabbables(container: HTMLElement): HTMLElement[] {
+  return [...container.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((el) => !el.closest('[inert]') && (el.offsetParent !== null || el === document.activeElement));
+}
+
+/**
+ * Keeps Tab and Shift-Tab inside `container` (a modal dialog, the drawer, the bottom sheet): from
+ * the last element Tab wraps to the first, and from the first (or from outside) Shift-Tab wraps
+ * to the last. Call it from a keydown handler; it ignores other keys.
+ */
+export function trapTab(e: KeyboardEvent, container: HTMLElement): void {
+  if (e.key !== 'Tab' || e.altKey || e.ctrlKey || e.metaKey) return;
+  const items = tabbables(container);
+  if (items.length === 0) {
+    e.preventDefault();
+    container.focus({ preventScroll: true });
+    return;
+  }
+  const first = items[0];
+  const last = items[items.length - 1];
+  const active = document.activeElement;
+  const inside = container.contains(active);
+  if (e.shiftKey && (active === first || active === container || !inside)) {
+    e.preventDefault();
+    last.focus();
+  } else if (!e.shiftKey && (active === last || !inside)) {
+    e.preventDefault();
+    first.focus();
+  }
+}
+
+/**
+ * Arrow keys in a menu (ARIA menu pattern): ↑/↓ move between the enabled items and wrap,
+ * Home/End go to the first and last. Returns true when it handled the key.
+ */
+export function menuKey(e: { key: string; preventDefault(): void }, menu: HTMLElement | null): boolean {
+  if (!menu || !['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return false;
+  const items = [...menu.querySelectorAll<HTMLElement>('[role^="menuitem"]:not([disabled]):not([aria-disabled="true"])')];
+  if (items.length === 0) return false;
+  e.preventDefault();
+  const i = items.indexOf(document.activeElement as HTMLElement);
+  const next = e.key === 'Home' ? 0 : e.key === 'End' ? items.length - 1 : (i + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+  // From nowhere, ↑ starts at the last item.
+  items[i < 0 && e.key === 'ArrowUp' ? items.length - 1 : next].focus();
+  return true;
 }

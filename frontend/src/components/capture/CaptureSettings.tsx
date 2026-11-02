@@ -44,7 +44,7 @@ function FailedCaptures() {
       )}
       {failed.length > 0 && (
         <>
-          <h3 className="settings-subtitle">Captures the server refused</h3>
+          <h2 className="settings-subtitle">Captures the server refused</h2>
           <ul className="discarded-list">
             {failed.map((f) => (
               <li key={f.id} className="discarded-item">
@@ -85,7 +85,7 @@ export function CaptureSettings() {
         Captures go to the end of <strong>Inbox.md</strong> (at the top of the vault) or of today&rsquo;s daily note, one list item each with the time.
         Without a connection they wait on this device.
       </p>
-      <h3 className="settings-subtitle">In the app</h3>
+      <h2 className="settings-subtitle">In the app</h2>
       <ul className="capture-steps">
         <li>
           <kbd>{keyLabel('Mod-Shift-Space')}</kbd> anywhere, the ribbon&rsquo;s inbox button, or <em>Quick capture</em> in the command palette.
@@ -96,7 +96,7 @@ export function CaptureSettings() {
           icon&rsquo;s menu has <em>Quick capture</em>.
         </li>
       </ul>
-      <h3 className="settings-subtitle">iPhone Share Sheet</h3>
+      <h2 className="settings-subtitle">iPhone Share Sheet</h2>
       <p className="setting-note">
         iOS does not let web apps receive shares, so a Shortcut sends them. It talks to NotesApp over the tailnet, so Tailscale must be connected.
       </p>

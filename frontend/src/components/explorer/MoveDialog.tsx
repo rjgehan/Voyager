@@ -112,9 +112,21 @@ function MoveForm({ path, type, onClose }: { path: string; type: 'file' | 'folde
       </div>
       <label className="field">
         <span className="field-label">Name</span>
-        <input className="text-input" value={name} onChange={(e) => setName(e.target.value)} aria-invalid={!!nameError} spellCheck={false} autoCapitalize="off" />
+        <input
+          className="text-input"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          aria-invalid={!!nameError}
+          aria-describedby={nameError ? `${listId}-name-error` : undefined}
+          spellCheck={false}
+          autoCapitalize="off"
+        />
       </label>
-      {nameError && <p className="field-error">{nameError}</p>}
+      {nameError && (
+        <p className="field-error" id={`${listId}-name-error`} role="alert">
+          {nameError}
+        </p>
+      )}
       <label className="checkbox-field">
         <input type="checkbox" checked={updateLinks} onChange={(e) => setUpdateLinks(e.target.checked)} />
         Update links to it

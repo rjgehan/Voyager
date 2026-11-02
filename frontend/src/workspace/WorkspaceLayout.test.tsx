@@ -84,8 +84,12 @@ describe('WorkspaceLayout', () => {
     ws = openTab(ws, '/zzz-b');
     resetWorkspace(ws);
     renderAt('/zzz-b');
+    // The × is for the pointer; it is not a control inside the tab (WCAG 4.1.2), Delete closes from the keyboard.
+    const tab = screen.getByRole('tab', { name: '/zzz-b' });
+    expect(tab.querySelector('button')).toBeNull();
+    expect(tab).toHaveAttribute('aria-keyshortcuts', 'Delete Shift+F10');
     act(() => {
-      fireEvent.click(screen.getByRole('button', { name: 'Close /zzz-b' }));
+      fireEvent.click(tab.querySelector('.ws-tab-close')!);
     });
     expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['/zzz-a']);
     expect(navigate).toHaveBeenCalledWith('/zzz-a', { replace: true });
