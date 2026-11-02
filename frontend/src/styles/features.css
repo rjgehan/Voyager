@@ -1912,9 +1912,10 @@ mark.match {
 
 /* ---------- phones ---------- */
 
-@media (max-width: 767px) {
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {
+  /* A phone on its side has the notch at the left or right. */
   .modal {
-    padding: max(12px, env(safe-area-inset-top)) 12px 12px;
+    padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 12px max(12px, env(safe-area-inset-left));
   }
 
   .modal-sheet {
@@ -1930,7 +1931,14 @@ mark.match {
     border: 0;
     border-radius: 0;
     padding-top: env(safe-area-inset-top);
+    padding-right: env(safe-area-inset-right);
     padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+  }
+
+  /* Above the keyboard the home indicator is covered. */
+  .keyboard-open .modal-sheet .modal-panel {
+    padding-bottom: 0;
   }
 
   .modal-sheet:has(.compare-dialog),
@@ -2130,7 +2138,7 @@ mark.match {
   font-size: var(--font-ui-small);
 }
 
-@media (max-width: 767px) {
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {
   .voice-panel .button {
     min-height: var(--tap-target);
   }

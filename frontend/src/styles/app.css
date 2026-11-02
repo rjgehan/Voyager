@@ -185,6 +185,27 @@ body.is-resizing {
   align-items: center;
 }
 
+/*
+ * Every page adds a ribbon button: when they no longer fit (44 px buttons on an iPad in landscape),
+ * the upper group scrolls and Trash, Settings and the theme toggle stay at the bottom.
+ */
+.ribbon-group:first-child {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+
+.ribbon-group:first-child::-webkit-scrollbar {
+  display: none;
+}
+
+.ribbon-group:last-child {
+  flex: none;
+  padding-top: 4px;
+}
+
 .ribbon-button,
 .icon-button {
   display: inline-flex;
@@ -659,7 +680,7 @@ body.is-resizing {
 }
 
 /* Phones have no note header bar above it. */
-@media (max-width: 767px) {
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {
   .source-mode-bar {
     top: 0;
   }
@@ -1078,12 +1099,14 @@ body.is-resizing {
   transition: transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
+/* Every panel keeps its content off the notch, the status bar and the home indicator. */
 .overlay-left .overlay-panel {
   top: 0;
   bottom: 0;
   left: 0;
   width: min(88vw, 360px);
   padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
   padding-left: env(safe-area-inset-left);
   transform: translateX(-102%);
 }
@@ -1094,6 +1117,7 @@ body.is-resizing {
   right: 0;
   width: min(88vw, 340px);
   padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
   padding-right: env(safe-area-inset-right);
   transform: translateX(102%);
 }
@@ -1105,8 +1129,13 @@ body.is-resizing {
   height: 70%;
   border-top-left-radius: var(--radius-l);
   border-top-right-radius: var(--radius-l);
-  padding-bottom: env(safe-area-inset-bottom);
+  padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
   transform: translateY(102%);
+}
+
+/* The overlays follow the visual viewport: above the keyboard the home indicator is covered. */
+.keyboard-open .overlay-panel {
+  padding-bottom: 0;
 }
 
 .overlay.is-open .overlay-panel {

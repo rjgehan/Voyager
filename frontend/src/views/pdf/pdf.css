@@ -232,7 +232,7 @@
   color: var(--text-normal);
 }
 
-@media (max-width: 767px) {
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {
   .pdf-page-input,
   .pdf-zoom-select,
   .pdf-find-input {

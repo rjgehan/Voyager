@@ -4,6 +4,7 @@ import { Columns2, CopyPlus, PanelTop, Pin, Plus, RotateCcw, Rows2, X } from 'lu
 import { registerCommand, registerPage } from '../extensions';
 import { noteRoute } from '../features/paths';
 import { setNewTabOpener } from '../features/navigation';
+import { isPhoneLayout } from '../features/platform';
 import { useUi } from '../state/ui';
 import { installTabGestures } from './gesture';
 import { activeTab, NEW_TAB_ROUTE } from './model';
@@ -24,7 +25,7 @@ import { TAB_SWITCHER } from './TabSwitcher';
 let registered = false;
 
 const many = () => Object.keys(workspace().panes).length > 1;
-const phone = () => typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 767px)').matches;
+const phone = isPhoneLayout;
 
 export function registerWorkspace(): void {
   if (registered) return;

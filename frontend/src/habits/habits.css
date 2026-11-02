@@ -624,7 +624,7 @@
   font-size: var(--font-ui-smaller);
 }
 
-@media (max-width: 767px) {
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {
   .hb-row {
     gap: 10px;
   }
