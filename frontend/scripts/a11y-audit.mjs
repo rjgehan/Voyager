@@ -14,6 +14,7 @@
 // owns, and Excalidraw's own UI) are reported but do not fail the run.
 import AxeBuilder from '@axe-core/playwright';
 import { chromium } from 'playwright-core';
+import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
 const { values: args } = parseArgs({
@@ -256,6 +257,8 @@ async function startServer() {
   if (args.url) return { url: args.url.replace(/\/$/, ''), close: async () => {} };
   process.env.VITE_MOCK_API = '1';
   const { createServer } = await import('vite');
+  // From the frontend folder, wherever the script is started: vite.config.ts resolves paths from there.
+  process.chdir(fileURLToPath(new URL('..', import.meta.url)));
   const server = await createServer({ server: { port: Number(args.port), strictPort: true, host: '127.0.0.1' }, logLevel: 'warn' });
   await server.listen();
   return { url: `http://127.0.0.1:${args.port}`, close: () => server.close() };
