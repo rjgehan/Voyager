@@ -323,8 +323,10 @@ async function main() {
         const context = await browser.newContext({ ...SIZES[size], colorScheme: theme, reducedMotion: 'reduce' });
         await context.addInitScript((t) => {
           localStorage.setItem('notesapp:prefs', JSON.stringify({ theme: t }));
-          // The keyboard hint and other one-time tips would otherwise cover parts of the page.
         }, theme);
+        // The mock answers the app in the page. The few calls it does not cover would go through
+        // Vite's proxy to a backend on :8080, maybe someone else's server: answer them here instead.
+        await context.route(`${server.url}/api/**`, (route) => route.fulfill({ status: 404, contentType: 'application/problem+json', body: '{"title":"Not in the mock API","status":404}' }));
         for (const screen of selectedScreens()) {
           if (screen.sizes && !screen.sizes.includes(size)) continue;
           const page = await context.newPage();

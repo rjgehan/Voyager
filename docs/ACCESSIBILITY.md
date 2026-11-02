@@ -44,7 +44,7 @@ npm run test:a11y -- --url http://127.0.0.1:5149     # a server that is already 
 npm run test:a11y -- --verbose                       # with axe's explanation of each finding
 ```
 
-`A11Y_BROWSER=chrome|msedge|chromium` picks the browser (`chromium` needs `npx playwright install chromium`); `A11Y_PORT` changes the port.
+`A11Y_BROWSER=chrome|msedge|chromium` picks the browser (`chromium` needs `npx playwright install chromium`); `A11Y_PORT` changes the port. The few `/api` calls the mock does not cover are answered in the browser (404), so the audit never reaches a backend through Vite's proxy.
 
 ### By hand
 
