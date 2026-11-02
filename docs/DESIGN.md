@@ -4462,7 +4462,7 @@ Public publishing (§5.28) is off in the shipped file: no Funnel and no second p
 #   Reusable: OFF · Ephemeral: off · Pre-approved: on · Tags: tag:notes
 # Used only for the FIRST login; afterwards the node identity lives in the tailscale-state volume.
 # DELETE this line after the first successful login (DEPLOY.md). Tagged nodes have key expiry disabled by default.
-TS_AUTHKEY=tskey-auth-XXXXXXXXXXXX-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+TS_AUTHKEY=tskey-auth-CHANGE-ME
 
 # Host names the app answers to (Host allowlist, DESIGN §5.13). Your tailnet's MagicDNS name:
 NOTES_ALLOWED_HOSTS=notes.<tailnet>.ts.net
