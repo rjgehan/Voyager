@@ -108,14 +108,24 @@ public final class MarkdownScanner {
 			int le = contentEnd(text, lineStarts, i);
 			String line = text.substring(ls, le);
 			scanHeading(text, lineStarts, i, line, bodyStart, codeLine, zones, headings);
-			List<int[]> linkSpans = new ArrayList<>();
-			scanWikilinks(text, i, ls, le, zones, links, linkSpans);
-			scanMarkdownLinks(text, i, ls, le, zones, links, linkSpans);
+			// Each pattern needs a literal that most lines lack ([[, ](, # and ^): a line without it is not run through
+			// the regular expression at all, which would otherwise be tried at every position (DESIGN §5.5.2).
+			List<int[]> linkSpans = new ArrayList<>(0);
+			if (line.contains("[[")) {
+				scanWikilinks(text, i, ls, le, zones, links, linkSpans);
+			}
+			if (line.contains("](")) {
+				scanMarkdownLinks(text, i, ls, le, zones, links, linkSpans);
+			}
 			linkSpans.forEach((span) -> allLinkSpans.add(new TextRange(span[0], span[1])));
-			scanTags(text, i, ls, le, zones, linkSpans, tags);
-			Matcher blockId = BLOCK_ID.matcher(line);
-			if (blockId.find() && !zones.overlaps(ls + blockId.start(1) - 1, ls + blockId.end(1))) {
-				blockIds.add(blockId.group(1));
+			if (line.indexOf('#') >= 0) {
+				scanTags(text, i, ls, le, zones, linkSpans, tags);
+			}
+			if (line.indexOf('^') >= 0) {
+				Matcher blockId = BLOCK_ID.matcher(line);
+				if (blockId.find() && !zones.overlaps(ls + blockId.start(1) - 1, ls + blockId.end(1))) {
+					blockIds.add(blockId.group(1));
+				}
 			}
 		}
 		links.sort((a, b) -> Integer.compare(a.from(), b.from()));
@@ -125,18 +135,15 @@ public final class MarkdownScanner {
 	}
 
 	static int[] lineStarts(String text) {
+		// indexOf is an intrinsic that scans many characters at a time; a charAt loop is several times slower.
 		int count = 1;
-		for (int i = 0; i < text.length(); i++) {
-			if (text.charAt(i) == '\n') {
-				count++;
-			}
+		for (int i = text.indexOf('\n'); i >= 0; i = text.indexOf('\n', i + 1)) {
+			count++;
 		}
 		int[] starts = new int[count];
 		int line = 1;
-		for (int i = 0; i < text.length(); i++) {
-			if (text.charAt(i) == '\n') {
-				starts[line++] = i + 1;
-			}
+		for (int i = text.indexOf('\n'); i >= 0; i = text.indexOf('\n', i + 1)) {
+			starts[line++] = i + 1;
 		}
 		return starts;
 	}
@@ -209,17 +216,17 @@ public final class MarkdownScanner {
 						p += run;
 					}
 				}
-				else if (line.startsWith("%%", p)) {
+				else if (c == '%' && line.startsWith("%%", p)) {
 					zone = Zone.PERCENT;
 					zoneStart = ls + p;
 					p += 2;
 				}
-				else if (line.startsWith("<!--", p)) {
+				else if (c == '<' && line.startsWith("<!--", p)) {
 					zone = Zone.HTML;
 					zoneStart = ls + p;
 					p += 4;
 				}
-				else if (line.startsWith("$$", p) && text.indexOf("$$", ls + p + 2) >= 0) {
+				else if (c == '$' && line.startsWith("$$", p) && text.indexOf("$$", ls + p + 2) >= 0) {
 					zone = Zone.MATH;
 					zoneStart = ls + p;
 					p += 2;
@@ -239,6 +246,15 @@ public final class MarkdownScanner {
 
 	private static void scanHeading(String text, int[] lineStarts, int i, String line, int bodyStart,
 			boolean[] codeLine, Excluded zones, List<HeadingOcc> headings) {
+		// Both forms start, after at most three spaces, with '#' (ATX) or '=' or '-' (a setext underline).
+		int indent = 0;
+		while (indent < 3 && indent < line.length() && line.charAt(indent) == ' ') {
+			indent++;
+		}
+		char first = (indent < line.length()) ? line.charAt(indent) : '\0';
+		if (first != '#' && first != '=' && first != '-') {
+			return;
+		}
 		int ls = lineStarts[i];
 		Matcher atx = ATX.matcher(line);
 		if (atx.matches()) {
