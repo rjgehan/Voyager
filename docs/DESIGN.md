@@ -1883,7 +1883,7 @@ These versions were verified on 2026-10-16. The lockfile pins them.
 | Concern | Choice |
 |---|---|
 | Build | Vite 8.3.4 (Rolldown/Oxc), `@vitejs/plugin-react` 6.1.2 |
-| Language | TypeScript `~6.0.3`. TS 7 is not used yet, because typescript-eslint 8.71.2 requires `<6.1.0`. |
+| Language | TypeScript `~6.0.3`. TS 7 is not used yet, because typescript-eslint 8.72.1 requires `<6.1.0`. (The web clipper, which has no ESLint, type-checks with TS 7.0.2, §6.27.1.) |
 | UI | React 19.3.1 and react-dom 19.3.1; lucide-react 1.58.0 icons; hand-written CSS with variables (no CSS framework) |
 | Routing | `react-router` 8.4.0 in **declarative mode** (`<BrowserRouter>`). Never install `react-router-dom`. |
 | Server state | `@tanstack/react-query` 5.104.3 |
@@ -3735,7 +3735,7 @@ Capture a thought, a link or a photo into `Inbox.md` (vault root) or today's dai
 
 Save a web page as a Markdown note in `Clippings/`: the readable article (Mozilla Readability 0.6.0) or only the selection, converted with turndown 7.2.4 and its GFM plugin (tables, strikethrough, task lists, fenced code with its language), under Obsidian Web Clipper's properties: `title`, `source`, `author`, `site`, `published` (a date), `created` (the device's date), `description` and `tags: [clippings]`. The note's name is the title made safe for the new-name rules (API.md §1.3): `/ \ |` become `-`, the other forbidden characters go, at most 200 bytes; a taken name gets ` 1`, ` 2` from `onConflict: "rename"`. **The server never fetches a page**: every client reads the page it is on, so the guarded server-side fetch of ROADMAP item 19 is not needed and not built.
 
-The code is the top-level `clipper/` package (its own `package.json`, esbuild build and Vitest tests; `npm run build` writes `clipper/dist/`). One core (`src/core`: `extract.ts`, `markdown.ts`, `note.ts`) serves three clients:
+The code is the top-level `clipper/` package (its own `package.json`, esbuild build, Vitest tests and TypeScript 7 for type checking, `tsc --noEmit`, which is also its lint; `npm run build` writes `clipper/dist/`). One core (`src/core`: `extract.ts`, `markdown.ts`, `note.ts`) serves three clients:
 
 | Client | Where it reads the page | How the note reaches the vault |
 |---|---|---|
