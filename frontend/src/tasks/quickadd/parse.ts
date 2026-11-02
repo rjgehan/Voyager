@@ -94,8 +94,12 @@ function wordsFrom(text: string, start: number): WordSpan[] {
   return out;
 }
 
-/** The recurrence phrase starting at `every`: the longest run of words that still adds to the rule. */
-function findRecurrence(text: string, taken: readonly Range[], ignore: ReadonlySet<string>): { part: ParsedPart; rrule: string } | null {
+/**
+ * The recurrence phrase starting at `every`: the longest run of words that still adds to the rule,
+ * with the words rrule reads without a change of the rule ("for 10 times"), and Obsidian Tasks'
+ * "when done" (the next date counts from the completion).
+ */
+function findRecurrence(text: string, taken: readonly Range[], ignore: ReadonlySet<string>, now: Date): { part: ParsedPart; rrule: string; fromCompletion: boolean } | null {
   const every = /(?<![\p{L}\p{N}])every(?![\p{L}\p{N}])/giu;
   for (let m = every.exec(text); m; m = every.exec(text)) {
     if (overlaps(taken, m.index, m.index + 5)) continue;
@@ -106,17 +110,25 @@ function findRecurrence(text: string, taken: readonly Range[], ignore: ReadonlyS
       const last = words[n - 1];
       // Our own syntax and the parts already taken end the phrase.
       if (/^[!#@]|^\[\[/u.test(last.text) || overlaps(taken, last.from, last.to)) break;
-      const rule = ruleFromText(text.slice(m.index, last.to));
+      const rule = ruleFromText(text.slice(m.index, last.to), now);
       if (rule !== null && rule !== bestRule) {
         bestTo = last.to;
         bestRule = rule;
       }
     }
     if (bestRule === null) continue;
+    let next = words.findIndex((w) => w.from >= bestTo);
+    const free = (i: number) => next >= 0 && i < words.length && !overlaps(taken, words[i].from, words[i].to);
+    if (free(next) && /COUNT=/.test(bestRule) && /^times?[.,;]?$/iu.test(words[next].text)) bestTo = words[next++].to;
+    let fromCompletion = false;
+    if (free(next) && free(next + 1) && /^when$/iu.test(words[next].text) && /^done[.,;!]?$/iu.test(words[next + 1].text)) {
+      bestTo = words[next + 1].to;
+      fromCompletion = true;
+    }
     const raw = text.slice(m.index, bestTo);
     const key = partKey('recurrence', raw);
     if (ignore.has(key)) continue;
-    return { part: { kind: 'recurrence', text: raw, from: m.index, to: bestTo, key }, rrule: bestRule };
+    return { part: { kind: 'recurrence', text: raw, from: m.index, to: bestTo, key }, rrule: bestRule, fromCompletion };
   }
   return null;
 }
@@ -209,9 +221,9 @@ export function parseQuickAdd(text: string, opts: ParseOptions): ParsedTask {
   }
 
   let recurrence: TaskRecurrence | null = null;
-  const rule = findRecurrence(text, taken, ignore);
+  const rule = findRecurrence(text, taken, ignore, opts.now);
   if (rule) {
-    recurrence = { rrule: rule.rrule, from: 'due' };
+    recurrence = { rrule: rule.rrule, from: rule.fromCompletion ? 'completion' : 'due' };
     take(rule.part);
   }
 
@@ -223,6 +235,14 @@ export function parseQuickAdd(text: string, opts: ParseOptions): ParsedTask {
     if (ignore.has(key)) continue;
     const day = dayjs(withNextHour(r, opts.now));
     due = r.start.isCertain('hour') ? day.format('YYYY-MM-DDTHH:mm') : day.format('YYYY-MM-DD');
+    // A time without a day ("Gym every monday at 7pm"): the rule's next occurrence at that time.
+    if (recurrence && r.start.isCertain('hour') && !r.start.isCertain('day') && !r.start.isCertain('weekday') && !r.start.isCertain('month')) {
+      const time = day.format('HH:mm');
+      const today = dayjs(opts.now);
+      let first = firstOccurrence(recurrence.rrule, today.format('YYYY-MM-DD'));
+      if (first !== null && `${first}T${time}` <= today.format('YYYY-MM-DDTHH:mm')) first = firstOccurrence(recurrence.rrule, today.add(1, 'day').format('YYYY-MM-DD'));
+      if (first !== null) due = `${first}T${time}`;
+    }
     take({ kind: 'due', text: raw, from: r.index, to: r.index + r.text.length, key });
     break;
   }

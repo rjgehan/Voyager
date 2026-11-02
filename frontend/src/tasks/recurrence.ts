@@ -30,8 +30,34 @@ export function recurrenceText(rrule: string): string {
   }
 }
 
-/** The RRULE value (without `RRULE:`), FREQ first, or null when the text is not a supported rule. */
-export function ruleFromText(text: string): string | null {
+const MONTH_DAY = /\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?\b/i;
+
+const pad2 = (n: number) => String(n).padStart(2, '0');
+
+/**
+ * The UNTIL of a rule typed in words, as the local day it names (rrule reads it as local midnight
+ * and would write it in UTC: the day before, east of UTC). A date without a year is the coming
+ * one (rrule's parser reads "dec 1" as 2001).
+ */
+function untilFromText(until: Date, text: string, now: Date): string | null {
+  if (Number.isNaN(until.getTime())) return null;
+  let year = until.getFullYear();
+  const month = until.getMonth();
+  const day = until.getDate();
+  const words = text.slice(text.toLowerCase().lastIndexOf('until'));
+  if (!/\b\d{4}\b/.test(words)) {
+    year = now.getFullYear();
+    if (new Date(year, month, day) < new Date(now.getFullYear(), now.getMonth(), now.getDate())) year++;
+  }
+  return `${year}${pad2(month + 1)}${pad2(day)}`;
+}
+
+/**
+ * The RRULE value (without `RRULE:`), FREQ first, or null when the text is not a supported rule.
+ * A time in the words ("every monday at 7pm") is left out: rrule reads it without am/pm, and a
+ * task's time belongs to its date (quick add reads it there). "Every year on april 15" keeps its day.
+ */
+export function ruleFromText(text: string, now: Date = new Date()): string | null {
   let options: Partial<Options> | null;
   try {
     options = RRule.parseText(text);
@@ -39,8 +65,17 @@ export function ruleFromText(text: string): string | null {
     return null;
   }
   if (!options || options.freq === undefined || options.freq === null || !SUPPORTED.has(options.freq)) return null;
-  const { dtstart: _start, tzid: _tz, ...rest } = options;
+  const { dtstart: _start, tzid: _tz, until, byhour: _hour, byminute: _minute, bysecond: _second, ...rest } = options;
+  if (rest.bymonth != null && rest.bymonthday == null && rest.byweekday == null) {
+    const day = MONTH_DAY.exec(text);
+    if (day && Number(day[1]) >= 1 && Number(day[1]) <= 31) rest.bymonthday = Number(day[1]);
+  }
   const parts = RRule.optionsToString(rest).replace(/^RRULE:/, '').split(';').filter(Boolean);
+  if (until) {
+    const value = untilFromText(until, text, now);
+    if (value === null) return null;
+    parts.push(`UNTIL=${value}`);
+  }
   parts.sort((a, b) => (a.startsWith('FREQ=') ? -1 : b.startsWith('FREQ=') ? 1 : 0));
   return parts.join(';');
 }
