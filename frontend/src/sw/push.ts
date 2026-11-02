@@ -41,7 +41,8 @@ export const SNOOZE_MINUTES = 10;
 
 /** Only app paths are opened, so a message can never send the app elsewhere. */
 export function safeAppPath(url: unknown): string {
-  return typeof url === 'string' && url.startsWith('/') && !url.startsWith('//') ? url : '/';
+  // `/\host` is `//host` to the browser's URL parser: another site, like `//host`.
+  return typeof url === 'string' && url.startsWith('/') && !url.startsWith('//') && !url.startsWith('/\\') ? url : '/';
 }
 
 function text(value: unknown, fallback: string): string {

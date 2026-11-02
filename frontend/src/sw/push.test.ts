@@ -18,6 +18,7 @@ describe('reminder notifications in the service worker', () => {
     expect(odd.options.data.url).toBe('/');
     expect(reminderNotification({ url: 'https://evil.example/x' }).options.data.url).toBe('/');
     expect(safeAppPath('//evil.example')).toBe('/');
+    expect(safeAppPath('/\\evil.example')).toBe('/');
     expect(safeAppPath('/n/Note.md')).toBe('/n/Note.md');
   });
 
