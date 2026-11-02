@@ -83,9 +83,8 @@ export function StatusBar() {
           <CircleAlert size={13} aria-hidden /> Unsaved changes are not protected on this device.
         </span>
       )}
-      <span className={`status-item status-save status-${summary}`} aria-live="polite">
-        {SUMMARY[summary]}
-      </span>
+      {/* Not a live region: each document's save status already announces itself (DESIGN §6.19). */}
+      <span className={`status-item status-save status-${summary}`}>{SUMMARY[summary]}</span>
       {vimMode && (
         <span className="status-item status-vim" title="Vim mode (Settings, This device)">
           {vimMode}
