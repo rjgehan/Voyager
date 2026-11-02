@@ -39,6 +39,7 @@ A Spring Boot 4 backend (Java 21 bytecode, run on JDK 25) serves the REST and SS
 | `.github/` | CI, image publishing, Dependabot |
 | `Dockerfile` | Three stages: frontend build, backend build (JDK 21), JDK 25 runtime with an AOT cache |
 | `docs/` | Design, API contract, deployment runbook, roadmap |
+| `perf/` | The load-test kit: a large generated vault, and measurements of the production jar and of the app in a browser ([docs/PERFORMANCE.md](docs/PERFORMANCE.md)) |
 | `scripts/` | `third-party-notices.mjs`, which regenerates `THIRD_PARTY_NOTICES.md` |
 
 ## Local development (Windows)
@@ -91,6 +92,7 @@ Rolling back, pausing updates, backups and everything else on the server side ar
 - [docs/CLIPPER.md](docs/CLIPPER.md): installing the web clipper (browser extension, bookmarklet, iPhone Shortcut)
 - [docs/DESKTOP.md](docs/DESKTOP.md): the Windows and macOS desktop app (install, Gatekeeper steps, usage, building and releases)
 - [docs/ROADMAP.md](docs/ROADMAP.md): what comes after v1
+- [docs/PERFORMANCE.md](docs/PERFORMANCE.md): performance at scale: the load-test kit, results and known limits
 
 ## Licence
 
