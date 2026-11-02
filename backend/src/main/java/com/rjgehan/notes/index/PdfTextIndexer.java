@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -42,7 +43,7 @@ import org.springframework.stereotype.Component;
  * cached in {@code .notesapp/cache/search-text/} (outside git), keyed by the file's path, size and mtime, so a
  * restart re-extracts nothing; a moved PDF takes its cache entry along. Once the backlog of the first pass is done,
  * cache entries of files that no longer exist are deleted. A PDF that cannot be read (encrypted, damaged, too large,
- * too slow) is indexed by its name alone.
+ * too slow, or one whose reading stopped the server) is indexed by its name alone.
  */
 @Component
 public class PdfTextIndexer implements SmartLifecycle, VaultIndex.ExtractionListener {
@@ -51,6 +52,9 @@ public class PdfTextIndexer implements SmartLifecycle, VaultIndex.ExtractionList
 
 	/** Where extracted text is cached, relative to the vault. */
 	public static final String CACHE_DIR = ".notesapp/cache/search-text";
+
+	/** Appended to a cache entry's name while its text is being extracted (see {@link #extractOnce}). */
+	static final String INFLIGHT_SUFFIX = ".reading";
 
 	private record Move(FileRecord from, FileRecord to) {
 	}
@@ -214,13 +218,68 @@ public class PdfTextIndexer implements SmartLifecycle, VaultIndex.ExtractionList
 		}
 		String text = cached(record);
 		if (text == null) {
-			text = extract(record);
-			writeCache(record, text);
+			text = extractOnce(record);
+			if (text == null) {
+				return;
+			}
 		}
 		String basename = PathNames.basenameOf(PathNames.nameOf(path));
 		NoteParse parse = parseOf(text);
 		SearchIndex.Doc doc = SearchIndex.Doc.of(basename, text, parse);
 		this.index.putExtracted(record, text, parse, doc);
+	}
+
+	/**
+	 * Extracts and caches a file's text, guarded against a PDF that takes the server down: a crafted file of a few
+	 * hundred kilobytes can make PDFBox inflate a single string of a gigabyte, and the JVM exits on the
+	 * {@code OutOfMemoryError} (DESIGN §7.1). Without a guard every start would read the same file again and die again.
+	 * So a marker is written next to the cache entry before the extraction and removed after it; a marker found at
+	 * the next start means the extraction never finished, and that file is indexed by its name only (security audit,
+	 * docs/SECURITY.md F3). Null when the server is stopping: nothing is cached, and the next start tries again.
+	 */
+	private @Nullable String extractOnce(FileRecord record) {
+		Path marker = cacheDir().resolve(cacheName(record) + INFLIGHT_SUFFIX);
+		if (Files.exists(marker, LinkOption.NOFOLLOW_LINKS)) {
+			logger.warn("PDF {}: reading its text stopped the server last time; it is indexed by its name only",
+					record.path());
+			writeCache(record, "");
+			deleteQuietly(marker);
+			return "";
+		}
+		boolean marked = writeMarker(marker);
+		String text = extract(record);
+		if (!this.running) {
+			if (marked) {
+				deleteQuietly(marker);
+			}
+			return null;
+		}
+		writeCache(record, text);
+		if (marked) {
+			deleteQuietly(marker);
+		}
+		return text;
+	}
+
+	private boolean writeMarker(Path marker) {
+		try {
+			Files.createDirectories(marker.getParent());
+			Files.write(marker, new byte[0]);
+			return true;
+		}
+		catch (IOException ex) {
+			logger.debug("Cannot mark the PDF text extraction of {} as started: {}", marker, ex.toString());
+			return false;
+		}
+	}
+
+	private static void deleteQuietly(Path file) {
+		try {
+			Files.deleteIfExists(file);
+		}
+		catch (IOException ex) {
+			logger.debug("Cannot delete {}: {}", file, ex.toString());
+		}
 	}
 
 	/** The parse of extracted text: its lines and nothing else (no frontmatter, links or tags). */
