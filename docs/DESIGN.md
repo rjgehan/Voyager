@@ -74,7 +74,7 @@ flowchart LR
       ts["tailscale (kernel mode)<br/>node name: notes<br/>serve :443 HTTPS to 127.0.0.1:8080"]
       app["notes (Spring Boot)<br/>listens on 127.0.0.1:8080 only"]
     end
-    wt["watchtower 1.23.1<br/>label-enable, polls GHCR every 300 s"]
+    wt["watchtower 1.23.2<br/>label-enable, polls GHCR every 300 s"]
     bk["backup (restic) + backup-scheduler<br/>optional, nightly (§7.10)"]
     usb[("second disk<br/>local restic repository")]
     data[("volume notes-data<br/>/data/vault + .git")]
@@ -4400,7 +4400,7 @@ services:
     restart: unless-stopped
 
   watchtower:
-    image: nickfedor/watchtower:1.23.1@sha256:<digest>   # maintained fork; pinned by digest (it holds docker.sock)
+    image: nickfedor/watchtower:1.23.2@sha256:<digest>   # maintained fork; pinned by digest (it holds docker.sock)
     environment:
       WATCHTOWER_LABEL_ENABLE: "true"           # only touches the 'notes' container
       WATCHTOWER_CLEANUP: "true"
@@ -4432,7 +4432,7 @@ volumes:
   ```
 - **Logs** use the `local` driver with rotation for all three services; DEPLOY.md verifies it with `docker inspect --format '{{.HostConfig.LogConfig}}' notes-notes-1`. Unrotated logs live on the same filesystem as the vault and would eventually fill it.
 - **Required variables.** `${VAR:?…}` makes `docker compose up` fail with a clear message when `NOTES_ALLOWED_HOSTS`, `NOTES_IDENTITY_ALLOWED_LOGINS` or `WATCHTOWER_NOTIFICATION_URL` is missing.
-- **Digest pin.** WP-Infra fills in the digest of `nickfedor/watchtower:1.23.1` (`docker buildx imagetools inspect`); Dependabot keeps it current (§7.5).
+- **Digest pin.** WP-Infra fills in the digest of `nickfedor/watchtower:1.23.2` (`docker buildx imagetools inspect`); Dependabot keeps it current (§7.5).
 - **Backups.** The real file continues with the optional `backup` and `backup-scheduler` services (Compose profiles, off by default), the `backup-cache` and `backup-state` volumes and a top-level `secrets:` block (§7.10).
 - **Backup status** (ROADMAP item 38). `notes` mounts the `backup-state` volume read-only at `/backup-state`, so the status page can show the last backup run (§7.10). It is a named volume by default, created empty when backups are off; with host cron, `NOTES_BACKUP_STATE` in `.env` names the cron job's state directory instead, which Compose then bind-mounts. The app only reads `status.json`; it never writes there.
 - **Mirror token** (ROADMAP item 2, §5.8 *Mirror*). The top-level `secrets:` block also declares `mirror_token` with `file: ${NOTES_MIRROR_TOKEN_SECRET:-./mirror/no-token}`. `deploy/mirror/no-token` is an empty file in git, so the always-enabled `notes` service can mount the secret on deploys that have no mirror (Compose fails to create a container whose secret file is missing); `NOTES_MIRROR_URL` empty keeps the mirror off. Setting it up points `NOTES_MIRROR_TOKEN_SECRET` at `./secrets/mirror-token` (gitignored, readable by uid 1000) and sets `NOTES_MIRROR_URL` (DEPLOY.md *Mirror to GitHub*). The CasaOS compose (`deploy/casaos-compose.yml`) has no files next to it to mount as a secret, so there `NOTES_MIRROR_TOKEN_FILE` is `/data/secrets/mirror-token`, beside `ntfy.json` (§5.18.1): outside the vault, so never in git or the mirror, though in the encrypted backups; the file is read before every push and only needed once `NOTES_MIRROR_URL` is set (docs/CASAOS.md).
@@ -4711,7 +4711,7 @@ Two optional services in `deploy/docker-compose.yml` take a restic snapshot of t
 | Service | Image | Role |
 |---|---|---|
 | `backup` | `restic/restic:0.19.1` (digest-pinned) | The restic sidecar. Its main process idles (`restic-job.sh idle`); every job runs inside it through `docker exec`, so its configuration lives in one place: the volumes **read-only** under `/source`, the local repository (a bind mount of `NOTES_BACKUP_LOCAL_REPO`, `create_host_path: false`) at `/repo`, the secrets, and the restic cache volume. Profiles `backup` and `backup-host-cron`. |
-| `backup-scheduler` | `docker:29.8.2-cli` (digest-pinned) | Runs `nightly.sh` once a day at `NOTES_BACKUP_TIME` (default 04:00, clear of the app's 03:30 `gc`) in `TZ` (the host's `/usr/share/zoneinfo` is mounted read-only; the image has none). It holds the Docker socket to stop and start `notes` and to `docker exec` into `backup`. Profile `backup` only. |
+| `backup-scheduler` | `docker:29.9.2-cli` (digest-pinned) | Runs `nightly.sh` once a day at `NOTES_BACKUP_TIME` (default 04:00, clear of the app's 03:30 `gc`) in `TZ` (the host's `/usr/share/zoneinfo` is mounted read-only; the image has none). It holds the Docker socket to stop and start `notes` and to `docker exec` into `backup`. Profile `backup` only. |
 
 The scripts live in `deploy/backup/`, mounted read-only into both containers: `restic-job.sh` (the restic steps: `init`, `preflight`, `snapshot`, `discard`, `forget`, `offsite`, `check`, `snapshots`, `restore`), `nightly.sh` (one run, orchestrated with the Docker CLI) and `scheduler.sh` (the daily loop). The `backup-host-cron` profile starts only the sidecar, for an operator who would rather have host cron run `nightly.sh` than give a second container the Docker socket.
 
@@ -4997,7 +4997,7 @@ There are three parallel work packages with **strict file ownership**. API.md is
 | 9 | iOS Safari quirks: keyboard, viewport, background SSE kill, composition. | High / Medium | `visualViewport` variables, native selection, the composition-safe `applyRemoteText`, reconnect with `lastEventId` on visible, revalidate sessions, early device testing (WP-Frontend task 12 and smoke items 16–17). |
 | 10 | Very fresh dependency versions (published 0–2 days ago). | Medium / Low | Lockfile committed; fall back one patch version on any regression. TypeScript pinned `~6.0.3`. |
 | 11 | GHCR PAT expiry, or any failed pull, stops updates silently. | Medium / Medium | The classic PAT is created without an expiry. Watchtower notifications are required, not optional, and report every session. The `beach` `/readyz` probe. `/api/status.buildSha` shows the deployed commit. |
-| 12 | Watchtower fork depends on a single maintainer, and the socket mount is root-equivalent. | Low / Medium | Pinned to `1.23.1` **by digest**; label-enable; Dependabot proposes updates; the fallback is `docker compose pull notes && docker compose up -d notes`. |
+| 12 | Watchtower fork depends on a single maintainer, and the socket mount is root-equivalent. | Low / Medium | Pinned to `1.23.2` **by digest**; label-enable; Dependabot proposes updates; the fallback is `docker compose pull notes && docker compose up -d notes`. |
 | 13 | Let's Encrypt lockout if the tailscale state is lost. | Low / Medium | The persistent `tailscale-state` volume, never pruned (documented). `TS_AUTH_ONCE=true`. |
 | 14 | Stored XSS through attachments (SVG or HTML) or note HTML. | Medium / High | Sandbox CSP on raw files, `nosniff`, `attachment` and `octet-stream` for HTML and XML, DOMPurify in the reading view, the app CSP without inline script, CORP same-origin. |
 | 15 | CSRF or DNS rebinding from another tab or site. | Low / High | Required custom header, Origin and `Sec-Fetch-Site` checks, the Host allowlist, no CORS, side-effect-free GETs; the dev server binds only to the tailnet address. |
