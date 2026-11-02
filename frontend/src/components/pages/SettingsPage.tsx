@@ -3,7 +3,7 @@
 // holds the per-device preferences and the recently discarded edits.
 import { ArrowLeft, Copy, Info, Laptop, RotateCcw, Trash2, TriangleAlert } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useId, useState, type ReactNode } from 'react';
 import { Link, NavLink, useLocation } from 'react-router';
 import { errorMessage } from '../../api/client';
 import { api } from '../../api/endpoints';
@@ -164,16 +164,36 @@ function useSettingsDraft(response: SettingsResponse | undefined) {
 
 // ---------- controls ----------
 
+/** The ids of a row's description and error, which its control names in aria-describedby (WCAG 1.3.1, 3.3.1). */
+const RowDescription = createContext<{ describedBy?: string; invalid: boolean }>({ invalid: false });
+
 function Row({ label, description, error, warning, children }: { label: string; description?: ReactNode; error?: string; warning?: string | null; children: ReactNode }) {
+  const id = useId();
+  const note = error ? `${id}-error` : warning ? `${id}-warning` : null;
+  const describedBy = [description ? `${id}-description` : null, note].filter(Boolean).join(' ') || undefined;
   return (
     <div className="setting-row">
       <div className="setting-info">
         <div className="setting-label">{label}</div>
-        {description && <div className="setting-description">{description}</div>}
-        {error && <div className="field-error">{error}</div>}
-        {!error && warning && <div className="field-warning">{warning}</div>}
+        {description && (
+          <div className="setting-description" id={`${id}-description`}>
+            {description}
+          </div>
+        )}
+        {error && (
+          <div className="field-error" id={`${id}-error`} role="alert">
+            {error}
+          </div>
+        )}
+        {!error && warning && (
+          <div className="field-warning" id={`${id}-warning`}>
+            {warning}
+          </div>
+        )}
       </div>
-      <div className="setting-control">{children}</div>
+      <div className="setting-control">
+        <RowDescription.Provider value={{ describedBy, invalid: !!error }}>{children}</RowDescription.Provider>
+      </div>
     </div>
   );
 }
@@ -185,6 +205,7 @@ function Row({ label, description, error, warning, children }: { label: string; 
 export function TextSetting({ value, onChange, disabled, placeholder, label, trim = false }: { value: string; onChange(v: string): void; disabled: boolean; placeholder?: string; label: string; trim?: boolean }) {
   const [text, setText] = useState(value);
   const [shown, setShown] = useState(value);
+  const row = useContext(RowDescription);
   if (value !== shown) {
     // A change from outside (saved, another device) replaces the text; this field's own trimmed
     // value does not.
@@ -198,6 +219,8 @@ export function TextSetting({ value, onChange, disabled, placeholder, label, tri
       placeholder={placeholder}
       disabled={disabled}
       aria-label={label}
+      aria-describedby={row.describedBy}
+      aria-invalid={row.invalid || undefined}
       onChange={(e) => {
         setText(e.target.value);
         onChange(trim ? e.target.value.trim() : e.target.value);
@@ -210,16 +233,18 @@ export function TextSetting({ value, onChange, disabled, placeholder, label, tri
 }
 
 function Toggle({ checked, onChange, disabled, label }: { checked: boolean; onChange(v: boolean): void; disabled?: boolean; label: string }) {
+  const row = useContext(RowDescription);
   return (
-    <button type="button" role="switch" aria-checked={checked} aria-label={label} className={`toggle${checked ? ' is-on' : ''}`} disabled={disabled} onClick={() => onChange(!checked)}>
+    <button type="button" role="switch" aria-checked={checked} aria-label={label} aria-describedby={row.describedBy} className={`toggle${checked ? ' is-on' : ''}`} disabled={disabled} onClick={() => onChange(!checked)}>
       <span className="toggle-knob" />
     </button>
   );
 }
 
 function Select<T extends string>({ value, options, onChange, disabled, label }: { value: T; options: Array<[T, string]>; onChange(v: T): void; disabled?: boolean; label: string }) {
+  const row = useContext(RowDescription);
   return (
-    <select className="select" value={value} disabled={disabled} aria-label={label} onChange={(e) => onChange(e.target.value as T)}>
+    <select className="select" value={value} disabled={disabled} aria-label={label} aria-describedby={row.describedBy} aria-invalid={row.invalid || undefined} onChange={(e) => onChange(e.target.value as T)}>
       {options.map(([v, text]) => (
         <option key={v} value={v}>
           {text}

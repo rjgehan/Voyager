@@ -58,9 +58,15 @@ function CreateVault() {
             (/v/name/).
           </div>
           {name !== '' && !valid && (
-            <div className="field-error">Use 1 to 32 lowercase letters, digits and dashes, starting and ending with a letter or digit.</div>
+            <div className="field-error" role="alert">
+              Use 1 to 32 lowercase letters, digits and dashes, starting and ending with a letter or digit.
+            </div>
           )}
-          {error && <div className="field-error">{error}</div>}
+          {error && (
+            <div className="field-error" role="alert">
+              {error}
+            </div>
+          )}
         </div>
         <div className="setting-control vault-create-control">
           <input

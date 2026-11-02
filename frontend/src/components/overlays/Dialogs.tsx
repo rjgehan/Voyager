@@ -44,6 +44,7 @@ function PromptDialog({ request }: { request: PromptRequest }) {
             value={value}
             placeholder={request.placeholder}
             aria-invalid={!!error && (touched || value !== request.value)}
+            aria-describedby={error && (touched || value !== request.value) ? errorId : undefined}
             onChange={(e) => {
               setValue(e.target.value);
               setTouched(true);
