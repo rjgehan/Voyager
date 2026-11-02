@@ -10,7 +10,7 @@ import type { Endpoints } from '../api/endpoints';
 import type { FileEntry, TextFile, Version, WriteResult } from '../api/types';
 import { tableRanges } from '../editor/livePreview/table/facets';
 import { isComposing, paneSync, sessionEdit, textReplace, waitForComposition } from '../editor/remote';
-import { trackedRange, trackedRangesField, trackRange, untrackRange } from '../editor/tracked';
+import { trackedRange, trackedRanges, trackedRangesField, trackRange, untrackRange } from '../editor/tracked';
 import { addUpload, endUpload, pendingUploads, uploadsField } from '../editor/uploads';
 import { detectEol, fromLf, toLf, type Eol } from '../features/eol';
 import { isNotePath } from '../features/paths';
@@ -126,6 +126,25 @@ const idle: (cb: () => void) => void =
 
 const AUTOSAVE: ReadonlySet<SessionStatus> = new Set(['dirty', 'offline', 'storage-error']);
 const UNSAVED: ReadonlySet<SessionStatus> = new Set(['dirty', 'saving', 'offline', 'storage-error', 'conflict', 'error']);
+
+/**
+ * The session's marks on the text (pending uploads, tracked ranges): editor state, never text,
+ * kept in every editor of the file, so whichever holds the document when work outside the editor
+ * comes back (an upload, a transcript) still has them.
+ */
+function isSessionMark(e: StateEffect<unknown>): boolean {
+  return e.is(addUpload) || e.is(endUpload) || e.is(trackRange) || e.is(untrackRange);
+}
+
+/** `state` with the marks of `from` (an editor state with the same text) instead of its own. */
+function withMarksOf(state: EditorState, from: EditorState): EditorState {
+  const effects: StateEffect<unknown>[] = [];
+  for (const u of pendingUploads(state)) effects.push(endUpload.of({ id: u.id }));
+  for (const r of trackedRanges(state)) effects.push(untrackRange.of(r.id));
+  for (const u of pendingUploads(from)) effects.push(addUpload.of(u));
+  for (const r of trackedRanges(from)) effects.push(trackRange.of(r));
+  return effects.length === 0 ? state : state.update({ effects, annotations: Transaction.addToHistory.of(false) }).state;
+}
 
 /** A remote event that arrived while a load or a save was running; the last one wins. */
 type DeferredEvent = { kind: 'changed'; version: Version | null } | { kind: 'deleted'; trashId: string | null };
@@ -353,16 +372,19 @@ export class DocumentSession {
 
   /**
    * Every transaction of an attached editor (its `dispatchTransactions`): applied there, and its
-   * changes copied into the file's other editors first, outside their undo history and their
-   * editing rules (`filter: false`), so all documents stay equal and the edit counts once.
+   * changes (with the session's marks: pending uploads, tracked ranges) copied into the file's
+   * other editors first, outside their undo history and their editing rules (`filter: false`), so
+   * all documents stay equal, the edit counts once, and any editor can finish an upload.
    */
   routeTransactions(view: EditorView, trs: readonly Transaction[]): void {
     if (this.views.length > 1 && this.views.includes(view)) {
       for (const tr of trs) {
-        if (!tr.docChanged || tr.annotation(paneSync)) continue;
+        if (tr.annotation(paneSync)) continue;
+        const marks = tr.effects.filter(isSessionMark);
+        if (!tr.docChanged && marks.length === 0) continue;
         const annotations = [paneSync.of(true), Transaction.addToHistory.of(false)];
         if (tr.annotation(Transaction.remote)) annotations.push(Transaction.remote.of(true));
-        for (const other of this.views) if (other !== view) other.dispatch({ changes: tr.changes, annotations, filter: false });
+        for (const other of this.views) if (other !== view) other.dispatch({ changes: tr.changes, effects: marks, annotations, filter: false });
       }
     }
     view.update(trs);
@@ -414,15 +436,19 @@ export class DocumentSession {
       return state;
     }
     this.nextIsMain = false;
-    return reconfigure(EditorState.create({ doc: live.state.doc, selection: live.state.selection }));
+    // Uploads and tracked ranges still running show (and can finish) in the new editor too.
+    return withMarksOf(reconfigure(EditorState.create({ doc: live.state.doc, selection: live.state.selection })), live.state);
   }
 
-  /** `state` (an earlier state of this file) with `latest`'s text and selection, the difference not undoable. */
+  /**
+   * `state` (an earlier state of this file) with `latest`'s text, selection and session marks, the
+   * difference not undoable.
+   */
   private caughtUp(state: EditorState, latest: EditorState): EditorState {
     const next = sessionKit().applyRemoteTextToState(state, latest.doc.toString());
     const head = Math.min(latest.selection.main.head, next.doc.length);
     const anchor = Math.min(latest.selection.main.anchor, next.doc.length);
-    return next.update({ selection: { anchor, head }, annotations: Transaction.addToHistory.of(false) }).state;
+    return withMarksOf(next.update({ selection: { anchor, head }, annotations: Transaction.addToHistory.of(false) }).state, latest);
   }
 
   detach(view: EditorView): void {

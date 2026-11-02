@@ -34,6 +34,11 @@ export const trackedRangesField = StateField.define<readonly TrackedRange[]>({
   },
 });
 
+/** Every range a state follows (none when the field is not configured). */
+export function trackedRanges(state: EditorState): readonly TrackedRange[] {
+  return state.field(trackedRangesField, false) ?? [];
+}
+
 /** Where a tracked range is now, or undefined (never tracked, or the field is not configured). */
 export function trackedRange(state: EditorState, id: number): TrackedRange | undefined {
   return (state.field(trackedRangesField, false) ?? []).find((r) => r.id === id);
