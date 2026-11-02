@@ -130,7 +130,11 @@ function LiveRegion() {
   );
 }
 
-function DrawerActions() {
+/**
+ * The phone drawer's New note, Today and Capture buttons, and the registered pages as a grid of
+ * tiles (DESIGN §6.16): a list of them took 11 rows and left the file tree one row.
+ */
+export function DrawerActions() {
   useExtensionsVersion();
   const run = (id: string) => runCommand(id, { activePath: activePath() });
   const pages = menuPages();
@@ -152,8 +156,9 @@ function DrawerActions() {
           {pages.map((p) => {
             const Icon = p.icon;
             return (
-              <button key={p.route} type="button" className="menu-item" onClick={() => run(`page.${p.route}`)}>
-                <Icon size={16} aria-hidden /> {p.title}
+              <button key={p.route} type="button" className="drawer-page" title={p.title} onClick={() => run(`page.${p.route}`)}>
+                <Icon size={20} aria-hidden />
+                <span className="drawer-page-label">{p.title}</span>
               </button>
             );
           })}
