@@ -6,6 +6,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -26,7 +27,9 @@ import org.springframework.stereotype.Component;
  * cells. A {@code [[Note]]} written in a cell, or computed by a formula, is therefore a backlink, and a {@code #tag}
  * a tag, as in a note; one block per cell keeps markup in one cell from reaching into the next. Sheet names and chart
  * titles are searchable too. Formulas themselves, error results, number formats and the JSON around the values are
- * not indexed. Files that are not readable sheets are not content-indexed.
+ * not indexed, except formulas that read a note by name ({@code =NOTEPROP("Plan", "status")}, ROADMAP item 42,
+ * DESIGN §6.45): each is a block with the note's name as a wikilink, so the spreadsheet is a backlink of the note it
+ * reads, with the formula as the context. Files that are not readable sheets are not content-indexed.
  */
 @Component
 public class SheetDocumentIndexer implements DocumentIndexer {
@@ -42,6 +45,9 @@ public class SheetDocumentIndexer implements DocumentIndexer {
 	private static final BigDecimal LARGE = new BigDecimal("1e15");
 
 	private static final BigDecimal SMALL = new BigDecimal("1e-6");
+
+	/** The functions whose first argument names a note (ROADMAP item 42). */
+	private static final Set<String> NOTE_READERS = Set.of("NOTEPROP", "NOTETABLE");
 
 	private final JsonMapper mapper;
 
@@ -97,14 +103,22 @@ public class SheetDocumentIndexer implements DocumentIndexer {
 		if (cells != null && cells.isObject()) {
 			// Row-major, as the grid shows them and the file stores them.
 			Map<Long, String> shown = new TreeMap<>();
+			Map<Long, String> reads = new TreeMap<>();
 			for (Map.Entry<String, JsonNode> entry : cells.properties()) {
 				long position = position(entry.getKey());
 				String value = shownText(entry.getValue());
 				if (position >= 0 && value != null && !value.isBlank()) {
 					shown.put(position, value);
 				}
+				JsonNode formula = entry.getValue().isObject() ? entry.getValue().get("f") : null;
+				String read = (position >= 0 && formula != null && formula.isString()) ? noteReads(formula.stringValue())
+						: null;
+				if (read != null) {
+					reads.put(position, read);
+				}
 			}
 			blocks.addAll(shown.values());
+			blocks.addAll(reads.values());
 		}
 		JsonNode charts = sheet.get("charts");
 		if (charts != null && charts.isObject()) {
@@ -166,6 +180,108 @@ public class SheetDocumentIndexer implements DocumentIndexer {
 		BigDecimal magnitude = decimal.abs();
 		return (magnitude.compareTo(LARGE) >= 0 || magnitude.compareTo(SMALL) < 0) ? decimal.toString()
 				: decimal.toPlainString();
+	}
+
+	/**
+	 * A formula that reads notes by name ({@code =NOTEPROP("Projects/Plan", "status")}, {@code =NOTETABLE("Costs")},
+	 * ROADMAP item 42) with each note's name as a wikilink ({@code =NOTEPROP([[Projects/Plan]], "status")}), or null
+	 * when it names no note: only a first argument written as text names one, as the frontend reads it.
+	 */
+	static @Nullable String noteReads(String formula) {
+		if (!formula.stripLeading().startsWith("=")) {
+			return null;
+		}
+		StringBuilder out = new StringBuilder();
+		int copied = 0;
+		boolean found = false;
+		int n = formula.length();
+		int i = 0;
+		while (i < n) {
+			char ch = formula.charAt(i);
+			if (ch == '"' || ch == '\'') {
+				i = quotedEnd(formula, i);
+				continue;
+			}
+			if (!isWord(ch) || (i > 0 && isWord(formula.charAt(i - 1)))) {
+				i++;
+				continue;
+			}
+			int end = i;
+			while (end < n && isWord(formula.charAt(end))) {
+				end++;
+			}
+			int open = end;
+			while (open < n && formula.charAt(open) == ' ') {
+				open++;
+			}
+			String name = formula.substring(i, end).toUpperCase(Locale.ROOT);
+			if (open >= n || formula.charAt(open) != '(' || !NOTE_READERS.contains(name)) {
+				i = end;
+				continue;
+			}
+			int arg = open + 1;
+			while (arg < n && Character.isWhitespace(formula.charAt(arg))) {
+				arg++;
+			}
+			if (arg < n && formula.charAt(arg) == '"') {
+				int close = quotedEnd(formula, arg);
+				int after = close;
+				while (after < n && Character.isWhitespace(formula.charAt(after))) {
+					after++;
+				}
+				boolean closed = close > arg + 1 && formula.charAt(close - 1) == '"';
+				boolean whole = after < n && ",);".indexOf(formula.charAt(after)) >= 0;
+				String target = closed ? linkTarget(formula.substring(arg + 1, close - 1).replace("\"\"", "\"")) : null;
+				if (whole && target != null) {
+					out.append(formula, copied, arg).append("[[").append(target).append("]]");
+					copied = close;
+					found = true;
+				}
+			}
+			i = open + 1;
+		}
+		return found ? oneLine(out.append(formula, copied, n).toString()) : null;
+	}
+
+	/** A note's name as a wikilink target, or null when it cannot be one. */
+	private static @Nullable String linkTarget(String text) {
+		String target = text.strip();
+		if (target.startsWith("[[") && target.endsWith("]]")) {
+			target = target.substring(2, target.length() - 2);
+		}
+		int bar = target.indexOf('|');
+		if (bar >= 0) {
+			target = target.substring(0, bar);
+		}
+		target = target.strip();
+		if (target.isEmpty() || target.chars().anyMatch((c) -> c == '[' || c == ']' || c == '|' || c == '#' || c == '\n' || c == '\r')) {
+			return null;
+		}
+		return target;
+	}
+
+	private static boolean isWord(char ch) {
+		return Character.isLetterOrDigit(ch) || ch == '_' || ch == '.' || ch == '$';
+	}
+
+	/** The end of a quoted run starting at {@code from} ({@code "…"} or {@code '…'}, the quote doubled inside). */
+	private static int quotedEnd(String text, int from) {
+		char quote = text.charAt(from);
+		int i = from + 1;
+		while (i < text.length()) {
+			if (text.charAt(i) == quote) {
+				if (i + 1 < text.length() && text.charAt(i + 1) == quote) {
+					i += 2;
+				}
+				else {
+					return i + 1;
+				}
+			}
+			else {
+				i++;
+			}
+		}
+		return text.length();
 	}
 
 	/** A sortable row-major position for a cell key ({@code B10}, {@code b10}, {@code $B$10}), or -1. */
