@@ -28,6 +28,7 @@ beforeEach(() => {
 afterEach(() => {
   queryClient.clear();
   resetKeptDrafts();
+  vi.useRealTimers();
 });
 
 const update = () => vi.spyOn(taskApi, 'update').mockImplementation(async (id, req) => result({ ...taskStore.task(id)!, ...req.changes } as Task));
@@ -101,6 +102,9 @@ describe('task detail sheet', () => {
   });
 
   it('shows a rule it cannot offer as a choice by its text, with the next dates', () => {
+    // A fixed day: the next dates read "Today" or "Tomorrow" when they fall on the day the test runs.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 9, 20, 12));
     taskStore.upsert([makeTask({ id: 'A', title: 'Report', due: '2026-10-19', recurrence: { rrule: 'FREQ=MONTHLY;BYDAY=1MO', from: 'completion' } })]);
     renderWithApp(<TaskDetail id="A" />);
     const repeat = screen.getByRole('combobox', { name: 'Repeat' });
