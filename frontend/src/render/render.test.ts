@@ -281,6 +281,21 @@ describe('render: sanitization', () => {
     expect(allowed.querySelector('img')?.getAttribute('src')).toBe('https://tracker.example/p.gif');
   });
 
+  it('reads CSS escapes before checking a style: an escaped url() or position: fixed is caught too', () => {
+    const text = [
+      '<div class="a" style="background:u\\72l(https://e.com/1.png); color: red">x</div>',
+      '<div class="b" style="background-image: \\75 rl(https://e.com/2.png)">x</div>',
+      '<div class="c" style="background: U\\rl(//e.com/3.png)">x</div>',
+      '<div class="d" style="position: f\\69xed; top: 0">x</div>',
+      '<div class="e" style="position: f\\ixed">x</div>',
+    ].join('\n\n');
+    const blocked = dom(text, ctx({ loadRemoteImages: false }));
+    for (const c of ['a', 'b', 'c']) expect(blocked.querySelector(`.${c}`)?.getAttribute('style') ?? '', c).not.toMatch(/e\.com/);
+    expect(blocked.querySelector('.a')?.getAttribute('style')).toContain('color');
+    expect(blocked.querySelector('.d')?.getAttribute('style') ?? '').not.toMatch(/position/);
+    expect(blocked.querySelector('.e')?.getAttribute('style') ?? '').not.toMatch(/position/);
+  });
+
   it('renders the tasks of a transcluded note disabled (FE-9, ux)', () => {
     const boxes = [...dom('- [ ] embedded task', ctx({ depth: 1 })).querySelectorAll('input.task-list-item-checkbox')] as HTMLInputElement[];
     expect(boxes).toHaveLength(1);

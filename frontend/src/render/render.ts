@@ -496,6 +496,20 @@ function newNonce(): string {
 const REMOTE_URL = /^\s*(?:https?:)?\/\//i;
 const CSS_URL = /url\s*\(|image-set\s*\(/i;
 
+/**
+ * A declaration as the browser reads it: CSS escapes (`u\72l(`, `f\ixed`) decoded and comments
+ * dropped, so the checks below see `url(` and `fixed` however they are written.
+ */
+function cssPlain(decl: string): string {
+  return decl
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\\([0-9a-fA-F]{1,6})[ \t\n\r\f]?|\\([^\n\r\f0-9a-fA-F])/g, (_m, hex: string | undefined, ch: string | undefined) => {
+      if (ch !== undefined) return ch;
+      const code = Number.parseInt(hex!, 16);
+      return code > 0 && code <= 0x10ffff && (code < 0xd800 || code > 0xdfff) ? String.fromCodePoint(code) : '�';
+    });
+}
+
 let purifier: ReturnType<typeof DOMPurify> | null = null;
 
 function purify(): ReturnType<typeof DOMPurify> {
@@ -517,11 +531,12 @@ function purify(): ReturnType<typeof DOMPurify> {
       const cleaned = style
         .split(';')
         .filter((decl) => {
-          const [prop, value = ''] = decl.split(':').map((s) => s.trim().toLowerCase());
+          const plain = cssPlain(decl);
+          const [prop, value = ''] = plain.split(':').map((s) => s.trim().toLowerCase());
           if (prop === 'z-index') return false;
           if (prop === 'position' && /fixed|sticky/.test(value)) return false;
           // "Load remote images: off" covers CSS backgrounds as well (tracking pixels).
-          if (blockRemote && CSS_URL.test(decl)) return false;
+          if (blockRemote && CSS_URL.test(plain)) return false;
           return decl.trim() !== '';
         })
         .join(';');
