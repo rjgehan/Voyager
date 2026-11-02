@@ -50,7 +50,9 @@ class MultipleVaultsIntegrationTest {
 
 	@DynamicPropertySource
 	static void properties(DynamicPropertyRegistry registry) {
-		IntegrationProperties.register(registry, () -> vault);
+		// One owner, so that sharing is available (DESIGN §5.40); requests without a login stay the owner's.
+		IntegrationProperties.register(registry, () -> vault,
+				Map.of("notes.identity.allowed-logins", "owner@example.com"));
 		registry.add("notes.vaults.dir", () -> {
 			try {
 				Files.createDirectories(vaults.resolve("work"));
@@ -316,6 +318,58 @@ class MultipleVaultsIntegrationTest {
 				Connection: close
 				""".formatted(this.port));
 		assertThat(dotted.status()).isIn(400, 404);
+	}
+
+	@Test
+	void sharesBelongToTheirVaultAndTheLandingListsEveryVault() {
+		String mom = "mom@example.com";
+		create("/api", "Shared/Main.md", "main vault note\n");
+		create(WORK, "Shared/Work.md", "work vault note\n");
+		create(WORK, "Shared/Main.md", "a work note named like the main one\n");
+		JsonNode main = this.api.postJson("/api/shares",
+				Map.of("path", "Shared/Main.md", "mode", "read", "recipients", List.of(mom), "link", true)).ok(201);
+		JsonNode work = this.api.postJson(WORK + "/shares",
+				Map.of("path", "Shared/Work.md", "mode", "edit", "recipients", List.of(mom), "link", true)).ok(201);
+		String mainId = main.get("share").get("id").asString();
+		String workId = work.get("share").get("id").asString();
+		assertThat(main.get("share").get("url").asString()).isEqualTo("/s/" + mainId);
+		assertThat(work.get("share").get("url").asString()).isEqualTo("/v/work/s/" + workId);
+		String workToken = work.get("link").asString().substring("/v/work/s/".length());
+		String mainToken = main.get("link").asString().substring("/s/".length());
+		// Keys open only their own vault's share.
+		assertThat(this.api.get(WORK + "/s/" + workId, "Tailscale-User-Login", mom).ok(200).get("path").asString())
+			.isEqualTo("Shared/Work.md");
+		assertThat(this.api.get(WORK + "/s/" + workToken, "Tailscale-User-Login", "x@example.com").status())
+			.isEqualTo(200);
+		assertThat(this.api.get("/api/s/" + workId, "Tailscale-User-Login", mom).problem(404))
+			.isEqualTo("share-not-found");
+		assertThat(this.api.get("/api/s/" + workToken, "Tailscale-User-Login", mom).problem(404))
+			.isEqualTo("share-not-found");
+		assertThat(this.api.get(WORK + "/s/" + mainId, "Tailscale-User-Login", mom).problem(404))
+			.isEqualTo("share-not-found");
+		assertThat(this.api.get(WORK + "/s/" + mainToken, "Tailscale-User-Login", mom).problem(404))
+			.isEqualTo("share-not-found");
+		// A share's paths are its own vault's: the main note's text is never read through a work share.
+		Reply other = this.api.get(WORK + "/s/" + workId + "/files?path=" + Api.enc("Shared/Main.md"),
+				"Tailscale-User-Login", mom);
+		assertThat(other.problem(403)).isEqualTo("outside-share");
+		assertThat(this.api.get("/api/s/" + mainId + "/files?path=" + Api.enc("Shared/Main.md"),
+				"Tailscale-User-Login", mom).ok(200).get("content").asString()).isEqualTo("main vault note\n");
+		// The default vault's landing lists every vault; an extra vault's lists itself.
+		JsonNode landing = this.api.get("/api/s", "Tailscale-User-Login", mom).ok(200);
+		List<String> urls = new ArrayList<>();
+		landing.get("shares").forEach((s) -> urls.add(s.get("url").asString()));
+		assertThat(urls).containsExactlyInAnyOrder("/s/" + mainId, "/v/work/s/" + workId);
+		landing.get("shares").forEach((s) -> assertThat(s.get("vault").isNull() ? "main" : s.get("vault").asString())
+			.isEqualTo(s.get("url").asString().startsWith("/v/work/") ? "work" : "main"));
+		JsonNode workLanding = this.api.get(WORK + "/s", "Tailscale-User-Login", mom).ok(200);
+		assertThat(workLanding.get("shares")).hasSize(1);
+		assertThat(workLanding.get("shares").get(0).get("vault").asString()).isEqualTo("work");
+		// Guests reach nothing else of either vault.
+		assertThat(this.api.get(WORK + "/tree", "Tailscale-User-Login", mom).problem(403))
+			.isEqualTo("identity-not-allowed");
+		assertThat(this.api.get("/api/vaults", "Tailscale-User-Login", mom).problem(403))
+			.isEqualTo("identity-not-allowed");
 	}
 
 }

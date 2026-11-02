@@ -29,12 +29,15 @@ import com.rjgehan.notes.history.GitStore;
 import com.rjgehan.notes.history.HistoryService;
 import com.rjgehan.notes.history.LargeFiles;
 import com.rjgehan.notes.identity.Identity;
+import com.rjgehan.notes.identity.IdentityResolver;
 import com.rjgehan.notes.index.FileIndexer;
 import com.rjgehan.notes.index.IndexBuilder;
 import com.rjgehan.notes.index.VaultIndex;
 import com.rjgehan.notes.publish.PublishService;
 import com.rjgehan.notes.publish.SnapshotStore;
 import com.rjgehan.notes.settings.SettingsService;
+import com.rjgehan.notes.share.ShareService;
+import com.rjgehan.notes.share.ShareStore;
 import com.rjgehan.notes.sheets.SheetDocumentIndexer;
 import com.rjgehan.notes.tasks.TaskDocumentIndexer;
 import com.rjgehan.notes.vault.ApiPath;
@@ -115,6 +118,12 @@ public final class TestVault implements AutoCloseable {
 
 	public final PublishService publish;
 
+	public final IdentityResolver identities;
+
+	public final ShareStore shareStore;
+
+	public final ShareService shares;
+
 	public final TrashStore trashStore;
 
 	public final LargeFiles largeFiles;
@@ -162,8 +171,13 @@ public final class TestVault implements AutoCloseable {
 		this.snapshots = new SnapshotStore(this.properties);
 		this.publish = new PublishService(this.properties, this.fs, this.index, this.files, this.batcher,
 				this.snapshots, this.clock, JSON);
+		this.identities = new IdentityResolver(this.properties);
+		this.shareStore = new ShareStore(this.fs, this.batcher, JSON);
+		this.shares = new ShareService(this.shareStore, this.index, this.identities, this.hub, this.batcher,
+				this.clock, this.properties);
 		this.moves = new MoveService(this.paths, this.fs, this.locks, this.index, this.files, this.indexer,
-				this.reconciler, this.batcher, this.hub, this.moveLog, this.settings, this.bookmarks, this.publish);
+				this.reconciler, this.batcher, this.hub, this.moveLog, this.settings, this.bookmarks, this.publish,
+				this.shares);
 		this.attachments = new AttachmentService(this.paths, this.nameRules, this.files, this.index, this.settings);
 		this.headings = new HeadingRenameService(this.paths, this.fs, this.locks, this.index, this.files,
 				this.indexer, this.reconciler, this.batcher, this.hub, this.bookmarks);

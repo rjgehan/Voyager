@@ -45,4 +45,29 @@ class IdentityResolverTest {
 		assertThat(resolver.resolve("intruder@github", "I", null)).isNull();
 	}
 
+	@Test
+	void theAllowlistNamesTheOwnersAndEveryOtherLoginIsAGuest() {
+		IdentityResolver resolver = resolver(Map.of("notes.identity.allowed-logins", "rjgehan@github, partner@github"));
+		assertThat(resolver.hasOwnerList()).isTrue();
+		Identity guest = resolver.resolveAny("mom@example.com", "=?utf-8?q?Mam=C3=A1?=", null);
+		assertThat(guest).isEqualTo(new Identity("mom@example.com", "Mamá", null, Identity.Source.TAILSCALE));
+		assertThat(resolver.isOwner(guest)).isFalse();
+		assertThat(resolver.isOwner(resolver.resolveAny("Partner@GitHub", null, null))).isTrue();
+		assertThat(resolver.resolveAny(null, null, null)).isNull();
+		assertThat(resolver.resolveAny("  ", null, null)).isNull();
+	}
+
+	@Test
+	void withoutAnOwnerListEveryLoginIsAnOwnerAndTheDefaultIdentityAlwaysIs() {
+		IdentityResolver open = resolver(Map.of());
+		assertThat(open.hasOwnerList()).isFalse();
+		assertThat(open.isOwner(open.resolveAny("anyone@example.com", null, null))).isTrue();
+		IdentityResolver dev = resolver(
+				Map.of("notes.identity.allow-default", "true", "notes.identity.allowed-logins", "rjgehan@github"));
+		Identity fallback = dev.resolveAny(null, null, null);
+		assertThat(fallback.source()).isEqualTo(Identity.Source.DEFAULT);
+		assertThat(dev.isOwner(fallback)).isTrue();
+		assertThat(dev.isOwner(dev.resolveAny("mom@example.com", null, null))).isFalse();
+	}
+
 }

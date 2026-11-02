@@ -3,6 +3,8 @@ package com.rjgehan.notes.config;
 import java.io.IOException;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
+import java.util.regex.Pattern;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -25,13 +27,32 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
  * Admission (DESIGN §5.13): the Host allowlist ({@code 421 unknown-host}, which blocks DNS rebinding) and the identity
- * allowlist ({@code 403 identity-not-allowed}) for every request except the health endpoints. The admitted identity
+ * allowlist ({@code 403 identity-not-allowed}) for every request except the health endpoints. The allowlist names the
+ * owners; any other Tailscale login is a guest and continues only to the guest surface of DESIGN §5.40 (the guest API
+ * {@code /api/s/**}, the guest page and its static files), decided on the path Spring MVC matches. The admitted identity
  * is stored as a request attribute, and the client id and a short request id are put in the logging MDC.
  */
 @Component
 @ServerWide
 @Order(Ordered.HIGHEST_PRECEDENCE + 10)
 public class HostAndIdentityFilter extends OncePerRequestFilter {
+
+	/** What a guest may request: the guest surface, the root's redirect to it, or nothing else. */
+	enum GuestAccess {
+
+		ALLOW, REDIRECT, DENY
+
+	}
+
+	/** The guest page of an extra vault: {@code /v/<name>/s} and below. */
+	private static final Pattern VAULT_GUEST_PAGE = Pattern.compile("/v/[a-z0-9-]{1,32}/s(/.*)?");
+
+	/** The guest page's files at the root of the static folder (everything else it loads is under {@code /assets/}). */
+	static final Set<String> GUEST_STATIC_FILES = Set.of("/favicon.svg", "/theme-boot.js", "/apple-touch-icon.png",
+			"/robots.txt");
+
+	/** Where a guest who opens the server's plain address goes: the landing page of the guest page. */
+	static final String GUEST_LANDING = "/s";
 
 	private final List<String> allowedHosts;
 
@@ -64,11 +85,24 @@ public class HostAndIdentityFilter extends OncePerRequestFilter {
 					new NotesException(ErrorCode.UNKNOWN_HOST, "This server does not answer to that host name"));
 			return;
 		}
-		Identity identity = this.identityResolver.resolve(request);
+		Identity identity = this.identityResolver.resolveAny(request);
 		if (identity == null) {
 			this.problems.write(request, response,
 					new NotesException(ErrorCode.IDENTITY_NOT_ALLOWED, "This identity may not use NotesApp"));
 			return;
+		}
+		if (!this.identityResolver.isOwner(identity)) {
+			GuestAccess access = guestAccess(request.getMethod(), RequestPaths.of(request));
+			if (access == GuestAccess.REDIRECT) {
+				response.setStatus(HttpServletResponse.SC_SEE_OTHER);
+				response.setHeader("Location", request.getContextPath() + GUEST_LANDING);
+				return;
+			}
+			if (access != GuestAccess.ALLOW) {
+				this.problems.write(request, response,
+						new NotesException(ErrorCode.IDENTITY_NOT_ALLOWED, "This identity may not use NotesApp"));
+				return;
+			}
 		}
 		request.setAttribute(Identity.ATTRIBUTE, identity);
 		String clientId = request.getHeader("X-Client-Id");
@@ -81,6 +115,32 @@ public class HostAndIdentityFilter extends OncePerRequestFilter {
 			MDC.remove("client");
 			MDC.remove("request");
 		}
+	}
+
+	/**
+	 * What a guest (a login outside the allowlist) may request (DESIGN §5.40), on the path Spring MVC matches: any method
+	 * on the guest API ({@code /api/s} and below, which an extra vault's {@code /api/v/<name>/s/...} has already been
+	 * routed to), and {@code GET}/{@code HEAD} of the guest page ({@code /s/**}, {@code /v/<name>/s/**}) and its static
+	 * files. {@code /} sends a guest to the landing page; a path with a dot segment is never guest surface.
+	 */
+	static GuestAccess guestAccess(String method, String path) {
+		if (RequestPaths.hasDotSegment(path)) {
+			return GuestAccess.DENY;
+		}
+		if (path.equals("/api/s") || path.startsWith("/api/s/")) {
+			return GuestAccess.ALLOW;
+		}
+		if (!"GET".equals(method) && !"HEAD".equals(method)) {
+			return GuestAccess.DENY;
+		}
+		if (path.equals("/")) {
+			return GuestAccess.REDIRECT;
+		}
+		if (path.equals(GUEST_LANDING) || path.startsWith(GUEST_LANDING + "/") || VAULT_GUEST_PAGE.matcher(path).matches()
+				|| path.startsWith("/assets/") || GUEST_STATIC_FILES.contains(path)) {
+			return GuestAccess.ALLOW;
+		}
+		return GuestAccess.DENY;
 	}
 
 	/**

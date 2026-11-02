@@ -122,7 +122,21 @@ public class SecurityHeadersFilter extends OncePerRequestFilter {
 			return false;
 		}
 		return path.equals("/api/files/raw") || path.equals("/api/history/raw") || path.equals("/api/events")
-				|| (path.startsWith("/api/trash/") && path.endsWith("/raw"));
+				|| (path.startsWith("/api/trash/") && path.endsWith("/raw")) || isGuestRawOrEvents(path);
+	}
+
+	/** A share's raw files and event stream (DESIGN §5.40): {@code /api/s/<key>/files/raw}, {@code /api/s/<key>/events}. */
+	static boolean isGuestRawOrEvents(String path) {
+		if (!path.startsWith("/api/s/")) {
+			return false;
+		}
+		String rest = path.substring("/api/s/".length());
+		int slash = rest.indexOf('/');
+		if (slash <= 0) {
+			return false;
+		}
+		String tail = rest.substring(slash);
+		return tail.equals("/files/raw") || tail.equals("/events");
 	}
 
 	private static final class OverridingHeadersResponse extends HttpServletResponseWrapper {

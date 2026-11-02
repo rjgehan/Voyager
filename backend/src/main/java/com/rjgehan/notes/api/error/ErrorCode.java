@@ -47,7 +47,12 @@ public enum ErrorCode {
 	PUBLISHING_OFF("publishing-off", HttpStatus.CONFLICT, "Public publishing is off"),
 	VAULT_NOT_FOUND("vault-not-found", HttpStatus.NOT_FOUND, "No such vault"),
 	VAULT_UNAVAILABLE("vault-unavailable", HttpStatus.SERVICE_UNAVAILABLE, "Vault not available"),
-	VAULTS_OFF("vaults-off", HttpStatus.CONFLICT, "Creating vaults is off");
+	VAULTS_OFF("vaults-off", HttpStatus.CONFLICT, "Creating vaults is off"),
+	SHARE_NOT_FOUND("share-not-found", HttpStatus.NOT_FOUND, "Share not found"),
+	OUTSIDE_SHARE("outside-share", HttpStatus.FORBIDDEN, "Outside the share"),
+	SHARE_READ_ONLY("share-read-only", HttpStatus.FORBIDDEN, "The share is read-only"),
+	TOO_MANY_ATTEMPTS("too-many-attempts", HttpStatus.TOO_MANY_REQUESTS, "Too many attempts"),
+	SHARING_UNAVAILABLE("sharing-unavailable", HttpStatus.CONFLICT, "Sharing is unavailable");
 
 	private final String code;
 
