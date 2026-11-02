@@ -83,10 +83,10 @@ async function key(page, combo, waitFor) {
 
 /** Opens the command palette: Mod-P on a desktop, ⋯ › Command palette on a phone. */
 async function openPalette(page, size) {
-  if (size === 'desktop') return key(page, 'Control+P', '[role=dialog]');
+  if (size === 'desktop') return key(page, 'Control+P', '.modal-panel');
   await page.getByRole('button', { name: 'More' }).click();
   await page.getByRole('menuitem', { name: 'Command palette' }).click();
-  await page.waitForSelector('[role=dialog]', { state: 'visible', timeout: 5000 });
+  await page.waitForSelector('.modal-panel', { state: 'visible', timeout: 5000 });
 }
 
 /** Runs a palette command; by default it opens a dialog. `create`: it makes a file, whose name is confirmed with Enter. */
@@ -109,10 +109,10 @@ function mockFile(path, content, waitFor) {
     await page.evaluate(([p, c]) => window.notesMock.externalEdit(p, c), [path, content]);
     // The new file reaches the tree through the mock's event stream; then the quick switcher opens it.
     await page.waitForTimeout(600);
-    if (size === 'desktop') await key(page, 'Control+O', '[role=dialog]');
+    if (size === 'desktop') await key(page, 'Control+O', '.modal-panel');
     else {
       await page.getByRole('button', { name: 'Quick switcher' }).click();
-      await page.waitForSelector('[role=dialog]', { state: 'visible', timeout: 5000 });
+      await page.waitForSelector('.modal-panel', { state: 'visible', timeout: 5000 });
     }
     await page.keyboard.type(path.replace(/\.md$/, ''));
     await page.waitForTimeout(300);
@@ -166,9 +166,9 @@ const SCREENS = [
     path: note,
     ready: editorReady,
     act: async (p, size) => {
-      if (size === 'desktop') return key(p, 'Control+O', '[role=dialog]');
+      if (size === 'desktop') return key(p, 'Control+O', '.modal-panel');
       await p.getByRole('button', { name: 'Quick switcher' }).click();
-      await p.waitForSelector('[role=dialog]', { state: 'visible', timeout: 5000 });
+      await p.waitForSelector('.modal-panel', { state: 'visible', timeout: 5000 });
     },
     escape: true,
   },
@@ -204,6 +204,8 @@ const SCREENS = [
   // The spreadsheet view belongs to the sheets work package: reported, not failing (docs/ACCESSIBILITY.md).
   { name: 'sheet', path: note, ready: editorReady, act: command('Create new spreadsheet', '.sheet-toolbar', true), advisory: true },
   { name: 'drawer', path: note, ready: editorReady, sizes: ['phone'], act: (p) => p.getByRole('button', { name: 'Open sidebar' }).click(), escape: true },
+  // The open drawer at 320 px (reflow only).
+  { name: 'drawer-narrow', path: note, ready: editorReady, sizes: ['phone'], act: (p) => p.getByRole('button', { name: 'Open sidebar' }).click(), reflow: true },
   // Panels.
   ...[
     ['left', 'Files'],
@@ -267,6 +269,8 @@ async function reflow(page) {
     const out = [];
     const exempt = 'table, pre, code, .cm-lp-table, .mermaid-svg, canvas, svg, .canvas-view, .excalidraw, .sheet-view, .graph-canvas, .katex-display';
     for (const el of document.querySelectorAll('.workspace-scroll, .settings-section, .page, .panel-body, .overlay-content, .modal-panel')) {
+      // A closed drawer or sheet is still in the page, hidden.
+      if (el.closest('[inert], [aria-hidden="true"]') || el.getClientRects().length === 0) continue;
       if (el.scrollWidth <= el.clientWidth + 1) continue;
       const right = el.getBoundingClientRect().right;
       const culprit = [...el.querySelectorAll('*')].find((c) => c.getBoundingClientRect().right > right + 1 && !c.closest(exempt) && getComputedStyle(c).position !== 'fixed');
@@ -305,6 +309,8 @@ async function main() {
   const sizes = args.sizes.split(',');
   const findings = new Map();
   const advisory = new Map();
+  // axe's best practices (headings, landmarks, …): reported, not failing; WCAG itself does not require them.
+  const practice = new Map();
   const keyboard = [];
   let runs = 0;
   let failedScreens = 0;
@@ -328,14 +334,19 @@ async function main() {
               await screen.act(page, size);
               await page.waitForTimeout(400);
             }
-            const results = await new AxeBuilder({ page }).withTags(TAGS).analyze();
+            const results = await new AxeBuilder({ page }).withTags([...TAGS, 'best-practice']).analyze();
             runs++;
+            const modalOpen = await page.evaluate(() => document.querySelector('.modal-panel') !== null);
             for (const v of results.violations) {
+              const wcag = v.tags.some((t) => TAGS.includes(t));
               for (const node of v.nodes) {
                 const target = node.target.join(' ');
                 if (isKnown(v.id, target)) continue;
+                // A control behind an open modal dialog cannot be activated (the dialog and its
+                // backdrop cover it); axe still measures it, as "partially obscured".
+                if (v.id === 'target-size' && modalOpen && (await page.evaluate((sel) => !document.querySelector(sel)?.closest('.modal-panel'), node.target[0]))) continue;
                 const k = `${v.id} :: ${target}`;
-                const into = screen.advisory ? advisory : findings;
+                const into = screen.advisory ? advisory : wcag ? findings : practice;
                 const entry = into.get(k) ?? { rule: v.id, impact: v.impact, help: v.help, target, summary: node.failureSummary ?? '', where: [] };
                 entry.where.push(where);
                 into.set(k, entry);
@@ -353,7 +364,7 @@ async function main() {
             if (screen.name === 'note' || screen.name === 'home' || screen.name === 'settings-files') {
               for (const p of await tabWalk(page)) keyboard.push(`${where}: ${p}`);
             }
-            if (size === 'phone' && !screen.act && !screen.advisory) {
+            if (size === 'phone' && (!screen.act || screen.reflow) && !screen.advisory) {
               for (const p of await reflow(page)) keyboard.push(`${where}: ${p}`);
             }
           } catch (e) {
@@ -381,8 +392,12 @@ async function main() {
     console.log("\nAdvisory (the spreadsheet view and Excalidraw's own UI; listed in docs/ACCESSIBILITY.md, not failing):");
     for (const f of [...advisory.values()].sort((a, b) => a.rule.localeCompare(b.rule))) print(f, '!');
   }
+  if (practice.size > 0) {
+    console.log('\nBest practices (not WCAG requirements; not failing):');
+    for (const f of [...practice.values()].sort((a, b) => a.rule.localeCompare(b.rule))) print(f, '·');
+  }
   for (const k of keyboard) console.log(`\n✗ keyboard: ${k}`);
-  console.log(`\naxe: ${runs} screens audited, ${list.length} distinct violations, ${keyboard.length} keyboard or reflow problems${failedScreens ? `, ${failedScreens} screens failed to open` : ''}${advisory.size ? `, ${advisory.size} advisory findings` : ''}.`);
+  console.log(`\naxe: ${runs} screens audited, ${list.length} distinct violations, ${keyboard.length} keyboard or reflow problems${failedScreens ? `, ${failedScreens} screens failed to open` : ''}${advisory.size ? `, ${advisory.size} advisory findings` : ''}${practice.size ? `, ${practice.size} best-practice notes` : ''}.`);
   process.exitCode = list.length > 0 || keyboard.length > 0 ? 1 : 0;
 }
 
