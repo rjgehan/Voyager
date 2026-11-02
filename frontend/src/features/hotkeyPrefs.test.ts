@@ -74,6 +74,20 @@ describe('hotkey preferences', () => {
     expect(reservedReason('Mod-Shift-b')).toBeNull();
   });
 
+  it('gives the same overrides on every read while storage cannot be read (private mode)', () => {
+    // A new {} on each read made every useSyncExternalStore user (ribbon, palette, note header,
+    // Settings › Hotkeys) re-render forever.
+    window.dispatchEvent(new StorageEvent('storage', { key: HOTKEYS_KEY }));
+    const spy = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new DOMException('denied', 'SecurityError');
+    });
+    try {
+      expect(hotkeyOverrides()).toBe(hotkeyOverrides());
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it('tells subscribers about changes', () => {
     const fn = vi.fn();
     const off = subscribeHotkeys(fn);
