@@ -85,7 +85,7 @@ export async function clipTab(b: Browser, tab: Tab, selection: boolean): Promise
   const [delivered] = await b.scripting.executeScript<ClipOutcome>({
     target: { tabId: appTab.id },
     func: deliverClip as unknown as (...args: never[]) => unknown,
-    args: [message, AUTO_SAVE_WAIT_MS],
+    args: [message, AUTO_SAVE_WAIT_MS, new URL(settings.appUrl).origin],
   });
   const outcome = delivered?.result ?? { status: 'failed', error: 'NotesApp did not answer.' };
   if (settings.autoSave && outcome.status === 'saved') await b.tabs.remove(appTab.id).catch(() => undefined);
