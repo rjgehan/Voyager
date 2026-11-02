@@ -3,54 +3,56 @@ tags: [welcome]
 ---
 # Welcome to NotesApp
 
-This vault is a folder of plain Markdown files on your own server. Everything you write is saved as you type, and every change goes into history. This note is a short tour; delete it whenever you like.
+Your notes are plain Markdown files on your own server. They save as you type, keep every version, and show on all your devices. This note is a five-minute tour: try each step right here, then delete the note whenever you like.
 
-## Writing
+> [!tip] The user guide is built in
+> Open **Help** at any time: the **?** near the bottom of the ribbon on a computer, or **☰ › Help** and **⋯ › Help** on a phone. Typing `help` in the command palette (`Ctrl+P`) works too, and the guide's search box answers questions such as "code", "table" or "reminder".
 
-- Notes show formatted as you type, and you edit them right there: there is no separate reading view to switch to. Click any text, a table cell, an image, a callout or a formula to change it.
-- If something ever looks wrong, **Show Markdown source** (in the note's ⋯ menu or the command palette) shows the plain text; **Back to normal view** returns.
+## 1. Write without Markdown
 
-## Notes and links
+- Click anywhere in this note and type. There is no edit mode to switch on: what you see is what you edit.
+- Select a word and press `Ctrl+B` to make it bold. On a phone, use the bar above the keyboard.
+- Type `/` at the start of a line for a menu of everything you can insert: headings, checklists, tables, callouts, code blocks, dates.
+- [ ] Tick this box.
 
-- Create a note with **New note** (`Mod-Alt-N`) or open the quick switcher (`Mod-O`) and type a name that does not exist yet.
-- Link notes with double brackets: [[My first note]]. A link to a note that does not exist is shown as unresolved; following it creates the note.
-- Link to a heading with `[[Note#Heading]]`, and show other text with `[[Note|label]]`.
-- `Mod`-click a link (tap it on a phone) to follow it. Click inside its text to edit it: the whole link shows as typed, so you can change where it goes.
-- Paste or drop an image to embed it: it is stored in `Attachments/` and inserted as `![[image.png]]`.
-- Renaming or moving a note updates the links that point to it.
-- The **Backlinks** panel lists the notes that link here, and plain-text mentions you can turn into links.
+More in Help › **Writing**.
 
-## Tags and search
+## 2. Link your notes
 
-- Write a tag anywhere in the text, like #welcome, or nest it: #ideas/later.
-- The **Tags** panel lists every tag with its count.
-- Search (`Mod-Shift-F`) understands `"exact phrases"`, `tag:ideas`, `path:Daily`, `file:plan` and `-word` to exclude.
+- Type `[[` and the start of a note's name to link to it. [[My first note]] does not exist yet: following the link creates it.
+- `Ctrl`+click a link to follow it (on a phone, tap it). A plain click puts the cursor in the link so you can change it.
+- The **Backlinks** panel shows which notes link to the open note. Tags such as #welcome group notes too.
 
-## Daily notes and templates
+More in Help › **Links, backlinks and tags**.
 
-- **Open today's daily note** creates `Daily/YYYY-MM-DD.md` (the folder and format are in Settings).
-- Notes in the `Templates/` folder can be inserted with **Insert template**. In a template, `{{title}}`, `{{date}}` and `{{time}}` are replaced; `{{date:dddd, MMMM Do YYYY}}` takes any date format.
+## 3. Find anything
 
-## Shortcuts
+- `Ctrl+O` opens a note by typing a few letters of its name.
+- `Ctrl+Shift+F` searches inside every note.
+- `Ctrl+P` lists every action by name, with its key.
 
-| Action | Keys |
+## 4. Numbers that add up
+
+| Item | Cost |
 |---|---|
-| Quick switcher | `Mod-O` |
-| Command palette | `Mod-P` |
-| New note | `Mod-Alt-N` |
-| Search in all notes | `Mod-Shift-F` |
-| Inline code | `Mod-E` |
-| Follow the link under the cursor | `Mod-Enter` |
-| Toggle a checkbox | `Mod-L` |
-| Bold, italic, link | `Mod-B`, `Mod-I`, `Mod-K` |
-| Back and forward | `Mod-Alt-←`, `Mod-Alt-→` |
-| Settings | `Mod-,` |
+| Rent | 1450 |
+| Internet | 65 |
+| **Total** | =SUM(B2:B3) |
 
-`Mod` is `Cmd` on Apple devices and `Ctrl` elsewhere.
+- Click the total to see its formula: a table works like a small spreadsheet. For a full one, run **Create new spreadsheet** from the command palette.
 
-## Where your history lives
+More in Help › **Tables and formulas** and **Spreadsheets**.
 
-- The vault is a git repository. Edits are committed automatically about 30 seconds after you stop typing, with your name as the author; changes made outside the app (over SSH, for example) are committed as **External**.
-- The **History** panel shows every version of a note, with a diff, and can restore any of them.
-- Deleted notes go to the **Trash**, from where they can be restored. Their content was committed to history first.
-- If two devices edit the same note, nothing is overwritten silently: you choose which version to keep, or merge them.
+## 5. Plan your days
+
+- The calendar icon in the ribbon (on a phone: **☰ › Today**) opens today's daily note.
+- **Today's tasks**, **Upcoming tasks** and **Task lists** hold tasks with dates, repeats and reminders.
+
+More in Help › **Tasks and reminders** and **Calendar and daily notes**.
+
+## Nothing gets lost
+
+- Every change goes into the note's **History**, and deleted notes go to the **Trash**.
+- If two devices change the same note at once, nothing is overwritten: you choose what to keep.
+
+On a Mac, press `Cmd` where this note says `Ctrl`. On an iPhone, add NotesApp to the Home Screen (Safari › Share › Add to Home Screen) to use it like an app; see Help › **Phone tips**.
