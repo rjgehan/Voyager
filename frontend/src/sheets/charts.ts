@@ -24,6 +24,8 @@ export interface ChartSeries {
 
 export interface ChartData {
   categories: string[];
+  /** The first column's numbers, the X values of a scatter chart (null where it holds none). */
+  xValues?: Array<number | null>;
   series: ChartSeries[];
   /** The first value cell's number format shows percentages: axis ticks get a %. */
   percent: boolean;
@@ -66,7 +68,9 @@ export function chartData(sheet: Sheet, chart: ChartProps): ChartResult {
   const range = chartRange(chart);
   if (!range) return { ok: false, message: chart.range ? `“${chart.range}” is not a range.` : 'The chart has no range.' };
   const headers = chart.headers === true && range.height > 1;
-  const labels = chart.labels === true && range.width > 1;
+  // A scatter chart's first column is its X values, as in Google Sheets.
+  const scatter = chart.type === 'scatter';
+  const labels = (chart.labels === true || scatter) && range.width > 1;
   const firstRow = range.row + (headers ? 1 : 0);
   const firstCol = range.col + (labels ? 1 : 0);
   const rows = range.row + range.height - firstRow;
@@ -75,10 +79,14 @@ export function chartData(sheet: Sheet, chart: ChartProps): ChartResult {
   const categoryCount = Math.min(rows, MAX_CATEGORIES);
   const seriesCount = Math.min(cols, MAX_SERIES);
   const categories: string[] = [];
+  const xValues: Array<number | null> = [];
   for (let i = 0; i < categoryCount; i++) {
     const row = firstRow + i;
     categories.push(labels ? shownCell(sheet, range.col, row).text : String(row + 1));
+    const x = labels ? cellValue(sheet.cells[toA1(range.col, row)]) : row + 1;
+    xValues.push(typeof x === 'number' && Number.isFinite(x) ? x : null);
   }
+  if (scatter && xValues.every((x) => x === null)) return { ok: false, message: `A scatter chart’s first column holds its X values: ${columnLetters(range.col)} holds no numbers.` };
   const series: ChartSeries[] = [];
   let numbers = 0;
   for (let j = 0; j < seriesCount; j++) {
@@ -98,8 +106,36 @@ export function chartData(sheet: Sheet, chart: ChartProps): ChartResult {
   }
   if (numbers === 0) return { ok: false, message: `${rangeText(range)} holds no numbers to chart.` };
   const percent = formatKind(effectiveFormat(sheet, firstCol, firstRow)) === 'percent';
-  return { ok: true, data: { categories, series, percent, hiddenSeries: cols - seriesCount, hiddenCategories: rows - categoryCount } };
+  const data: ChartData = { categories, series, percent, hiddenSeries: cols - seriesCount, hiddenCategories: rows - categoryCount };
+  if (scatter) data.xValues = xValues;
+  return { ok: true, data };
 }
+
+/** The smallest and largest value a chart's axis must show: with `stacked`, the sums of each category's negative and positive values. */
+export function valueExtent(data: ChartData, stacked: boolean): [number, number] {
+  let lo = Infinity;
+  let hi = -Infinity;
+  if (stacked) {
+    data.categories.forEach((_, i) => {
+      let pos = 0;
+      let neg = 0;
+      for (const s of data.series) {
+        const v = s.values[i];
+        if (v === null) continue;
+        if (v >= 0) pos += v;
+        else neg += v;
+      }
+      lo = Math.min(lo, neg);
+      hi = Math.max(hi, pos);
+    });
+  } else {
+    for (const s of data.series) for (const v of s.values) if (v !== null) [lo, hi] = [Math.min(lo, v), Math.max(hi, v)];
+  }
+  return lo === Infinity ? [0, 1] : [lo, hi];
+}
+
+/** The chart types as Google Sheets names them, for labels: `bar` is its column chart. */
+export const CHART_NAMES: Record<string, string> = { bar: 'Column', hbar: 'Bar', line: 'Line', area: 'Area', pie: 'Pie', scatter: 'Scatter' };
 
 export interface PieSlice {
   label: string;

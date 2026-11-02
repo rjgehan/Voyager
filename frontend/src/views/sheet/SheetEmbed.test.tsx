@@ -105,7 +105,7 @@ describe('SheetEmbed', () => {
     expect(table.querySelector('tr')?.className).toBe('is-bold');
     expect(table.querySelectorAll('col')[1].style.width).toBe('110px');
     // A whole sheet shows its charts.
-    expect(view.container.querySelector('figure.sheet-chart')?.getAttribute('aria-label')).toBe('Bar chart: Costs');
+    expect(view.container.querySelector('figure.sheet-chart')?.getAttribute('aria-label')).toBe('Column chart: Costs');
   });
 
   it('shows conditional formatting as the grid does (format version 2)', async () => {

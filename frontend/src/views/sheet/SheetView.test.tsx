@@ -758,23 +758,33 @@ describe('number formats, charts, import and export (6b, 6c)', () => {
     fireEvent.keyDown(nameBox(), { key: 'Enter' });
     fireEvent.click(button('Insert chart'));
     const dialog = screen.getByRole('dialog');
-    expect((within(dialog).getByLabelText('Range') as HTMLInputElement).value).toBe('A1:B3');
-    expect(within(dialog).getByLabelText('Row 1 names the series')).toBeChecked();
-    expect(within(dialog).getByLabelText('Column A labels the categories')).toBeChecked();
-    fireEvent.change(within(dialog).getByLabelText('Title'), { target: { value: 'Costs' } });
-    expect(within(dialog).getByRole('figure')).toHaveAttribute('aria-label', 'Bar chart: Costs');
+    expect((within(dialog).getByLabelText('Data range') as HTMLInputElement).value).toBe('A1:B3');
+    expect(within(dialog).getByLabelText('Use row 1 as headers (series names)')).toBeChecked();
+    expect(within(dialog).getByLabelText('Use column A as labels (categories)')).toBeChecked();
+    fireEvent.change(within(dialog).getByLabelText('Chart title'), { target: { value: 'Costs' } });
+    expect(within(dialog).getByRole('figure')).toHaveAttribute('aria-label', 'Column chart: Costs');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Insert' }));
     let charts = (await saved(path)).sheets[0].charts;
     const [id] = Object.keys(charts);
     expect(charts[id]).toEqual({ type: 'bar', range: 'A1:B3', title: 'Costs', headers: true, labels: true });
     const pane = screen.getByRole('region', { name: 'Charts' });
-    expect(within(pane).getByRole('figure')).toHaveAttribute('aria-label', 'Bar chart: Costs');
+    expect(within(pane).getByRole('figure')).toHaveAttribute('aria-label', 'Column chart: Costs');
 
     fireEvent.click(within(pane).getByRole('button', { name: 'Edit chart Costs' }));
-    fireEvent.click(within(screen.getByRole('dialog')).getByRole('radio', { name: 'Pie' }));
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('radio', { name: 'Doughnut' }));
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Save' }));
     charts = (await saved(path)).sheets[0].charts;
-    expect(charts[id].type).toBe('pie');
+    expect([charts[id].type, charts[id].donut]).toEqual(['pie', true]);
+    // The chart editor's options: Google Sheets' bar chart, stacked, the legend below, axis titles.
+    fireEvent.click(within(pane).getByRole('button', { name: 'Edit chart Costs' }));
+    const editor = screen.getByRole('dialog');
+    fireEvent.click(within(editor).getByRole('radio', { name: 'Bar' }));
+    fireEvent.click(within(editor).getByLabelText('Stacked'));
+    fireEvent.change(within(editor).getByLabelText('Legend'), { target: { value: 'bottom' } });
+    fireEvent.change(within(editor).getByLabelText('Horizontal axis title'), { target: { value: 'Dollars' } });
+    fireEvent.click(within(editor).getByRole('button', { name: 'Save' }));
+    charts = (await saved(path)).sheets[0].charts;
+    expect(charts[id]).toEqual({ type: 'hbar', range: 'A1:B3', title: 'Costs', headers: true, labels: true, stacked: true, legend: 'bottom', xTitle: 'Dollars' });
 
     fireEvent.click(within(pane).getByRole('button', { name: 'Delete chart Costs' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
@@ -788,7 +798,7 @@ describe('number formats, charts, import and export (6b, 6c)', () => {
     await openGrid();
     fireEvent.click(button('Insert chart'));
     const dialog = screen.getByRole('dialog');
-    fireEvent.change(within(dialog).getByLabelText('Range'), { target: { value: 'Notes!A1:A3' } });
+    fireEvent.change(within(dialog).getByLabelText('Data range'), { target: { value: 'Notes!A1:A3' } });
     expect(within(dialog).getByText('A chart shows a range of its own sheet.')).toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: 'Insert' })).toBeDisabled();
   });

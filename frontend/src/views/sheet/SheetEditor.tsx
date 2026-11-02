@@ -1333,7 +1333,14 @@ ${JSON.stringify(sheet.filter ?? null)}`;
         />
       )}
       {dialog?.kind === 'chart' && (
-        <ChartDialog sheet={sheet} initial={dialog.initial} editing={dialog.id !== null} onSave={(props) => saveChart(dialog.id, props)} onClose={() => setDialog(null)} />
+        <ChartDialog
+          sheet={sheet}
+          initial={dialog.initial}
+          editing={dialog.id !== null}
+          selection={single ? undefined : rangeText(selectedRange)}
+          onSave={(props) => saveChart(dialog.id, props)}
+          onClose={() => setDialog(null)}
+        />
       )}
       {dialog?.kind === 'import' && (
         <ImportDialog

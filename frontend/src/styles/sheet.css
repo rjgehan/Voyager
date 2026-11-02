@@ -488,6 +488,43 @@
   cursor: pointer;
 }
 
+.sheet-chart-kinds.is-gallery {
+  flex-wrap: wrap;
+}
+
+.sheet-chart-kinds.is-gallery .sheet-chart-kind {
+  flex: 1 1 88px;
+}
+
+.sheet-chart-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.sheet-chart-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sheet-chart-range {
+  display: flex;
+  gap: 6px;
+}
+
+.sheet-chart-range .text-input {
+  flex: 1;
+  min-width: 0;
+}
+
+@media (max-width: 640px) {
+  .sheet-chart-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .sheet-chart-kind[aria-checked='true'] {
   border-color: var(--interactive-accent);
   background: var(--background-modifier-active-hover);
