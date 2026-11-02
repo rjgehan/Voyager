@@ -164,8 +164,13 @@
   }
 }
 
+/* A phone: the title and Open full sheet on the first line, the toolbar on its own below. */
 @media (max-width: 480px) {
   .sheet-live-open-label {
     display: none;
+  }
+
+  .sheet-live-toolbar {
+    order: 1;
   }
 }
