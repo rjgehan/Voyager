@@ -113,8 +113,13 @@ export class DocumentRegistry {
     return [...this.sessions.values()].filter((s) => !s.isDisposed);
   }
 
-  /** Closes a session for good (deleted or discarded note). */
+  /**
+   * Closes a session for good (deleted or discarded note). Text it still holds unsaved (an
+   * unresolved conflict, a save the server refused) goes to the discarded store: its draft is under
+   * this tab's own key, which the next session of the path (a restore, a new note) would overwrite.
+   */
   close(session: DocumentSession): void {
+    if (session.hasUnsavedChanges()) this.preserve(session, true);
     session.dispose();
     if (this.sessions.get(session.path) === session) this.sessions.delete(session.path);
     this.holders.delete(session);
@@ -142,12 +147,18 @@ export class DocumentRegistry {
     return true;
   }
 
-  /** Keeps a displaced session's unsaved text recoverable (Settings › This device). */
-  private preserve(session: DocumentSession): void {
+  /**
+   * Keeps a displaced or closed session's unsaved text recoverable (Settings › This device);
+   * `dropDraft` then removes the session's own draft, which holds the same text.
+   */
+  private preserve(session: DocumentSession, dropDraft = false): void {
     const { path, eol } = session.getSnapshot();
     void this.opts.drafts
       .discard(orphanRecord({ path, text: session.getText(), eol, at: Date.now() }))
-      .then(() => this.opts.notify({ message: `Unsaved text of ${displayName(path)} was kept in Settings › This device` }))
+      .then(async () => {
+        if (dropDraft) await this.opts.drafts.remove(path, this.opts.clientId).catch(() => undefined);
+        this.opts.notify({ message: `Unsaved text of ${displayName(path)} was kept in Settings › This device` });
+      })
       .catch(() => this.opts.onDraftWrite(false));
   }
 

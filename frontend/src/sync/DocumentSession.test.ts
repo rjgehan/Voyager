@@ -714,6 +714,36 @@ function registryFor(vault: MockVault, fake: ReturnType<typeof fakeApi>, opts: {
   });
 }
 
+describe('closing a session that still holds unsaved text (a deleted note)', () => {
+  it('keeps the text recoverable, so a new session of the path never overwrites it with its own draft', async () => {
+    const vault = new MockVault(false);
+    vault.createFile({ path: 'a.md', content: 'hello' }, 'o');
+    const fake = fakeApi(vault);
+    const drafts = new MemoryDraftStore();
+    const notices: string[] = [];
+    const docs = registryFor(vault, fake, { drafts, notify: (m) => notices.push(m) });
+    const s = docs.acquire('a.md', 'view');
+    await s.ready;
+    // An unresolved conflict: mine was never saved, and only its draft holds it.
+    vault.externalWrite('a.md', 'theirs');
+    type(s, ' mine');
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(status(s)).toBe('conflict');
+    await vi.advanceTimersByTimeAsync(600);
+    expect(drafts.forPath('a.md').map((d) => d.text)).toEqual(['hello mine']);
+    // The note is deleted (the flush cannot save a conflict), then restored (Undo) and edited.
+    docs.close(s);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(drafts.discarded.map((d) => d.text)).toEqual(['hello mine']);
+    expect(notices.some((n) => n.includes('Settings › This device'))).toBe(true);
+    const again = docs.acquire('a.md', 'view');
+    await again.ready;
+    type(again, ' later');
+    await vi.advanceTimersByTimeAsync(600);
+    expect(drafts.discarded.map((d) => d.text)).toEqual(['hello mine']);
+  });
+});
+
 describe('a note that failed to load (FE-1)', () => {
   function failingFirstRead(content = 'the full note text') {
     const vault = new MockVault(false);
