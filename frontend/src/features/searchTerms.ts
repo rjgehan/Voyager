@@ -5,13 +5,29 @@ import { parseSearchQuery, queryLeaves, toJsRegExp } from './searchQuery';
 
 export type HighlightTerm = string | RegExp;
 
+/**
+ * Lower case with every character keeping its length, so offsets in it are offsets in the text:
+ * `'İ'.toLowerCase()` is `i` plus a combining dot (two code units), which shifted every later
+ * range (and ran the last ones past the text). Such a character lower-cases to its first unit.
+ */
+export function lowerCaseSameLength(text: string): string {
+  const lower = text.toLowerCase();
+  if (lower.length === text.length) return lower;
+  let out = '';
+  for (const ch of text) {
+    const l = ch.toLowerCase();
+    out += l.length === ch.length ? l : l.slice(0, ch.length);
+  }
+  return out;
+}
+
 export function highlightTerms(query: string): HighlightTerm[] {
   const words: string[] = [];
   const regexes: RegExp[] = [];
   for (const { leaf, negated } of queryLeaves(parseSearchQuery(query))) {
     if (negated) continue;
     if (leaf.kind === 'word' || leaf.kind === 'phrase') {
-      const value = leaf.value.trim().toLowerCase();
+      const value = lowerCaseSameLength(leaf.value.trim());
       if (value) words.push(value);
     } else if (leaf.kind === 'regex') {
       const re = toJsRegExp(leaf.value);
@@ -28,7 +44,7 @@ export function findTermRanges(text: string, terms: readonly HighlightTerm[], li
   const ranges: Array<{ from: number; to: number }> = [];
   for (const term of terms) {
     if (typeof term === 'string') {
-      lower ??= text.toLowerCase();
+      lower ??= lowerCaseSameLength(text);
       for (let at = lower.indexOf(term); at >= 0 && ranges.length < limit; at = lower.indexOf(term, at + term.length)) {
         ranges.push({ from: at, to: at + term.length });
       }

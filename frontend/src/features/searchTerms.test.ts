@@ -39,6 +39,15 @@ describe('findTermRanges', () => {
     expect(findTermRanges('nothing', [])).toEqual([]);
   });
 
+  it('gives offsets in the text itself after a letter that lower-cases longer (Turkish İ)', () => {
+    // 'İ'.toLowerCase() is two code units: ranges found in the lower-cased text drifted, and one
+    // near the end ran past the text (the editor's highlight then threw a RangeError).
+    expect(findTermRanges('İstanbul gezisi', highlightTerms('gezisi'))).toEqual([{ from: 9, to: 15 }]);
+    expect(findTermRanges('İİİ abc', highlightTerms('abc'))).toEqual([{ from: 4, to: 7 }]);
+    expect(findTermRanges('İstanbul', highlightTerms('İstanbul'))).toEqual([{ from: 0, to: 8 }]);
+    expect(findTermRanges('İstanbul', highlightTerms('istanbul'))).toEqual([{ from: 0, to: 8 }]);
+  });
+
   it('finds regular expression matches, skipping empty ones', () => {
     expect(findTermRanges('Color or colour, 555-1234', [/colou?r/gimu, /\d*/gmu])).toEqual([
       { from: 0, to: 5 },
