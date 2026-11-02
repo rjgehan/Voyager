@@ -96,10 +96,22 @@ export function pickFiles(opts: { accept?: string; multiple?: boolean } = {}): P
   return picker ? picker(opts) : Promise.resolve([]);
 }
 
-/** "Insert attachment…": picks files and inserts them where the cursor was. */
+/**
+ * "Insert attachment…": picks files and inserts them where the cursor was. The picker may stay open
+ * a while: the place is followed through edits made meanwhile (another device's included), and
+ * selected text that changed meanwhile is kept, the files going in before it.
+ */
 export function pickAndInsertAttachments(session: DocumentSession, accept?: string): void {
   const range = session.insertionRange();
-  void pickFiles({ accept, multiple: true }).then((files) => insertAttachments(session, files, range, false));
+  const selected = session.editorState.doc.sliceString(range.from, range.to);
+  const tracked = session.trackRange(range.from, range.to);
+  if (tracked === null) return;
+  void pickFiles({ accept, multiple: true }).then((files) => {
+    const at = session.takeRange(tracked);
+    if (!at || files.length === 0) return;
+    const to = session.editorState.doc.sliceString(at.from, at.to) === selected ? at.to : at.from;
+    return insertAttachments(session, files, { from: at.from, to }, false);
+  });
 }
 
 // ---------- OS files dropped on an explorer folder ----------

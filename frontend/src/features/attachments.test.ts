@@ -12,7 +12,7 @@ import { pendingUploads } from '../editor/uploads';
 import { DocumentRegistry } from '../sync/documents';
 import { MoveMap } from '../sync/moves';
 import { fakeApi, MemoryDraftStore, sessionDeps } from '../test/fakes';
-import { attachmentName, insertAttachments, uploadToFolder } from './attachments';
+import { attachmentName, insertAttachments, pickAndInsertAttachments, setFilePicker, uploadToFolder } from './attachments';
 
 function result(path: string): AttachmentResult {
   return {
@@ -24,8 +24,7 @@ function result(path: string): AttachmentResult {
   };
 }
 
-async function open(content: string) {
-  const vault = new MockVault(false);
+async function open(content: string, vault = new MockVault(false)) {
   vault.createFile({ path: 'Notes/a.md', content }, 'other-device-1');
   const session = new DocumentSession('Notes/a.md', sessionDeps(fakeApi(vault).api));
   await session.ready;
@@ -65,6 +64,25 @@ describe('insertAttachments', () => {
     expect(session.getText()).toBe('Hello ![[pic.png]]');
     expect(pendingUploads(session.editorState)).toEqual([]);
     expect(session.getSnapshot().status).toBe('dirty');
+    session.dispose();
+  });
+
+  it('"Insert attachment…" replaces the selection it was asked at, wherever edits made while the picker was open moved it', async () => {
+    const vault = new MockVault(false);
+    const session = await open('Hello world', vault);
+    let pick!: (files: File[]) => void;
+    setFilePicker(() => new Promise((r) => (pick = r)));
+    vi.spyOn(api, 'uploadAttachment').mockResolvedValue(result('Attachments/pic.png'));
+    // "world" is selected when the picker opens.
+    session.select(6);
+    vi.spyOn(session, 'insertionRange').mockReturnValueOnce({ from: 6, to: 11 });
+    pickAndInsertAttachments(session);
+    // Another device edits the note while the picker is open.
+    vault.externalWrite('Notes/a.md', 'Well, Hello world');
+    await session.onRemoteChanged({ version: vault.readFile('Notes/a.md').version });
+    pick([new File(['abc'], 'pic.png', { type: 'image/png' })]);
+    await vi.waitFor(() => expect(session.getText()).toBe('Well, Hello ![[pic.png]]'));
+    setFilePicker(null);
     session.dispose();
   });
 
