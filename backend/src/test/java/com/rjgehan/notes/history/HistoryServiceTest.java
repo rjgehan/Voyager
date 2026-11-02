@@ -118,6 +118,15 @@ class HistoryServiceTest {
 	}
 
 	@Test
+	void aPathUnderAFileHasAnEmptyHistory() throws Exception {
+		create("Welcome.md", "hello\n");
+		this.vault.flush();
+		// "Welcome.md" is a blob at HEAD: looking for a child in it threw IncorrectObjectTypeException (a 500).
+		assertThat(this.history.list("Welcome.md/x", 50, 0).entries()).isEmpty();
+		assertThat(this.vault.git.diskPathAtHead("Welcome.md/x")).isNull();
+	}
+
+	@Test
 	void restoreCommitsImmediately() throws Exception {
 		String v1 = create("R.md", "one\n");
 		GitStore.Commit first = this.vault.flush();
