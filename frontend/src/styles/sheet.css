@@ -986,7 +986,7 @@
   }
 }
 
-@media (max-width: 767px) {
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {
   /* On a phone the find panel spans the grid's top. */
   .sheet-find {
     top: 0;

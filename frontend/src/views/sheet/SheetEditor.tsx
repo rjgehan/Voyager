@@ -38,6 +38,7 @@ import { isApple, keyLabel } from '../../features/platform';
 import { columnLetters, parseA1, toA1 } from '../../sheets/a1';
 import { setActiveSheet, type SheetActions } from '../../sheets/activeSheet';
 import { guessChartOptions } from '../../sheets/charts';
+import { pivotTable, type PivotOptions } from '../../sheets/pivot';
 import { columnFiltered, dataRegion, filterRange, looksLikeHeader } from '../../sheets/filter';
 import type { Separator } from '../../sheets/csv';
 import { effectiveFormat, formatShown, shownCell } from '../../sheets/display';
@@ -75,6 +76,7 @@ import { ConditionalDialog } from './ConditionalDialog';
 import { DropdownList } from './DropdownList';
 import { ValidationDialog } from './ValidationDialog';
 import { FilterMenu } from './FilterMenu';
+import { PivotDialog } from './PivotDialog';
 import { FindPanel } from './FindPanel';
 import {
   addToWorkbook,
@@ -128,6 +130,7 @@ const FORMAT_LIMIT = 10000;
 type Dialog =
   | { kind: 'named' | 'width' | 'format' | 'conditional' }
   | { kind: 'validation'; start?: ValidationType }
+  | { kind: 'pivot'; range: CellRange }
   | { kind: 'chart'; id: string | null; initial: ChartProps }
   | { kind: 'import'; file: File; type: ImportKind; separator: Separator; text?: string; book?: ImportedBook };
 
@@ -583,6 +586,26 @@ ${JSON.stringify(sheet.filter ?? null)}`;
     { id: 'rules', label: 'Data validation rules…', run: () => setDialog({ kind: 'validation' }) },
   ];
 
+  // ---------- pivot tables ----------
+
+  /** Makes a pivot table of the data on a new sheet (`Pivot table 1`), one undo step, and opens it. */
+  const createPivot = (opts: PivotOptions) => {
+    setDialog(null);
+    const table = pivotTable(sheet, opts);
+    let name = '';
+    for (let n = 1; name === ''; n++) if (!sheetNameProblem(`Pivot table ${n}`, workbook.file)) name = `Pivot table ${n}`;
+    let id = '';
+    run(() =>
+      workbook.transact(() => {
+        id = workbook.addSheet(name);
+        workbook.setCells(Object.entries(table.cells).map(([ref, c]) => ({ sheet: id, ref, content: c.f !== undefined ? { f: c.f } : c.v !== undefined ? { v: c.v } : null, fmt: c.fmt ?? null })));
+        for (const row of table.boldRows) workbook.setRow(id, String(row + 1), { bold: true });
+        workbook.setColumn(id, 'A', { w: 160 });
+      }),
+    );
+    if (id) setSheetId(id);
+  };
+
   // ---------- sorting and filters ----------
 
   const filter = sheet.filter;
@@ -684,6 +707,8 @@ ${JSON.stringify(sheet.filter ?? null)}`;
     { id: 'rangeDesc', label: `Sort range ${sortRangeLabel} by column ${activeLetters}, Z → A`, run: () => sortRangeBy(true) },
     { id: 'sheetAsc', label: `Sort sheet by column ${activeLetters}, A → Z`, run: () => sortSheetBy(false) },
     { id: 'sheetDesc', label: `Sort sheet by column ${activeLetters}, Z → A`, run: () => sortSheetBy(true) },
+    'separator',
+    { id: 'pivot', label: 'Create pivot table…', run: () => setDialog({ kind: 'pivot', range: dataRange() }) },
   ];
 
   // ---------- import and export ----------
@@ -949,6 +974,7 @@ ${JSON.stringify(sheet.filter ?? null)}`;
       openDataValidation: () => setDialog({ kind: 'validation' }),
       openFind: () => openFind(false),
       openReplace: () => openFind(true),
+      createPivotTable: () => setDialog({ kind: 'pivot', range: dataRange() }),
     };
   });
   useEffect(() => {
@@ -991,6 +1017,7 @@ ${JSON.stringify(sheet.filter ?? null)}`;
       openDataValidation: call('openDataValidation'),
       openFind: call('openFind'),
       openReplace: call('openReplace'),
+      createPivotTable: call('createPivotTable'),
     });
   }, [path]);
 
@@ -1306,6 +1333,7 @@ ${JSON.stringify(sheet.filter ?? null)}`;
           onClose={() => setDropdown(null)}
         />
       )}
+      {dialog?.kind === 'pivot' && <PivotDialog sheet={sheet} initial={dialog.range} onCreate={createPivot} onClose={() => setDialog(null)} />}
       {dialog?.kind === 'validation' && (
         <ValidationDialog workbook={workbook} sheet={sheet} selection={rangeText(selectedRange)} editable={editable} start={dialog.start} onClose={() => setDialog(null)} />
       )}

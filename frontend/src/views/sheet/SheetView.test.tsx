@@ -1171,3 +1171,24 @@ describe('Google Sheets keyboard shortcuts (DESIGN §6.21.16)', () => {
     expect(input.value).toMatch(/^\d\d:\d\d:\d\d$/);
   });
 });
+
+describe('pivot tables (DESIGN §6.21.17)', () => {
+  it('makes a pivot table of the data on a new sheet as one undo step', async () => {
+    const path = await openGrid();
+    select(0, 0); // A2: the data around it is A1:C3
+    fireEvent.click(screen.getByRole('button', { name: 'Sort and filter' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Create pivot table…' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Create pivot table' });
+    expect(within(dialog).getByRole('textbox', { name: 'Data range (with its header row)' })).toHaveValue('A1:C3');
+    expect(within(dialog).getByRole('combobox', { name: 'Values' })).toHaveDisplayValue('Cost');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create' }));
+    expect(screen.getByRole('tab', { name: 'Pivot table 1' })).toHaveAttribute('aria-selected', 'true');
+    const pivot = (await saved(path)).sheets[2];
+    expect(pivot.cells.A1).toEqual({ v: 'Item' });
+    expect(pivot.cells.B1).toEqual({ v: 'SUM of Cost' });
+    expect([pivot.cells.A2.v, pivot.cells.B2.c, pivot.cells.A3.v, pivot.cells.B3.c, pivot.cells.B4.c]).toEqual(['Food', 487.5, 'Rent', 1450, 1937.5]);
+    expect(pivot.rows['1']).toEqual({ bold: true });
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    expect((await saved(path)).sheets.map((s) => s.name)).toEqual(['Budget', 'Notes']);
+  });
+});

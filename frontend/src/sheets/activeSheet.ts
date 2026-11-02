@@ -40,6 +40,7 @@ export interface SheetActions {
   openDataValidation(): void;
   openFind(): void;
   openReplace(): void;
+  createPivotTable(): void;
 }
 
 let active: SheetActions | null = null;

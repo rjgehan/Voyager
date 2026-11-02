@@ -74,6 +74,7 @@ export const SHEET_COMMANDS: Command[] = [
   sheetCommand('dataValidation', 'Data validation…', (a) => a.openDataValidation(), { edits: false }),
   sheetCommand('find', 'Find in spreadsheet', (a) => a.openFind(), { editorHotkey: 'Mod-f', edits: false }),
   sheetCommand('replace', 'Find and replace in spreadsheet', (a) => a.openReplace(), { editorHotkey: 'Mod-h' }),
+  sheetCommand('pivotTable', 'Create pivot table…', (a) => a.createPivotTable()),
   sheetCommand('importFile', 'Import CSV or Excel into this spreadsheet…', (a) => a.importFile(), { edits: false }),
   sheetCommand('exportCsv', 'Download sheet as CSV', (a) => a.exportCsv(), { edits: false }),
   sheetCommand('exportXlsx', 'Download spreadsheet as Excel (.xlsx)', (a) => a.exportXlsx(), { edits: false }),
