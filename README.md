@@ -35,6 +35,7 @@ A Spring Boot 4 backend (Java 21 bytecode, run on JDK 25) serves the REST and SS
 | `backend/` | Spring Boot app (`com.rjgehan.notes`), Maven wrapper |
 | `frontend/` | React + TypeScript + Vite SPA |
 | `clipper/` | The web clipper: browser extension, bookmarklet and iOS Shortcut script ([docs/CLIPPER.md](docs/CLIPPER.md)) |
+| `e2e/` | The end-to-end suite (Playwright: API, PC and iPhone), its scratch stack and seed, and the screen inventory ([e2e/README.md](e2e/README.md)) |
 | `deploy/` | `docker-compose.yml` (tailscale, notes, watchtower; optional backup sidecars), the backup scripts in `backup/`, the empty mirror-token placeholder in `mirror/`, Tailscale serve config, `.env.example`, and for CasaOS `casaos-compose.yml` (the app on the host's Tailscale), the advanced `casaos-compose-sidecar.yml` and the optional `casaos-backup-compose.yml` and `casaos-whisper-compose.yml` |
 | `.github/` | CI, image publishing, Dependabot |
 | `Dockerfile` | Three stages: frontend build, backend build (JDK 21), JDK 25 runtime with an AOT cache |
@@ -72,11 +73,12 @@ Checks (the same ones CI runs):
 ```powershell
 cd backend;  .\mvnw.cmd verify                      # add "-DexcludedGroups=" to include the perf tests
 cd frontend; npm run lint; npm test; npm run build
+cd e2e; npm ci; npm run reset -- --prod; npm test; npm run stop   # end to end, on a scratch vault (e2e/README.md)
 ```
 
 ## How deploys work
 
-1. **Pull requests** run the backend tests, the frontend lint, tests and build, and a Docker image build (amd64, not pushed), so the Dockerfile is exercised before anything reaches `main`.
+1. **Pull requests** run the backend tests, the frontend lint, tests and build, the end-to-end suite (the jar serving the built frontend, driven by Chrome as the PC and the iPhone; [e2e/README.md](e2e/README.md)) and a Docker image build (amd64, not pushed), so the Dockerfile is exercised before anything reaches `main`.
 2. **A push to `main`** (docs-only pushes excepted) runs the same checks and then [`publish.yml`](.github/workflows/publish.yml), which builds `linux/amd64` and `linux/arm64` images and pushes `ghcr.io/rjgehan/notesapp:latest` and `:sha-<7 hex>` to the private GHCR package.
 3. **Watchtower** on the server polls GHCR every 5 minutes, pulls the new image and recreates the `notes` container with a 45 s graceful stop. Open browser tabs reconnect and reload themselves onto the new build.
 4. **Weekly**, a scheduled run rebuilds and republishes the image so base-image security fixes arrive without a code change. Dependabot proposes grouped dependency updates weekly.

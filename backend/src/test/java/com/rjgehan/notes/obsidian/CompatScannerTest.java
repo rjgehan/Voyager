@@ -62,6 +62,27 @@ class CompatScannerTest {
 	}
 
 	@Test
+	void subpathsIntoDocumentsAreNotHeadings() {
+		// A spreadsheet's range, a task list's section or task: neither is a heading nor a block id of a note.
+		VaultIndex index = new VaultIndex();
+		index.put(ObsidianFixture.note("Plan.md", "# Goals\n\nText ^kept\n"));
+		index.put(ObsidianFixture.document("Budget.sheet", "Budget\nItem\nCost\n"));
+		index.put(ObsidianFixture.document("Home.tasks", "Home\nErrands\nPay rent\n"));
+		index.put(ObsidianFixture.note("Uses.md", String.join("\n", "![[Budget.sheet#Budget!A1:C6]]", "[[Budget.sheet#Total]]",
+				"[[Home.tasks#Errands]]", "[[Home.tasks#^01JC4M3A0QY1T9X2W4E6R8T0U2]]", "[[Plan#Goals]]", "[[Plan#^kept]]",
+				"[[Plan#Nope]]", "[[Plan#^gone]]")));
+		Map<String, CompatIssue> issues = CompatScanner
+			.scan(index.noteViews(), index.filesUnder(""), List.of(), ObsidianFixture.KINDS::kindOf)
+			.stream()
+			.collect(Collectors.toMap(CompatIssue::id, (i) -> i));
+		assertThat(issues).doesNotContainKeys("missing-notes", "missing-files"); // every link resolves
+		assertThat(issues.get("missing-headings").occurrences()).extracting(CompatOccurrence::text)
+			.containsExactly("[[Plan#Nope]]");
+		assertThat(issues.get("missing-blocks").occurrences()).extracting(CompatOccurrence::text)
+			.containsExactly("[[Plan#^gone]]");
+	}
+
+	@Test
 	void findsFilesNotesAppCannotUseFully() {
 		Map<String, CompatIssue> issues = scanFixture();
 		assertThat(where(issues.get("frontmatter"))).containsExactly("Broken.md:0");
