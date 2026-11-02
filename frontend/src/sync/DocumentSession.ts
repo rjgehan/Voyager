@@ -556,7 +556,7 @@ export class DocumentSession {
     this.retryAttempt = 0;
     this.retryAt = null;
     this.adopt(file);
-    await this.restoreDrafts(file);
+    await this.restoreDrafts();
     const pending = this.deferred;
     this.deferred = null;
     if (pending?.kind === 'deleted') {
@@ -1407,7 +1407,9 @@ export class DocumentSession {
   }
 
   /** On open: drafts of this path owned by no live tab, newest first (DESIGN §6.9). */
-  private async restoreDrafts(file: TextFile): Promise<void> {
+  private async restoreDrafts(): Promise<void> {
+    // The note shows (and can be edited) while the drafts are read and the other tabs asked.
+    const editsBefore = this.changes;
     let drafts: DraftRecord[];
     try {
       drafts = (await this.deps.drafts.listForPath(this.path)).filter((d) => d.clientId !== this.deps.clientId);
@@ -1418,36 +1420,45 @@ export class DocumentSession {
     if (drafts.length === 0) return;
     const live = await this.deps.liveDraftOwners(this.path);
     const orphans = drafts.filter((d) => !live.has(d.clientId)).sort((a, b) => b.at - a.at);
-    const serverText = toLf(file.content);
     const now = Date.now();
     let restored = false;
+    let kept = false;
     for (const d of orphans) {
       const drop = () => this.deps.drafts.remove(d.path, d.clientId).catch(() => undefined);
-      if (now - d.at > DRAFT_MAX_AGE_MS || d.text === serverText) {
+      // The server's text: the load's, or another device's change applied meanwhile.
+      if (now - d.at > DRAFT_MAX_AGE_MS || d.text === this.baseText) {
         await drop();
         continue;
       }
-      if (restored) {
+      // Text typed meanwhile is never replaced, and a note deleted meanwhile is not brought back:
+      // the draft is kept recoverable (Settings › This device) instead of restored.
+      const unchanged = !this.disposed && this.changes === editsBefore && this.status === 'clean';
+      if (restored || !unchanged) {
         // Keep older orphans recoverable rather than restoring several at once.
         await this.deps.drafts.discard({ path: d.path, text: d.text, eol: d.eol, at: d.at, reason: 'superseded-draft' }).catch(() => undefined);
         await drop();
+        if (!restored) kept = true;
         continue;
       }
       restored = true;
+      // Theirs is what the session holds from the server now (its text equals the buffer's).
+      const theirsText = this.baseText;
+      const theirsVersion = this.version!;
+      const theirsEol = this.eol;
       this.eol = d.eol;
       this.replaceUndoable(d.text);
       this.changes++;
       this.firstUnsavedAt = Date.now();
-      if (d.baseVersion === file.version && !d.conflict) {
+      if (d.baseVersion === theirsVersion && !d.conflict) {
         this.setStatus('dirty');
         this.scheduleSave(false);
         this.deps.notify({ message: 'Restored unsaved changes' });
-      } else if (!this.tryMerge(serverText, file.version, detectEol(file.content), d.baseText ?? null, 'draft')) {
+      } else if (!this.tryMerge(theirsText, theirsVersion, theirsEol, d.baseText ?? null, 'draft')) {
         this.version = d.baseVersion;
         this.conflict = {
-          theirsText: serverText,
-          theirsVersion: file.version,
-          theirsEol: detectEol(file.content),
+          theirsText,
+          theirsVersion,
+          theirsEol,
           baseText: d.baseText ?? null,
           source: 'draft',
           historyBlocked: false,
@@ -1459,6 +1470,7 @@ export class DocumentSession {
       await this.writeDraft();
       await drop();
     }
+    if (kept) this.deps.notify({ message: 'Unsaved text from an earlier visit to this note was kept in Settings › This device' });
   }
 
   // ---------- lifecycle ----------

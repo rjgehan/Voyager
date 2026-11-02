@@ -486,6 +486,52 @@ describe('DocumentSession drafts', () => {
   });
 });
 
+describe('drafts restored while the note changes', () => {
+  /** A note with a crashed tab's draft, whose restore waits for the other tabs' answer. */
+  async function opening() {
+    const vault = new MockVault(false);
+    const v1 = vault.createFile({ path: 'a.md', content: 'hello' }, 'o').file.version;
+    const fake = fakeApi(vault);
+    let answer!: (owners: Set<string>) => void;
+    const asked = vi.fn(() => new Promise<Set<string>>((r) => (answer = r)));
+    const deps = sessionDeps(fake.api, { liveDraftOwners: asked });
+    await deps.drafts.put({ path: 'a.md', clientId: 'crashed-tab-1', baseVersion: v1, baseText: 'hello', text: 'hello from the crashed tab', eol: 'lf', at: Date.now() });
+    const session = new DocumentSession('a.md', deps);
+    // The note shows (and can be edited) while the other tabs are asked whether they own the draft.
+    await vi.waitFor(() => expect(asked).toHaveBeenCalled());
+    expect(session.getSnapshot().loaded).toBe(true);
+    return { vault, fake, deps, session, answer: (owners = new Set<string>()) => answer(owners) };
+  }
+
+  it('text typed meanwhile is never replaced by the draft, which is kept recoverable', async () => {
+    const { vault, deps, session, answer } = await opening();
+    type(session, ' typed');
+    answer();
+    await session.ready;
+    expect(text(session)).toBe('hello typed');
+    expect(deps.drafts.discarded.map((d) => [d.text, d.reason])).toEqual([['hello from the crashed tab', 'superseded-draft']]);
+    expect(deps.drafts.forPath('a.md').some((d) => d.clientId === 'crashed-tab-1')).toBe(false);
+    expect(deps.notices.some((n) => n.includes('Settings › This device'))).toBe(true);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(vault.readFile('a.md').content).toBe('hello typed');
+  });
+
+  it("a change from another device that arrives meanwhile is never overwritten by the draft's save", async () => {
+    const { vault, session, answer } = await opening();
+    vault.externalWrite('a.md', 'hello, edited on the phone');
+    await session.onRemoteChanged({ version: vault.readFile('a.md').version });
+    expect(text(session)).toBe('hello, edited on the phone');
+    answer();
+    await session.ready;
+    await vi.advanceTimersByTimeAsync(5000);
+    // The draft was made on the old text: only the conflict banner may decide.
+    expect(vault.readFile('a.md').content).toBe('hello, edited on the phone');
+    expect(status(session)).toBe('conflict');
+    expect(text(session)).toBe('hello from the crashed tab');
+    expect(session.getSnapshot().conflict).toMatchObject({ theirsText: 'hello, edited on the phone', theirsVersion: vault.readFile('a.md').version, baseText: 'hello', source: 'draft' });
+  });
+});
+
 describe('DocumentRegistry', () => {
   function registry(vault: MockVault, fake: ReturnType<typeof fakeApi>, drafts = new MemoryDraftStore()) {
     return new DocumentRegistry({
