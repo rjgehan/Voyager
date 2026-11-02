@@ -622,6 +622,49 @@
   white-space: nowrap;
 }
 
+/* ---------- find and replace (DESIGN §6.21.14) ---------- */
+
+.sheet-find {
+  position: absolute;
+  top: 6px;
+  right: 16px;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: min(420px, calc(100% - 32px));
+  padding: 8px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  background: var(--background-primary);
+  box-shadow: var(--shadow-l);
+}
+
+.sheet-find-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sheet-find-row .text-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.sheet-find-count {
+  flex: none;
+  font-size: var(--font-ui-small);
+  white-space: nowrap;
+}
+
+.sheet-find-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  font-size: var(--font-ui-small);
+}
+
 /* ---------- dropdown lists and validation (DESIGN §6.21.13) ---------- */
 
 .sheet-dropdown {
@@ -892,9 +935,28 @@
   }
 
   .sheet-dv-item .text-input,
-  .sheet-dropdown-body .text-input {
+  .sheet-dropdown-body .text-input,
+  .sheet-find .text-input {
     min-height: 44px;
     font-size: 16px;
+  }
+
+  .sheet-find .icon-button,
+  .sheet-find .button,
+  .sheet-find-options .checkbox-field {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 767px) {
+  /* On a phone the find panel spans the grid's top. */
+  .sheet-find {
+    top: 0;
+    right: 0;
+    left: 0;
+    width: auto;
+    border-radius: 0;
   }
 }
 

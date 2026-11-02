@@ -73,6 +73,8 @@ export interface SheetGridHandlers {
   onToggleSelection(): void;
   /** Opens a dropdown cell's list (sheet coordinates), under a rectangle on the screen. */
   onDropdown(at: CellAt, rect: ScreenRect): void;
+  /** Mod-F (find) and Mod-H (find and replace). */
+  onFind(replace: boolean): void;
 }
 
 export interface ScreenRect {
@@ -589,6 +591,12 @@ export function SheetGrid({ sheet, layout, looks, filter, version, selection, ma
       };
       if (e.key === 'Escape') {
         handlers.onEscape();
+        return;
+      }
+      if (mod && !e.altKey && !e.shiftKey && (key === 'f' || key === 'h')) {
+        take();
+        e.stopPropagation();
+        handlers.onFind(key === 'h');
         return;
       }
       if (mod && !e.altKey && key === 'a') {

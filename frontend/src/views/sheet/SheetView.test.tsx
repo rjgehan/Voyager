@@ -1042,3 +1042,51 @@ describe('formulas typed on an iPhone (Smart Punctuation)', () => {
     editor.remove();
   });
 });
+
+describe('find and replace (DESIGN §6.21.14)', () => {
+  const key = (k: string) => {
+    const e = { key: k, ctrlKey: true, metaKey: false, shiftKey: false, altKey: false, cancel: vi.fn(), preventDefault: vi.fn(), stopPropagation: vi.fn(), bounds: undefined, keyCode: 0, rawEvent: undefined, location: undefined };
+    act(() => gridProps().onKeyDown!(e));
+    return e;
+  };
+
+  it('finds with Mod-F, goes from match to match, and replaces all as one undo step', async () => {
+    const path = await openGrid();
+    expect(key('f').cancel).toHaveBeenCalled();
+    const panel = screen.getByRole('search', { name: 'Find and replace' });
+    const find = within(panel).getByRole('searchbox', { name: 'Find' });
+    expect(document.activeElement).toBe(find);
+    fireEvent.change(find, { target: { value: 'o' } });
+    expect(within(panel).getByText('2 found')).toBeInTheDocument();
+    fireEvent.keyDown(find, { key: 'Enter' });
+    // A1 is the active cell; the matches are Cost (B1) and Food (A3), row by row.
+    expect(nameBox().value).toBe('B1');
+    expect(within(panel).getByText('1 of 2')).toBeInTheDocument();
+    fireEvent.keyDown(find, { key: 'Enter' });
+    expect(nameBox().value).toBe('A3');
+    fireEvent.keyDown(find, { key: 'Enter', shiftKey: true });
+    expect(nameBox().value).toBe('B1');
+    fireEvent.click(within(panel).getByRole('button', { name: 'Replace…' }));
+    fireEvent.change(within(panel).getByRole('textbox', { name: 'Replace with' }), { target: { value: '0' } });
+    fireEvent.click(within(panel).getByRole('button', { name: 'Replace all' }));
+    const cells = (await saved(path)).sheets[0].cells;
+    expect([cells.B1.v, cells.A3.v]).toEqual(['C0st', 'F00d']);
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    expect((await saved(path)).sheets[0].cells.A3.v).toBe('Food');
+    fireEvent.keyDown(find, { key: 'Escape' });
+    expect(screen.queryByRole('search')).toBeNull();
+  });
+
+  it('opens with Replace on Mod-H and finds on all sheets', async () => {
+    await openGrid();
+    key('h');
+    const panel = screen.getByRole('search', { name: 'Find and replace' });
+    expect(within(panel).getByRole('textbox', { name: 'Replace with' })).toBeInTheDocument();
+    fireEvent.click(within(panel).getByRole('checkbox', { name: 'All sheets' }));
+    fireEvent.change(within(panel).getByRole('searchbox', { name: 'Find' }), { target: { value: 'n' } });
+    // Rent (Budget!A2) and n (Notes!A1).
+    fireEvent.click(within(panel).getByRole('button', { name: 'Next match' }));
+    fireEvent.click(within(panel).getByRole('button', { name: 'Next match' }));
+    expect(screen.getByRole('tab', { name: 'Notes' })).toHaveAttribute('aria-selected', 'true');
+  });
+});

@@ -38,6 +38,8 @@ export interface SheetActions {
   insertCheckboxes(): void;
   insertDropdown(): void;
   openDataValidation(): void;
+  openFind(): void;
+  openReplace(): void;
 }
 
 let active: SheetActions | null = null;

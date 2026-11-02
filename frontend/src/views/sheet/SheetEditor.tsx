@@ -17,6 +17,7 @@ import {
   Hash,
   ListChecks,
   PaintBucket,
+  Search,
   Import,
   MoveHorizontal,
   Redo2,
@@ -74,6 +75,7 @@ import { ConditionalDialog } from './ConditionalDialog';
 import { DropdownList } from './DropdownList';
 import { ValidationDialog } from './ValidationDialog';
 import { FilterMenu } from './FilterMenu';
+import { FindPanel } from './FindPanel';
 import {
   addToWorkbook,
   baseName,
@@ -199,6 +201,8 @@ export function SheetEditor({ path, snapshot, workbook, version }: Props) {
   /** A dropdown cell's list (sheet coordinates), open under the cell. */
   const [dropdown, setDropdown] = useState<{ at: CellAt; anchor: ScreenRect } | null>(null);
   const [validationMenu, setValidationMenu] = useState<{ x: number; y: number } | null>(null);
+  /** The find panel, with Replace open or not; `key` reopens it (and focuses it) on Mod-F again. */
+  const [find, setFind] = useState<{ replace: boolean; key: number } | null>(null);
   /** The cut waiting to be pasted, shown with a dashed outline while it is still the last copy. */
   const [cutMark, setCutMark] = useState<SheetClip | null>(null);
   /** The range a formula being typed points at. */
@@ -520,6 +524,16 @@ ${JSON.stringify(sheet.filter ?? null)}`;
       danger: true,
     });
     if (ok) run(() => workbook.setChart(sheet.id, id, null));
+  };
+
+  // ---------- find and replace ----------
+
+  const openFind = (replace: boolean) => setFind((f) => ({ replace: replace && editable, key: (f?.key ?? 0) + 1 }));
+
+  /** Shows a match: its sheet, with the cell selected (the grid scrolls to it); the panel keeps the keys. */
+  const goToMatch = (m: { sheet: string; col: number; row: number }) => {
+    const dest = sheetById(workbook.file, m.sheet);
+    if (dest) showRange(dest, { col: m.col, row: m.row, width: 1, height: 1 });
   };
 
   // ---------- data validation: checkboxes and dropdowns ----------
@@ -930,6 +944,8 @@ ${JSON.stringify(sheet.filter ?? null)}`;
       insertCheckboxes,
       insertDropdown: () => setDialog({ kind: 'validation', start: 'list' }),
       openDataValidation: () => setDialog({ kind: 'validation' }),
+      openFind: () => openFind(false),
+      openReplace: () => openFind(true),
     };
   });
   useEffect(() => {
@@ -970,6 +986,8 @@ ${JSON.stringify(sheet.filter ?? null)}`;
       insertCheckboxes: call('insertCheckboxes'),
       insertDropdown: call('insertDropdown'),
       openDataValidation: call('openDataValidation'),
+      openFind: call('openFind'),
+      openReplace: call('openReplace'),
     });
   }, [path]);
 
@@ -1005,6 +1023,7 @@ ${JSON.stringify(sheet.filter ?? null)}`;
     onToggleCheckbox: toggleCheckbox,
     onToggleSelection: toggleSelectionCheckboxes,
     onDropdown: (at, rect) => setDropdown({ at, anchor: rect }),
+    onFind: (replace) => openFind(replace),
     onUndo: undo,
     onRedo: redo,
     onEscape: () => {
@@ -1140,6 +1159,9 @@ ${JSON.stringify(sheet.filter ?? null)}`;
         >
           <ListChecks size={16} />
         </ToolButton>
+        <ToolButton title="Find and replace" hotkey="Mod-f" pressed={find !== null} onClick={() => (find ? setFind(null) : openFind(false))}>
+          <Search size={16} />
+        </ToolButton>
         <span className="sheet-toolbar-sep" aria-hidden />
         <ToolButton title="Insert chart" disabled={!editable} onClick={insertChart}>
           <ChartColumn size={16} />
@@ -1191,6 +1213,22 @@ ${JSON.stringify(sheet.filter ?? null)}`;
           gridRef={gridRef}
           portalRef={portalRef}
         />
+        {find && (
+          <FindPanel
+            key={find.key}
+            workbook={workbook}
+            version={version}
+            sheetId={sheet.id}
+            active={{ sheet: sheet.id, ...activeAt }}
+            editable={editable}
+            replace={find.replace}
+            onGo={goToMatch}
+            onClose={() => {
+              setFind(null);
+              focusGrid();
+            }}
+          />
+        )}
       </div>
       <ChartsPane
         sheet={sheet}
