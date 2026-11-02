@@ -311,8 +311,12 @@ public class FlashcardService {
 			@Nullable FlashcardCardState state, @Nullable String from) {
 	}
 
-	private static @Nullable ValidReview validate(FlashcardReview r, String prefix, Instant latest,
+	private static @Nullable ValidReview validate(@Nullable FlashcardReview r, String prefix, Instant latest,
 			List<FieldError> errors) {
+		if (r == null) {
+			errors.add(new FieldError(prefix.substring(0, prefix.length() - 1), "must be an answer, not null"));
+			return null;
+		}
 		int before = errors.size();
 		if (r.card() == null || !SrsFile.CARD_ID.matcher(r.card()).matches()) {
 			errors.add(new FieldError(prefix + "card", "must be 1 to 64 letters, digits, - or _"));
