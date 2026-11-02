@@ -189,6 +189,19 @@ describe('CanvasController and the document session', () => {
   });
 });
 
+describe('CanvasController viewport of a hand-written file', () => {
+  it('keeps a usable view when coordinates overflow the bounds to infinity', async () => {
+    const { controller } = await setup(
+      '{"nodes":[{"id":"a","type":"text","text":"x","x":0,"y":0,"width":250,"height":60},{"id":"b","type":"text","text":"far","x":1e308,"y":0,"width":1e308,"height":60}],"edges":[]}',
+    );
+    controller.setStage(1000, 800);
+    controller.zoomToFit();
+    controller.panBy(10, 10);
+    const v = controller.getState().view;
+    expect(Number.isFinite(v.x) && Number.isFinite(v.y) && Number.isFinite(v.zoom)).toBe(true);
+  });
+});
+
 describe('CanvasController viewport', () => {
   it('zooms around a point and fits the board', async () => {
     const { controller } = await setup();

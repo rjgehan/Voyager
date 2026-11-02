@@ -390,6 +390,9 @@ export class CanvasController {
 
   setView(view: Viewport): void {
     const v = { x: view.x, y: view.y, zoom: clampZoom(view.zoom) };
+    // Coordinates near the float limit (a hand-written file) make bounds infinite: such a view
+    // would stick (no pan or zoom gets back from it), so it is not taken.
+    if (!Number.isFinite(v.x) || !Number.isFinite(v.y) || !Number.isFinite(v.zoom)) return;
     const cur = this.state.view;
     if (v.x !== cur.x || v.y !== cur.y || v.zoom !== cur.zoom) this.set({ view: v });
   }
