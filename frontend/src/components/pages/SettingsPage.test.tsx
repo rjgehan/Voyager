@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '../../api/endpoints';
 import { queryClient } from '../../api/queryClient';
 import { setTranscribeNewRecordings } from '../../features/voice/voiceNotes';
-import SettingsPage, { RemindersSection, TextSetting, VoiceRow } from './SettingsPage';
+import SettingsPage, { NoteWidthSlider, RemindersSection, TextSetting, VoiceRow } from './SettingsPage';
 import { remindersApi } from '../../features/reminders/client';
 import { DEFAULT_SETTINGS } from '../../features/settings';
 import type { RemindersStatus, Settings } from '../../api/types';
@@ -36,6 +36,38 @@ describe('TextSetting (FE-5, ux)', () => {
     for (const ch of 'Daily Notes ') fireEvent.change(input, { target: { value: input.value + ch } });
     expect(input.value).toBe('Daily Notes ');
     expect(values.at(-1)).toBe('Daily Notes');
+  });
+});
+
+describe('Note width (DESIGN §6.6)', () => {
+  function Slider({ onValue, initial }: { onValue(v: number | 'full'): void; initial: number | 'full' }) {
+    const [value, setValue] = useState(initial);
+    return (
+      <NoteWidthSlider
+        value={value}
+        disabled={false}
+        onChange={(v) => {
+          setValue(v);
+          onValue(v);
+        }}
+      />
+    );
+  }
+
+  it('slides from 600 to 1400 px, and its last stop is the full width', () => {
+    const values: Array<number | 'full'> = [];
+    render(<Slider initial={600} onValue={(v) => values.push(v)} />);
+    const slider = screen.getByRole('slider', { name: 'Note width' });
+    expect(slider).toHaveAttribute('min', '600');
+    expect(slider).toHaveAttribute('step', '50');
+    expect(screen.getByText('600 px')).toBeInTheDocument();
+    fireEvent.change(slider, { target: { value: '900' } });
+    expect(screen.getByText('900 px')).toBeInTheDocument();
+    expect(slider).toHaveAttribute('aria-valuetext', '900 pixels');
+    fireEvent.change(slider, { target: { value: slider.getAttribute('max') } });
+    expect(screen.getByText('Full width')).toBeInTheDocument();
+    expect(slider).toHaveAttribute('aria-valuetext', 'Full width');
+    expect(values).toEqual([900, 'full']);
   });
 });
 

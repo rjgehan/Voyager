@@ -446,6 +446,13 @@ final class SearchEvaluation {
 
 		final Map<LeafState, long[]> masks = new IdentityHashMap<>();
 
+		/**
+		 * The answers of the scopes nested in another scope. A nested scope is answered for the whole document, so it is
+		 * evaluated once per document, not again for every unit of the scope around it (which multiplied the work by
+		 * the number of lines at every level of nesting).
+		 */
+		final Map<Scoped, Boolean> nested = new IdentityHashMap<>();
+
 		DocContext(DocRef ref) {
 			this.ref = ref;
 			this.searchText = ref.note().searchText();
@@ -479,7 +486,11 @@ final class SearchEvaluation {
 
 	/** True when some line or section of the document matches the scoped clause. */
 	private boolean anyUnit(Scoped scoped, DocRef ref) {
-		DocContext context = new DocContext(ref);
+		return anyUnit(scoped, new DocContext(ref));
+	}
+
+	private boolean anyUnit(Scoped scoped, DocContext context) {
+		DocRef ref = context.ref;
 		NoteParse parse = ref.note().parse();
 		String text = context.searchText;
 		int[] lineStarts = parse.lineStarts();
@@ -489,6 +500,8 @@ final class SearchEvaluation {
 		int first = (frontmatter != null) ? Math.min(lines, frontmatter.closingLine() + 1) : 0;
 		if (scoped.scope() == Scope.LINE) {
 			for (int line = first; line < lines; line++) {
+				// Word clauses never read the budgeted text, so the units check the clock themselves.
+				this.budget.check();
 				Unit unit = new Unit(token(lineTokens, line), token(lineTokens, line + 1), lineStarts[line],
 						MarkdownScanner.contentEnd(text, lineStarts, line));
 				if (matchesUnit(scoped.child(), context, unit)) {
@@ -512,6 +525,7 @@ final class SearchEvaluation {
 		for (int line = first + 1; line <= lines; line++) {
 			if (line == lines || breaks[line]) {
 				int end = (line < lines) ? lineStarts[line] : text.length();
+				this.budget.check();
 				Unit unit = new Unit(token(lineTokens, start), token(lineTokens, line), lineStarts[start], end);
 				if (matchesUnit(scoped.child(), context, unit)) {
 					return true;
@@ -570,8 +584,15 @@ final class SearchEvaluation {
 				yield false;
 			}
 			case Not not -> false;
-			// A scope inside a scope is answered for the whole document.
-			case Scoped scoped -> anyUnit(scoped, context.ref);
+			// A scope inside a scope is answered for the whole document, once.
+			case Scoped scoped -> {
+				Boolean known = context.nested.get(scoped);
+				if (known == null) {
+					known = anyUnit(scoped, context);
+					context.nested.put(scoped, known);
+				}
+				yield known;
+			}
 		};
 	}
 

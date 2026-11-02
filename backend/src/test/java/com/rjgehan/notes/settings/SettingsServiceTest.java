@@ -181,10 +181,10 @@ class SettingsServiceTest {
 	void equalContentIsNeverAConflict() throws Exception {
 		service().load();
 		String base = service().get().version();
-		SettingsResponse first = service().update(defaultsWith("editor", "readableLineLength", false), base,
+		SettingsResponse first = service().update(defaultsWith("editor", "noteWidth", "full"), base,
 				TestVault.ALICE, "client-a1");
 		this.vault.hub.published.clear();
-		SettingsResponse retried = service().update(defaultsWith("editor", "readableLineLength", false), base,
+		SettingsResponse retried = service().update(defaultsWith("editor", "noteWidth", "full"), base,
 				TestVault.ALICE, "client-a1");
 		assertThat(retried.version()).isEqualTo(first.version());
 		assertThat(this.vault.hub.published).isEmpty();
@@ -345,6 +345,79 @@ class SettingsServiceTest {
 		service().update(old, service().get().version(), TestVault.BOB, "client-b1");
 		assertThat(service().current().ai().enabled()).isTrue();
 		assertThat(service().current().files().useWikilinks()).isFalse();
+	}
+
+	@Test
+	void theNoteWidthIsANumberOfPixelsOrFull() throws Exception {
+		assertThat(TestVault.JSON.valueToTree(Settings.defaults()).get("editor").get("noteWidth").asInt())
+			.isEqualTo(600);
+		service().load();
+		service().update(defaultsWith("editor", "noteWidth", 1000), service().get().version(), TestVault.ALICE,
+				"client-a1");
+		assertThat(service().current().editor().noteWidth()).isEqualTo(new NoteWidth(1000));
+		service().update(defaultsWith("editor", "noteWidth", "full"), service().get().version(), TestVault.ALICE,
+				"client-a1");
+		assertThat(service().current().editor().noteWidth()).isEqualTo(NoteWidth.FULL);
+		assertThat(TestVault.JSON.readTree(Files.readString(this.file)).get("editor").get("noteWidth").asString())
+			.isEqualTo("full");
+		for (Object bad : List.of(599, 1401, 800.5, "wide", true)) {
+			assertThatThrownBy(() -> service().update(defaultsWith("editor", "noteWidth", bad),
+					service().get().version(), TestVault.ALICE, "client-a1"))
+				.isInstanceOfSatisfying(NotesException.class, (ex) -> {
+					@SuppressWarnings("unchecked")
+					List<FieldError> errors = (List<FieldError>) ex.getBody().getProperties().get("errors");
+					assertThat(errors).extracting(FieldError::field).containsExactly("settings.editor.noteWidth");
+				});
+		}
+	}
+
+	@Test
+	void readableLineLengthFromAnEarlierBuildBecomesTheNoteWidth() throws Exception {
+		ObjectNode tree = body(Settings.defaults());
+		ObjectNode editor = (ObjectNode) tree.get("editor");
+		editor.remove("noteWidth");
+		editor.put("readableLineLength", false);
+		Files.createDirectories(this.file.getParent());
+		Files.writeString(this.file, TestVault.JSON.writeValueAsString(tree));
+		service().load();
+		assertThat(service().isReadOnly()).isFalse();
+		assertThat(service().current().editor().noteWidth()).isEqualTo(NoteWidth.FULL);
+
+		editor.put("readableLineLength", true);
+		Files.writeString(this.file, TestVault.JSON.writeValueAsString(tree));
+		service().load();
+		assertThat(service().current().editor().noteWidth()).isEqualTo(NoteWidth.READABLE);
+
+		// The first save writes noteWidth in its place.
+		service().update(defaultsWith("files", "useWikilinks", false), service().get().version(), TestVault.ALICE,
+				"client-a1");
+		JsonNode onDisk = TestVault.JSON.readTree(Files.readString(this.file)).get("editor");
+		assertThat(onDisk.get("noteWidth").asInt()).isEqualTo(600);
+		assertThat(onDisk.has("readableLineLength")).isFalse();
+	}
+
+	@Test
+	void aPageFromBeforeTheNoteWidthKeepsTheWidthUnlessItSwitchedReadableLineLength() throws Exception {
+		service().load();
+		service().update(defaultsWith("editor", "noteWidth", 900), service().get().version(), TestVault.ALICE,
+				"client-a1");
+		ObjectNode old = defaultsWith("files", "useWikilinks", false);
+		((ObjectNode) old.get("editor")).remove("noteWidth");
+		service().update(old, service().get().version(), TestVault.BOB, "client-b1");
+		assertThat(service().current().editor().noteWidth()).isEqualTo(new NoteWidth(900));
+		assertThat(service().current().files().useWikilinks()).isFalse();
+
+		((ObjectNode) old.get("editor")).put("readableLineLength", true);
+		service().update(old, service().get().version(), TestVault.BOB, "client-b1");
+		assertThat(service().current().editor().noteWidth()).isEqualTo(new NoteWidth(900));
+
+		((ObjectNode) old.get("editor")).put("readableLineLength", false);
+		service().update(old, service().get().version(), TestVault.BOB, "client-b1");
+		assertThat(service().current().editor().noteWidth()).isEqualTo(NoteWidth.FULL);
+
+		((ObjectNode) old.get("editor")).put("readableLineLength", true);
+		service().update(old, service().get().version(), TestVault.BOB, "client-b1");
+		assertThat(service().current().editor().noteWidth()).isEqualTo(NoteWidth.READABLE);
 	}
 
 	@Test

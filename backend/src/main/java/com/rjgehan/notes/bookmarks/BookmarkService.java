@@ -8,9 +8,11 @@ import java.time.Clock;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
@@ -68,6 +70,12 @@ public class BookmarkService {
 	public static final String FILE = ".notesapp/bookmarks.json";
 
 	static final String OBSIDIAN_FILE = ".obsidian/bookmarks.json";
+
+	/** Where builds before the bookmarks-only decision kept saved searches ({@link #migrateSavedSearches}). */
+	public static final String SAVED_SEARCHES_FILE = ".notesapp/searches.json";
+
+	/** The saved searches file once its entries are bookmarks. */
+	public static final String MIGRATED_SAVED_SEARCHES_FILE = SAVED_SEARCHES_FILE + ".migrated";
 
 	private static final ApiPath PATH = ApiPath.of(FILE);
 
@@ -246,6 +254,110 @@ public class BookmarkService {
 		}
 		change((items) -> BookmarkCodec.rewriteFileItems(items, rename), "heading rename in " + notePath, identity);
 		return count[0];
+	}
+
+	/**
+	 * A startup step (DESIGN §5.17): the saved searches an earlier build kept in {@code .notesapp/searches.json}
+	 * ({@code {"searches": [{id, name, query, sort}]}}) become search bookmarks at the end of the top level, titled with
+	 * their names. A query that already has a search bookmark (in a group too, compared trimmed) is skipped, as is an
+	 * entry without a usable query; the sort is not kept, since a search bookmark has none. The file is then renamed
+	 * {@code searches.json.migrated} (with a time stamp when that name is taken), so this runs once. A bookmarks file
+	 * that is not JSON leaves both files alone until it is fixed. Nothing is announced, as no client is connected yet;
+	 * the startup commit records the change. A failure is logged and never stops the vault from starting. Returns how
+	 * many bookmarks were added.
+	 */
+	public int migrateSavedSearches() {
+		try {
+			lock();
+		}
+		catch (NotesException ex) {
+			logger.warn("The saved searches in {} were not migrated: the bookmarks are busy", SAVED_SEARCHES_FILE);
+			return 0;
+		}
+		try {
+			byte[] saved = readOrNull(SAVED_SEARCHES_FILE);
+			if (saved == null) {
+				return 0;
+			}
+			Document current = read();
+			if (current.broken()) {
+				logger.warn("{} is not valid JSON: the saved searches in {} become bookmarks once it is fixed", FILE,
+						SAVED_SEARCHES_FILE);
+				return 0;
+			}
+			List<ObjectNode> added = savedSearchBookmarks(parse(saved), current.items());
+			if (!added.isEmpty()) {
+				List<ObjectNode> items = new ArrayList<>(current.items());
+				items.addAll(added);
+				this.fs.atomicWrite(FILE, serialize(BookmarkCodec.document(current.root(), items)));
+			}
+			String kept = this.fs.existsExactly(MIGRATED_SAVED_SEARCHES_FILE)
+					? MIGRATED_SAVED_SEARCHES_FILE + "-" + BACKUP_STAMP.format(this.clock.instant())
+					: MIGRATED_SAVED_SEARCHES_FILE;
+			this.fs.moveExclusive(SAVED_SEARCHES_FILE, kept);
+			logger.info("Saved searches are bookmarks now: added {} search bookmarks from {}, kept it as {}",
+					added.size(), SAVED_SEARCHES_FILE, kept);
+			return added.size();
+		}
+		catch (IOException | RuntimeException ex) {
+			logger.warn("The saved searches in {} were not migrated: {}", SAVED_SEARCHES_FILE, ex.toString());
+			return 0;
+		}
+		finally {
+			this.lock.unlock();
+		}
+	}
+
+	/** The search bookmarks for the saved searches in {@code root}, without the queries {@code existing} has. */
+	private List<ObjectNode> savedSearchBookmarks(@Nullable JsonNode root, List<ObjectNode> existing) {
+		JsonNode searches = (root != null) ? root.get("searches") : null;
+		if (searches == null || !searches.isArray()) {
+			if (root == null) {
+				logger.warn("{} is not valid JSON; it has no saved searches to migrate", SAVED_SEARCHES_FILE);
+			}
+			return List.of();
+		}
+		Set<String> queries = new HashSet<>();
+		searchQueries(existing, queries);
+		long now = this.clock.millis();
+		List<ObjectNode> out = new ArrayList<>();
+		for (JsonNode search : searches.values()) {
+			String query = BookmarkCodec.text(search, "query");
+			String name = BookmarkCodec.text(search, "name");
+			if (query == null || query.isBlank() || query.strip().length() > BookmarkCodec.MAX_TEXT) {
+				logger.warn("{}: skipped a saved search without a usable query", SAVED_SEARCHES_FILE);
+				continue;
+			}
+			String trimmed = query.strip();
+			if (!queries.add(trimmed)) {
+				continue;
+			}
+			ObjectNode item = this.mapper.createObjectNode();
+			item.put("type", BookmarkCodec.SEARCH);
+			item.put("ctime", now);
+			item.put("query", trimmed);
+			if (name != null && !name.isBlank() && name.strip().length() <= BookmarkCodec.MAX_TEXT) {
+				item.put("title", name.strip());
+			}
+			out.add(item);
+		}
+		return out;
+	}
+
+	/** Adds the trimmed query of every search bookmark in {@code items}, in groups too. */
+	private static void searchQueries(Iterable<? extends JsonNode> items, Set<String> out) {
+		for (JsonNode item : items) {
+			String type = BookmarkCodec.text(item, "type");
+			if (BookmarkCodec.SEARCH.equals(type)) {
+				String query = BookmarkCodec.text(item, "query");
+				if (query != null) {
+					out.add(query.strip());
+				}
+			}
+			else if (BookmarkCodec.GROUP.equals(type) && item.get("items") instanceof ArrayNode children) {
+				searchQueries(children.values(), out);
+			}
+		}
 	}
 
 	/** Heading text as heading targets compare it: case-insensitive, whitespace collapsed (DESIGN §6.4). */

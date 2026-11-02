@@ -113,11 +113,36 @@ public class FileIndexer {
 					: new IndexedFile(record, disk, null, null);
 		}
 		TextCodec.Decoded decoded = TextCodec.decode(bytes);
-		NoteParse parse = MarkdownScanner.scan(decoded.text(), decoded.hadBom(), decoded.lossy());
+		NoteParse parse = parse(path, decoded, MarkdownScanner::scan);
 		FileRecord record = new FileRecord(path, kind, bytes.length, mtime, version, parse.aliases());
 		DocumentParse.Parsed supplemented = supplement(path, decoded, parse);
 		return (supplemented != null) ? new IndexedFile(record, disk, supplemented.text(), supplemented.parse())
 				: new IndexedFile(record, disk, decoded.text(), parse);
+	}
+
+	/** {@link MarkdownScanner#scan}, as a seam for the tests. */
+	@FunctionalInterface
+	interface Scanner {
+
+		NoteParse scan(String text, boolean hadBom, boolean lossy);
+
+	}
+
+	/**
+	 * Scans a note. A defect of the scanner must never cost the note: a save indexes the bytes it has just written, so
+	 * an exception there failed every later save of the note with a 500 (each first re-indexes the disk), and the
+	 * startup index leaves out a file it cannot index, so the note vanished from the app. It is indexed as plain text
+	 * instead (no links, tags, headings or frontmatter), and the defect is logged.
+	 */
+	static NoteParse parse(String path, TextCodec.Decoded decoded, Scanner scanner) {
+		try {
+			return scanner.scan(decoded.text(), decoded.hadBom(), decoded.lossy());
+		}
+		catch (RuntimeException | StackOverflowError ex) {
+			logger.error("Cannot parse the Markdown of {}; it is indexed as plain text", path, ex);
+			return new NoteParse(null, null, List.of(), List.of(), List.of(), List.of(), List.of(),
+					MarkdownScanner.lineStarts(decoded.text()), List.of(), List.of(), decoded.hadBom(), decoded.lossy());
+		}
 	}
 
 	/**

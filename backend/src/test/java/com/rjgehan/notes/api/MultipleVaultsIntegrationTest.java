@@ -226,8 +226,7 @@ class MultipleVaultsIntegrationTest {
 		tools.jackson.databind.node.ObjectNode changed = (tools.jackson.databind.node.ObjectNode) workSettings
 			.get("settings")
 			.deepCopy();
-		((tools.jackson.databind.node.ObjectNode) changed.get("editor")).put("readableLineLength",
-				!workSettings.get("settings").get("editor").get("readableLineLength").asBoolean());
+		((tools.jackson.databind.node.ObjectNode) changed.get("editor")).put("noteWidth", 900);
 		this.api.putJson(WORK + "/settings", Map.of("settings", changed, "baseVersion", workSettings.get("version")))
 			.ok(200);
 		assertThat(this.api.get("/api/settings").ok(200).get("settings"))

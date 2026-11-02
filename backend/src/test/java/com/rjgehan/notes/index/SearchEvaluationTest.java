@@ -138,6 +138,31 @@ class SearchEvaluationTest {
 	}
 
 	@Test
+	void nestedScopesAreAnsweredOncePerDocumentAndStayWithinTheBudget() {
+		StringBuilder text = new StringBuilder();
+		for (int i = 0; i < 2000; i++) {
+			text.append((i % 2 == 0) ? "alpha one\n" : "beta two\n");
+		}
+		note("long.md", text.toString(), 0);
+		note("short.md", "alpha beta\n", 1);
+		// A scope inside a scope is answered for the whole document: once, not once per outer line.
+		long started = System.nanoTime();
+		assertThat(search("line:(line:(line:(alpha beta)))")).containsExactly("short.md");
+		assertThat(search("line:(line:(alpha one))")).containsExactly("long.md");
+		assertThat(search("section:(line:(alpha one) beta)")).containsExactly("long.md");
+		assertThat(Duration.ofNanos(System.nanoTime() - started)).isLessThan(Duration.ofSeconds(2));
+		StringBuilder deep = new StringBuilder("alpha beta");
+		for (int i = 0; i < 6; i++) {
+			deep.insert(0, (i % 2 == 0) ? "line:(" : "section:(").append(')');
+		}
+		started = System.nanoTime();
+		assertThat(outcome(deep.toString(), false, Duration.ofSeconds(1)).hits())
+			.extracting((hit) -> hit.note().path())
+			.containsExactly("short.md");
+		assertThat(Duration.ofNanos(System.nanoTime() - started)).isLessThan(Duration.ofSeconds(2));
+	}
+
+	@Test
 	void scopesWorkOnLargeVaultsInParallel() {
 		for (int i = 0; i < 300; i++) {
 			note("n" + i + ".md", (i % 3 == 0) ? "alpha beta\n" : "alpha\nbeta\n", i);

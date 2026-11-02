@@ -76,6 +76,12 @@ class RemindersIntegrationTest {
 
 		assertThat(this.api.putJson("/api/reminders/zone", Map.of("zone", "Mars/Olympus")).problem(400))
 			.isEqualTo("bad-request");
+		// Offsets are no IANA ids: the status would report "Z" or "+02:00", and a fixed offset loses DST.
+		for (String offset : List.of("Z", "+02:00", "GMT+1", "UTC+3", "UT")) {
+			assertThat(this.api.putJson("/api/reminders/zone", Map.of("zone", offset)).problem(400)).as(offset)
+				.isEqualTo("bad-request");
+		}
+		this.api.putJson("/api/reminders/zone", Map.of("zone", "UTC")).ok(204);
 		this.api.putJson("/api/reminders/zone", Map.of("zone", "Europe/Berlin")).ok(204);
 		JsonNode after = this.api.get("/api/reminders/status").ok(200);
 		assertThat(after.get("zone").asString()).isEqualTo("Europe/Berlin");

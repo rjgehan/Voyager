@@ -897,7 +897,7 @@ sudo chown -R 1000:1000 /srv/notes/data/vault
 docker compose up -d
 ```
 
-The first start creates `.notesapp/settings.json` from `.obsidian/`: attachment folder, new note location, link format and style, excluded files, strict line breaks, readable line length, default view, the daily note format, folder, template and "open on startup", and the template folder and formats (`docker compose logs notes | grep Imported` shows how many). A vault that already has `.notesapp/settings.json` keeps it; the report below proposes Obsidian's values instead.
+The first start creates `.notesapp/settings.json` from `.obsidian/`: attachment folder, new note location, link format and style, excluded files, strict line breaks, readable line length (as the note width: on is 600 px, off is full width), default view, the daily note format, folder, template and "open on startup", and the template folder and formats (`docker compose logs notes | grep Imported` shows how many). A vault that already has `.notesapp/settings.json` keeps it; the report below proposes Obsidian's values instead.
 
 - **The vault has its own `.git`** (the obsidian-git plugin): it is kept and NotesApp commits on its current branch; turn the plugin off in Obsidian for this vault, NotesApp is now the only git writer. A detached `HEAD` turns history off until it is on a branch (`/api/status` says so).
 - **A large vault** (thousands of files) is ready at once; its history commit runs in the background.

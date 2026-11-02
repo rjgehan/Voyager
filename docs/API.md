@@ -287,7 +287,7 @@ Settings follow the same protocol with `PUT /api/settings {settings, baseVersion
     },
     "dailyNotes": { "format": "YYYY-MM-DD", "folder": "Daily", "template": "", "openOnStartup": false },
     "templates": { "folder": "Templates", "dateFormat": "YYYY-MM-DD", "timeFormat": "HH:mm", "folderTemplates": [] },
-    "editor": { "defaultMode": "edit", "readableLineLength": true, "strictLineBreaks": false },
+    "editor": { "defaultMode": "edit", "noteWidth": 600, "strictLineBreaks": false },
     "ai": { "enabled": false, "provider": "claude-code", "model": "claude-sonnet-5-5", "excludedPaths": ["Private"],
             "maxContextChars": 60000, "monthlyBudgetUsd": 5.0 },
     "reminders": { "webPush": false, "ntfy": false, "ntfyTitleOnly": true, "inApp": false, "dailyNote": false,
@@ -341,7 +341,7 @@ Request `SettingsUpdateRequest`: `{"settings": { ...full Settings... }, "baseVer
 | `dailyNotes.*`, `templates.*` | See §15.2 and §15.4. |
 | `templates.folderTemplates` | Applied by the client: a note it creates (New note, a link to a missing note, the quick switcher) in a folder starts from the template of the deepest rule whose `folder` contains it, rendered as in §15.4. Notes created in `templates.folder` get none. |
 | `editor.defaultMode` | Kept for compatibility; both values stay valid. The client ignores it: every note opens in Live Preview, which is rendered and editable (DESIGN §6.6.1), and the Settings page writes `edit` with its next editor change. Source mode is a per-note, per-page-load escape hatch on the client. |
-| `editor.*` | UI preferences that apply on all devices. `strictLineBreaks: false` (the default, as in Obsidian) renders a single newline as a line break in reading view. |
+| `editor.*` | UI preferences that apply on all devices. `strictLineBreaks: false` (the default, as in Obsidian) renders a single newline as a line break in reading view. `noteWidth` is how wide a note's text runs: an integer from 600 to 1400 (CSS pixels; 600 is the default) or `"full"` for the whole pane; anything else is a `400` naming `settings.editor.noteWidth`. It replaced the on/off `readableLineLength`: a file or request without `noteWidth` takes it from `readableLineLength` when present (`true`: 600, `false`: `"full"`), and the first save writes `noteWidth` and drops `readableLineLength`. A `PUT` without `noteWidth` (a page from an earlier build) keeps the stored width unless its `readableLineLength` switched: `false` makes it `"full"`, `true` turns a full width back to 600. |
 | `ai.*` | Ask your vault and summaries (§24). `enabled` is off by default: until it is on, nothing is ever sent to Anthropic. `provider`: `claude-code` (default), the server's Claude Code CLI with the user's Claude subscription, or `api`, the Anthropic API billed per token. `excludedPaths` (default `["Private"]`) and `files.excludedPaths` are never read for a request. `maxContextChars` caps the note text of one request, earlier turns included; `monthlyBudgetUsd` refuses requests once the month's estimated spend reaches it. |
 
 ---
@@ -353,7 +353,7 @@ Request `SettingsUpdateRequest`: `{"settings": { ...full Settings... }, "baseVer
 `200 MeResponse`:
 
 ```json
-{ "login": "rjgehan@github", "name": "R. J. Gehan", "profilePicUrl": "https://avatars.githubusercontent.com/u/123?v=4", "source": "tailscale" }
+{ "login": "octocat@github", "name": "The Octocat", "profilePicUrl": "https://avatars.githubusercontent.com/u/123?v=4", "source": "tailscale" }
 ```
 
 - Values come from `Tailscale-User-Login`, `Tailscale-User-Name` (RFC 2047-decoded) and `Tailscale-User-Profile-Pic`.
@@ -631,7 +631,7 @@ Events to other clients: `file.changed` (or `folder.created` and `file.created` 
 
 ```json
 { "id": "01JA7Q3M9K2Z", "originalPath": "Projects/Old plan.md", "type": "file",
-  "deletedAt": "2026-10-16T14:12:40.120Z", "deletedBy": "rjgehan@github", "size": 2311, "fileCount": 1 }
+  "deletedAt": "2026-10-16T14:12:40.120Z", "deletedBy": "octocat@github", "size": 2311, "fileCount": 1 }
 ```
 
 - This works for **any** file kind, and for existing names that break the new-name rules.
@@ -1198,43 +1198,11 @@ Clauses next to each other must all match (AND).
 
 Nothing else in the API changes for spreadsheets: they are text files read and saved through §8 with the version and conflict protocol of §4.
 
-### 12.4 Saved searches: `GET /api/searches` and `PUT /api/searches`
+### 12.4 Saved searches are search bookmarks
 
-Named queries, stored in the vault as `.notesapp/searches.json`, so they sync to every device and are committed with the vault's history (DESIGN §4.1).
+A search is kept as a search bookmark (§21, `{"type": "search", "query": …, "title"?: …}`), starred in the search panel or added from the Bookmarks pane. There is no separate list of saved searches: `/api/searches` and the `searches.changed` event are gone (`404 not-found`).
 
-`GET /api/searches` returns `200 SavedSearchesResponse`:
-
-```json
-{ "searches": [ { "id": "s-6f1c2a9e", "name": "Open loops", "query": "tag:#todo -done", "sort": "relevance" } ],
-  "version": "3b18e512dba79e4c8300dd08aeb37f8e728b8dad" }
-```
-
-`version` is the blob id of the file (§1.6), or `null` while it does not exist (no search was ever saved). A file that cannot be read as saved searches lists none; entries that are invalid are skipped (both are logged).
-
-`PUT /api/searches` replaces the whole list. Request `SavedSearchesUpdateRequest`:
-
-```json
-{ "searches": [ { "id": "s-6f1c2a9e", "name": "Open loops", "query": "tag:#todo -done", "sort": "relevance" } ],
-  "baseVersion": "3b18e512dba79e4c8300dd08aeb37f8e728b8dad" }
-```
-
-| Field | Rule |
-|---|---|
-| `searches` | At most 100, in display order |
-| `id` | 1 to 64 characters from `[A-Za-z0-9-]`, unique; chosen by the client |
-| `name` | 1 to 120 characters, trimmed |
-| `query` | 1 to 2,000 characters (§12.1); stored as given |
-| `sort` | `relevance` or `mtime`; missing means `relevance` |
-| `baseVersion` | The `version` the client last read, or `null` (or `""`) when the file does not exist yet |
-
-`200 SavedSearchesResponse` with the new `version`. Saving a list equal to the stored one succeeds whatever `baseVersion` says.
-
-| Errors |
-|---|
-| `400 bad-request` with `errors[]` naming each invalid field, for example `searches[2].name` |
-| `409 version-conflict` (`path: ".notesapp/searches.json"`, `currentVersion`, `currentContent`): another device saved meanwhile. The client fetches the list again and re-applies its change (add, rename, delete). |
-
-Event: `searches.changed` (§16.4). The file is added to the pending history batch like a save.
+Builds before this one kept named searches in `.notesapp/searches.json` (`{"schemaVersion": 1, "searches": [{id, name, query, sort}]}`). At startup (DESIGN §5.17) the server turns each entry into a search bookmark at the end of the top level of `.notesapp/bookmarks.json`, with the name as its `title`, the trimmed query, and the migration time as its `ctime`; the sort is not kept (a search bookmark has none). An entry whose query already has a search bookmark (anywhere, groups included) is skipped, as are entries without a usable query. The file is then renamed `.notesapp/searches.json.migrated` (with a time stamp after `-` when that name is taken), so the step runs once; the startup commit records both changes. A `bookmarks.json` that is not JSON leaves both files untouched until it is fixed.
 
 ### 12.5 PDF text in search
 
@@ -1258,7 +1226,7 @@ The trash lives in `<vault>/.trash/` and is **flat**: each trashed file or folde
 ```json
 { "entries": [
   { "id": "01JA7Q3M9K2Z", "originalPath": "Projects/Old plan.md", "type": "file",
-    "deletedAt": "2026-10-16T14:12:40.120Z", "deletedBy": "rjgehan@github", "size": 2311, "fileCount": 1 },
+    "deletedAt": "2026-10-16T14:12:40.120Z", "deletedBy": "octocat@github", "size": 2311, "fileCount": 1 },
   { "id": "x-4b1d9e0c7a2f5e83", "originalPath": "Scratch.md", "type": "file",
     "deletedAt": "2026-10-01T09:00:00.000Z", "deletedBy": "unknown", "size": 120, "fileCount": 1 }
 ] }
@@ -1344,13 +1312,13 @@ This is the history of one path, following renames (the equivalent of `git log -
     { "commitId": "c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2", "shortId": "c3d4e5f",
       "parentCommitId": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0",
       "path": "Projects/Roadmap.md", "time": "2026-10-16T14:20:02.000Z",
-      "authorName": "R. J. Gehan", "authorLogin": "rjgehan@github",
+      "authorName": "The Octocat", "authorLogin": "octocat@github",
       "message": "Rename Projects/Plan.md → Projects/Roadmap.md",
       "change": "renamed", "renamedFrom": "Projects/Plan.md" },
     { "commitId": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0", "shortId": "a1b2c3d",
       "parentCommitId": "f0e1d2c3b4a5968778695a4b3c2d1e0f9a8b7c6d",
       "path": "Projects/Plan.md", "time": "2026-10-16T14:05:31.000Z",
-      "authorName": "R. J. Gehan", "authorLogin": "rjgehan@github",
+      "authorName": "The Octocat", "authorLogin": "octocat@github",
       "message": "Update Projects/Plan.md", "change": "modified", "renamedFrom": null }
   ],
   "excluded": null
@@ -1456,13 +1424,13 @@ The vault-wide timeline (ROADMAP item 28): every commit, newest first (by commit
   "entries": [
     { "commitId": "c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2", "shortId": "c3d4e5f",
       "parentCommitId": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0",
-      "time": "2026-10-16T14:20:02.000Z", "authorName": "R. J. Gehan", "authorLogin": "rjgehan@github",
+      "time": "2026-10-16T14:20:02.000Z", "authorName": "The Octocat", "authorLogin": "octocat@github",
       "message": "Rename Projects/Plan.md → Projects/Roadmap.md",
       "files": [ { "path": "Projects/Roadmap.md", "change": "renamed", "renamedFrom": "Projects/Plan.md" } ],
       "filesTotal": 1 } ] }
 ```
 
-- `files` is the diff against the first parent (a root commit: against nothing), with renames detected as in §14.1, sorted by path, at most 100 of `filesTotal`. Hidden paths (`.notesapp/settings.json`, `.notesapp/searches.json`) are left out, so a commit that only saved settings has no files.
+- `files` is the diff against the first parent (a root commit: against nothing), with renames detected as in §14.1, sorted by path, at most 100 of `filesTotal`. Hidden paths (`.notesapp/settings.json`, `.notesapp/bookmarks.json`) are left out, so a commit that only saved settings has no files.
 - To show a file at a commit, use §14.2 with `commit=<commitId>` (or `parentCommitId` for a `deleted` file) and the entry's `path`.
 
 ### 14.7 `GET /api/history/changes[?since=][&until=][&path=]`
@@ -1474,7 +1442,7 @@ What changed over a period ("what changed this week"): the net difference betwee
 ```json
 { "since": "2026-10-12T00:00:00.000Z", "until": null,
   "fromCommitId": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0", "toCommitId": "c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2",
-  "commits": 14, "authors": ["R. J. Gehan"],
+  "commits": 14, "authors": ["The Octocat"],
   "files": [ { "path": "Ideas/Plan B.md", "change": "added", "renamedFrom": null },
              { "path": "Projects/Roadmap.md", "change": "renamed", "renamedFrom": "Projects/Plan.md" } ],
   "truncated": false }
@@ -1501,7 +1469,7 @@ Files that were deleted at some point and do not exist now, so they can be broug
   "entries": [ { "path": "Projects/Old plan.md", "deletedAt": "2026-09-02T08:12:40.000Z",
                  "commitId": "d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3", "shortId": "d4e5f6a",
                  "parentCommitId": "c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2",
-                 "authorName": "R. J. Gehan", "authorLogin": "rjgehan@github", "message": "Delete Projects/Old plan.md" } ] }
+                 "authorName": "The Octocat", "authorLogin": "octocat@github", "message": "Delete Projects/Old plan.md" } ] }
 ```
 
 **Restore** with §14.4: `{"path": <path>, "commit": <parentCommitId>, "sourcePath": <path>, "baseVersion": null}`. The file and its folders are re-created, and the restore is committed; the path then leaves this list.
@@ -1834,7 +1802,6 @@ data: {"serverTime":"2026-10-16T14:05:20.004Z"}
 | `trash.changed` | `TrashChangedEvent` (`{}`) | yes | The trash list changed |
 | `history.committed` | `HistoryCommittedEvent` | yes | A commit was made. `paths` has at most 100 entries, and `truncated` is true when there were more. Not sent when an operation had nothing to commit. |
 | `settings.changed` | `SettingsChangedEvent` | no | The settings were saved |
-| `searches.changed` | `SavedSearchesChangedEvent` | no | The saved searches were saved (§12.4); refetch them |
 | `types.changed` | `PropertyTypesChangedEvent` | no | The vault's property types changed (§38.2), by a type change or a property rename; refetch `GET /api/properties/types` |
 | `bookmarks.changed` | `BookmarksChangedEvent` | no | The bookmarks were saved (§21). After a move or a trash restore the server re-keys them itself and sends this with `origin: null`, so it reaches every client, the mover's included. Refetch `GET /api/bookmarks`. |
 | `status.changed` | `StatusChangedEvent` | yes | Something shown by `GET /api/status` changed state (`git.state`, `watcher.mode`, `settings.readOnly`, `mirror.state`, or free space crossing 1 GiB), or a push requested with §6.4 ended; refetch it |
@@ -1853,7 +1820,7 @@ Examples of `data` payloads:
 {"path":"Projects/Old plan.md","trashed":true,"trashId":"01JA7Q3M9K2Z","origin":"c-9a8b7c6d5e4f"}
 {"path":"Projects/Beta","origin":null}
 {"from":"Projects/Plan.md","to":"Projects/Roadmap.md","type":"file","origin":"c-9a8b7c6d5e4f"}
-{"commitId":"c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2","message":"Update Projects/Plan.md","authorName":"R. J. Gehan","time":"2026-10-16T14:05:31.000Z","paths":["Projects/Plan.md"],"truncated":false}
+{"commitId":"c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2","message":"Update Projects/Plan.md","authorName":"The Octocat","time":"2026-10-16T14:05:31.000Z","paths":["Projects/Plan.md"],"truncated":false}
 {"version":"a1f3c5e7b9d0a2c4e6f8b0d2f4a6c8e0b2d4f6a8","origin":"c-1f2e3d4c5b6a"}
 {"reason":"git"}
 {"reason":"watcher-overflow"}
@@ -2048,7 +2015,7 @@ export interface DailyNotesSettings { format: string; folder: VaultPath; templat
 /** A folder template (ROADMAP item 30): new notes in `folder` (`""`: anywhere) start from `template`. */
 export interface FolderTemplate { folder: VaultPath; template: VaultPath }
 export interface TemplatesSettings { folder: VaultPath; dateFormat: string; timeFormat: string; folderTemplates: FolderTemplate[] }
-export interface EditorSettings { defaultMode: 'edit' | 'read'; readableLineLength: boolean; strictLineBreaks: boolean }
+export interface EditorSettings { defaultMode: 'edit' | 'read'; noteWidth: number | 'full'; strictLineBreaks: boolean }   // noteWidth: 600–1400 CSS pixels
 /** Ask your vault and summaries (§24). Optional in a request: a body without it keeps the current values. */
 export interface AiSettings {
   enabled: boolean;               // off by default: nothing is sent to Anthropic until this is on
@@ -2306,9 +2273,6 @@ export interface SearchResponse {
   corrections: SearchCorrection[];
 }
 export type SearchSort = 'relevance' | 'mtime';
-export interface SavedSearch { id: string; name: string; query: string; sort: SearchSort }
-export interface SavedSearchesResponse { searches: SavedSearch[]; version: Version | null }
-export interface SavedSearchesUpdateRequest { searches: SavedSearch[]; baseVersion: Version | null }
 export interface TagCount { tag: string; count: number; total: number }
 export interface TagsResponse { tags: TagCount[] }
 
@@ -2544,7 +2508,6 @@ export interface SettingsChangedEvent { version: Version; origin: string | null 
 export interface BookmarksChangedEvent { version: Version; origin: string | null }   // origin null: re-keyed by the server after a move or restore
 export interface StatusChangedEvent { reason: 'git' | 'watcher' | 'settings' | 'disk' | 'mirror' }
 export interface ResyncEvent { reason: 'watcher-overflow' | 'bulk-change' | 'rescan-error' }
-export interface SavedSearchesChangedEvent { version: Version; origin: string | null }
 
 export interface VaultEventMap {
   'hello': HelloEvent;
@@ -2561,14 +2524,13 @@ export interface VaultEventMap {
   'bookmarks.changed': BookmarksChangedEvent;
   'status.changed': StatusChangedEvent;
   'resync': ResyncEvent;
-  'searches.changed': SavedSearchesChangedEvent;
   'types.changed': PropertyTypesChangedEvent;
 }
 export type VaultEventName = keyof VaultEventMap;
 export const VAULT_EVENT_NAMES: readonly VaultEventName[] = [
   'hello', 'ping', 'file.created', 'file.changed', 'file.deleted', 'folder.created', 'folder.deleted',
   'entry.moved', 'trash.changed', 'history.committed', 'settings.changed', 'bookmarks.changed', 'status.changed',
-  'resync', 'searches.changed', 'types.changed',
+  'resync', 'types.changed',
 ];
 // Extensions add their own event names at runtime with registerEventHandler (DESIGN §6.8).
 
@@ -2930,8 +2892,6 @@ export interface NotesQueryResponse {
 | GET | `/api/compat` | | 200 `CompatReport` | 11.5 |
 | GET | `/api/search?q=&limit=&sort=&prefix=` | | 200 `SearchResponse` | 12.1 |
 | GET | `/api/tags` | | 200 `TagsResponse` | 12.2 |
-| GET | `/api/searches` | | 200 `SavedSearchesResponse` | 12.3 |
-| PUT | `/api/searches` | `SavedSearchesUpdateRequest` | 200 `SavedSearchesResponse` | 12.3 |
 | GET | `/api/trash` | | 200 `TrashListResponse` | 13.1 |
 | GET | `/api/trash/{id}/raw` | | 200/206/304 bytes | 13.2 |
 | POST | `/api/trash/{id}/restore` | `RestoreRequest` (optional) | 200 `RestoreResult` | 13.3 |
@@ -3030,7 +2990,6 @@ export interface NotesQueryResponse {
 | `CreateFolderRequest`, `FolderResult`, `MoveRequest`, `MovedFile`, `LinkUpdate`, `FailedUpdate`, `MoveResult` | Same | `MoveRequest.updateLinks` and `dryRun` are `@Nullable Boolean`. `FailedUpdate.reason` is the enum `FailedReason` |
 | `HeadingInfo`, `OutgoingLink`, `NoteMeta`, `Mention`, `BacklinkGroup`, `BacklinksResponse`, `ResolveRequest`, `ResolvedLink`, `ResolveResponse` | Same | `NoteMeta.frontmatter` is `@Nullable Map<String, Object>` |
 | `SearchMatch`, `SearchHit`, `SearchCorrection`, `SearchResponse`, `TagCount`, `TagsResponse` | Same | `SearchMatch.page` is a `@Nullable Integer`; `SearchHit.kind` is `FileKind` |
-| `SavedSearch`, `SavedSearchesResponse`, `SavedSearchesUpdateRequest` | Same | `SavedSearch.sort` is a `String` (`relevance` or `mtime`); `SavedSearchesUpdateRequest.searches` is a `@Nullable JsonNode`, so every invalid field is reported by name |
 | `GraphNode`, `GraphResponse` | Same | `GraphNode.type` is the enum `GraphNodeType` (`note`, `attachment`, `unresolved`); `GraphResponse.edges` is an `int[]` |
 | `CompatReport`, `ObsidianInfo`, `CompatSetting`, `CompatPlugin`, `CompatIssue`, `CompatOccurrence`, `CompatTotals` | Same | Nested enums `CompatSetting.Status`, `CompatPlugin.Kind`, `CompatPlugin.Support`, `CompatIssue.Category`, `CompatIssue.Severity` serialize as the lower-case strings in §17. `CompatReport.proposedSettings` is a `@Nullable Settings`, `graph` a `@Nullable ObjectNode` |
 | `TrashEntry`, `TrashListResponse`, `RestoreRequest`, `RestoreResult`, `PurgeResult` | Same | |
@@ -3044,7 +3003,7 @@ export interface NotesQueryResponse {
 | `TranscriptionStatus`, `TranscriptionResult` | Same; the request is `TranscribeRequest(String path)` | |
 | `VaultsResponse`, `VaultInfo`, `CreateVaultRequest` | Same | `VaultInfo.state` is the registry's enum written in lower case; `CreateVaultRequest.name` is `@Nullable` (missing: `400 invalid-name`) |
 | `PublishResponse`, `PublishedNote`, `PublishRequest` | Same | `PublishedNote.state` is the enum `PublishedNoteState` (`current`, `changed`, `source-missing`, `snapshot-missing`); every `PublishRequest` component is `@Nullable` |
-| `HelloEvent`, `PingEvent`, `FileEvent`, `FileDeletedEvent`, `FolderEvent`, `FolderDeletedEvent`, `MovedEvent`, `TrashChangedEvent`, `HistoryCommittedEvent`, `SettingsChangedEvent`, `BookmarksChangedEvent`, `StatusChangedEvent`, `ResyncEvent`, `SavedSearchesChangedEvent` | Same names in `com.rjgehan.notes.events`, all implementing `sealed interface VaultEvent { @JsonIgnore String eventName(); @JsonIgnore default @Nullable String echoOrigin() { return null; } }` | `eventName()` returns the §16.4 string. Content events (`file.*`, `folder.*`, `entry.moved`, `settings.changed`) have a real `origin` record component, which is serialized, and override `echoOrigin()` to return it. Non-content events have no `origin` component, so they never serialize `"origin": null` into an event the TypeScript types declare without one. Neither interface method is serialized. `HelloEvent` and `PingEvent` are written by `EventHub` directly and never stored in the replay ring. |
+| `HelloEvent`, `PingEvent`, `FileEvent`, `FileDeletedEvent`, `FolderEvent`, `FolderDeletedEvent`, `MovedEvent`, `TrashChangedEvent`, `HistoryCommittedEvent`, `SettingsChangedEvent`, `BookmarksChangedEvent`, `StatusChangedEvent`, `ResyncEvent` | Same names in `com.rjgehan.notes.events`, all implementing `sealed interface VaultEvent { @JsonIgnore String eventName(); @JsonIgnore default @Nullable String echoOrigin() { return null; } }` | `eventName()` returns the §16.4 string. Content events (`file.*`, `folder.*`, `entry.moved`, `settings.changed`) have a real `origin` record component, which is serialized, and override `echoOrigin()` to return it. Non-content events have no `origin` component, so they never serialize `"origin": null` into an event the TypeScript types declare without one. Neither interface method is serialized. `HelloEvent` and `PingEvent` are written by `EventHub` directly and never stored in the replay ring. |
 | `Problem` / `VersionConflictProblem` / `TaskConflictProblem` | Not records: Spring `ProblemDetail` with properties added by `NotesException` / `VersionConflictException` | |
 | `Task`, `TaskList`, `TaskSection`, `TaskRecurrence`, `TaskReminder`, `TaskFileProblem`, `TasksResponse`, `TaskListsResponse`, `TaskWriteResult`, `TaskListWriteResult`, `CompleteTaskRequest`, `ReorderTasksRequest`, `ReorderRequest`, `CreateTaskListRequest`, `SectionRequest` | Same | Enums `TaskStatus`, `TaskView` and `RecurrenceFrom` (for `TaskRecurrence.from`); `Task.priority` is an `int`. `CompleteTaskRequest.base` is a `JsonNode`. |
 | `CreateTaskRequest`, `UpdateTaskRequest`, `UpdateTaskListRequest`, `TaskFields`, `TaskListFields` | `POST /api/tasks` takes a `JsonNode`; both `PATCH`es take the record `UpdateTaskRequest(JsonNode changes, JsonNode base)` | Kept as JSON trees, because an omitted field (unchanged) and `null` (cleared) differ |
@@ -3053,7 +3012,7 @@ export interface NotesQueryResponse {
 | `HabitNote`, `DailyNoteValues`, `HabitsResponse` | Same (§35) | `HabitNote.properties` is a `Map<String, @Nullable Object>` (the frontmatter as parsed, §5.5.3 of DESIGN); `DailyNoteValues.values` holds `Boolean`, `Number` and `String` values only |
 | `DatedNote`, `DatedNotesResponse` | Same (§25) | Built by `calendar.DatedNoteService` from the index's parsed frontmatter |
 | `PropertyInfo`, `PropertiesResponse`, `PropertyTypesResponse`, `PropertyTypeRequest`, `PropertyValue`, `PropertyValuesResponse`, `PropertyRenameRequest`, `PropertyUpdate`, `PropertyRenameResult` | Same (§38) | Types are `String`s (`PropertyType` is not an enum, so a types file with a type this version does not know still reads); every request component is `@Nullable` and checked by `properties.PropertyTypeService` / `PropertyService`. `FailedUpdate.reason` gains `PROPERTY_EXISTS` (`property-exists`). |
-| `PropertyTypesChangedEvent` | Same name in `com.rjgehan.notes.events` | Echoes `origin` like `SavedSearchesChangedEvent` |
+| `PropertyTypesChangedEvent` | Same name in `com.rjgehan.notes.events` | Echoes `origin` like `BookmarksChangedEvent` |
 | `FlashcardsChangedEvent` | Same name in `com.rjgehan.notes.events` | An extension event (§34.7): it echoes `origin` like a content event, and `cards` maps removed records to `null` |
 | `AiSettings` | Same name in `com.rjgehan.notes.settings` | `model` is a `String` checked against `AiSettings.MODELS` |
 | `AiAskRequest`, `AiSummarizeRequest`, `AiTurn`, `AiPrompt`, `AiStatus`, `AiModelInfo`, `AiSource`, `AiStartEvent`, `AiDeltaEvent`, `AiRestartEvent`, `AiUsage`, `AiDoneEvent`, `AiErrorEvent` | Same | Every request component is `@Nullable` (the service validates and applies defaults). `AiStatus.state` is the enum `AiState` (`off`, `not-configured`, `over-budget`, `ready`). The stream events are written by `AiController` through an `SseEmitter`, not through `EventHub`. |

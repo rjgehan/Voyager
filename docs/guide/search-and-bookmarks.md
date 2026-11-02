@@ -50,7 +50,7 @@ Bookmarks keep notes, headings, folders and searches you use often one click awa
 - **The open note**: the star at the top right of the note (computer), **⋯ › Bookmark** (phone), or **Bookmark current file** in the palette.
 - **A heading**: the star next to the heading in the **Outline** tab, or put the cursor under the heading and run **Bookmark heading at cursor**.
 - **A file or folder**: **Bookmark** in its menu in the Files tab, or drag it onto the Bookmarks tab (computer).
-- **A search**: type the search, then click the star next to the number of results (or run **Bookmark current search**). Opening that bookmark runs the search again, so it is always up to date.
+- **A search**: type the search, then click the star next to the number of results (or run **Bookmark current search**). Opening that bookmark runs the search again, so it is always up to date. This is how a search is kept: there is no separate list of saved searches.
 
 **Use them:** the **Bookmarks** tab of the left sidebar (phone: the drawer). Click a bookmark to open it.
 

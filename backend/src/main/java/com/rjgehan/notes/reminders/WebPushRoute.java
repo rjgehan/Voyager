@@ -7,6 +7,7 @@ import java.util.List;
 
 import com.rjgehan.notes.config.NotesProperties;
 import com.rjgehan.notes.settings.RemindersSettings;
+import com.rjgehan.notes.vaults.VaultNames;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,18 +48,36 @@ public class WebPushRoute implements ReminderRoute {
 
 	private final String subject;
 
+	/**
+	 * The vault's URL prefix ({@code ""} for the default vault, {@code /v/<name>} otherwise). The devices are shared by
+	 * every vault, and keys such as {@code daily:<date>} are not unique across vaults: without it, one vault's daily
+	 * nudge replaced another's on the device (same tag) and at the push service (same {@code Topic}).
+	 */
+	private final String scope;
+
 	@Autowired
 	public WebPushRoute(PushStore store, WebPushSender sender, JsonMapper mapper, Clock clock,
 			NotesProperties properties, @Value("${notes.reminders.vapid-subject:}") String subject) {
-		this(store, sender::send, mapper, clock, subject(subject, properties.allowedHosts()));
+		this(store, sender::send, mapper, clock, subject(subject, properties.allowedHosts()),
+				VaultNames.urlPrefix(properties.vaults().currentName(), properties.vaults().isDefault()));
 	}
 
 	WebPushRoute(PushStore store, Sender sender, JsonMapper mapper, Clock clock, String subject) {
+		this(store, sender, mapper, clock, subject, "");
+	}
+
+	WebPushRoute(PushStore store, Sender sender, JsonMapper mapper, Clock clock, String subject, String scope) {
 		this.store = store;
 		this.sender = sender;
 		this.mapper = mapper;
 		this.clock = clock;
 		this.subject = subject;
+		this.scope = scope;
+	}
+
+	/** The notification's tag: the reminder's key, qualified by the vault for an extra vault. */
+	String tag(String key) {
+		return this.scope.isEmpty() ? key : this.scope.substring(1) + ":" + key;
 	}
 
 	/** The VAPID contact: the configured one, else the app's own https address, else a placeholder address. */
@@ -99,7 +118,7 @@ public class WebPushRoute implements ReminderRoute {
 			return Delivery.failed((deviceId != null) ? "no such device" : "no device is subscribed");
 		}
 		byte[] payload = payload(message);
-		String topic = topic(message.key());
+		String topic = topic(tag(message.key()));
 		int delivered = 0;
 		String lastError = null;
 		for (PushStore.Subscription device : devices) {
@@ -142,7 +161,7 @@ public class WebPushRoute implements ReminderRoute {
 		ObjectNode json = this.mapper.createObjectNode();
 		json.put("title", ReminderScheduler.clip(message.title(), 200));
 		json.put("body", ReminderScheduler.clip(message.body(), 600));
-		json.put("tag", message.key());
+		json.put("tag", tag(message.key()));
 		json.put("kind", message.kind());
 		json.put("url", message.url());
 		if (message.taskId() != null) {

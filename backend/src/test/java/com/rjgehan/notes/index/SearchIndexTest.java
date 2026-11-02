@@ -236,4 +236,40 @@ class SearchIndexTest {
 		assertThat(all.moreMatches()).isEqualTo(2);
 	}
 
+
+	@Test
+	void aPhraseLongerThanTheKeptSequencesIsCheckedOnTheFewNotesThatHaveItsStart() {
+		StringBuilder phrase = new StringBuilder();
+		for (int i = 0; i < 70; i++) {
+			phrase.append((i == 0) ? "" : " ")
+				.append(List.of("alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf").get(i % 7));
+		}
+		SearchIndex search = new SearchIndex();
+		List<String> words = List.of(phrase.toString().split(" "));
+		List<String> shuffled = new java.util.ArrayList<>(words);
+		java.util.Collections.reverse(shuffled);
+		String[] texts = { "intro " + phrase + " outro\n", String.join(" ", shuffled) + "\n",
+				phrase.substring(0, phrase.lastIndexOf(" ")) + " different\n" };
+		for (int i = 0; i < texts.length; i++) {
+			search.add(i, "n" + i + ".md", SearchIndex.Doc.of("n" + i, texts[i], MarkdownScanner.scan(texts[i], false,
+					false)));
+		}
+		TermPattern pattern = new TermPattern(words, false);
+		java.util.BitSet docs = search.candidates(pattern);
+		assertThat(docs.cardinality()).isEqualTo(3);
+		List<Integer> verified = new java.util.ArrayList<>();
+		search.retainPhrase(docs, pattern, (docId) -> {
+			verified.add(docId);
+			return docId == 0;
+		});
+		assertThat(docs.stream().boxed().toList()).containsExactly(0);
+		// The reversed note lacks the phrase's first 64 terms in sequence: it is never tokenized again.
+		assertThat(verified).containsExactly(0, 2);
+
+		note("a.md", texts[0], 0);
+		note("b.md", texts[1], 1);
+		note("c.md", texts[2], 2);
+		assertThat(search("\"" + phrase + "\"")).containsExactly("a.md");
+	}
+
 }

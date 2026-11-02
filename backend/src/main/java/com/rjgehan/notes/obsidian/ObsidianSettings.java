@@ -15,6 +15,7 @@ import com.rjgehan.notes.settings.EditorSettings;
 import com.rjgehan.notes.settings.FilesSettings;
 import com.rjgehan.notes.settings.LinkFormat;
 import com.rjgehan.notes.settings.NewNoteLocation;
+import com.rjgehan.notes.settings.NoteWidth;
 import com.rjgehan.notes.settings.RemindersSettings;
 import com.rjgehan.notes.settings.Settings;
 import com.rjgehan.notes.settings.SettingsSeed;
@@ -172,7 +173,7 @@ public class ObsidianSettings implements SettingsSeed {
 
 		private EditorMode defaultMode;
 
-		private boolean readableLineLength;
+		private NoteWidth noteWidth;
 
 		private boolean strictLineBreaks;
 
@@ -205,7 +206,7 @@ public class ObsidianSettings implements SettingsSeed {
 			this.folderTemplates = t.folderTemplates();
 			EditorSettings e = current.editor();
 			this.defaultMode = e.defaultMode();
-			this.readableLineLength = e.readableLineLength();
+			this.noteWidth = e.noteWidth();
 			this.strictLineBreaks = e.strictLineBreaks();
 			this.ai = current.ai();
 			this.reminders = current.reminders();
@@ -219,7 +220,7 @@ public class ObsidianSettings implements SettingsSeed {
 					new DailyNotesSettings(this.dailyFormat, this.dailyFolder, this.dailyTemplate, this.openOnStartup),
 					new TemplatesSettings(this.templatesFolder, this.dateFormat, this.timeFormat,
 							this.folderTemplates),
-					new EditorSettings(this.defaultMode, this.readableLineLength, this.strictLineBreaks), this.ai,
+					new EditorSettings(this.defaultMode, this.noteWidth, this.strictLineBreaks), this.ai,
 					this.reminders);
 		}
 
@@ -410,14 +411,15 @@ public class ObsidianSettings implements SettingsSeed {
 					null);
 		}
 
+		/** Obsidian's on/off switch becomes a note width: on is the readable width, off the full width. */
 		void readableLineLength(@Nullable JsonNode value) {
 			if (!isBool(value)) {
 				return;
 			}
-			String before = String.valueOf(this.readableLineLength);
-			this.readableLineLength = value.booleanValue();
-			row(APP + "readableLineLength", value, "editor.readableLineLength", before,
-					String.valueOf(this.readableLineLength), null);
+			String before = String.valueOf(this.noteWidth.wire());
+			this.noteWidth = NoteWidth.fromReadableLineLength(value.booleanValue());
+			row(APP + "readableLineLength", value, "editor.noteWidth", before, String.valueOf(this.noteWidth.wire()),
+					null);
 		}
 
 		void defaultMode(@Nullable JsonNode value) {

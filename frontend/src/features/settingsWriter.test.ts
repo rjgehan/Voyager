@@ -83,11 +83,11 @@ describe('SettingsWriter', () => {
 
   it('a real change from another device keeps both changes (FE-6)', async () => {
     const s = server();
-    s.foreign((x) => (x.editor.readableLineLength = false));
+    s.foreign((x) => (x.editor.noteWidth = 'full'));
     s.writer.update({ ...s.view(), files: { ...s.view().files, useWikilinks: false } }, true);
     await vi.advanceTimersByTimeAsync(500);
     expect(s.settings.files.useWikilinks).toBe(false);
-    expect(s.settings.editor.readableLineLength).toBe(false);
+    expect(s.settings.editor.noteWidth).toBe('full');
     expect(s.notices.map(([m]) => m)).toEqual([expect.stringContaining('applied on top')]);
   });
 
@@ -106,11 +106,11 @@ describe('SettingsWriter', () => {
     s.writer.update({ ...s.view(), templates: { ...s.view().templates, folder: 'Tpl' } }, false);
     await vi.advanceTimersByTimeAsync(100);
     // ... while another device changes another field, and settings.changed refreshes the cache.
-    s.foreign((x) => (x.editor.readableLineLength = false));
+    s.foreign((x) => (x.editor.noteWidth = 'full'));
     s.refresh();
     await vi.advanceTimersByTimeAsync(WRITE_DEBOUNCE_MS + 500);
     expect(s.settings.templates.folder).toBe('Tpl');
-    expect(s.settings.editor.readableLineLength).toBe(false);
+    expect(s.settings.editor.noteWidth).toBe('full');
   });
 
   it('a draft left after a failed write is applied on top of what other devices saved since', async () => {
@@ -124,13 +124,13 @@ describe('SettingsWriter', () => {
     expect(s.errors).toHaveLength(1);
     expect(s.writer.draft?.files.useWikilinks).toBe(false);
     // Another device saves meanwhile, and settings.changed refreshes the cache.
-    s.foreign((x) => (x.editor.readableLineLength = false));
+    s.foreign((x) => (x.editor.noteWidth = 'full'));
     s.refresh();
     // Later, another field is edited on the draft still shown.
     s.writer.update({ ...s.view(), files: { ...s.view().files, autoUpdateLinks: false } }, true);
     await vi.advanceTimersByTimeAsync(500);
     expect(s.settings.files).toMatchObject({ useWikilinks: false, autoUpdateLinks: false });
-    expect(s.settings.editor.readableLineLength).toBe(false);
+    expect(s.settings.editor.noteWidth).toBe('full');
   });
 
   it('a debounced edit is written when the page is left within the debounce (FE-7)', async () => {

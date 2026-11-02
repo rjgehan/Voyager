@@ -3,7 +3,7 @@ import { MockVault } from '../../api/mock/vault';
 import { useToasts } from '../../state/toasts';
 import { fakeApi, sessionDeps } from '../../test/fakes';
 import { DocumentSession } from '../../sync/DocumentSession';
-import { CanvasController } from './controller';
+import { CanvasController, FIT_MIN_ZOOM, MIN_ZOOM } from './controller';
 import { OBSIDIAN_SAMPLE } from './fixtures.test-data';
 import { parseCanvas, serializeCanvas } from './format';
 import { moveNodes, updateNode } from './ops';
@@ -24,6 +24,12 @@ async function setup(content = OBSIDIAN_SAMPLE) {
 }
 
 const saved = (vault: MockVault) => vault.readFile(PATH).content;
+
+/** A board of `columns` cards in a row, 300 px apart (the mock's big board is 25 wide). */
+function wideBoard(columns: number): string {
+  const nodes = Array.from({ length: columns }, (_, i) => ({ id: (i + 1).toString(16).padStart(16, '0'), type: 'text', text: `Card ${i + 1}`, x: i * 300, y: 0, width: 250, height: 140 }));
+  return JSON.stringify({ nodes, edges: [] });
+}
 const version = (vault: MockVault) => vault.readFile(PATH).version;
 
 beforeEach(() => {
@@ -193,6 +199,44 @@ describe('CanvasController viewport', () => {
       expect(br.x).toBeLessThanOrEqual(1000);
       expect(br.y).toBeLessThanOrEqual(800);
     }
+  });
+
+  it('fits a board too wide for 5 % on a phone, above the toolbar, and pinching stays smooth there', async () => {
+    const { controller } = await setup(wideBoard(25));
+    controller.setStage(375, 768);
+    controller.setBottomInset(66);
+    controller.zoomToFit();
+    const fitted = controller.getState().view.zoom;
+    expect(fitted).toBeLessThan(MIN_ZOOM);
+    expect(fitted).toBeGreaterThanOrEqual(FIT_MIN_ZOOM);
+    for (const n of controller.getState().doc!.nodes) {
+      const tl = controller.worldToScreen({ x: n.x, y: n.y });
+      const br = controller.worldToScreen({ x: n.x + n.width, y: n.y + n.height });
+      expect(tl.x).toBeGreaterThan(0);
+      expect(tl.y).toBeGreaterThan(0);
+      expect(br.x).toBeLessThan(375);
+      expect(br.y).toBeLessThan(768 - 66);
+    }
+    // Zooming out stops at the whole board, and zooming in from there moves smoothly (no jump to 5 %).
+    controller.zoomBy(0.5);
+    expect(controller.getState().view.zoom).toBeCloseTo(fitted, 10);
+    controller.zoomBy(1.1);
+    expect(controller.getState().view.zoom).toBeCloseTo(fitted * 1.1, 10);
+    // On a desktop the same board needs no zoom below 5 %, which stays the floor.
+    controller.setStage(1600, 1000);
+    controller.setBottomInset(0);
+    expect(controller.minZoom()).toBe(MIN_ZOOM);
+  });
+
+  it('keeps a fitted tall board clear of the floating toolbar', async () => {
+    const tall = JSON.stringify({ nodes: [{ id: 'a1a1a1a1a1a1a1a1', type: 'text', text: 'Tall', x: 0, y: 0, width: 200, height: 2000 }], edges: [] });
+    const { controller } = await setup(tall);
+    controller.setStage(375, 768);
+    controller.setBottomInset(66);
+    controller.zoomToFit();
+    const bottom = controller.worldToScreen({ x: 0, y: 2000 }).y;
+    expect(bottom).toBeLessThanOrEqual(768 - 66 - 12 + 0.001);
+    expect(controller.worldToScreen({ x: 0, y: 0 }).y).toBeGreaterThan(0);
   });
 
   it('keeps the centre when the stage is resized', async () => {

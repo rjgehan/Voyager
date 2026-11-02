@@ -21,11 +21,13 @@ import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -258,15 +260,25 @@ public class ReminderScheduler implements DisposableBean {
 
 	// ---------------------------------------------------------------- the tick
 
-	/** Finds what is due and delivers it. Runs on the reminders thread (and directly in tests); never throws. */
+	/**
+	 * Finds what is due and delivers it. Runs on the reminders thread (and directly in tests); never throws: an
+	 * exception escaping a scheduled task would cancel the ticker, and no reminder would come until a restart. The
+	 * deliveries run outside {@code lock}: a Web Push send can take 25 s per device, and the zone, status, snooze and
+	 * done requests (and shutdown) must not wait for a tick's network calls.
+	 */
 	void tick() {
 		try {
+			List<ReminderMessage> toSend = new ArrayList<>();
+			RemindersSettings reminders;
+			List<ReminderRoute> active;
+			Instant now;
 			synchronized (this.lock) {
 				load();
-				Instant now = this.clock.instant();
+				now = this.clock.instant();
 				Settings settings = this.sources.settings();
-				RemindersSettings reminders = settings.reminders();
-				List<ReminderRoute> active = this.routes.stream().filter((r) -> r.enabled(reminders)).toList();
+				RemindersSettings current = settings.reminders();
+				reminders = current;
+				active = this.routes.stream().filter((r) -> r.enabled(current)).toList();
 				prune(now);
 				if (active.isEmpty()) {
 					if (now.isAfter(this.baseline)) {
@@ -280,9 +292,12 @@ public class ReminderScheduler implements DisposableBean {
 					return;
 				}
 				List<Due> due = due(settings, now);
-				int sent = 0;
+				// A reminder that left the window is never retried: forget its backoff, or the map only grows.
+				Set<String> dueKeys = new HashSet<>();
+				due.forEach((item) -> dueKeys.add(item.message().key()));
+				this.retries.keySet().retainAll(dueKeys);
 				for (Due item : due) {
-					if (sent >= MAX_PER_TICK) {
+					if (toSend.size() >= MAX_PER_TICK) {
 						break;
 					}
 					String key = item.message().key();
@@ -296,23 +311,31 @@ public class ReminderScheduler implements DisposableBean {
 						this.dirty = true;
 						continue;
 					}
-					sent++;
-					deliver(item.message(), reminders, active, now);
+					toSend.add(item.message().withUrlPrefix(this.urlPrefix));
 				}
+			}
+			for (ReminderMessage message : toSend) {
+				List<String> errors = new ArrayList<>();
+				boolean accepted = deliver(message, reminders, active, errors);
+				synchronized (this.lock) {
+					delivered(message.key(), accepted, errors, now);
+				}
+			}
+			synchronized (this.lock) {
 				if (this.dirty) {
 					save(now);
 				}
 			}
 		}
-		catch (RuntimeException ex) {
-			logger.warn("The reminder scheduler's tick failed; it will run again: {}", ex.toString());
+		catch (RuntimeException | Error ex) {
+			logger.error("The reminder scheduler's tick failed; it will run again", ex);
 		}
 	}
 
-	private void deliver(ReminderMessage due, RemindersSettings settings, List<ReminderRoute> active, Instant now) {
-		ReminderMessage message = due.withUrlPrefix(this.urlPrefix);
+	/** Offers a message to every active route; true when one accepted it. Network calls: never under {@code lock}. */
+	private static boolean deliver(ReminderMessage message, RemindersSettings settings, List<ReminderRoute> active,
+			List<String> errors) {
 		boolean accepted = false;
-		List<String> errors = new ArrayList<>();
 		for (ReminderRoute route : active) {
 			ReminderRoute.Delivery delivery;
 			try {
@@ -328,7 +351,11 @@ public class ReminderScheduler implements DisposableBean {
 				errors.add(route.id() + ": " + delivery.error());
 			}
 		}
-		String key = message.key();
+		return accepted;
+	}
+
+	/** Records a delivery's outcome. Holds {@code lock}. */
+	private void delivered(String key, boolean accepted, List<String> errors, Instant now) {
 		if (accepted) {
 			this.ledger.put(key, now);
 			this.retries.remove(key);
@@ -371,13 +398,21 @@ public class ReminderScheduler implements DisposableBean {
 				}
 			}
 		}
+		List<Snooze> stale = new ArrayList<>();
 		for (Snooze snooze : this.snoozes) {
 			if (!snooze.until().isAfter(now) && !this.ledger.containsKey(snooze.key())) {
 				Task task = this.sources.task(snooze.taskId());
-				if (task != null && !task.status().isClosed()) {
+				if (task == null || !hasReminder(task, snooze.at())) {
+					// Its occurrence is over: the task is gone, or another device completed it and it rolled forward.
+					stale.add(snooze);
+				}
+				else if (!task.status().isClosed()) {
 					due.add(new Due(snooze.until(), taskMessage(snooze.key(), task, snooze.at(), zoneId)));
 				}
 			}
+		}
+		if (this.snoozes.removeAll(stale)) {
+			this.dirty = true;
 		}
 		RemindersSettings reminders = settings.reminders();
 		if (reminders.dailyNote()) {
@@ -393,6 +428,10 @@ public class ReminderScheduler implements DisposableBean {
 		}
 		due.sort(Comparator.comparing(Due::when));
 		return due;
+	}
+
+	private static boolean hasReminder(Task task, String at) {
+		return task.reminders().stream().anyMatch((r) -> r.at().equals(at));
 	}
 
 	private boolean isDue(Instant when, Instant from, Instant now) {
@@ -519,13 +558,9 @@ public class ReminderScheduler implements DisposableBean {
 	 */
 	public boolean done(String taskId, String at, Identity identity, @Nullable String origin) throws IOException {
 		Task task = this.sources.task(taskId);
-		boolean snoozed;
-		synchronized (this.lock) {
-			load();
-			snoozed = this.snoozes.stream().anyMatch((s) -> s.taskId().equals(taskId) && s.at().equals(at));
-		}
-		if (task == null || task.status().isClosed()
-				|| (!snoozed && task.reminders().stream().noneMatch((r) -> r.at().equals(at)))) {
+		// A snoozed reminder too: once the task rolled forward, its old occurrence is no longer among its reminders,
+		// and completing it again would skip the next occurrence.
+		if (task == null || task.status().isClosed() || !hasReminder(task, at)) {
 			return false;
 		}
 		ObjectNode base = JsonNodeFactory.instance.objectNode();
@@ -533,6 +568,7 @@ public class ReminderScheduler implements DisposableBean {
 		base.put("start", task.start());
 		this.completer.complete(taskId, new CompleteTaskRequest(zoneId().getId(), null, base), identity, origin);
 		synchronized (this.lock) {
+			load();
 			if (this.snoozes.removeIf((s) -> s.taskId().equals(taskId) && s.at().equals(at))) {
 				this.dirty = true;
 				save(this.clock.instant());

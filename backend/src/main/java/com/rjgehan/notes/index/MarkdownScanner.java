@@ -22,7 +22,11 @@ public final class MarkdownScanner {
 
 	private static final Pattern ATX = Pattern.compile("^ {0,3}(#{1,6})(?=[ \\t]|$)(.*)$");
 
-	private static final Pattern ATX_CLOSING = Pattern.compile("(?:^|[ \\t]+)#+$");
+	/**
+	 * The closing sequence of an ATX heading. A run of blanks is only tried from its first character: tried from every
+	 * one, a long run before a {@code #} that does not end the line made the match quadratic.
+	 */
+	private static final Pattern ATX_CLOSING = Pattern.compile("(?:^|(?<![ \\t])[ \\t]+)#+$");
 
 	private static final Pattern SETEXT_UNDERLINE = Pattern.compile("^ {0,3}(=+|-+)[ \\t]*$");
 
@@ -304,14 +308,20 @@ public final class MarkdownScanner {
 
 	private static void scanMarkdownLinks(String text, int line, int ls, int le, Excluded zones, List<LinkOcc> links,
 			List<int[]> spans) {
-		Matcher m = Syntax.MARKDOWN_LINK.matcher(text).region(ls, le);
-		while (m.find()) {
+		Matcher m = Syntax.MARKDOWN_LINK.matcher(text);
+		int[] close = { ls };
+		for (int from = ls; (from = nextMarkdownLink(m, text, from, le, close)) >= 0;) {
 			if (zones.overlaps(m.start(), m.end()) || overlapsAny(spans, m.start(), m.end())) {
 				continue;
 			}
 			spans.add(new int[] { m.start(), m.end() });
 			String destination = m.group(3);
 			boolean angle = destination.startsWith("<");
+			if (angle && (destination.length() < 2 || destination.indexOf('>') != destination.length() - 1)) {
+				// A destination that opens with < but is not <...> (typing "[a](<" with auto-closed parentheses
+				// gives "[a](<)") is no link destination (CommonMark), and has no brackets to strip.
+				continue;
+			}
 			String inner = angle ? destination.substring(1, destination.length() - 1) : destination;
 			if (!Syntax.isInternalDestination(inner)) {
 				continue;
@@ -325,6 +335,41 @@ public final class MarkdownScanner {
 			links.add(new LinkOcc(m.group(), target, subpath, m.group(2), !m.group(1).isEmpty(), LinkStyle.MARKDOWN,
 					angle, line, m.start(), m.end(), innerStart, innerStart + targetRaw.length(), false, true,
 					LinkOcc.Quoting.BODY));
+		}
+	}
+
+	/**
+	 * The next markdown link at or after {@code from} on a line ending at {@code le}: the same match as
+	 * {@code MARKDOWN_LINK.region(from, le).find()}, in linear time. Every {@code [} before the same {@code ]} shares
+	 * that bracket's outcome (the link text cannot contain a {@code ]}), so only the first of them is tried; the regex
+	 * alone restarted at each one and scanned to the bracket again, which made a line of many {@code [} quadratic. On
+	 * success {@code m} holds the match and its end is returned, else -1. {@code close} keeps the last bracket found,
+	 * so the search for the next one never goes back.
+	 */
+	private static int nextMarkdownLink(Matcher m, String text, int from, int le, int[] close) {
+		int open = from;
+		while (true) {
+			while (open < le && text.charAt(open) != '[') {
+				open++;
+			}
+			if (open >= le) {
+				return -1;
+			}
+			int c = Math.max(close[0], open + 1);
+			while (c < le && text.charAt(c) != ']' && text.charAt(c) != '\n') {
+				c++;
+			}
+			close[0] = c;
+			if (c >= le) {
+				return -1;
+			}
+			if (text.charAt(c) == ']') {
+				int start = (open > from && text.charAt(open - 1) == '!') ? open - 1 : open;
+				if (m.region(start, le).lookingAt()) {
+					return m.end();
+				}
+			}
+			open = c + 1;
 		}
 	}
 

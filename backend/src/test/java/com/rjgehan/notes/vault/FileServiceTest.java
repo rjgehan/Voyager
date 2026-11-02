@@ -19,6 +19,7 @@ import com.rjgehan.notes.api.dto.WriteResult;
 import com.rjgehan.notes.api.error.ErrorCode;
 import com.rjgehan.notes.api.error.NotesException;
 import com.rjgehan.notes.history.GitStore;
+import com.rjgehan.notes.index.LinkOcc;
 import com.rjgehan.notes.support.TestVault;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -321,6 +322,19 @@ class FileServiceTest {
 		assertThat(this.vault.hub.published).hasSize(events);
 		assertThat(this.vault.batcher.isPending("Known.md")).isFalse();
 		assertThat(this.vault.batcher.isPending("Dropped.md")).isFalse();
+	}
+
+	@Test
+	void aHalfTypedAngleBracketLinkIsSavedAndIndexed() throws Exception {
+		// "[a](" with auto-closed parentheses, then "<": the scan threw after the write, so this save and every later
+		// one (each re-indexes the disk first) failed with a 500.
+		String v1 = create("Links.md", "start\n");
+		String v2 = save("Links.md", "see [a](<)\n", v1);
+		assertThat(this.vault.index.file("Links.md").version()).isEqualTo(v2);
+		String v3 = save("Links.md", "see [a](<Other Note.md>)\n", v2);
+		assertThat(this.vault.index.file("Links.md").version()).isEqualTo(v3);
+		assertThat(this.vault.index.note("Links.md").parse().links()).extracting(LinkOcc::target)
+			.containsExactly("Other Note.md");
 	}
 
 	@Test

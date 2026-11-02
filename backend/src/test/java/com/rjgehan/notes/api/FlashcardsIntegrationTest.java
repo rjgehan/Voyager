@@ -5,6 +5,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -210,6 +211,13 @@ class FlashcardsIntegrationTest {
 				"reviews[1].at");
 		assertThat(this.api.postJson("/api/flashcards/reviews", Map.of("reviews", List.of())).problem(400))
 			.isEqualTo("bad-request");
+		// A null answer was dereferenced: 500 internal-error.
+		Api.Reply nullAnswer = this.api.postJson("/api/flashcards/reviews", Map.of("reviews", Arrays.asList(
+				review("ok2", "2026-10-01T09:00:00Z", "good"), null)));
+		assertThat(nullAnswer.problem(400)).isEqualTo("bad-request");
+		List<String> nullFields = new ArrayList<>();
+		nullAnswer.json().get("errors").forEach((e) -> nullFields.add(e.get("field").asString()));
+		assertThat(nullFields).containsExactly("reviews[1]");
 		Map<String, Object> anonymous = Map.of("reviews", List.of(review("x", "2026-10-01T09:00:00Z", "good")));
 		assertThat(this.api.postJson("/api/flashcards/reviews", anonymous, "X-Client-Id", null).problem(403))
 			.isEqualTo("client-id-required");

@@ -72,6 +72,9 @@ public class EventHub {
 
 	private final Set<Connection> connections = new LinkedHashSet<>();
 
+	/** Set by {@link #closeAll}: the context is closing, and no stream may start any more. Guarded by {@link #lock}. */
+	private boolean closed;
+
 	public EventHub(NotesProperties properties, Clock clock) {
 		this.clock = clock;
 		this.bootId = Long.toString(clock.millis(), 36);
@@ -132,6 +135,12 @@ public class EventHub {
 		emitter.onError((ex) -> emitter.complete());
 		emitter.onCompletion(connection::detach);
 		synchronized (this.lock) {
+			if (this.closed) {
+				// A client that reconnected after closeAll (the extra vaults still closing, the web server not yet
+				// draining) would hold a 30-minute stream that graceful shutdown waits for until its timeout.
+				connection.closeLater();
+				return emitter;
+			}
 			EventIds.EventId last = EventIds.parse(lastEventId);
 			String head = EventIds.format(this.bootId, this.seq);
 			boolean replayable = lastEventId != null && last != null && last.bootId().equals(this.bootId)
@@ -179,6 +188,7 @@ public class EventHub {
 	public void closeAll() {
 		List<Connection> snapshot;
 		synchronized (this.lock) {
+			this.closed = true;
 			snapshot = List.copyOf(this.connections);
 		}
 		snapshot.forEach(Connection::close);

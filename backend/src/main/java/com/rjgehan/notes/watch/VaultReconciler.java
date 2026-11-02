@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
+import java.nio.file.NotDirectoryException;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
@@ -319,7 +321,16 @@ public class VaultReconciler {
 
 	private List<Change> reconcileEntry(String path, String disk) {
 		List<Change> changes = new ArrayList<>();
-		String actualName = exactChild(PathNames.parentOf(disk), PathNames.nameOf(path), PathNames.nameOf(disk));
+		String actualName;
+		try {
+			actualName = exactChild(PathNames.parentOf(disk), PathNames.nameOf(path), PathNames.nameOf(disk));
+		}
+		catch (IOException ex) {
+			// The folder is there but cannot be listed (its permissions changed): what it holds is unknown, and is
+			// not gone. Reading it as empty announced every file in it as deleted and committed the deletions.
+			logger.warn("Cannot list the folder of {}; leaving it as it is: {}", disk, ex.toString());
+			return changes;
+		}
 		FileRecord record = this.index.file(path);
 		boolean folder = this.index.isFolder(path);
 		BasicFileAttributes attributes = null;
@@ -473,9 +484,11 @@ public class VaultReconciler {
 
 	/**
 	 * The actual on-disk name in {@code parentDisk} for a child: the exact disk name if listed, else a name whose NFC
-	 * form equals {@code nfcName}; null when neither is listed. Case differences do not match.
+	 * form equals {@code nfcName}; null when neither is listed, or the folder is gone or no folder. Case differences
+	 * do not match.
+	 * @throws IOException when the folder exists but cannot be listed
 	 */
-	private @Nullable String exactChild(String parentDisk, String nfcName, String diskName) {
+	private @Nullable String exactChild(String parentDisk, String nfcName, String diskName) throws IOException {
 		Path dir = this.fs.resolve(parentDisk);
 		String normalized = null;
 		try (DirectoryStream<Path> children = Files.newDirectoryStream(dir)) {
@@ -489,8 +502,15 @@ public class VaultReconciler {
 				}
 			}
 		}
-		catch (IOException ex) {
+		catch (NoSuchFileException | NotDirectoryException ex) {
 			return null;
+		}
+		catch (IOException ex) {
+			BasicFileAttributes attributes = VaultFs.attributes(dir);
+			if (attributes == null || !attributes.isDirectory() || attributes.isSymbolicLink()) {
+				return null;
+			}
+			throw ex;
 		}
 		return normalized;
 	}

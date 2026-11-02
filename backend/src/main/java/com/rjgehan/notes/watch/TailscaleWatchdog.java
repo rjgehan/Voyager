@@ -132,8 +132,18 @@ public class TailscaleWatchdog implements SmartLifecycle {
 		ScheduledExecutorService scheduler = Executors
 			.newSingleThreadScheduledExecutor(Thread.ofPlatform().name("tailscale-watchdog").daemon().factory());
 		long period = this.properties.interval().toMillis();
-		scheduler.scheduleWithFixedDelay(() -> record(probe()), period, period, TimeUnit.MILLISECONDS);
+		scheduler.scheduleWithFixedDelay(this::tick, period, period, TimeUnit.MILLISECONDS);
 		this.executor = scheduler;
+	}
+
+	/** One probe. Never throws: an exception escaping a scheduled task would stop the watchdog for good, silently. */
+	void tick() {
+		try {
+			record(probe());
+		}
+		catch (RuntimeException | Error ex) {
+			logger.warn("The Tailscale watchdog's probe failed; it will run again: {}", ex.toString());
+		}
 	}
 
 	@Override

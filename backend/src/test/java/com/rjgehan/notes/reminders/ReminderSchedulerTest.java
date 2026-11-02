@@ -11,6 +11,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import com.rjgehan.notes.api.dto.CompleteTaskRequest;
 import com.rjgehan.notes.api.dto.Task;
@@ -60,6 +62,11 @@ class ReminderSchedulerTest {
 
 		volatile boolean accept = true;
 
+		/** When set, a delivery counts {@code entered} down and then waits for {@code gate}, like a slow network. */
+		volatile @Nullable CountDownLatch gate;
+
+		final CountDownLatch entered = new CountDownLatch(1);
+
 		@Override
 		public String id() {
 			return "inApp";
@@ -73,6 +80,16 @@ class ReminderSchedulerTest {
 		@Override
 		public Delivery deliver(ReminderMessage message, RemindersSettings settings) {
 			this.received.add(message);
+			CountDownLatch slow = this.gate;
+			if (slow != null) {
+				this.entered.countDown();
+				try {
+					slow.await(10, TimeUnit.SECONDS);
+				}
+				catch (InterruptedException ex) {
+					Thread.currentThread().interrupt();
+				}
+			}
 			return this.accept ? Delivery.ACCEPTED : Delivery.failed("no tab");
 		}
 
@@ -276,6 +293,55 @@ class ReminderSchedulerTest {
 			assertThat(request.base().get("due").asString()).isEqualTo("2026-10-16");
 			assertThat(request.base().get("start").isNull()).isTrue();
 		});
+	}
+
+	@Test
+	void aSnoozeOfAnOccurrenceAnotherDeviceCompletedNeitherFiresNorRollsTheTaskOnAgain() throws Exception {
+		ReminderScheduler scheduler = scheduler();
+		scheduler.tick();
+		this.tasks.add(task("t1", "Water plants", "2026-10-16", "2026-10-16T12:01"));
+		this.clock.advance(Duration.ofMinutes(1));
+		scheduler.tick();
+		assertThat(this.route.received).hasSize(1);
+		assertThat(scheduler.snooze("t1", "2026-10-16T12:01", 10)).isNotNull();
+
+		// The desktop completes the daily task: it rolls forward to tomorrow, with tomorrow's reminder.
+		this.tasks.clear();
+		this.tasks.add(task("t1", "Water plants", "2026-10-17", "2026-10-17T12:01"));
+		this.clock.advance(Duration.ofMinutes(10));
+		scheduler.tick();
+		assertThat(this.route.received).hasSize(1);
+
+		// A tap on the old notification's Done must not roll the task on a second time (API.md §28.4).
+		assertThat(scheduler.done("t1", "2026-10-16T12:01", OWNER, "client-1")).isFalse();
+		assertThat(this.completed).isEmpty();
+	}
+
+	@Test
+	void requestsDoNotWaitForTheNetworkCallsOfATick() throws Exception {
+		ReminderScheduler scheduler = scheduler();
+		scheduler.tick();
+		this.tasks.add(task("t1", "Water plants", "2026-10-16", "2026-10-16T12:01"));
+		this.clock.advance(Duration.ofMinutes(1));
+		CountDownLatch gate = new CountDownLatch(1);
+		this.route.gate = gate;
+		Thread ticking = Thread.ofPlatform().start(scheduler::tick);
+		try {
+			assertThat(this.route.entered.await(5, TimeUnit.SECONDS)).isTrue();
+			long started = System.nanoTime();
+			assertThat(scheduler.zoneId()).isEqualTo(ZoneId.of("UTC"));
+			assertThat(scheduler.zoneReported()).isFalse();
+			assertThat(scheduler.snooze("missing", "2026-10-16T12:01", 10)).isNull();
+			assertThat(Duration.ofNanos(System.nanoTime() - started)).isLessThan(Duration.ofSeconds(2));
+		}
+		finally {
+			gate.countDown();
+			ticking.join(10_000);
+		}
+		this.route.gate = null;
+		assertThat(scheduler.lastDeliveredAt()).isEqualTo(this.clock.instant());
+		scheduler.tick();
+		assertThat(this.route.received).hasSize(1);
 	}
 
 	@Test

@@ -17,7 +17,7 @@ import { formatLimit } from '../../features/largeFiles';
 import { mirrorSummary } from '../../features/mirror';
 import { openPath } from '../../features/navigation';
 import { displayName, newNameError, pathSafetyError } from '../../features/paths';
-import { DEFAULT_SETTINGS } from '../../features/settings';
+import { DEFAULT_SETTINGS, NOTE_WIDTH_MAX, NOTE_WIDTH_MIN, NOTE_WIDTH_STEP, noteWidth } from '../../features/settings';
 import { vimAvailable } from '../../editor/vimMode';
 import { clearOfflineCopies, noteCache } from '../../offline/offlineStore';
 import { setOfflineMedia } from '../../pwa/serviceWorker';
@@ -409,16 +409,41 @@ function EditorSection({ settings: s, set, disabled }: VaultSectionProps) {
   const e = s.editor;
   // Every note opens in Live Preview (DESIGN §6.6.1): `defaultMode` has no control, and a saved
   // `read` (a locked default from an older build) is written back as `edit` with the next change.
-  const editor = (patch: Partial<Settings['editor']>) => set({ ...s, editor: { ...e, ...patch, defaultMode: 'edit' } });
+  const editor = (patch: Partial<Settings['editor']>, immediate = true) => set({ ...s, editor: { ...e, ...patch, defaultMode: 'edit' } }, immediate);
   return (
     <>
-      <Row label="Readable line length" description="Limit the line width of notes.">
-        <Toggle label="Readable line length" checked={e.readableLineLength} disabled={disabled} onChange={(v) => editor({ readableLineLength: v })} />
+      <Row label="Note width" description="How wide a note's text runs, in Live Preview, Markdown source and embeds. Full width uses the whole pane.">
+        {/* Saved once the slider rests, not at every step of a drag. */}
+        <NoteWidthSlider value={noteWidth(e)} disabled={disabled} onChange={(v) => editor({ noteWidth: v }, false)} />
       </Row>
       <Row label="Strict line breaks" description="Off (as in Obsidian): a single line break shows as a line break in embedded notes. A note itself always shows its lines as typed.">
         <Toggle label="Strict line breaks" checked={e.strictLineBreaks} disabled={disabled} onChange={(v) => editor({ strictLineBreaks: v })} />
       </Row>
     </>
+  );
+}
+
+/** `editor.noteWidth` (DESIGN §6.6): 600 to 1400 px in steps of 50, and Full width past the last step. */
+export function NoteWidthSlider({ value, onChange, disabled }: { value: number | 'full'; onChange(v: number | 'full'): void; disabled: boolean }) {
+  const full = NOTE_WIDTH_MAX + NOTE_WIDTH_STEP;
+  return (
+    <div className="setting-slider">
+      <input
+        type="range"
+        min={NOTE_WIDTH_MIN}
+        max={full}
+        step={NOTE_WIDTH_STEP}
+        value={value === 'full' ? full : value}
+        disabled={disabled}
+        aria-label="Note width"
+        aria-valuetext={value === 'full' ? 'Full width' : `${value} pixels`}
+        onChange={(ev) => {
+          const n = Number(ev.target.value);
+          onChange(n > NOTE_WIDTH_MAX ? 'full' : n);
+        }}
+      />
+      <output className="setting-slider-value">{value === 'full' ? 'Full width' : `${value} px`}</output>
+    </div>
   );
 }
 
