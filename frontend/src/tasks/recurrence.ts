@@ -452,8 +452,10 @@ const MAX_SCAN = 2000;
  * The days of the occurrences after `anchor` (the task's date) that fall from `from` to `to`,
  * honouring COUNT (occurrences left, this one included) and UNTIL: the calendar's projection of
  * a repeating task (DESIGN §6.32). One pass over the rule; empty when it cannot be evaluated.
+ * COUNT is spent only from `countFrom` on: completing an overdue task skips the occurrences it
+ * missed without counting them (as the server's roll-forward does).
  */
-export function occurrencesBetween(rrule: string, anchor: TaskDate, from: LocalDate, to: LocalDate): LocalDate[] {
+export function occurrencesBetween(rrule: string, anchor: TaskDate, from: LocalDate, to: LocalDate, countFrom?: LocalDate): LocalDate[] {
   let parts: Map<string, string>;
   try {
     parts = ruleParts(rrule);
@@ -470,9 +472,12 @@ export function occurrencesBetween(rrule: string, anchor: TaskDate, from: LocalD
     const rule = evaluator(parts, start, timed);
     const all = rule.between(start, end, false, (_, i) => i < MAX_SCAN);
     const out: LocalDate[] = [];
-    for (let i = 0; i < all.length && i < left; i++) {
+    let counted = 0;
+    for (let i = 0; i < all.length && counted < left; i++) {
       const day = dateOf(all[i]);
       if (until && day > until) break;
+      if (countFrom !== undefined && day < countFrom) continue;
+      counted++;
       if (day >= from && out[out.length - 1] !== day) out.push(day);
     }
     return out;

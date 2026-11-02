@@ -18,7 +18,8 @@ export function repeatsByDay(tasks: Iterable<Task>, lists: ReadonlyMap<string, T
     if (!list || list.archived) continue;
     const anchor = scheduled(t);
     if (anchor === null) continue;
-    for (const day of occurrencesBetween(t.recurrence.rrule, anchor, first, to)) {
+    // COUNT counts from tomorrow: completing an overdue task skips the occurrences it missed.
+    for (const day of occurrencesBetween(t.recurrence.rrule, anchor, first, to, addDays(today, 1))) {
       if (day <= datePart(anchor)) continue;
       const bucket = byDay.get(day);
       if (bucket) bucket.push(t);

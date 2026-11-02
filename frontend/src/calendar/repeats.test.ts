@@ -44,6 +44,15 @@ describe('repeatsByDay (DESIGN §6.32)', () => {
     expect(repeatsByDay(tasks, lists, '2026-09-28', '2026-11-08', '2026-10-21').size).toBe(0);
   });
 
+  it('projects an overdue task with COUNT as completing it would roll it forward', () => {
+    // Completing skips the missed Wednesdays without spending COUNT: 11-04 (COUNT=2), then 11-11.
+    const tasks = [makeTask({ id: 'C', due: '2026-10-14', recurrence: { rrule: 'FREQ=WEEKLY;BYDAY=WE;COUNT=3', from: 'due' } })];
+    expect(days(repeatsByDay(tasks, lists, '2026-11-01', '2026-11-30', '2026-11-02'))).toEqual({ '2026-11-04': ['C'], '2026-11-11': ['C'] });
+    // Not overdue: counted from its own date, as before.
+    const coming = [makeTask({ id: 'D', due: '2026-11-04', recurrence: { rrule: 'FREQ=WEEKLY;BYDAY=WE;COUNT=3', from: 'due' } })];
+    expect(days(repeatsByDay(coming, lists, '2026-11-01', '2026-11-30', '2026-11-02'))).toEqual({ '2026-11-11': ['D'], '2026-11-18': ['D'] });
+  });
+
   it('shows nothing for a range that has passed', () => {
     const tasks = [makeTask({ id: 'A', due: '2026-09-01', recurrence: weekly })];
     expect(repeatsByDay(tasks, lists, '2026-09-01', '2026-09-30', '2026-10-21').size).toBe(0);
