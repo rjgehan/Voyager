@@ -204,7 +204,6 @@ describe('EventStream', () => {
     const t = setup();
     t.stream.start(null);
     t.current().hello({ resync: true, eventId: 'b.2' }, 'b.2');
-    expect(t.deps.invalidateAll).toHaveBeenCalled();
     expect(t.stream.isBuffering).toBe(true);
     t.current().emit('file.changed', {}, 'b.3');
     t.current().emit('file.created', {}, 'b.4');
@@ -214,9 +213,25 @@ describe('EventStream', () => {
     t.tree('b.4');
     await vi.waitFor(() => expect(t.stream.isBuffering).toBe(false));
     expect(t.applied()).toEqual(['file.deleted@b.5', 'file.changed@other.1']);
+    expect(t.deps.invalidateAll).toHaveBeenCalledTimes(1);
     expect(t.caughtUp()).toBe(true);
     expect(t.deps.revalidateDocuments).toHaveBeenCalledTimes(1);
     expect(t.stream.lastEventId).toBe('other.1');
+    t.stream.stop();
+  });
+
+  it('invalidates the other server state once the tree snapshot is in, so an event the snapshot discards is never lost for it', async () => {
+    const t = setup();
+    t.stream.start(null);
+    t.current().hello({ resync: true }, 'b.2');
+    // Bookmarks change while the tree request runs. The snapshot (b.3) reflects it, so the event is
+    // discarded: only a refetch of the other server state that starts after the snapshot sees it.
+    t.current().emit('bookmarks.changed', {}, 'b.3');
+    const before = t.deps.invalidateAll.mock.calls.length;
+    t.tree('b.3');
+    await vi.waitFor(() => expect(t.stream.isBuffering).toBe(false));
+    expect(t.applied()).toEqual([]);
+    expect(t.deps.invalidateAll.mock.calls.length).toBeGreaterThan(before);
     t.stream.stop();
   });
 

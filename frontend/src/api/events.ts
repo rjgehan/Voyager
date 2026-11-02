@@ -22,8 +22,9 @@ export interface EventStreamDeps {
   open(clientId: string, lastEventId: string | null): EventSourceLike;
   /** Applies one event (anything but hello, ping and resync) to the caches. */
   apply(name: string, data: unknown, id: string): void;
-  /** Refetches the tree and returns its `eventId`; other server state is invalidated first. */
+  /** Refetches the tree and returns its `eventId`. */
   refetchTree(): Promise<string>;
+  /** Invalidates the other server state (once the tree snapshot is in, during a resync). */
   invalidateAll(): void;
   /** Every open document compares its version with the fresh tree. */
   revalidateDocuments(): void;
@@ -295,7 +296,6 @@ export class EventStream {
     const generation = ++this.resyncGeneration;
     this.buffering = true;
     this.setCaughtUp(false);
-    this.deps.invalidateAll();
     let treeEventId: string;
     try {
       treeEventId = await this.deps.refetchTree();
@@ -309,6 +309,10 @@ export class EventStream {
       return;
     }
     if (generation !== this.resyncGeneration || this.stopped) return;
+    // The other server state is refetched only now: buffered events up to the snapshot's id are
+    // discarded below, and a refetch started before the snapshot (alongside the tree request)
+    // could predate one of them, which would then be lost for that state until its next change.
+    this.deps.invalidateAll();
     const snapshot = parseEventId(treeEventId);
     const pending = this.buffer;
     this.buffer = [];
