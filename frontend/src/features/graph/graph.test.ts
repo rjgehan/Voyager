@@ -180,6 +180,25 @@ describe('graph model', () => {
     expect(links(buildView(triangle, DEFAULT_LOCAL_OPTIONS, { ...scope, neighborLinks: false }))).toEqual(['C.md-X.md:1', 'C.md-Y.md:1']);
   });
 
+  it('keeps the center when it is a file the attachment filter hides (an image, a PDF, a canvas)', () => {
+    const base = baseGraph({
+      version: 'a',
+      unchanged: false,
+      nodes: [
+        { path: 'Attachments/pic.png', type: 'attachment', tags: [] },
+        { path: 'Plan.md', type: 'note', tags: [] },
+        { path: 'Board.canvas', type: 'attachment', tags: [] },
+      ],
+      edges: [1, 0, 1, 2, 1, 1],
+    });
+    const o = { ...DEFAULT_LOCAL_OPTIONS, showAttachments: false };
+    for (const center of ['Attachments/pic.png', 'Board.canvas']) {
+      const view = buildView(base, o, { path: center, depth: 1, incoming: true, outgoing: true, neighborLinks: true });
+      expect(view.nodes[view.center]?.id).toBe(center);
+      expect(view.nodes.map((n) => n.id).sort()).toEqual([center, 'Plan.md'].sort());
+    }
+  });
+
   it('colors each node with the first matching group', () => {
     const view = buildView(base, { ...all, showTags: true });
     const colors = groupColors(view.nodes, [
