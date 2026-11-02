@@ -32,6 +32,8 @@ export const queryKeys = {
   transcription: () => ['transcription'] as const,
   /** Published notes (API.md §26.1). */
   publish: () => ['publish'] as const,
+  /** Shares of notes and folders (API.md §42.1). */
+  shares: () => ['shares'] as const,
 };
 
 export const STALE = {
@@ -54,4 +56,5 @@ export const STALE = {
   bookmarks: Infinity,
   transcription: 300_000,
   publish: 30_000,
+  shares: 30_000,
 } as const;

@@ -401,6 +401,27 @@ describe('DocumentSession failures', () => {
     expect(status(session)).toBe('clean');
   });
 
+  it('a save refused for its content (a shared note’s embed) keeps the text and saves again after the next edit', async () => {
+    const { vault, fake, session } = setup();
+    await session.ready;
+    fake.failNext(() => {
+      throw problem({ code: 'outside-share', status: 403, detail: 'A shared note can only embed files that are shared with it' });
+    });
+    type(session, ' ![[secret.png]]');
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(status(session)).toBe('error');
+    expect(session.getSnapshot().error).toBe('A shared note can only embed files that are shared with it');
+    // No retry on its own: the same text would be refused again.
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(fake.api.saveFile).toHaveBeenCalledTimes(1);
+    // The guest removes the embed: autosave goes again.
+    session.setText('hello and more');
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(fake.api.saveFile).toHaveBeenCalledTimes(2);
+    expect(status(session)).toBe('clean');
+    expect(vault.readFile('a.md').content).toBe('hello and more');
+  });
+
   it('waits for the event stream to catch up before retrying', async () => {
     const vault = new MockVault(false);
     vault.createFile({ path: 'a.md', content: 'x' }, 'o');

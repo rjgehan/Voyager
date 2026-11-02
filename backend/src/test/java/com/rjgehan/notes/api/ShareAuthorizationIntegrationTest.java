@@ -249,6 +249,27 @@ class ShareAuthorizationIntegrationTest {
 	}
 
 	@Test
+	void theOwnerIsAdmittedEverywhere() {
+		for (Endpoint endpoint : endpoints()) {
+			if (endpoint.method().equals("GET")) {
+				// Every GET is side-effect free (API.md §2): whatever it answers, it is not the identity refusal.
+				Reply reply = this.api.get(endpoint.path(), LOGIN, OWNER);
+				assertThat(reply.text()).as(endpoint.toString()).doesNotContain("identity-not-allowed");
+			}
+			else if (endpoint.path().startsWith("/api/")) {
+				// A write without a client id passes admission and stops at the CSRF guard, before any handler runs.
+				Reply reply = switch (endpoint.method()) {
+					case "DELETE" -> this.api.delete(endpoint.path(), LOGIN, OWNER, "X-Client-Id", null);
+					case "POST" -> this.api.postJson(endpoint.path(), Map.of(), LOGIN, OWNER, "X-Client-Id", null);
+					case "PUT" -> this.api.putJson(endpoint.path(), Map.of(), LOGIN, OWNER, "X-Client-Id", null);
+					default -> this.api.patchJson(endpoint.path(), Map.of(), LOGIN, OWNER, "X-Client-Id", null);
+				};
+				assertThat(reply.problem(403)).as(endpoint.toString()).isEqualTo("client-id-required");
+			}
+		}
+	}
+
+	@Test
 	void theGuestSurfaceIsExactlyTheGuestEndpointsAndPages() {
 		Set<String> surface = new TreeSet<>();
 		for (Endpoint endpoint : endpoints()) {
@@ -502,6 +523,13 @@ class ShareAuthorizationIntegrationTest {
 					LOGIN, MOM)
 			.problem(403)).isEqualTo("outside-share");
 		assertThat(Files.exists(vault.resolve("Family/Recipes/Tart2.md"))).isFalse();
+		// Refused embeds do not count toward the rate limit: autosave sends the text again after every pause.
+		for (int i = 0; i < ShareRateLimiter.MAX_FAILURES + 5; i++) {
+			assertThat(this.api
+				.putJson("/api/s/" + noteToken + "/files" + path,
+						Map.of("content", "![[secret.png]]\n", "baseVersion", "0".repeat(40)), LOGIN, "typist@example.com")
+				.problem(403)).isEqualTo("outside-share");
+		}
 	}
 
 	@Test

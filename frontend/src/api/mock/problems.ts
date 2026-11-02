@@ -41,6 +41,11 @@ const TABLE: Record<ErrorCode, [number, string]> = {
   'vault-not-found': [404, 'No such vault'],
   'vault-unavailable': [503, 'Vault not available'],
   'vaults-off': [409, 'Creating vaults is off'],
+  'share-not-found': [404, 'Share not found'],
+  'outside-share': [403, 'Outside the share'],
+  'share-read-only': [403, 'The share is read-only'],
+  'too-many-attempts': [429, 'Too many attempts'],
+  'sharing-unavailable': [409, 'Sharing is unavailable'],
 };
 
 /** Builds and throws the server's problem document for `code` (API.md §3). */

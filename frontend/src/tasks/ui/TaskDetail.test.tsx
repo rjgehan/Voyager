@@ -28,6 +28,7 @@ beforeEach(() => {
 afterEach(() => {
   queryClient.clear();
   resetKeptDrafts();
+  vi.useRealTimers();
 });
 
 const update = () => vi.spyOn(taskApi, 'update').mockImplementation(async (id, req) => result({ ...taskStore.task(id)!, ...req.changes } as Task));
@@ -101,12 +102,16 @@ describe('task detail sheet', () => {
   });
 
   it('shows a rule it cannot offer as a choice by its text, with the next dates', () => {
+    // The next dates are relative to today: pin it, or the test fails on the day it names (Nov 2 shows as "Today").
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-21T12:00:00'));
     taskStore.upsert([makeTask({ id: 'A', title: 'Report', due: '2026-10-19', recurrence: { rrule: 'FREQ=MONTHLY;BYDAY=1MO', from: 'completion' } })]);
     renderWithApp(<TaskDetail id="A" />);
     const repeat = screen.getByRole('combobox', { name: 'Repeat' });
     expect(repeat).toHaveDisplayValue('Every month on the 1st Monday');
     expect(screen.getByRole('combobox', { name: 'Repeat from' })).toHaveValue('completion');
     expect(screen.getByText(/^Then /)).toHaveTextContent(/Nov 2/);
+    vi.useRealTimers();
     fireEvent.click(screen.getByRole('button', { name: 'Edit the rule' }));
     expect(screen.getByRole('radio', { name: 'Choose' })).toHaveAttribute('aria-checked', 'true');
     expect(screen.getByRole('radio', { name: /^on the/ })).toBeChecked();

@@ -30,6 +30,7 @@ import { documents, draftStore } from '../../sync/instance';
 import { useBreakpoint } from '../layout/useBreakpoint';
 import { CaptureSettings } from '../capture/CaptureSettings';
 import { PublishSettings } from '../publish/PublishSettings';
+import { ShareSettings } from '../share/ShareSettings';
 import { VaultsSettings } from '../vaults/VaultsSettings';
 import { ClipperSettings } from '../clip/ClipperSettings';
 import { OrphanDraftList } from '../OrphanDrafts';
@@ -56,6 +57,7 @@ const SECTIONS = [
   { id: 'ai', title: 'Ask and summaries' },
   { id: 'reminders', title: 'Reminders' },
   { id: 'publish', title: 'Publishing' },
+  { id: 'sharing', title: 'Sharing' },
   { id: 'vaults', title: 'Vaults' },
   { id: 'device', title: 'This device' },
   { id: 'about', title: 'About' },
@@ -1050,7 +1052,7 @@ export default function SettingsPage() {
             </h1>
             {saving && <span className="muted">Saving…</span>}
           </header>
-          {section !== 'device' && section !== 'hotkeys' && section !== 'about' && section !== 'capture' && section !== 'publish' && section !== 'clipper' && section !== 'vaults' && (
+          {section !== 'device' && section !== 'hotkeys' && section !== 'about' && section !== 'capture' && section !== 'publish' && section !== 'sharing' && section !== 'clipper' && section !== 'vaults' && (
             <>
               {readOnly && (
                 <div className="banner banner-warning" role="status">
@@ -1075,6 +1077,7 @@ export default function SettingsPage() {
           {section === 'ai' && <AiSection {...props} />}
           {section === 'reminders' && <RemindersSection {...props} />}
           {section === 'publish' && <PublishSettings />}
+          {section === 'sharing' && <ShareSettings />}
           {section === 'vaults' && <VaultsSettings />}
           {section === 'device' && <DeviceSection />}
           {section === 'about' && <AboutSection />}

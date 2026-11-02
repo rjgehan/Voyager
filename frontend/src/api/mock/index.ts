@@ -6,6 +6,7 @@ import { ApiError, TransientError } from '../client';
 import { installEndpoints, type Endpoints } from '../endpoints';
 import type { FileEntry, Problem } from '../types';
 import { mockCapture } from './capture';
+import { MockShares } from './shares';
 import { mimeOf, MockVault } from './vault';
 
 type FailureKind = 'network' | '502' | 'busy' | 'io-error';
@@ -25,6 +26,11 @@ export interface MockControls {
 
 export function createMockEndpoints(vault: MockVault, controls: { latency: number; failures: FailureKind[] }): Endpoints {
   const urls = new Map<string, string>();
+  const shares = new MockShares((path) => {
+    const tree = vault.getTree();
+    if (tree.folders.some((f) => f.path === path)) return 'folder';
+    return tree.files.some((f) => f.path === path && f.kind === 'note') ? 'note' : null;
+  });
 
   async function call<T>(run: () => T | Promise<T>): Promise<T> {
     await new Promise((r) => setTimeout(r, controls.latency * (0.6 + Math.random() * 0.8)));
@@ -103,6 +109,10 @@ export function createMockEndpoints(vault: MockVault, controls: { latency: numbe
     getPublish: () => call(() => vault.getPublish()),
     publishNote: (req) => call(() => vault.publishNote(req)),
     unpublishNote: (path) => call(() => vault.unpublishNote(path)),
+    getShares: () => call(() => shares.list()),
+    createShare: (req) => call(() => shares.create(req)),
+    updateShare: (id, req) => call(() => shares.update(id, req)),
+    revokeShare: (id) => call(() => shares.revoke(id)),
     // One vault in the mock (DESIGN §6.44): nothing to switch to.
     listVaults: () => call(() => ({ vaults: [{ name: 'main', isDefault: true, state: 'ready' as const, url: '/' }], canCreate: false })),
     createVault: () =>

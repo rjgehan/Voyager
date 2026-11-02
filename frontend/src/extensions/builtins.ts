@@ -75,6 +75,7 @@ import { startVoiceNote, transcribeAtCursor } from '../features/voice/voiceNotes
 import { registerAi } from '../features/ai/register';
 import { registerScripts } from '../scripts/register';
 import { registerPublish } from '../components/publish/register';
+import { registerShare } from '../components/share/register';
 import { isMarkdownViewPath, onViewsChanged, registeredViews, viewFor } from '../views/registry';
 import { registerSheetView } from '../views/sheet/register';
 import { registerCommand, registerPage, registerPanel, registerView } from './index';
@@ -465,6 +466,7 @@ export function registerBuiltins(): void {
   // Reminders and push notifications (ROADMAP items 9 and 4c, DESIGN §6.38).
   registerReminders();
   registerPublish();
+  registerShare();
   // ROADMAP item 11 (DESIGN §6.40): tabs, split panes and their commands.
   registerWorkspace();
   registerProperties();

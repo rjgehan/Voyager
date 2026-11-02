@@ -171,6 +171,8 @@ export default defineConfig({
   build: {
     sourcemap,
     rolldownOptions: {
+      // Two pages: the app, and the guest page of shares (DESIGN §6.45), which loads none of the app.
+      input: { main: fileURLToPath(new URL('./index.html', import.meta.url)), share: fileURLToPath(new URL('./share.html', import.meta.url)) },
       output: {
         // React and the router change rarely: in their own chunk they stay cached across deploys.
         codeSplitting: {

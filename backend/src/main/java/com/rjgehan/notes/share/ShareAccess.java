@@ -177,17 +177,13 @@ public class ShareAccess {
 		return path;
 	}
 
-	/** Refuses text that adds embeds reaching outside the share; the refusal counts like any outside path. */
+	/**
+	 * Refuses text that adds embeds reaching outside the share. Not counted toward the rate limit: the answer is the
+	 * same whether the file exists or not, and autosave sends the text again after every pause while the guest still
+	 * has the embed.
+	 */
 	public void checkEmbeds(Grant grant, String path, String content) {
-		try {
-			this.shares.checkGuestEmbeds(grant.share(), path, content);
-		}
-		catch (NotesException ex) {
-			if (ex.code() == ErrorCode.OUTSIDE_SHARE) {
-				throw refuse(grant.identity(), grant.owner(), ex);
-			}
-			throw ex;
-		}
+		this.shares.checkGuestEmbeds(grant.share(), path, content);
 	}
 
 	private void requireEditableNote(Grant grant, String path) {

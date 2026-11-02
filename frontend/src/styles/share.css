@@ -1,0 +1,153 @@
+/* Sharing with family (ROADMAP item 42, DESIGN §6.45): the share dialog and Settings › Sharing. */
+
+.share-dialog {
+  max-width: 560px;
+}
+
+.share-unavailable,
+.share-explain {
+  line-height: 1.5;
+}
+
+.share-unavailable {
+  color: var(--text-muted);
+}
+
+.share-unavailable code {
+  font-size: var(--font-ui-small);
+}
+
+.share-subtitle {
+  margin: 16px 0 8px;
+  font-size: 15px;
+}
+
+.share-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.share-card {
+  padding: 10px 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+}
+
+.share-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+}
+
+.share-card-when {
+  font-size: var(--font-ui-small);
+}
+
+.share-people,
+.share-link-state {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0;
+  overflow-wrap: anywhere;
+}
+
+.share-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.share-state {
+  padding: 1px 6px;
+  border-radius: var(--radius-s);
+  color: var(--text-error);
+  border: 1px solid var(--text-error);
+  font-size: var(--font-ui-small);
+}
+
+.share-address {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0;
+}
+
+.share-address-label {
+  flex: none;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+
+.share-address code {
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  padding: 6px 8px;
+  border-radius: var(--radius-s);
+  background: var(--code-bg);
+  font-size: var(--font-ui-small);
+  white-space: pre;
+}
+
+.share-new-link {
+  margin: 8px 0;
+  padding: 8px 10px;
+  border-radius: var(--radius-m);
+  background: var(--background-secondary);
+}
+
+.share-warning {
+  margin: 4px 0 0;
+  color: var(--accent);
+  font-size: var(--font-ui-small);
+}
+
+.share-new .segmented.share-mode {
+  margin: 0 0 10px;
+}
+
+.share-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.share-expiry {
+  max-width: 220px;
+}
+
+.share-settings-row {
+  margin-bottom: 4px;
+}
+
+.share-settings-target {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  margin-bottom: 4px;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 767px) {
+  .share-dialog {
+    max-width: none;
+  }
+
+  .share-address {
+    flex-wrap: wrap;
+  }
+
+  .share-address code {
+    flex-basis: 100%;
+    order: 2;
+  }
+}

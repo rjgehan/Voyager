@@ -10,6 +10,10 @@ import type {
   PublishRequest,
   PublishResponse,
   PublishedNote,
+  CreateShareRequest,
+  ShareResult,
+  SharesResponse,
+  UpdateShareRequest,
   BookmarksUpdateRequest,
   CaptureRequest,
   CaptureResult,
@@ -161,6 +165,14 @@ export interface Endpoints {
   publishNote(req: PublishRequest): Promise<PublishedNote>;
   /** Unpublishes a note: its public page is gone at once (API.md §26.3). */
   unpublishNote(path: string): Promise<void>;
+  /** Shares of notes and folders, and whether sharing is available (API.md §42.1). */
+  getShares(): Promise<SharesResponse>;
+  /** Shares a note or folder; a new link's address is in the answer only (API.md §42.2). */
+  createShare(req: CreateShareRequest): Promise<ShareResult>;
+  /** Replaces a share's settings (API.md §42.3). */
+  updateShare(id: string, req: UpdateShareRequest): Promise<ShareResult>;
+  /** Revokes a share: its addresses stop working at once (API.md §42.4). */
+  revokeShare(id: string): Promise<void>;
   /** The server's vaults (API.md §41.1); server-wide, never prefixed. */
   listVaults(): Promise<VaultsResponse>;
   /** Creates an empty vault and starts it (API.md §41.2). */
@@ -246,6 +258,10 @@ export const httpEndpoints: Endpoints = {
   getPublish: () => apiFetch('/api/publish'),
   publishNote: (req) => apiFetch('/api/publish', { method: 'POST', json: req }),
   unpublishNote: (path) => apiFetch('/api/publish' + query(p(path)), { method: 'DELETE' }),
+  getShares: () => apiFetch('/api/shares'),
+  createShare: (req) => apiFetch('/api/shares', { method: 'POST', json: req }),
+  updateShare: (id, req) => apiFetch('/api/shares/' + encodeURIComponent(id), { method: 'PUT', json: req }),
+  revokeShare: (id) => apiFetch('/api/shares/' + encodeURIComponent(id), { method: 'DELETE' }),
   listVaults: () => apiFetch('/api/vaults'),
   createVault: (req) => apiFetch('/api/vaults', { method: 'POST', json: req }),
   getTranscriptionStatus: () => apiFetch('/api/transcription'),

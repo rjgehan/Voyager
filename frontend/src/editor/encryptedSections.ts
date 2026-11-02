@@ -5,7 +5,7 @@ import { RangeSetBuilder, type EditorState } from '@codemirror/state';
 import { Decoration, EditorView, ViewPlugin, WidgetType, type DecorationSet, type ViewUpdate } from '@codemirror/view';
 import { openSection } from '../features/encryption/inline';
 import { findSections, LOCK, sectionAt, type InlineSection } from '../features/encryption/meld';
-import { documents } from '../sync/instance';
+import { sessionAt } from '../sync/sessionLookup';
 import { noteContext } from './context';
 
 class LockWidget extends WidgetType {
@@ -88,7 +88,7 @@ export function sectionInState(state: EditorState, pos: number): InlineSection |
 export function openSectionIn(view: EditorView, pos: number): boolean {
   const section = sectionInState(view.state, pos);
   const ctx = view.state.facet(noteContext);
-  const session = ctx ? documents.get(ctx.path()) : undefined;
+  const session = ctx ? sessionAt(ctx.path()) : undefined;
   if (!section || !session) return false;
   void openSection(session, section);
   return true;
