@@ -267,6 +267,32 @@ describe('.excalidraw.md (Obsidian Excalidraw)', () => {
   });
 });
 
+describe('texts with a line like a section heading', () => {
+  // A text element's line `# Drawing` (or `## Element Links`, `## Embedded Files`) ended the Text
+  // Elements section in the middle of the entry: every save left another copy of its tail behind.
+  const typedIn = (d: Drawing, id: string, typed: string, version: number): Scene => ({
+    ...d.scene,
+    elements: d.scene.elements.map((e) => (e.id === id ? { ...e, text: typed, originalText: typed, rawText: typed, version } : e)),
+  });
+  const moved = (d: Drawing, x: number, version: number): Scene => ({ ...d.scene, elements: d.scene.elements.map((e) => (e.id === 'rect0001' ? { ...e, x, version } : e)) });
+
+  for (const heading of ['# Drawing', '## Drawing', '## Element Links', '# Embedded Files']) {
+    it(`keeps a text with a “${heading}” line whole, save after save`, () => {
+      const d0 = parsed('markdown', markdownDrawing({ texts: [['Ab12Cd34', 'Hello']], scene: scene([text('Ab12Cd34', 'Hello'), el('rect0001')]) }));
+      const typed = `Intro\n${heading}\nmore`;
+      const out1 = writeDrawing(d0, typedIn(d0, 'Ab12Cd34', typed, 2));
+      const d1 = parsed('markdown', out1);
+      expect(markdownParts(out1).texts).toEqual([{ id: 'Ab12Cd34', raw: typed }]);
+      expect(d1.scene.elements.find((e) => e.id === 'Ab12Cd34')).toMatchObject({ text: typed, originalText: typed });
+      const out2 = writeDrawing(d1, moved(d1, 5, 3));
+      const out3 = writeDrawing(parsed('markdown', out2), moved(parsed('markdown', out2), 9, 4));
+      expect(out3.match(/\^Ab12Cd34/g)).toHaveLength(1);
+      expect(out3.length).toBe(out2.length);
+      expect(markdownRest(markdownParts(out3))).toBe(markdownRest(markdownParts(out1)));
+    });
+  }
+});
+
 describe('Element Links (Obsidian Excalidraw)', () => {
   const linked = scene([
     text('Ab12Cd34', 'Hello', { link: '[[Old]]' }),
