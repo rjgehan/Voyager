@@ -303,6 +303,24 @@ class GitMirrorTest {
 	}
 
 	@Test
+	void anErrorDuringAPushIsAFailureThatIsRetried() throws Exception {
+		GitMirror mirror = mirror();
+		String head = commit("a.md");
+		((TestVault.FailingGitStore) this.vault.git).pushError = new OutOfMemoryError("simulated: packing");
+		mirror.requestPush();
+		// It escaped the tick, which cancels a scheduled task: the mirror stopped for good, "pushing" forever.
+		mirror.tick();
+		MirrorStatus failing = mirror.status();
+		assertThat(failing.state()).isEqualTo(MirrorState.FAILING);
+		assertThat(failing.lastError()).contains("simulated: packing");
+		((TestVault.FailingGitStore) this.vault.git).pushError = null;
+		advance(Duration.ofMinutes(1));
+		mirror.tick();
+		assertThat(mirror.status().state()).isEqualTo(MirrorState.READY);
+		assertThat(remoteHead()).isEqualTo(head);
+	}
+
+	@Test
 	void aFailedPushWithNothingNewStillRetriesUntilTheMirrorIsBack() throws Exception {
 		GitMirror mirror = mirror();
 		String head = commit("a.md");
