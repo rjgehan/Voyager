@@ -153,7 +153,9 @@ NotesApp/                              (monorepo; branch main)
 │   ├── dependabot.yml                 WP-Infra  weekly grouped updates: actions, docker, compose, maven, npm
 │   └── workflows/
 │       ├── ci.yml                     WP-Infra  tests on PRs, pushes and weekly; PR image build; on main calls publish.yml
-│       └── publish.yml                WP-Infra  reusable: multi-arch image to GHCR
+│       ├── publish.yml                WP-Infra  reusable: multi-arch image to GHCR
+│       ├── desktop.yml                          desktop installers on desktop-v* tags (§6.39)
+│       └── pages.yml                            the live demo on GitHub Pages (§6.45)
 ├── backend/                           WP-Backend
 │   ├── pom.xml                        Boot 4.1.1 parent, Java 21, + JGit, snakeyaml-engine
 │   ├── mvnw, mvnw.cmd, .mvn/wrapper/  Maven 3.10.0 via wrapper 3.3.4 (only-script)
@@ -181,7 +183,10 @@ NotesApp/                              (monorepo; branch main)
 │   └── .env.example                   copied to deploy/.env on homeserver (gitignored)
 ├── docs/
 │   ├── DESIGN.md, API.md, ROADMAP.md  architect
-│   └── DEPLOY.md                      WP-Infra: homeserver runbook
+│   ├── DEPLOY.md                      WP-Infra: homeserver runbook (CASAOS.md: the CasaOS short path)
+│   ├── FEATURES.md, DEVELOPMENT.md    the full feature list; local development, layout, checks (moved out of README.md)
+│   ├── DESKTOP.md, CLIPPER.md         the desktop app and the web clipper
+│   └── images/                        README screenshots, the demo GIF and the social preview, captured from the demo (§6.45)
 ├── scripts/
 │   └── third-party-notices.mjs        regenerates THIRD_PARTY_NOTICES.md from the lockfile and Maven (no npm deps)
 ├── Dockerfile                         WP-Infra  3 stages: node build, maven build (Java 21), JDK 25 runtime with an AOT cache
@@ -4662,6 +4667,8 @@ updates:
 If the `docker-compose` ecosystem is not available to the repository, the monthly manual update in §7.9 covers the compose images.
 
 `.github/workflows/desktop.yml` (ROADMAP item 41, §6.39) is separate from CI and the image: it runs only on `desktop-v*` tags (and by hand, publishing nothing), tests and packages the desktop shell on a Windows and a macOS runner, and attaches the installer and the dmg to the tag's release. Dependabot does not watch `desktop/` (Electron upgrades are deliberate, with a new tag).
+
+`.github/workflows/pages.yml` (§6.45) publishes the live demo: on pushes to `main` that touch `frontend/` (or the social preview), and by hand, it builds the frontend with `npm run build:demo` under the base path `actions/configure-pages` reports, uploads `frontend/dist-demo` with `actions/upload-pages-artifact` and deploys it with `actions/deploy-pages` to the `github-pages` environment (Pages source: GitHub Actions). It has no server part and needs no secrets; `ci.yml` builds the demo too, so a change that would break it fails before `main`.
 
 ### 7.6 Healthchecks
 
