@@ -9,6 +9,7 @@
 import { currentSettings, currentTree } from '../api/hooks';
 import type { CreateTaskRequest, LocalDate, Task, TaskPriority } from '../api/types';
 import { activeEditor } from '../editor/activeEditor';
+import { LINE_BLOCK_ID } from '../features/blocks';
 import { assembleLink, linkText } from '../features/links';
 import { activePath } from '../features/navigation';
 import { isNotePath } from '../features/paths';
@@ -143,18 +144,24 @@ export async function convertCheckbox(at: CheckboxAt, create: (req: CreateTaskRe
   const tracked = session.trackRange(at.from, at.to);
   if (tracked === null) return null;
   try {
-    const fields = parseCheckboxText(line.text);
+    // A block id closing the line (`^rent`) names the line, not the task: it stays at its end.
+    const id = LINE_BLOCK_ID.exec(line.text);
+    const blockId = id && id.index > 0 ? id : null;
+    const fields = parseCheckboxText(blockId ? line.text.slice(0, blockId.index) : line.text);
     const req: CreateTaskRequest = { title: fields.title };
     if (fields.due) req.due = fields.due;
     if (fields.start) req.start = fields.start;
     if (fields.priority) req.priority = fields.priority;
     if (fields.repeat) {
+      // Obsidian Tasks' "when done": the next date counts from the completion.
+      const whenDone = /^(.*?)\s+when\s+done$/iu.exec(fields.repeat);
+      const words = whenDone ? whenDone[1] : fields.repeat;
       const rule = await loadRecurrence().then(
-        (m) => m.ruleFromText(fields.repeat!.toLowerCase().startsWith('every') ? fields.repeat! : `every ${fields.repeat}`),
+        (m) => m.ruleFromText(words.toLowerCase().startsWith('every') ? words : `every ${words}`),
         () => null,
       );
       // A rule this app cannot read stays in the title, so nothing written is lost.
-      if (rule) req.recurrence = { rrule: rule, from: 'due' };
+      if (rule) req.recurrence = { rrule: rule, from: whenDone ? 'completion' : 'due' };
       else req.title = `${req.title} 🔁 ${fields.repeat}`;
     }
     const task = await create(req);
@@ -169,7 +176,8 @@ export async function convertCheckbox(at: CheckboxAt, create: (req: CreateTaskRe
       toast(`Added “${task.title}” to ${listName}. The line changed meanwhile, so it was left in the note.`, { action: open, timeout: 12_000 });
       return task.id;
     }
-    session.applyEdit({ from: range.from + line.prefix.length, to: range.to, insert: taskLink(listPath, task.id, task.title, path) }, { userEvent: 'input.convert' });
+    const link = taskLink(listPath, task.id, task.title, path) + (blockId ? ` ^${blockId[1]}` : '');
+    session.applyEdit({ from: range.from + line.prefix.length, to: range.to, insert: link }, { userEvent: 'input.convert' });
     toast(`Moved “${task.title}” to ${listName}`, { action: open });
     return task.id;
   } finally {
