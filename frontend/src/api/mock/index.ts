@@ -1,11 +1,14 @@
-// In-memory implementation of `Endpoints` for VITE_MOCK_API=1 (dev only, loaded with a dynamic
-// import). Adds network-like latency, blob URLs for raw files, and `window.notesMock` helpers to
-// simulate another device: external edits, deletes, moves, dropped connections and failures.
+// In-memory implementation of `Endpoints` for VITE_MOCK_API=1 (dev only) and the GitHub Pages demo
+// (DESIGN §6.45), loaded with a dynamic import. Adds network-like latency, blob URLs for raw files,
+// and `window.notesMock` helpers to simulate another device: external edits, deletes, moves,
+// dropped connections and failures.
 import { clientId } from '../../state/clientId';
 import { ApiError, TransientError } from '../client';
 import { installEndpoints, type Endpoints } from '../endpoints';
 import type { FileEntry, Problem } from '../types';
 import { mockCapture } from './capture';
+import type { SeedFile } from './seed';
+import { installMockServer } from './server';
 import { mimeOf, MockVault } from './vault';
 
 type FailureKind = 'network' | '502' | 'busy' | 'io-error';
@@ -128,10 +131,19 @@ declare global {
   }
 }
 
-export function installMockApi(): MockControls {
-  const vault = new MockVault();
-  const state = { latency: 60, failures: [] as FailureKind[] };
+export interface MockOptions {
+  /** The vault's files: the dev seed (seed.ts) by default. */
+  seed?: readonly SeedFile[];
+  /** Latency added to every call, in ms (60 by default). */
+  latency?: number;
+}
+
+export function installMockApi(options: MockOptions = {}): MockControls {
+  const vault = new MockVault(options.seed ?? true);
+  const state = { latency: options.latency ?? 60, failures: [] as FailureKind[] };
   installEndpoints(createMockEndpoints(vault, state));
+  // The endpoints the features keep beside themselves (tasks, flashcards, habits, calendar, ...).
+  installMockServer(vault);
   const controls: MockControls = {
     vault,
     get latency() {

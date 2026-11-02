@@ -1941,7 +1941,8 @@ frontend/src/
 │   ├── client.ts             apiFetch(): adds X-Client-Id + Accept (+ Idempotency-Key when given); JSON; reads X-Notes-Build;
 │   │                         throws ApiError(problem) | TransientError (network, 502/504, non-problem 503, busy, non-JSON body)
 │   ├── endpoints.ts          one typed function per endpoint (getTree, readFile, saveFile, ... )
-│   ├── mock/                 in-memory implementation of endpoints.ts for VITE_MOCK_API=1 (dev only, dynamic import)
+│   ├── mock/                 in-memory implementation of endpoints.ts for VITE_MOCK_API=1 (dev) and the demo (§6.45),
+│   │                         dynamic import; server.ts answers the features' own endpoints (tasks, calendar, ...)
 │   ├── queryKeys.ts          key factory (§6.3)
 │   ├── hooks.ts              useTree, useSettings, useSearch, useBacklinks, useHistory, ... (TanStack Query)
 │   └── events.ts             EventStream: EventSource lifecycle, lastEventId, replay countdown, resync buffering,
