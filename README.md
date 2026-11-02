@@ -17,7 +17,8 @@ A self-hosted, single-user notes web app modelled closely on Obsidian. The vault
   - **Capture.** Quick add from anywhere (`Mod-Alt-T`, or the floating + on the phone) reads `Pay rent tomorrow 9am every month !high #home @Bills [[Apartment]]` into chips before saving. **Convert checkbox to task** turns the `- [ ]` line under the cursor into a task in the Inbox and leaves a link to it (Obsidian Tasks emoji dates and priorities come along).
   - **In notes.** `![[Home.tasks]]` embeds a live list you can check off (`#Section` or `#^task-id` for part of it); a `.tasks` file opens as its list, with its JSON a click away; `[[links]]` and `#tags` in tasks show up in backlinks, tags, search and a "Tasks linking to this note" panel.
   - Changes show at once and on every device; completing a repeating task moves it to its next date; devices editing different tasks of one list never conflict, and edits made by hand are picked up.
-- **Phone-first.** A responsive layout tuned for iPhone Safari (keyboard-aware editor, toolbar, drawer, 44 px targets), dark and light themes.
+- **Help built in.** The [user guide](docs/guide/index.md) (getting started, writing, tables and formulas, spreadsheets, tasks, every feature, keyboard shortcuts and troubleshooting) is part of the app as a searchable **Help** page that works offline and never touches the vault; the first-run Welcome note is a short tour that points to it.
+- **Phone-first.** A responsive layout tuned for iPhone Safari and the Home Screen app, upright or on its side (keyboard-aware editor, toolbar, drawer, safe areas, 44 px targets, no zoom into fields), dark and light themes.
 - **Zero-touch deploys.** A push to `main` is tested, built for amd64 and arm64, and running on the server within about five minutes.
 - **Nightly backups.** Optional, encrypted restic snapshots of the vault, its history and the Tailscale identity to a second disk and to Backblaze B2 or Amazon S3 (7 daily, 4 weekly, 12 monthly), consistent because the app is stopped for the seconds the snapshot takes, with ntfy alerts (naming the failed steps, never your files) and a documented restore drill.
 - **History mirror on GitHub.** Optionally, the vault's git history is pushed to a private GitHub repository about 10 minutes after you stop editing, with a token from a compose secret; fast-forward only, so a mirror that has diverged is reported, never overwritten. Failures, and a mirror whose settings cannot be used, show in the status bar; failures are retried with backoff.
@@ -84,6 +85,7 @@ Rolling back, pausing updates, backups and everything else on the server side ar
 
 ## Documentation
 
+- [docs/guide/index.md](docs/guide/index.md): the **user guide**, task by task (the same pages are built into the app: **Help** in the ribbon, the phone's drawer and ⋯ menu, or *Open help* in the command palette)
 - [docs/DESIGN.md](docs/DESIGN.md): technical design (decisive)
 - [docs/API.md](docs/API.md): the REST and SSE contract between backend and frontend
 - [docs/DEPLOY.md](docs/DEPLOY.md): homeserver runbook (first deploy, operations, troubleshooting)

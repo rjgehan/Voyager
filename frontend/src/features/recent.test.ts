@@ -1,5 +1,6 @@
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+import { setCurrentVaultForTests } from '../state/vault';
 import { clearRecent, forgetRecent, lastOpenedPath, MAX_RECENT, presentRecent, recentEntries, recentPaths, recordOpened, removeRecent, renameRecent, subscribeRecent, useRecentEntries } from './recent';
 
 describe('recent files', () => {
@@ -62,6 +63,23 @@ describe('recent files', () => {
     expect(listener).toHaveBeenCalled();
     expect(result.current).toEqual([{ path: 'A.md', at: 5 }]);
     unsubscribe();
+  });
+
+  it("follows another tab's changes in an extra vault (its own storage key)", () => {
+    setCurrentVaultForTests('work');
+    try {
+      const { result } = renderHook(() => useRecentEntries());
+      expect(result.current).toEqual([]);
+      // Another tab of the same vault opened a note.
+      const text = JSON.stringify([{ path: 'Plan.md', at: 9 }]);
+      localStorage.setItem('notesapp:recentFiles@work', text);
+      act(() => {
+        window.dispatchEvent(new StorageEvent('storage', { key: 'notesapp:recentFiles@work', newValue: text }));
+      });
+      expect(result.current).toEqual([{ path: 'Plan.md', at: 9 }]);
+    } finally {
+      setCurrentVaultForTests(null);
+    }
   });
 
   it('leaves out files no longer in the vault', () => {

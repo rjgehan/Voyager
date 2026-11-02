@@ -19,6 +19,21 @@ describe('tracked ranges (editor/tracked.ts)', () => {
     expect(state.doc.lineAt(moved.from).from).not.toBe(moved.from);
   });
 
+  it('never turn around: text inserted at an empty range, or over a whole range, leaves a valid empty range', () => {
+    let state = start('hello world', 5, 5);
+    // Another device types exactly where an embed is waiting to go.
+    state = state.update({ changes: { from: 5, insert: 'abc' } }).state;
+    const point = trackedRange(state, 1)!;
+    expect(point.from).toBeLessThanOrEqual(point.to);
+    expect(() => state.update({ changes: { from: point.from, to: point.to, insert: '!' } })).not.toThrow();
+    // The whole followed text replaced by other text.
+    state = start('one two three', 4, 7);
+    state = state.update({ changes: { from: 4, to: 7, insert: 'TWO' } }).state;
+    const whole = trackedRange(state, 1)!;
+    expect(whole.from).toBeLessThanOrEqual(whole.to);
+    expect(state.doc.sliceString(whole.from, whole.to)).not.toBe('two');
+  });
+
   it('collapse when their text is deleted, and stop when untracked', () => {
     let state = start('keep\n- [ ] x\n', 5, 12);
     state = state.update({ changes: { from: 4, to: 12 } }).state;

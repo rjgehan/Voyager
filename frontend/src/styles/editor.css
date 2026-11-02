@@ -640,9 +640,15 @@
   word-break: normal;
 }
 
+/*
+ * Wide tables scroll sideways only. The grips' and the fill handle's 44 px touch areas reach a few
+ * pixels past the last row: with overflow-y auto (what overflow-x auto implies), every table was a
+ * vertical scroller of 5 px that took the swipes meant for the note on iOS.
+ */
 .cm-lp-table-scroll {
   max-width: 100%;
   overflow-x: auto;
+  overflow-y: hidden;
   padding: 10px 0 2px 10px;
   margin: -10px 0 -2px -10px;
 }
@@ -1209,12 +1215,17 @@ th.cm-lp-cell {
  * menu's bottom edge is the toolbar's top, whatever the caret's place.
  */
 @media (pointer: coarse) {
+  /* With the keyboard closed (iPad with a keyboard), the toolbar also pads the home indicator. */
   .cm-editor .cm-tooltip.cm-tooltip-autocomplete.cm-slash-menu {
     position: fixed !important;
-    top: calc(var(--vv-top, 0px) + var(--vvh, 100dvh) - 56px) !important;
-    right: 8px !important;
-    left: 8px !important;
+    top: calc(var(--vv-top, 0px) + var(--vvh, 100dvh) - 56px - env(safe-area-inset-bottom)) !important;
+    right: max(8px, env(safe-area-inset-right)) !important;
+    left: max(8px, env(safe-area-inset-left)) !important;
     transform: translateY(-100%);
+  }
+
+  .keyboard-open .cm-editor .cm-tooltip.cm-tooltip-autocomplete.cm-slash-menu {
+    top: calc(var(--vv-top, 0px) + var(--vvh, 100dvh) - 56px) !important;
   }
 
   .cm-editor .cm-tooltip.cm-tooltip-autocomplete.cm-slash-menu > ul {

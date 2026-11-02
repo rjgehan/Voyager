@@ -5,13 +5,14 @@ import { DEFAULT_SETTINGS } from './settings';
 import { applyDelta, SettingsWriter, WRITE_DEBOUNCE_MS } from './settingsWriter';
 
 /** A settings endpoint with the version protocol and 60 ms of latency. */
-function server() {
+function server(opts: { recordErrors?: boolean } = {}) {
   let version = 1;
   let settings: Settings = structuredClone(DEFAULT_SETTINGS);
   const response = (): SettingsResponse => ({ settings: structuredClone(settings), version: `v${version}`, readOnly: false });
   let cache: SettingsResponse | undefined = response();
   const notices: Array<[string, string]> = [];
   const drafts: Array<Settings | null> = [];
+  const errors: unknown[] = [];
   const put = vi.fn(async (req: SettingsUpdateRequest) => {
     await new Promise((r) => setTimeout(r, 60));
     if (req.baseVersion !== `v${version}`) {
@@ -31,7 +32,8 @@ function server() {
     onSaving: () => {},
     notify: (message, kind) => notices.push([message, kind]),
     onError: (e) => {
-      throw e;
+      if (!opts.recordErrors) throw e;
+      errors.push(e);
     },
   });
   return {
@@ -39,6 +41,7 @@ function server() {
     put,
     notices,
     drafts,
+    errors,
     get settings() {
       return settings;
     },
@@ -48,6 +51,10 @@ function server() {
       version++;
     },
     view: () => writer.draft ?? cache!.settings,
+    /** `settings.changed` refetched the cache. */
+    refresh() {
+      cache = response();
+    },
   };
 }
 
@@ -91,6 +98,39 @@ describe('SettingsWriter', () => {
     expect(s.settings.templates.timeFormat).toBe('HH:mm:ss');
     expect(s.put).toHaveBeenCalledTimes(1);
     expect(s.writer.draft).toBeNull();
+  });
+
+  it('a draft never reverts a change another device made after the draft was started (it reached the cache)', async () => {
+    const s = server();
+    // A typed edit waits for its debounce (or stays invalid for a while) ...
+    s.writer.update({ ...s.view(), templates: { ...s.view().templates, folder: 'Tpl' } }, false);
+    await vi.advanceTimersByTimeAsync(100);
+    // ... while another device changes another field, and settings.changed refreshes the cache.
+    s.foreign((x) => (x.editor.readableLineLength = false));
+    s.refresh();
+    await vi.advanceTimersByTimeAsync(WRITE_DEBOUNCE_MS + 500);
+    expect(s.settings.templates.folder).toBe('Tpl');
+    expect(s.settings.editor.readableLineLength).toBe(false);
+  });
+
+  it('a draft left after a failed write is applied on top of what other devices saved since', async () => {
+    const s = server({ recordErrors: true });
+    s.put.mockImplementationOnce(async () => {
+      throw new ApiError({ type: 'urn:notesapp:problem:io-error', title: 'io', status: 500, code: 'io-error' });
+    });
+    s.writer.update({ ...s.view(), files: { ...s.view().files, useWikilinks: false } }, true);
+    await vi.advanceTimersByTimeAsync(100);
+    // The write failed: the form keeps showing the draft.
+    expect(s.errors).toHaveLength(1);
+    expect(s.writer.draft?.files.useWikilinks).toBe(false);
+    // Another device saves meanwhile, and settings.changed refreshes the cache.
+    s.foreign((x) => (x.editor.readableLineLength = false));
+    s.refresh();
+    // Later, another field is edited on the draft still shown.
+    s.writer.update({ ...s.view(), files: { ...s.view().files, autoUpdateLinks: false } }, true);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(s.settings.files).toMatchObject({ useWikilinks: false, autoUpdateLinks: false });
+    expect(s.settings.editor.readableLineLength).toBe(false);
   });
 
   it('a debounced edit is written when the page is left within the debounce (FE-7)', async () => {

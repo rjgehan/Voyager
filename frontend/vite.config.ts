@@ -5,6 +5,7 @@ import { createReadStream, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative, resolve, sep } from 'node:path'
 import { defineConfig, type Plugin } from 'vite'
 import { bundleBudget } from './vite-plugin-budget.ts'
+import { userGuide } from './vite-plugin-guide.ts'
 import { serviceWorker } from './vite-plugin-sw.ts'
 
 // The Dockerfile sets VITE_BUILD_SHA; everywhere else the build is "dev", which the
@@ -127,6 +128,8 @@ export default defineConfig({
     react(),
     packageAssetsPlugin(),
     clipperDevPlugin(),
+    // The user guide, docs/guide/*.md, for the Help page (DESIGN §6.45).
+    userGuide(),
     bundleBudget({ entry: 'index.html', maxGzipKiB: 350 }),
     serviceWorker({ entry: 'src/sw/sw.ts', buildSha }),
   ],

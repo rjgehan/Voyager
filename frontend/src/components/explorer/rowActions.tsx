@@ -8,6 +8,7 @@ import { copyLink, createFolder, createNote, deleteEntry, downloadFile, validate
 import { newNoteFromTemplateIn } from '../../features/folderTemplates';
 import { activePath, openPath } from '../../features/navigation';
 import { displayName, folderOf, noteRoute } from '../../features/paths';
+import { isPhoneLayout } from '../../features/platform';
 import { openInNewTab, splitPane, workspace } from '../../workspace/store';
 import { confirmAction, promptText } from '../../state/dialogs';
 import { useUi } from '../../state/ui';
@@ -78,7 +79,7 @@ export function rowMenuItems(row: RowTarget, startRename: () => void): MenuEntry
   });
   if (row.kind === 'file') {
     // Tabs and split panes (ROADMAP item 11, DESIGN §6.40); phones have one pane.
-    const desktop = typeof window.matchMedia !== 'function' || !window.matchMedia('(max-width: 767px)').matches;
+    const desktop = !isPhoneLayout();
     items.push({ id: 'open-tab', label: 'Open in new tab', icon: <PanelTop size={16} />, run: () => openInNewTab(noteRoute(row.path)) });
     if (desktop) {
       items.push({

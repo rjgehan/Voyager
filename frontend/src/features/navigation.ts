@@ -12,6 +12,7 @@ import { applyWriteResult } from '../sync/treePatch';
 import { folderTemplateOutput, placeTemplateCursor } from './folderTemplates';
 import { createPath, resolve } from './links';
 import { noteRoute, pathFromLocation } from './paths';
+import { isPhoneLayout } from './platform';
 import { toastError } from './errors';
 import { takeNewTabGesture } from '../workspace/gesture';
 
@@ -99,7 +100,7 @@ export async function openLink(target: string, subpath: string | null, source: s
  */
 export function openSearch(query: string): void {
   const ui = useUi.getState();
-  if (window.matchMedia?.('(max-width: 767px)').matches) {
+  if (isPhoneLayout()) {
     ui.setDrawerOpen(false);
     navigateTo('/search' + (query ? '?q=' + encodeURIComponent(query) : ''));
     return;

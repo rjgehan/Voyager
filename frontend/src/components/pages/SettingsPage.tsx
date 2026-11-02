@@ -1,7 +1,7 @@
 // `/settings` and `/settings/<section>` (DESIGN §5.12, §6.4), a lazy chunk. Vault settings are
 // written with the version protocol (`PUT /api/settings {settings, baseVersion}`); "This device"
 // holds the per-device preferences and the recently discarded edits.
-import { ArrowLeft, Copy, Info, Laptop, RotateCcw, Trash2, TriangleAlert } from 'lucide-react';
+import { ArrowLeft, CircleHelp, Copy, Info, Laptop, RotateCcw, Trash2, TriangleAlert } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, NavLink, useLocation } from 'react-router';
@@ -1006,6 +1006,7 @@ function AboutSection() {
           {status.vault.skipped.length > 0 && item('Skipped files', status.vault.skipped.map((s) => `${s.name} (${s.reason})`).join(', '))}
         </>
       )}
+      {item('User guide', <Link to="/x/help">How to use NotesApp, page by page (also in the palette: Open help)</Link>)}
       {item('Status page', <Link to="/x/status">Uptime, history, disk, backups and alerts</Link>)}
       {item('Compatibility report', <Link to="/x/compat">Obsidian settings, plugins and syntax this vault uses</Link>)}
     </dl>
@@ -1036,6 +1037,10 @@ export default function SettingsPage() {
             {s.title}
           </NavLink>
         ))}
+        {/* The user guide (DESIGN §6.45): how to use what these settings change. */}
+        <Link to="/x/help" className="settings-nav-item settings-nav-help">
+          <CircleHelp size={14} aria-hidden /> Help and user guide
+        </Link>
       </nav>
       {section !== null && (
         <section className="settings-section" aria-labelledby="settings-section-title">

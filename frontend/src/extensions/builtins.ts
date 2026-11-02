@@ -73,6 +73,7 @@ import { registerDrawingViews } from '../views/excalidraw/register';
 import { registerPdfView } from '../views/pdf/register';
 import { startVoiceNote, transcribeAtCursor } from '../features/voice/voiceNotes';
 import { registerAi } from '../features/ai/register';
+import { registerHelp } from '../help/register';
 import { registerScripts } from '../scripts/register';
 import { registerPublish } from '../components/publish/register';
 import { isMarkdownViewPath, onViewsChanged, registeredViews, viewFor } from '../views/registry';
@@ -469,6 +470,8 @@ export function registerBuiltins(): void {
   registerWorkspace();
   registerProperties();
   registerCommand({ id: 'settings.open', name: 'Open settings', hotkey: 'Mod-,', icon: SettingsIcon, run: () => goTo('/settings') });
+  // The user guide, in the app (DESIGN §6.45).
+  registerHelp();
   registerCommand({ id: 'theme.toggle', name: 'Toggle dark/light theme', run: toggleTheme });
 
   // ---------- roadmap features, through the same extension points ----------

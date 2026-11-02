@@ -41,11 +41,16 @@ export function readProperties(yaml: string): ParsedProperties {
   const pairs = contents.items as Pair[];
   const entries: PropertyEntry[] = [];
   const js = doc.toJS({ maxAliasCount: 20 }) as Record<string, unknown> | null;
+  const seen = new Set<string>();
   for (let i = 0; i < pairs.length; i++) {
     const pair = pairs[i];
     if (!isScalar(pair.key) || !(pair.key as Ranged).range) return { entries: [], error: 'A property has a key that is not text; edit it as YAML' };
     const keyRange = (pair.key as Ranged).range!;
     const key = String(pair.key.value);
+    // Edits find a property by its name: with two of one name (in any case), a row would show the
+    // other's value and write to the other's lines.
+    if (seen.has(key.toLowerCase())) return { entries: [], error: `The property “${key}” appears twice; edit it as YAML` };
+    seen.add(key.toLowerCase());
     const from = lineStart(yaml, keyRange[0]);
     let to = (pair.value as Ranged | null)?.range ? (pair.value as Ranged).range![1] : keyRange[1];
     // Through the end of that line (a trailing comment goes with the value), never into the next key.

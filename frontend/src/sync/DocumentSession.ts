@@ -10,7 +10,7 @@ import type { Endpoints } from '../api/endpoints';
 import type { FileEntry, TextFile, Version, WriteResult } from '../api/types';
 import { tableRanges } from '../editor/livePreview/table/facets';
 import { isComposing, paneSync, sessionEdit, textReplace, waitForComposition } from '../editor/remote';
-import { trackedRange, trackedRangesField, trackRange, untrackRange } from '../editor/tracked';
+import { trackedRange, trackedRanges, trackedRangesField, trackRange, untrackRange } from '../editor/tracked';
 import { addUpload, endUpload, pendingUploads, uploadsField } from '../editor/uploads';
 import { detectEol, fromLf, toLf, type Eol } from '../features/eol';
 import { isNotePath } from '../features/paths';
@@ -126,6 +126,25 @@ const idle: (cb: () => void) => void =
 
 const AUTOSAVE: ReadonlySet<SessionStatus> = new Set(['dirty', 'offline', 'storage-error']);
 const UNSAVED: ReadonlySet<SessionStatus> = new Set(['dirty', 'saving', 'offline', 'storage-error', 'conflict', 'error']);
+
+/**
+ * The session's marks on the text (pending uploads, tracked ranges): editor state, never text,
+ * kept in every editor of the file, so whichever holds the document when work outside the editor
+ * comes back (an upload, a transcript) still has them.
+ */
+function isSessionMark(e: StateEffect<unknown>): boolean {
+  return e.is(addUpload) || e.is(endUpload) || e.is(trackRange) || e.is(untrackRange);
+}
+
+/** `state` with the marks of `from` (an editor state with the same text) instead of its own. */
+function withMarksOf(state: EditorState, from: EditorState): EditorState {
+  const effects: StateEffect<unknown>[] = [];
+  for (const u of pendingUploads(state)) effects.push(endUpload.of({ id: u.id }));
+  for (const r of trackedRanges(state)) effects.push(untrackRange.of(r.id));
+  for (const u of pendingUploads(from)) effects.push(addUpload.of(u));
+  for (const r of trackedRanges(from)) effects.push(trackRange.of(r));
+  return effects.length === 0 ? state : state.update({ effects, annotations: Transaction.addToHistory.of(false) }).state;
+}
 
 /** A remote event that arrived while a load or a save was running; the last one wins. */
 type DeferredEvent = { kind: 'changed'; version: Version | null } | { kind: 'deleted'; trashId: string | null };
@@ -353,16 +372,19 @@ export class DocumentSession {
 
   /**
    * Every transaction of an attached editor (its `dispatchTransactions`): applied there, and its
-   * changes copied into the file's other editors first, outside their undo history and their
-   * editing rules (`filter: false`), so all documents stay equal and the edit counts once.
+   * changes (with the session's marks: pending uploads, tracked ranges) copied into the file's
+   * other editors first, outside their undo history and their editing rules (`filter: false`), so
+   * all documents stay equal, the edit counts once, and any editor can finish an upload.
    */
   routeTransactions(view: EditorView, trs: readonly Transaction[]): void {
     if (this.views.length > 1 && this.views.includes(view)) {
       for (const tr of trs) {
-        if (!tr.docChanged || tr.annotation(paneSync)) continue;
+        if (tr.annotation(paneSync)) continue;
+        const marks = tr.effects.filter(isSessionMark);
+        if (!tr.docChanged && marks.length === 0) continue;
         const annotations = [paneSync.of(true), Transaction.addToHistory.of(false)];
         if (tr.annotation(Transaction.remote)) annotations.push(Transaction.remote.of(true));
-        for (const other of this.views) if (other !== view) other.dispatch({ changes: tr.changes, annotations, filter: false });
+        for (const other of this.views) if (other !== view) other.dispatch({ changes: tr.changes, effects: marks, annotations, filter: false });
       }
     }
     view.update(trs);
@@ -414,15 +436,19 @@ export class DocumentSession {
       return state;
     }
     this.nextIsMain = false;
-    return reconfigure(EditorState.create({ doc: live.state.doc, selection: live.state.selection }));
+    // Uploads and tracked ranges still running show (and can finish) in the new editor too.
+    return withMarksOf(reconfigure(EditorState.create({ doc: live.state.doc, selection: live.state.selection })), live.state);
   }
 
-  /** `state` (an earlier state of this file) with `latest`'s text and selection, the difference not undoable. */
+  /**
+   * `state` (an earlier state of this file) with `latest`'s text, selection and session marks, the
+   * difference not undoable.
+   */
   private caughtUp(state: EditorState, latest: EditorState): EditorState {
     const next = sessionKit().applyRemoteTextToState(state, latest.doc.toString());
     const head = Math.min(latest.selection.main.head, next.doc.length);
     const anchor = Math.min(latest.selection.main.anchor, next.doc.length);
-    return next.update({ selection: { anchor, head }, annotations: Transaction.addToHistory.of(false) }).state;
+    return withMarksOf(next.update({ selection: { anchor, head }, annotations: Transaction.addToHistory.of(false) }).state, latest);
   }
 
   detach(view: EditorView): void {
@@ -530,7 +556,7 @@ export class DocumentSession {
     this.retryAttempt = 0;
     this.retryAt = null;
     this.adopt(file);
-    await this.restoreDrafts(file);
+    await this.restoreDrafts();
     const pending = this.deferred;
     this.deferred = null;
     if (pending?.kind === 'deleted') {
@@ -1002,8 +1028,6 @@ export class DocumentSession {
    * null for the deleted state.
    */
   private movedTarget(movedTo: string | null, requestPath: string, baseVersion: Version | null): { path: string; authoritative: boolean } | null {
-    // Re-keyed while the request was in flight: the file is at this.path now.
-    if (this.path !== requestPath) return { path: this.path, authoritative: true };
     const known = this.deps.moves.lookup(requestPath);
     if (known && known !== requestPath) return { path: known, authoritative: false };
     if (!movedTo || movedTo === requestPath || !this.deps.moves.trustsMoveFrom(requestPath)) return null;
@@ -1017,6 +1041,15 @@ export class DocumentSession {
   private async onSaveFailed(e: unknown, text: string, covered: number, baseVersion: Version | null, requestPath: string): Promise<void> {
     if (isVersionConflict(e)) {
       const p = e.problem;
+      // Re-keyed while the request was in flight (entry.moved, own MoveResult): the answer is about
+      // the old path, where another note may live by now; the file is at this.path. A pure move
+      // keeps the blob id: retry there with the same base, and the server compares with this file.
+      if (this.path !== requestPath) {
+        this.version = baseVersion;
+        this.status = 'dirty';
+        await this.performSave();
+        return;
+      }
       if (p.currentContent !== null && p.currentVersion !== null) {
         const theirs = toLf(p.currentContent);
         if (theirs === text) {
@@ -1381,7 +1414,9 @@ export class DocumentSession {
   }
 
   /** On open: drafts of this path owned by no live tab, newest first (DESIGN §6.9). */
-  private async restoreDrafts(file: TextFile): Promise<void> {
+  private async restoreDrafts(): Promise<void> {
+    // The note shows (and can be edited) while the drafts are read and the other tabs asked.
+    const editsBefore = this.changes;
     let drafts: DraftRecord[];
     try {
       drafts = (await this.deps.drafts.listForPath(this.path)).filter((d) => d.clientId !== this.deps.clientId);
@@ -1392,36 +1427,45 @@ export class DocumentSession {
     if (drafts.length === 0) return;
     const live = await this.deps.liveDraftOwners(this.path);
     const orphans = drafts.filter((d) => !live.has(d.clientId)).sort((a, b) => b.at - a.at);
-    const serverText = toLf(file.content);
     const now = Date.now();
     let restored = false;
+    let kept = false;
     for (const d of orphans) {
       const drop = () => this.deps.drafts.remove(d.path, d.clientId).catch(() => undefined);
-      if (now - d.at > DRAFT_MAX_AGE_MS || d.text === serverText) {
+      // The server's text: the load's, or another device's change applied meanwhile.
+      if (now - d.at > DRAFT_MAX_AGE_MS || d.text === this.baseText) {
         await drop();
         continue;
       }
-      if (restored) {
+      // Text typed meanwhile is never replaced, and a note deleted meanwhile is not brought back:
+      // the draft is kept recoverable (Settings › This device) instead of restored.
+      const unchanged = !this.disposed && this.changes === editsBefore && this.status === 'clean';
+      if (restored || !unchanged) {
         // Keep older orphans recoverable rather than restoring several at once.
         await this.deps.drafts.discard({ path: d.path, text: d.text, eol: d.eol, at: d.at, reason: 'superseded-draft' }).catch(() => undefined);
         await drop();
+        if (!restored) kept = true;
         continue;
       }
       restored = true;
+      // Theirs is what the session holds from the server now (its text equals the buffer's).
+      const theirsText = this.baseText;
+      const theirsVersion = this.version!;
+      const theirsEol = this.eol;
       this.eol = d.eol;
       this.replaceUndoable(d.text);
       this.changes++;
       this.firstUnsavedAt = Date.now();
-      if (d.baseVersion === file.version && !d.conflict) {
+      if (d.baseVersion === theirsVersion && !d.conflict) {
         this.setStatus('dirty');
         this.scheduleSave(false);
         this.deps.notify({ message: 'Restored unsaved changes' });
-      } else if (!this.tryMerge(serverText, file.version, detectEol(file.content), d.baseText ?? null, 'draft')) {
+      } else if (!this.tryMerge(theirsText, theirsVersion, theirsEol, d.baseText ?? null, 'draft')) {
         this.version = d.baseVersion;
         this.conflict = {
-          theirsText: serverText,
-          theirsVersion: file.version,
-          theirsEol: detectEol(file.content),
+          theirsText,
+          theirsVersion,
+          theirsEol,
           baseText: d.baseText ?? null,
           source: 'draft',
           historyBlocked: false,
@@ -1433,6 +1477,7 @@ export class DocumentSession {
       await this.writeDraft();
       await drop();
     }
+    if (kept) this.deps.notify({ message: 'Unsaved text from an earlier visit to this note was kept in Settings › This device' });
   }
 
   // ---------- lifecycle ----------

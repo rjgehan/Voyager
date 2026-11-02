@@ -513,7 +513,8 @@
   position: absolute;
   z-index: 6;
   top: 8px;
-  left: 12px;
+  /* A phone on its side: clear of the notch. */
+  left: max(12px, env(safe-area-inset-left));
   display: flex;
   align-items: center;
   gap: 4px;

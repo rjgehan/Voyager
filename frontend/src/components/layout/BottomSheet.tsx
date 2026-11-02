@@ -19,6 +19,18 @@ function scrollParent(target: EventTarget | null, root: HTMLElement): HTMLElemen
   return null;
 }
 
+/**
+ * True when the touch starts on something that handles its own gestures: the local graph's canvas,
+ * a drag handle (both `touch-action: none`) or a slider. Dragging them down must not drag the sheet.
+ */
+function ownsGestures(target: EventTarget | null, root: HTMLElement): boolean {
+  for (let el = target instanceof Element ? target : null; el && el !== root; el = el.parentElement) {
+    if (el instanceof HTMLInputElement && el.type === 'range') return true;
+    if (getComputedStyle(el).touchAction === 'none') return true;
+  }
+  return false;
+}
+
 export function useSheetDrag(panel: RefObject<HTMLElement | null>, grip: RefObject<HTMLElement | null>, active: boolean, onClose: () => void): void {
   const onCloseRef = useRef(onClose);
   useLayoutEffect(() => {
@@ -68,7 +80,7 @@ export function useSheetDrag(panel: RefObject<HTMLElement | null>, grip: RefObje
     // The content: a downward swipe that starts while it is scrolled to the top. The decision is
     // made on the first move, because iOS ignores preventDefault once it has started scrolling.
     const onTouchStart = (e: TouchEvent) => {
-      if (e.touches.length !== 1 || handle.contains(e.target as Node)) {
+      if (e.touches.length !== 1 || handle.contains(e.target as Node) || ownsGestures(e.target, sheet)) {
         touch = null;
         return;
       }

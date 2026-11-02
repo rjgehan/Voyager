@@ -17,6 +17,7 @@ import type { LivePreviewConfig } from '../decorations';
 import { tableEdit } from './facets';
 import { gridOf, type TableGrid } from './grid';
 import { insertTable, moveToCell, refreshTables, tableBlocks, tableCellFormatters, tables, type TableCellFormatter } from './index';
+import { sourceFiles } from '../../../test/sources';
 
 const views: EditorView[] = [];
 
@@ -736,5 +737,14 @@ describe('inserting a table', () => {
     const before = view.state.doc.toString();
     expect(insertTable(cellEditor(view))).toBe(true);
     expect(view.state.doc.toString()).toBe(before);
+  });
+});
+
+describe('the grid’s scroller', () => {
+  it('scrolls sideways only: the grips’ touch targets reach past the last row (pointer: coarse)', async () => {
+    const css = (await sourceFiles('.css'))['styles/editor.css'];
+    const rule = /\.cm-lp-table-scroll\s*\{([^}]*)\}/.exec(css.replace(/\/\*[\s\S]*?\*\//g, ''));
+    expect(rule?.[1]).toMatch(/overflow-x:\s*auto/);
+    expect(rule?.[1]).toMatch(/overflow-y:\s*hidden/);
   });
 });

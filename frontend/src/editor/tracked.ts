@@ -11,21 +11,28 @@ export interface TrackedRange {
   to: number;
 }
 
+/** `r` through a change: its edges keep inserted text outside, and it never turns around. */
+function mapped(r: TrackedRange, mapping: { mapPos(pos: number, assoc: number): number }): TrackedRange {
+  const from = mapping.mapPos(r.from, 1);
+  const to = mapping.mapPos(r.to, -1);
+  // Text inserted at an empty range (or replacing all of one) would put its start after its end:
+  // it stays an empty range, before that text.
+  return from <= to ? { ...r, from, to } : { ...r, from: to, to };
+}
+
 /**
  * Starts following a range. Text inserted at either edge stays outside it: a whole line followed
  * this way still starts and ends a line after a line is added above or below it, while a caller
  * that checks this notices a line typed onto at its start or end.
  */
-export const trackRange = StateEffect.define<TrackedRange>({
-  map: (r, mapping) => ({ ...r, from: mapping.mapPos(r.from, 1), to: mapping.mapPos(r.to, -1) }),
-});
+export const trackRange = StateEffect.define<TrackedRange>({ map: mapped });
 
 export const untrackRange = StateEffect.define<number>();
 
 export const trackedRangesField = StateField.define<readonly TrackedRange[]>({
   create: () => [],
   update(value, tr) {
-    let next = tr.docChanged ? value.map((r) => ({ ...r, from: tr.changes.mapPos(r.from, 1), to: tr.changes.mapPos(r.to, -1) })) : value;
+    let next = tr.docChanged ? value.map((r) => mapped(r, tr.changes)) : value;
     for (const e of tr.effects) {
       if (e.is(trackRange)) next = [...next, e.value];
       else if (e.is(untrackRange)) next = next.filter((r) => r.id !== e.value);
@@ -33,6 +40,11 @@ export const trackedRangesField = StateField.define<readonly TrackedRange[]>({
     return next;
   },
 });
+
+/** Every range a state follows (none when the field is not configured). */
+export function trackedRanges(state: EditorState): readonly TrackedRange[] {
+  return state.field(trackedRangesField, false) ?? [];
+}
 
 /** Where a tracked range is now, or undefined (never tracked, or the field is not configured). */
 export function trackedRange(state: EditorState, id: number): TrackedRange | undefined {

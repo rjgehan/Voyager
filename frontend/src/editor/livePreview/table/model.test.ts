@@ -293,6 +293,16 @@ describe('rows and columns', () => {
     expect(deleteColumn(model(CORPUS['single column']), 0)).toEqual(model(CORPUS['single column']));
   });
 
+  it('deletes a column of tables that GFM reads but whose one-column form Lezer would not', () => {
+    // Leading pipes only: `| b` over `| ---` is no table; the lone cell gets its trailing pipe.
+    expect(edited(deleteColumn(model('| a | b\n| --- | ---\n| 1 | 2'), 0))).toBe('| b |\n| --- |\n| 2 |');
+    // A short row holding only the deleted cell stays a row, not a blank line (or `||`) ending the table.
+    expect(edited(deleteColumn(model('a | b\n--- | ---\n1'), 0))).toBe('b |\n--- |\n|  |');
+    expect(edited(deleteColumn(model('| a | b |\n|---|---|\n| 1 |'), 0))).toBe('| b |\n|---|\n|  |');
+    // A delimiter row of a lone `-` gets a leading pipe: `- |` is a list item.
+    expect(edited(deleteColumn(model('a | b\n-|-\n1 | 2'), 0))).toBe('b |\n| - |\n2 |');
+  });
+
   it('moves a column with its alignment, filling short rows', () => {
     const m = model('| L | R |\n|:--|--:|\n| 1 | 2 |\n| 3 |');
     const moved = edited(moveColumn(m, 0, 1));
@@ -314,6 +324,8 @@ describe('rows and columns', () => {
     expect(edited(setAlign(model(CORPUS.alignment), 0, null))).toBe(CORPUS.alignment.replace('|:--|', '|---|'));
     expect(edited(setAlign(model(CORPUS.alignment), 3, 'center'))).toBe(CORPUS.alignment.replace('|---|\n', '|:-:|\n'));
     expect(edited(setAlign(model(CORPUS.padded), 1, 'right'))).toBe('| Name  | Age |\n| ----- | --: |\n| Alice | 30  |\n| Bob   | 4   |');
+    // `:-:` back to `-` at the start of a row without a leading pipe would make a list item.
+    expect(edited(setAlign(model('a |\n:-: |\n1 |'), 0, null))).toBe('a |\n| - |\n1 |');
   });
 
   it('writes a new empty table that is a padded table', () => {
@@ -358,7 +370,19 @@ describe('random edits never corrupt a table', () => {
       const pick = <T>(items: readonly T[]): T => items[Math.floor(next() * items.length)];
       const columns = 1 + Math.floor(next() * 4);
       const rows = Math.floor(next() * 4);
-      const start = next() < 0.5 ? newTableText(columns, rows) : [`| ${Array.from({ length: columns }, (_, i) => `h${i}`).join(' | ')} |`, `|${'---|'.repeat(columns)}`, ...Array.from({ length: rows }, () => `| ${Array.from({ length: columns }, () => 'v').join(' | ')} |`)].join('\n');
+      const shape = next();
+      const line = (cells: string[], lead: string, trail: string) => lead + cells.join(' | ') + trail;
+      const headers = Array.from({ length: columns }, (_, i) => `h${i}`);
+      // Short rows (one cell) and tables without trailing or any outer pipes, as typed by hand.
+      const body = (lead: string, trail: string) => Array.from({ length: rows }, (_, i) => line(i % 2 ? ['v'] : Array.from({ length: columns }, () => 'v'), lead, trail));
+      const start =
+        shape < 0.4
+          ? newTableText(columns, rows)
+          : shape < 0.6
+            ? [`| ${headers.join(' | ')} |`, `|${'---|'.repeat(columns)}`, ...Array.from({ length: rows }, () => `| ${Array.from({ length: columns }, () => 'v').join(' | ')} |`)].join('\n')
+            : shape < 0.8
+              ? [line(headers, '| ', columns === 1 ? ' |' : ''), line(headers.map(() => '---'), '| ', columns === 1 ? ' |' : ''), ...body('| ', columns === 1 ? ' |' : '')].join('\n')
+              : [line(headers, '', columns === 1 ? ' |' : ''), headers.map(() => '-').join('|') + (columns === 1 ? '|' : ''), ...body('', columns === 1 ? ' |' : '')].join('\n');
       let m = model(start);
       let expected = gridRows(m).map((row) => row.map(settled));
       for (let step = 0; step < 25; step++) {

@@ -486,6 +486,52 @@ describe('DocumentSession drafts', () => {
   });
 });
 
+describe('drafts restored while the note changes', () => {
+  /** A note with a crashed tab's draft, whose restore waits for the other tabs' answer. */
+  async function opening() {
+    const vault = new MockVault(false);
+    const v1 = vault.createFile({ path: 'a.md', content: 'hello' }, 'o').file.version;
+    const fake = fakeApi(vault);
+    let answer!: (owners: Set<string>) => void;
+    const asked = vi.fn(() => new Promise<Set<string>>((r) => (answer = r)));
+    const deps = sessionDeps(fake.api, { liveDraftOwners: asked });
+    await deps.drafts.put({ path: 'a.md', clientId: 'crashed-tab-1', baseVersion: v1, baseText: 'hello', text: 'hello from the crashed tab', eol: 'lf', at: Date.now() });
+    const session = new DocumentSession('a.md', deps);
+    // The note shows (and can be edited) while the other tabs are asked whether they own the draft.
+    await vi.waitFor(() => expect(asked).toHaveBeenCalled());
+    expect(session.getSnapshot().loaded).toBe(true);
+    return { vault, fake, deps, session, answer: (owners = new Set<string>()) => answer(owners) };
+  }
+
+  it('text typed meanwhile is never replaced by the draft, which is kept recoverable', async () => {
+    const { vault, deps, session, answer } = await opening();
+    type(session, ' typed');
+    answer();
+    await session.ready;
+    expect(text(session)).toBe('hello typed');
+    expect(deps.drafts.discarded.map((d) => [d.text, d.reason])).toEqual([['hello from the crashed tab', 'superseded-draft']]);
+    expect(deps.drafts.forPath('a.md').some((d) => d.clientId === 'crashed-tab-1')).toBe(false);
+    expect(deps.notices.some((n) => n.includes('Settings › This device'))).toBe(true);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(vault.readFile('a.md').content).toBe('hello typed');
+  });
+
+  it("a change from another device that arrives meanwhile is never overwritten by the draft's save", async () => {
+    const { vault, session, answer } = await opening();
+    vault.externalWrite('a.md', 'hello, edited on the phone');
+    await session.onRemoteChanged({ version: vault.readFile('a.md').version });
+    expect(text(session)).toBe('hello, edited on the phone');
+    answer();
+    await session.ready;
+    await vi.advanceTimersByTimeAsync(5000);
+    // The draft was made on the old text: only the conflict banner may decide.
+    expect(vault.readFile('a.md').content).toBe('hello, edited on the phone');
+    expect(status(session)).toBe('conflict');
+    expect(text(session)).toBe('hello from the crashed tab');
+    expect(session.getSnapshot().conflict).toMatchObject({ theirsText: 'hello, edited on the phone', theirsVersion: vault.readFile('a.md').version, baseText: 'hello', source: 'draft' });
+  });
+});
+
 describe('DocumentRegistry', () => {
   function registry(vault: MockVault, fake: ReturnType<typeof fakeApi>, drafts = new MemoryDraftStore()) {
     return new DocumentRegistry({
@@ -668,6 +714,36 @@ function registryFor(vault: MockVault, fake: ReturnType<typeof fakeApi>, opts: {
   });
 }
 
+describe('closing a session that still holds unsaved text (a deleted note)', () => {
+  it('keeps the text recoverable, so a new session of the path never overwrites it with its own draft', async () => {
+    const vault = new MockVault(false);
+    vault.createFile({ path: 'a.md', content: 'hello' }, 'o');
+    const fake = fakeApi(vault);
+    const drafts = new MemoryDraftStore();
+    const notices: string[] = [];
+    const docs = registryFor(vault, fake, { drafts, notify: (m) => notices.push(m) });
+    const s = docs.acquire('a.md', 'view');
+    await s.ready;
+    // An unresolved conflict: mine was never saved, and only its draft holds it.
+    vault.externalWrite('a.md', 'theirs');
+    type(s, ' mine');
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(status(s)).toBe('conflict');
+    await vi.advanceTimersByTimeAsync(600);
+    expect(drafts.forPath('a.md').map((d) => d.text)).toEqual(['hello mine']);
+    // The note is deleted (the flush cannot save a conflict), then restored (Undo) and edited.
+    docs.close(s);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(drafts.discarded.map((d) => d.text)).toEqual(['hello mine']);
+    expect(notices.some((n) => n.includes('Settings › This device'))).toBe(true);
+    const again = docs.acquire('a.md', 'view');
+    await again.ready;
+    type(again, ' later');
+    await vi.advanceTimersByTimeAsync(600);
+    expect(drafts.discarded.map((d) => d.text)).toEqual(['hello mine']);
+  });
+});
+
 describe('a note that failed to load (FE-1)', () => {
   function failingFirstRead(content = 'the full note text') {
     const vault = new MockVault(false);
@@ -745,6 +821,26 @@ describe('saves racing a move (FE-2)', () => {
     expect(status(session)).toBe('clean');
     expect(session.getSnapshot().deleted).toBeNull();
     expect(vault.readFile('b.md').content).toBe('hello world');
+  });
+
+  it('a 409 about a new note created at the old path after the move is never shown as a conflict with that note', async () => {
+    const { vault, fake, session } = setup();
+    await session.ready;
+    const release = fake.holdSaves();
+    type(session, ' world');
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(status(session)).toBe('saving');
+    // Another device renames the note and creates a new, unrelated note under the old name.
+    vault.move({ from: 'a.md', to: 'b.md' }, 'other-device-1');
+    vault.createFile({ path: 'a.md', content: 'an unrelated note' }, 'other-device-1');
+    session.onRemoteMoved('b.md');
+    release();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(session.path).toBe('b.md');
+    expect(session.getSnapshot().conflict).toBeNull();
+    expect(status(session)).toBe('clean');
+    expect(vault.readFile('b.md').content).toBe('hello world');
+    expect(vault.readFile('a.md').content).toBe('an unrelated note');
   });
 
   it('a 200 for the old path processed after the move never re-keys the session back', async () => {

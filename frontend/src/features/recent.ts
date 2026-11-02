@@ -78,7 +78,8 @@ function write(list: RecentEntry[]): void {
 
 if (typeof window !== 'undefined') {
   window.addEventListener('storage', (e) => {
-    if (e.key !== KEY && e.key !== null) return;
+    // This vault's key (an extra vault's is `notesapp:recentFiles@<name>`).
+    if (e.key !== vaultKey(KEY) && e.key !== null) return;
     cache = null;
     for (const l of listeners) l();
   });

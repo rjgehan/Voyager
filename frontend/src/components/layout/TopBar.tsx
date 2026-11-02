@@ -1,8 +1,8 @@
 // Phone and tablet top bar (DESIGN §6.16): ☰, the note title with the connection dot,
 // switcher/search and ⋯ (palette, panels, "Show Markdown source", file actions, template,
-// today, reload).
+// today, help, theme, reload).
 // On tablets it also toggles the right sidebar overlay.
-import { CalendarDays, CloudUpload, CodeXml, Command as CommandIcon, Ellipsis, FileSearch, FolderInput, Globe, History, LayoutTemplate, Link2, ListTree, Menu, Moon, PanelRight, Pencil, Plus, RefreshCw, Star, StarOff, Sun, Trash, TriangleAlert, Waypoints } from 'lucide-react';
+import { CalendarDays, CircleHelp, CloudUpload, CodeXml, Command as CommandIcon, Ellipsis, FileSearch, FolderInput, Globe, History, LayoutTemplate, Link2, ListTree, Menu, Moon, PanelRight, Pencil, Plus, RefreshCw, Star, StarOff, Sun, Trash, TriangleAlert, Waypoints } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { matchPath, useLocation } from 'react-router';
 import { useTree } from '../../api/hooks';
@@ -97,6 +97,7 @@ function MoreMenu({ path, mode, onClose }: { path: string | null; mode: ViewMode
       {note && command('templates.insert', 'Insert template', <LayoutTemplate size={16} />)}
       {command('daily.today', 'Today', <CalendarDays size={16} />)}
       <div className="menu-separator" role="separator" />
+      {command('help.open', 'Help', <CircleHelp size={16} />)}
       {item(dark ? 'Light theme' : 'Dark theme', dark ? <Sun size={16} /> : <Moon size={16} />, toggleTheme)}
       {item('Reload', <RefreshCw size={16} />, () => navigateOverOverlays(() => window.location.reload()))}
     </div>

@@ -3,7 +3,7 @@
 // Tablet: icon rail + workspace, both sidebars as overlays. Desktop: ribbon, resizable sidebars,
 // workspace and status bar. Touch devices get the editing toolbar as the last grid row. The shell
 // also hosts the overlays, the app-level file input and the polite live region.
-import { CalendarDays, FilePlus, Inbox, Moon, RefreshCw, Settings, Sun, Trash, TriangleAlert } from 'lucide-react';
+import { CalendarDays, CircleHelp, FilePlus, Inbox, Moon, RefreshCw, Settings, Sun, Trash, TriangleAlert } from 'lucide-react';
 import { lazy, Suspense, useCallback, useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 import { setFilePicker } from '../../features/attachments';
 import { runCommand } from '../../features/commands';
@@ -130,7 +130,11 @@ function LiveRegion() {
   );
 }
 
-function DrawerActions() {
+/**
+ * The phone drawer's New note, Today and Capture buttons, and the registered pages as a grid of
+ * tiles (DESIGN §6.16): a list of them took 11 rows and left the file tree one row.
+ */
+export function DrawerActions() {
   useExtensionsVersion();
   const run = (id: string) => runCommand(id, { activePath: activePath() });
   const pages = menuPages();
@@ -152,8 +156,9 @@ function DrawerActions() {
           {pages.map((p) => {
             const Icon = p.icon;
             return (
-              <button key={p.route} type="button" className="menu-item" onClick={() => run(`page.${p.route}`)}>
-                <Icon size={16} aria-hidden /> {p.title}
+              <button key={p.route} type="button" className="drawer-page" title={p.title} onClick={() => run(`page.${p.route}`)}>
+                <Icon size={20} aria-hidden />
+                <span className="drawer-page-label">{p.title}</span>
               </button>
             );
           })}
@@ -174,6 +179,9 @@ function DrawerFooter() {
       </button>
       <button type="button" className="icon-button drawer-footer-button" onClick={() => run('trash.open')}>
         <Trash size={18} aria-hidden /> Trash
+      </button>
+      <button type="button" className="icon-button drawer-footer-button" onClick={() => run('help.open')}>
+        <CircleHelp size={18} aria-hidden /> Help
       </button>
       <button
         type="button"

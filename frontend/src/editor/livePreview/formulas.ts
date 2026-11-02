@@ -188,7 +188,9 @@ function inlineFormulas(view: EditorView): { from: number; to: number; expressio
         if (node.name === 'FencedCode' || node.name === 'CodeBlock' || node.name === 'Frontmatter' || node.name === 'Table' || node.name === 'CommentBlock' || node.name === 'Comment') return false;
         if (node.name !== 'InlineCode') return;
         const marks = node.node.getChildren('CodeMark');
-        if (marks.length < 2) return false;
+        // Code over a soft line break stays code: a view plugin's replaced range may not cross a
+        // line break (the editor would throw, and the note not open).
+        if (marks.length < 2 || state.doc.lineAt(node.from).to < node.to) return false;
         const expression = state.sliceDoc(marks[0].to, marks[marks.length - 1].from).trim();
         if (isFormula(expression)) out.push({ from: node.from, to: node.to, expression });
         return false;

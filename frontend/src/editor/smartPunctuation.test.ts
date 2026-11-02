@@ -1,8 +1,11 @@
 import { ensureSyntaxTree } from '@codemirror/language';
 import { EditorSelection, EditorState } from '@codemirror/state';
+import { EditorView } from '@codemirror/view';
 import { describe, expect, it } from 'vitest';
 import { markdownNoteLanguage } from './language';
 import { smartPunctuationGuard } from './smartPunctuation';
+import { cellLanguage } from './livePreview/table';
+import { tableCellHost } from './livePreview/table/facets';
 
 /** Simulates iOS replacing the text before the cursor with a smart character. */
 function typeSmart(doc: string, cursor: number, replaceFrom: number, insert: string): string {
@@ -32,5 +35,26 @@ describe('smartPunctuationGuard', () => {
   it('keeps smart punctuation in ordinary prose', () => {
     expect(typeSmart('He said ', 8, 8, '“')).toBe('He said “');
     expect(typeSmart('a -', 3, 2, '—')).toBe('a —');
+  });
+});
+
+describe('smartPunctuationGuard in a table cell (ROADMAP 39)', () => {
+  /** iOS typing a smart character into a table cell's editor holding `doc`. */
+  function typeInCell(doc: string, insert: string): string {
+    const host = new EditorView({ doc: '' });
+    const state = EditorState.create({ doc, selection: EditorSelection.cursor(doc.length), extensions: [cellLanguage, tableCellHost.of(host), smartPunctuationGuard] });
+    const next = state.update({ changes: { from: doc.length, insert }, userEvent: 'input.type' }).state.doc.toString();
+    host.destroy();
+    return next;
+  }
+
+  it('keeps a formula’s quotes straight, so its text and sheet names still read', () => {
+    expect(typeInCell('=IF(A2>0,', '“')).toBe('=IF(A2>0,"');
+    expect(typeInCell('=IF(A2>0,"yes', '”')).toBe('=IF(A2>0,"yes"');
+    expect(typeInCell(' =', '‘')).toBe(" ='");
+  });
+
+  it('leaves a cell of text alone', () => {
+    expect(typeInCell('He said ', '“')).toBe('He said “');
   });
 });

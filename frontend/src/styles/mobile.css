@@ -7,6 +7,34 @@ select {
   font-size: max(16px, 1em);
 }
 
+/*
+ * On a touch screen the floor wins over the classes: `.text-input` and `.select` are 14 px, and
+ * many fields take the 13 px UI size through `font: inherit`, so iOS zoomed into the settings,
+ * the task fields, the search box and the dialogs (DESIGN §6.16). 1em is the parent's size here,
+ * so a field that inherits a larger size (a note's title) keeps it. Excalidraw's text editor and
+ * PDF form fields are sized inline to match what they edit. The second copy is for iOS with a
+ * trackpad, whose pointer is fine (only iOS Safari knows -webkit-touch-callout).
+ */
+@media (pointer: coarse) {
+  :is(
+      input:not([type='checkbox'], [type='radio'], [type='range'], [type='color'], [type='file'], [type='button'], [type='submit'], [type='reset'], [type='image']),
+      textarea,
+      select
+    ):not(.excalidraw *, .annotationLayer *) {
+    font-size: max(16px, 1em) !important;
+  }
+}
+
+@supports (-webkit-touch-callout: none) {
+  :is(
+      input:not([type='checkbox'], [type='radio'], [type='range'], [type='color'], [type='file'], [type='button'], [type='submit'], [type='reset'], [type='image']),
+      textarea,
+      select
+    ):not(.excalidraw *, .annotationLayer *) {
+    font-size: max(16px, 1em) !important;
+  }
+}
+
 @media (pointer: coarse) {
   :root {
     --tap-target: 44px;
@@ -18,8 +46,48 @@ select {
   }
 
   .panel-tab {
+    flex: none;
     width: 44px;
     height: 44px;
+  }
+
+  /* More panels than fit (the phone's sheet holds 8 at 375 px) scroll instead of shrinking. */
+  .panel-tab-strip {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+
+  .panel-tab-strip::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Switches the size of iOS's (51 × 31), with a 44 px touch area. */
+  .toggle {
+    width: 51px;
+    height: 31px;
+  }
+
+  .toggle::after {
+    content: '';
+    position: absolute;
+    inset: -7px -4px;
+  }
+
+  .toggle-knob {
+    top: 2px;
+    left: 2px;
+    width: 27px;
+    height: 27px;
+  }
+
+  .toggle.is-on .toggle-knob {
+    transform: translateX(20px);
+  }
+
+  /* Segmented controls (List / Board, Diff / Full text, the vault history's tabs, filters). */
+  .segmented button {
+    min-height: 40px;
   }
 
   /* Every tap target is at least 44 × 44 px (DESIGN §6.16). */
@@ -73,7 +141,37 @@ select {
   }
 }
 
-@media (max-width: 767px) {
+/* Without a hover, a press shows instead (hover styles are only for a mouse, app.css). */
+@media (hover: none) {
+  .ribbon-button:not(:disabled):active,
+  .icon-button:not(:disabled):active,
+  .panel-tab:active,
+  .tree-row:active,
+  .outline-item:active,
+  .menu-item:active,
+  .button:not(:disabled):active,
+  .settings-nav-item:active,
+  .history-row:active,
+  .tag-row:active {
+    background: var(--background-modifier-hover);
+  }
+
+  .button-primary:not(:disabled):active {
+    background: var(--interactive-accent-hover);
+  }
+
+  .button-danger:not(:disabled):active {
+    background: var(--text-error);
+    filter: brightness(1.1);
+  }
+}
+
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {
+  /* Key hints mean nothing without a keyboard. */
+  .picker-kbd {
+    display: none;
+  }
+
   :root {
     --content-gutter: 16px;
   }
@@ -149,6 +247,22 @@ select {
 
 .mobile-toolbar-scroll::-webkit-scrollbar {
   display: none;
+}
+
+/* More tools past an edge: the row fades out there (MobileToolbar sets the classes on scroll). */
+.mobile-toolbar-scroll.has-more-after {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
+}
+
+.mobile-toolbar-scroll.has-more-before {
+  -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 32px), transparent);
+  mask-image: linear-gradient(to left, #000 calc(100% - 32px), transparent);
+}
+
+.mobile-toolbar-scroll.has-more-before.has-more-after {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent);
+  mask-image: linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent);
 }
 
 .mobile-toolbar-button {

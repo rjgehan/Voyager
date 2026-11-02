@@ -62,6 +62,11 @@ export function HomePage() {
             Today
           </button>
         )}
+        {getCommand('help.open') && (
+          <button type="button" className="button" onClick={() => runCommand('help.open', { activePath: null })}>
+            Help
+          </button>
+        )}
       </div>
     </div>
   );

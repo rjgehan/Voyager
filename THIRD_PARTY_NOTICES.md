@@ -76,6 +76,8 @@ Vitest, ESLint and so on) are not shipped.
 | @glideapps/glide-data-grid | MIT | <https://grid.glideapps.com> |
 | @iconify/types | MIT | <https://github.com/iconify/iconify> |
 | @iconify/utils | MIT | <https://iconify.design/docs/libraries/utils/> |
+| @jitl/quickjs-ffi-types | MIT | <https://github.com/justjake/quickjs-emscripten> |
+| @jitl/quickjs-singlefile-browser-release-asyncify | MIT | <https://github.com/justjake/quickjs-emscripten> |
 | @joplin/turndown-plugin-gfm | MIT | <https://github.com/laurent22/joplin-turndown-plugin-gfm> |
 | @jridgewell/gen-mapping | MIT | <https://github.com/jridgewell/sourcemaps/tree/main/packages/gen-mapping> |
 | @jridgewell/resolve-uri | MIT | <https://github.com/jridgewell/resolve-uri> |
@@ -222,7 +224,6 @@ Vitest, ESLint and so on) are not shipped.
 | es-errors | MIT | <https://github.com/ljharb/es-errors> |
 | es-toolkit | MIT | <https://es-toolkit.dev> |
 | es6-promise-pool | MIT | <https://github.com/timdp/es6-promise-pool> |
-| fastdom | MIT | <https://github.com/wilsonpage/fastdom> |
 | fill-range | MIT | <https://github.com/jonschlinkert/fill-range> |
 | find-up | MIT | <https://github.com/sindresorhus/find-up> |
 | fractional-indexing | CC0-1.0 | <https://github.com/rocicorp/fractional-indexing> |
@@ -297,6 +298,7 @@ Vitest, ESLint and so on) are not shipped.
 | prop-types | MIT | <https://facebook.github.io/react/> |
 | punycode.js | MIT | <https://mths.be/punycode> |
 | pwacompat | Apache-2.0 | <https://github.com/GoogleChrome/pwacompat> |
+| quickjs-emscripten-core | MIT | <https://github.com/justjake/quickjs-emscripten> |
 | react | MIT | <https://react.dev/> |
 | react-dom | MIT | <https://react.dev/> |
 | react-easy-swipe | MIT | <http://leandrowd.github.io/react-easy-swipe/> |
@@ -322,7 +324,6 @@ Vitest, ESLint and so on) are not shipped.
 | shebang-regex | MIT | <https://github.com/sindresorhus/shebang-regex> |
 | sliced | MIT | <https://github.com/aheckmann/sliced> |
 | source-map-js | BSD-3-Clause | <https://github.com/7rulnik/source-map-js> |
-| strictdom | MIT | <https://github.com/wilsonpage/strictdom> |
 | style-mod | MIT | <https://code.haverbeke.berlin/marijn/style-mod> |
 | stylis | MIT | <https://github.com/thysultan/stylis.js> |
 | supports-preserve-symlinks-flag | MIT | <https://github.com/inspect-js/node-supports-preserve-symlinks-flag> |
@@ -396,10 +397,10 @@ The compile and runtime dependencies of `backend/pom.xml`, direct and transitive
 | com.standardwebhooks:standardwebhooks | MIT | <https://github.com/standard-webhooks/standard-webhooks/tree/main/libraries/java> |
 | commons-codec:commons-codec | Apache-2.0 | <https://commons.apache.org/proper/commons-codec/> |
 | commons-logging:commons-logging | Apache-2.0 | <https://commons.apache.org/proper/commons-logging/> |
-| io.micrometer:micrometer-commons | Apache-2.0 | <https://github.com/micrometer-metrics/micrometer-commercial> |
-| io.micrometer:micrometer-core | Apache-2.0 | <https://github.com/micrometer-metrics/micrometer-commercial> |
-| io.micrometer:micrometer-jakarta9 | Apache-2.0 | <https://github.com/micrometer-metrics/micrometer-commercial> |
-| io.micrometer:micrometer-observation | Apache-2.0 | <https://github.com/micrometer-metrics/micrometer-commercial> |
+| io.micrometer:micrometer-commons | Apache-2.0 | <https://github.com/micrometer-metrics/micrometer> |
+| io.micrometer:micrometer-core | Apache-2.0 | <https://github.com/micrometer-metrics/micrometer> |
+| io.micrometer:micrometer-jakarta9 | Apache-2.0 | <https://github.com/micrometer-metrics/micrometer> |
+| io.micrometer:micrometer-observation | Apache-2.0 | <https://github.com/micrometer-metrics/micrometer> |
 | io.opentelemetry:opentelemetry-api | Apache-2.0 | <https://github.com/open-telemetry/opentelemetry-java> |
 | io.opentelemetry:opentelemetry-common | Apache-2.0 | <https://github.com/open-telemetry/opentelemetry-java> |
 | io.opentelemetry:opentelemetry-context | Apache-2.0 | <https://github.com/open-telemetry/opentelemetry-java> |
