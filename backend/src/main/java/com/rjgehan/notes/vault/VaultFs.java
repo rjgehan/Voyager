@@ -19,6 +19,8 @@ import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -121,6 +123,39 @@ public class VaultFs {
 			Files.deleteIfExists(tmp);
 		}
 		syncDirectory(target.getParent());
+	}
+
+	/**
+	 * The first half of {@link #atomicWrite}: writes and syncs {@code bytes} to a new temp file in the vault and returns
+	 * it, for {@link #placeStaged}. Many files can be staged at once from several threads, which overlaps their syncs;
+	 * then they are placed one after another, and their folders synced with {@link #syncParents}.
+	 */
+	public Path stage(byte[] bytes) throws IOException {
+		return writeTemp(bytes);
+	}
+
+	/** Atomically replaces (or creates) {@code disk} with a staged file, without syncing its folder. */
+	public void placeStaged(Path staged, String disk) throws IOException {
+		replace(staged, resolve(disk));
+	}
+
+	/** Deletes a staged file that was not placed (nothing happens once it was). */
+	public void discardStaged(Path staged) {
+		try {
+			Files.deleteIfExists(staged);
+		}
+		catch (IOException ex) {
+			// .notesapp/tmp is emptied at startup
+		}
+	}
+
+	/** Syncs the folders that hold these files, each once: what {@link #atomicWrite} does for one file. */
+	public void syncParents(Collection<String> disks) {
+		Set<Path> folders = new LinkedHashSet<>();
+		for (String disk : disks) {
+			folders.add(resolve(disk).getParent());
+		}
+		folders.forEach(this::syncDirectory);
 	}
 
 	/**
