@@ -94,6 +94,7 @@ import { ChartDialog, ColumnWidthDialog, ImportDialog, NamedRangesDialog, Number
 import { useFormulaAssist } from './formulaAssist';
 import { useReferencePicking } from './referencePicking';
 import { useStraightQuotes } from './straightQuotes';
+import { useFormulaKeys } from './formulaKeys';
 import { SheetGrid, type GridFilter, type ScreenRect, type SheetGridHandlers } from './SheetGrid';
 import { SheetTabs } from './SheetTabs';
 import { useCoarsePointer, useSheetTheme } from './theme';
@@ -266,6 +267,8 @@ ${JSON.stringify(sheet.filter ?? null)}`;
   useFormulaAssist({ portalRef, barInput: () => bar.current?.editingInput() ?? null });
   // iOS Smart Punctuation's curly quotes become straight while a formula is typed.
   useStraightQuotes({ portalRef, barInput: () => bar.current?.editingInput() ?? null });
+  // F4 cycles a reference's $ signs; Mod-; and Mod-Shift-; type the date and the time.
+  useFormulaKeys({ portalRef, barInput: () => bar.current?.editingInput() ?? null });
 
   useEffect(() => {
     remembered.set(path, { sheetId: sheet.id, selections, chartsOpen });
@@ -1024,6 +1027,7 @@ ${JSON.stringify(sheet.filter ?? null)}`;
     onToggleSelection: toggleSelectionCheckboxes,
     onDropdown: (at, rect) => setDropdown({ at, anchor: rect }),
     onFind: (replace) => openFind(replace),
+    onInsertNow: (at, text) => setCells([typedEdit(sheet, at.col, at.row, text)], { implyFormats: true }),
     onUndo: undo,
     onRedo: redo,
     onEscape: () => {

@@ -1100,3 +1100,74 @@ describe('find and replace (DESIGN §6.21.14)', () => {
     expect(screen.getByRole('tab', { name: 'Notes' })).toHaveAttribute('aria-selected', 'true');
   });
 });
+
+describe('Google Sheets keyboard shortcuts (DESIGN §6.21.16)', () => {
+  const key = (k: string, mods: { ctrl?: boolean; shift?: boolean; alt?: boolean } = {}) => {
+    const e = { key: k, ctrlKey: mods.ctrl ?? false, metaKey: false, shiftKey: mods.shift ?? false, altKey: mods.alt ?? false, cancel: vi.fn(), preventDefault: vi.fn(), stopPropagation: vi.fn(), bounds: undefined, keyCode: 0, rawEvent: undefined, location: undefined };
+    act(() => gridProps().onKeyDown!(e));
+    return e;
+  };
+
+  it('jumps to the edge of the data with Mod-Arrow and extends to it with Mod-Shift-Arrow', async () => {
+    await openGrid();
+    select(1, 0); // B2: B2 and B3 hold numbers, B4 is empty, B5 the total
+    key('ArrowDown', { ctrl: true });
+    expect(nameBox().value).toBe('B3');
+    key('ArrowDown', { ctrl: true });
+    expect(nameBox().value).toBe('B5');
+    key('ArrowUp', { ctrl: true, shift: true });
+    expect(nameBox().value).toBe('B3:B5');
+    select(0, 0);
+    key('ArrowRight', { ctrl: true });
+    expect(nameBox().value).toBe('C2');
+  });
+
+  it('selects columns with Ctrl-Space and rows with Shift-Space, and types the date with Mod-;', async () => {
+    const path = await openGrid();
+    select(1, 1, 2, 1); // B3:C3
+    key(' ', { ctrl: true });
+    expect(nameBox().value).toBe('B1:C1000');
+    select(1, 1);
+    key(' ', { shift: true });
+    expect(nameBox().value).toBe('A3:Z3');
+    select(3, 0); // D2
+    key(';', { ctrl: true });
+    const d2 = (await saved(path)).sheets[0].cells.D2;
+    expect(d2.fmt).toBe('yyyy-mm-dd');
+    expect(typeof d2.v).toBe('number');
+  });
+
+  it('pastes values only with Mod-Shift-V, cycles $ with F4 and types the time while editing', async () => {
+    const path = await openGrid();
+    select(2, 0); // C2: =B2/Total
+    screen.getByTestId('grid').focus();
+    const data = new Map<string, string>();
+    const clipboardData = { setData: (t: string, v: string) => data.set(t, v), getData: (t: string) => data.get(t) ?? '' };
+    const fire = (type: 'copy' | 'paste') => {
+      const e = new Event(type, { cancelable: true }) as ClipboardEvent;
+      Object.defineProperty(e, 'clipboardData', { value: clipboardData });
+      act(() => void window.dispatchEvent(e));
+    };
+    fire('copy');
+    select(4, 0); // E2
+    screen.getByTestId('grid').focus();
+    fireEvent.keyDown(screen.getByTestId('grid'), { key: 'V', ctrlKey: true, shiftKey: true });
+    fire('paste');
+    const e2 = (await saved(path)).sheets[0].cells.E2;
+    expect(e2.f).toBeUndefined();
+    expect(e2.v).toBeCloseTo(0.748, 3);
+    // F4 in the formula bar.
+    const input = formulaInput();
+    act(() => input.focus());
+    fireEvent.change(input, { target: { value: '=B2*2' } });
+    input.setSelectionRange(3, 3);
+    fireEvent.keyDown(input, { key: 'F4' });
+    expect(input.value).toBe('=$B$2*2');
+    fireEvent.keyDown(input, { key: 'F4' });
+    expect(input.value).toBe('=B$2*2');
+    // Mod-Shift-; types the time at the caret.
+    fireEvent.change(input, { target: { value: '' } });
+    fireEvent.keyDown(input, { key: ':', code: 'Semicolon', ctrlKey: true, shiftKey: true });
+    expect(input.value).toMatch(/^\d\d:\d\d:\d\d$/);
+  });
+});

@@ -20,13 +20,14 @@ import {
   type Rectangle,
 } from '@glideapps/glide-data-grid';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
-import { columnLetters } from '../../sheets/a1';
-import { conditionalStyles } from '../../sheets/conditional';
-import type { ValidationLook } from '../../sheets/validation';
-import { shownCell } from '../../sheets/display';
-import type { Sheet } from '../../sheets/format';
-import type { CellRange } from '../../sheets/refs';
 import { isApple } from '../../features/platform';
+import { columnLetters, toA1 } from '../../sheets/a1';
+import { conditionalStyles } from '../../sheets/conditional';
+import { shownCell } from '../../sheets/display';
+import { cellValue, type Sheet } from '../../sheets/format';
+import { dataEdge } from '../../sheets/keys';
+import type { CellRange } from '../../sheets/refs';
+import type { ValidationLook } from '../../sheets/validation';
 import {
   frozenRowAt,
   frozenRowTop,
@@ -40,6 +41,7 @@ import {
   type GridLayout,
   type SheetSelection,
 } from './gridModel';
+import { nowText } from './formulaKeys';
 import { FreezeHandles } from './FreezeHandles';
 import type { SheetTheme } from './theme';
 
@@ -75,6 +77,8 @@ export interface SheetGridHandlers {
   onDropdown(at: CellAt, rect: ScreenRect): void;
   /** Mod-F (find) and Mod-H (find and replace). */
   onFind(replace: boolean): void;
+  /** Mod-; and Mod-Shift-; in the grid: the date or the time into the active cell (sheet coordinates). */
+  onInsertNow(at: CellAt, text: string): void;
 }
 
 export interface ScreenRect {
@@ -593,6 +597,54 @@ export function SheetGrid({ sheet, layout, looks, filter, version, selection, ma
         handlers.onEscape();
         return;
       }
+      // Google Sheets' selection keys (DESIGN §6.21.16): Mod-Arrow jumps to the edge of the data,
+      // Mod-Shift-Arrow extends the selection there; Ctrl-Space selects columns, Shift-Space rows.
+      const arrow = MOVES[e.key];
+      if (mod && !e.altKey && arrow) {
+        take();
+        const [dx, dy] = arrow;
+        const { active } = selection;
+        const r = selection.range;
+        const sheetNow = model.sheet;
+        const filled = (col: number, row: number) => {
+          const v = cellValue(sheetNow.cells[toA1(col, view.sheetRow(row))]);
+          return v !== null && v !== '';
+        };
+        // Extending moves the selection's far edge, the one away from the active cell.
+        const from = e.shiftKey
+          ? { col: dx === 0 ? active.col : active.col === r.col ? r.col + r.width - 1 : r.col, row: dy === 0 ? active.row : active.row === r.row ? r.row + r.height - 1 : r.row }
+          : active;
+        const to =
+          dy !== 0
+            ? { col: from.col, row: dataEdge(from.row, dy as 1 | -1, layout.rows - 1, (i) => filled(from.col, i)) }
+            : { col: dataEdge(from.col, dx as 1 | -1, layout.cols - 1, (i) => filled(i, from.row)), row: from.row };
+        if (!e.shiftKey) handlers.onSelect({ active: to, range: { ...to, width: 1, height: 1 } });
+        else if (dy !== 0) handlers.onSelect({ active, range: { col: r.col, width: r.width, row: Math.min(active.row, to.row), height: Math.abs(to.row - active.row) + 1 } });
+        else handlers.onSelect({ active, range: { row: r.row, height: r.height, col: Math.min(active.col, to.col), width: Math.abs(to.col - active.col) + 1 } });
+        return;
+      }
+      if (e.key === ' ' && (e.ctrlKey || e.shiftKey) && !e.altKey && !e.metaKey) {
+        take();
+        const r = selection.range;
+        const columns = e.ctrlKey;
+        const rows = e.shiftKey;
+        handlers.onSelect({
+          active: selection.active,
+          range: {
+            col: rows ? 0 : r.col,
+            width: rows ? layout.cols : r.width,
+            row: columns ? 0 : r.row,
+            height: columns ? layout.rows : r.height,
+          },
+        });
+        return;
+      }
+      if (mod && editable && (e.key === ';' || e.key === ':')) {
+        take();
+        const { col, row } = selection.active;
+        handlers.onInsertNow({ col, row: view.sheetRow(row) }, nowText(e.shiftKey, e.altKey));
+        return;
+      }
       if (mod && !e.altKey && !e.shiftKey && (key === 'f' || key === 'h')) {
         take();
         e.stopPropagation();
@@ -666,7 +718,7 @@ export function SheetGrid({ sheet, layout, looks, filter, version, selection, ma
         handlers.onEdit({ col, row }, e.key);
       }
     },
-    [handlers, editable, selection, frozenActive, f, touch, layout.cols, layout.rows, looks, view, gridRef],
+    [handlers, editable, selection, frozenActive, f, touch, layout.cols, layout.rows, looks, view, gridRef, model],
   );
 
   // ---------- columns and size ----------
