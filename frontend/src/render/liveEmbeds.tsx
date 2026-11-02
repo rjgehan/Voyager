@@ -19,7 +19,7 @@ import { handleRenderedClick } from './interaction';
 const KINDS = new Set(['image', 'audio', 'video', 'pdf', 'note']);
 
 /** Shows a vault file's embed in `el`; returns what removes it. */
-export function renderLiveEmbed(el: HTMLElement, { entry, subpath, display, size }: EmbedRequest, sourcePath: string): () => void {
+export function renderLiveEmbed(el: HTMLElement, { entry, subpath, display, size, editable }: EmbedRequest, sourcePath: string): () => void {
   const kind = KINDS.has(entry.kind) ? entry.kind : 'file';
   el.classList.add('markdown-rendered');
   const embed = document.createElement('span');
@@ -54,7 +54,7 @@ export function renderLiveEmbed(el: HTMLElement, { entry, subpath, display, size
     embed.appendChild(img);
     return () => embed.remove();
   }
-  hydrateEmbeds(el, makeEmbedContext(sourcePath, currentTree(), 0));
+  hydrateEmbeds(el, makeEmbedContext(sourcePath, currentTree(), 0, editable === true));
   const onClick = (e: MouseEvent) => handleRenderedClick(e, sourcePath);
   el.addEventListener('click', onClick);
   return () => {

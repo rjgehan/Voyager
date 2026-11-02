@@ -110,6 +110,8 @@ export interface EmbedRequest {
   subpath: string | null;
   display: string | null;
   size: { width: number; height: number | null } | null;
+  /** The note can be written: the embed may be edited in place (a spreadsheet's grid, ROADMAP item 42). */
+  editable?: boolean;
 }
 
 export type EditorMenuEntry = { id: string; label: string; danger?: boolean; disabled?: boolean; run(): void } | 'separator';

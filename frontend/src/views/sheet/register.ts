@@ -103,7 +103,8 @@ export function registerSheetView(): void {
     textual: true,
     modes: ['edit'],
     load: withMerge(sheetMerge, () => import('./SheetView')),
-    loadEmbed: withMerge(sheetMerge, () => import('./SheetEmbed')),
+    // Edited in place in notes that can be written (ROADMAP item 42); item 6b's table elsewhere.
+    loadEmbed: withMerge(sheetMerge, () => import('../../sheets/links/embed/SheetLiveEmbed')),
     create: { label: 'spreadsheet', extension: 'sheet', initialContent: () => NEW_SHEET_TEXT },
     merge: sheetMerge.merge,
     commands: SHEET_COMMANDS,

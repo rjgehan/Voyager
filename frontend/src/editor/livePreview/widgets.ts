@@ -249,7 +249,7 @@ export function widgetFor(spec: WidgetSpec, ctx: WidgetContext): WidgetType {
     case 'text':
       return new TextWidget(spec.text, spec.className);
     case 'embed':
-      return embedWidget(spec.embed, ctx.note, ctx.remoteImages);
+      return embedWidget(spec.embed, ctx.note, ctx.remoteImages, ctx.checkboxes);
     case 'footnote': {
       const index = ctx.footnotes();
       return new FootnoteWidget(spec.label === null ? index.inlineNumber(spec.at) : index.number(spec.label), spec.label);

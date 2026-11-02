@@ -24,6 +24,12 @@ export interface EmbedProps {
   height?: number;
   sourcePath: string;
   depth: number;
+  /**
+   * The note showing the embed can be written (Live Preview, not locked): an embed may then be
+   * edited in place (a spreadsheet's grid, ROADMAP item 42). Absent elsewhere (embedded notes,
+   * canvases, rendered blocks), where embeds are read-only.
+   */
+  editable?: boolean;
 }
 
 export interface FileViewDescriptor {

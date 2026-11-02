@@ -1,0 +1,171 @@
+/* Spreadsheets embedded in notes and edited in place (ROADMAP item 42, DESIGN §6.45), on top of item
+   6b's embed table (styles/sheetEmbed.css). Loaded with the embed's chunk. No rem (rootFontSize). */
+
+.sheet-live-embed.is-editable {
+  cursor: default;
+}
+
+.sheet-live-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+  margin-bottom: 4px;
+  /* Room for the embed's edit button (</>) at the top right. */
+  padding-right: 36px;
+}
+
+.sheet-live-head .markdown-embed-title {
+  margin-bottom: 0;
+}
+
+.sheet-live-toolbar {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0;
+}
+
+.sheet-live-toolbar .icon-button,
+.sheet-live-open {
+  min-width: 28px;
+  min-height: 28px;
+  padding: 4px;
+}
+
+.sheet-live-open {
+  gap: 4px;
+  margin-left: auto;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+.sheet-live-sheets {
+  max-width: 160px;
+  padding: 2px 4px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-size: var(--font-ui-smaller);
+}
+
+.sheet-live-bar {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-height: 22px;
+  margin-bottom: 4px;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  white-space: nowrap;
+}
+
+.sheet-live-name {
+  min-width: 36px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.sheet-live-text {
+  overflow: hidden;
+  font-family: var(--font-monospace);
+  text-overflow: ellipsis;
+}
+
+.sheet-live-error {
+  overflow: hidden;
+  color: var(--text-error);
+  text-overflow: ellipsis;
+}
+
+.sheet-live-scroll {
+  position: relative;
+}
+
+.sheet-live-table:focus {
+  outline: none;
+}
+
+.sheet-live-embed .sheet-live-table th {
+  min-width: 28px;
+  padding: 1px 6px;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-secondary);
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+  font-weight: 400;
+  text-align: center;
+  user-select: none;
+}
+
+.sheet-live-embed .sheet-live-table th.is-current {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+
+.sheet-live-embed .sheet-live-table.is-editable td {
+  cursor: cell;
+  user-select: none;
+}
+
+.sheet-live-embed .sheet-live-table td.is-selected {
+  background: color-mix(in srgb, var(--interactive-accent) 12%, transparent);
+}
+
+.sheet-live-embed .sheet-live-table td.is-active {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: -2px;
+}
+
+.sheet-live-embed .sheet-live-table td.is-picked {
+  outline: 2px dashed var(--interactive-accent);
+  outline-offset: -2px;
+}
+
+.sheet-live-input {
+  position: absolute;
+  z-index: 2;
+  box-sizing: border-box;
+  padding: 3px 8px;
+  border: 2px solid var(--interactive-accent);
+  border-radius: 0;
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font: inherit;
+  font-size: var(--font-ui-small);
+  font-variant-numeric: tabular-nums;
+  box-shadow: var(--shadow-s);
+}
+
+.sheet-live-input:focus {
+  outline: none;
+}
+
+@media (pointer: coarse) {
+  .sheet-live-toolbar .icon-button,
+  .sheet-live-open {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .sheet-live-embed .sheet-live-table.is-editable td {
+    height: 32px;
+  }
+
+  /* 16 px keeps iOS from zooming into the field. */
+  .sheet-live-input {
+    font-size: 16px;
+  }
+
+  .sheet-live-head {
+    padding-right: 48px;
+  }
+}
+
+@media (max-width: 480px) {
+  .sheet-live-open-label {
+    display: none;
+  }
+}
