@@ -49,8 +49,11 @@ function findJar() {
 function run(cmd, cmdArgs, cwd, env = {}) {
   console.log(`> ${cmd} ${cmdArgs.join(' ')}   (in ${cwd})`);
   const opts = { cwd, stdio: 'inherit', env: { ...process.env, ...env } };
-  // .cmd scripts (mvnw.cmd, npm.cmd) need cmd.exe on Windows; give it one quoted command line.
-  if (win) execSync([cmd, ...cmdArgs].map((a) => `"${a}"`).join(' '), opts);
+  // .cmd scripts (mvnw.cmd, npm.cmd) need cmd.exe on Windows; give it one command line, with quotes only
+  // where a part needs them. A quoted bare name that cmd.exe finds on the PATH ("npm") runs the batch file
+  // with %~dp0 set to the current folder, so npm.cmd looks for its own files there and fails.
+  const quote = (a) => (/[\s"&|<>^()]/.test(a) ? `"${a}"` : a);
+  if (win) execSync([cmd, ...cmdArgs].map(quote).join(' '), opts);
   else execFileSync(cmd, cmdArgs, opts);
 }
 
