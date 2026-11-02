@@ -9,6 +9,7 @@ import { queryKeys, STALE } from '../api/queryKeys';
 import type { PublishedNote, PublishRequest, PublishResponse } from '../api/types';
 import { toast } from '../state/toasts';
 import { confirmAction } from '../state/dialogs';
+import { documents } from '../sync/instance';
 import { toastError } from './errors';
 
 export function usePublish() {
@@ -58,6 +59,8 @@ function refresh(): Promise<void> {
 
 export async function publishNote(req: PublishRequest): Promise<PublishedNote | null> {
   try {
+    // The server renders the saved note: what was typed in the last second goes out first.
+    await documents.get(req.path)?.flush();
     const note = await api.publishNote(req);
     await refresh();
     toast(`Published at ${note.url}`);
