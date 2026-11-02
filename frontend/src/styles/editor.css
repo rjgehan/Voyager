@@ -1178,6 +1178,13 @@ th.cm-lp-cell {
   contain: none;
 }
 
+/* A callout's body is note HTML, so it is clipped to the callout, as the reading view clipped it to
+   the note (reading.css): whatever its styles, it cannot draw over the editor or the app (DESIGN
+   §5.14 #7). */
+.cm-lp-rich .callout {
+  contain: paint;
+}
+
 .cm-lp-rich > :first-child {
   margin-top: 0;
 }

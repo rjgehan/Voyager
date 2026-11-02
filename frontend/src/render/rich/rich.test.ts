@@ -338,4 +338,22 @@ describe('sanitizers', () => {
     expect(holder.querySelector('image')!.hasAttribute('href')).toBe(false);
     expect(holder.textContent).toContain('link');
   });
+
+  it('sanitizeSvg drops remote references spelled with escapes or as presentation attributes (security audit)', () => {
+    const holder = document.createElement('div');
+    holder.appendChild(
+      sanitizeSvg(
+        '<svg id="m2" xmlns="http://www.w3.org/2000/svg"><style>#m2 .node{fill:red;background:u\\72 l(https://evil.example/x.png)}</style>' +
+          '<rect id="a" fill="url(https://evil.example/s.svg#p)" filter="u\\rl(https://evil.example/f#f)"></rect><rect id="b" fill="url(#grad)"></rect>' +
+          '<image href="/\\evil.example/t.png"></image><g style="mask:image-set(&quot;https://evil.example/m.png&quot; 1x);fill:blue"></g></svg>',
+      ),
+    );
+    expect(holder.querySelector('style')?.textContent ?? '').toBe('');
+    expect(holder.querySelector('#a')!.hasAttribute('fill')).toBe(false);
+    expect(holder.querySelector('#a')!.hasAttribute('filter')).toBe(false);
+    expect(holder.querySelector('#b')!.getAttribute('fill')).toBe('url(#grad)');
+    expect(holder.querySelector('image')!.hasAttribute('href')).toBe(false);
+    expect(holder.querySelector('g')!.getAttribute('style')).toBe('fill:blue');
+    expect(holder.innerHTML).not.toContain('evil.example');
+  });
 });
