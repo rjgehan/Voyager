@@ -20,7 +20,7 @@ Where to find quick add:
 - **Command palette**: **Add task (quick add)**.
 - **In a note**: type `/task` and pick **New task…**.
 - **On a task page**: the **Add task** button at the top (phone: the round **+** button).
-- **A key**: quick add's default key, `Ctrl+Alt+T`, is also the default key of **New tab**, and New tab wins, so pressing it opens a tab. Give quick add a key of its own under **Settings › Hotkeys** (see [Keyboard shortcuts](keyboard-shortcuts.md#change-a-key)).
+- **A key**: `Ctrl+Alt+Q`, even while you are typing in a note. You can give it another key under **Settings › Hotkeys** (see [Keyboard shortcuts](keyboard-shortcuts.md#change-a-key)).
 
 ## The task pages
 

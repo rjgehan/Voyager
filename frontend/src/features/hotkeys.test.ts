@@ -83,6 +83,16 @@ describe('global hotkeys', () => {
     expect(add).not.toHaveBeenCalled();
     expect(typed.defaultPrevented).toBe(false);
     expect(lira.defaultPrevented).toBe(false);
+    // Quick add's own key, Mod-Alt-Q: AltGr+Q types @ on a German keyboard, a backslash on a Czech one.
+    const quick = vi.fn();
+    registerCommand({ id: 'test.quickAddQ', name: 'Add task (Q)', hotkey: 'Mod-Alt-q', globalHotkey: true, run: quick });
+    const at = press(content, { key: '@', code: 'KeyQ', ctrlKey: true, altKey: true });
+    const backslash = press(input, { key: '\\', code: 'KeyQ', ctrlKey: true, altKey: true });
+    expect(quick).not.toHaveBeenCalled();
+    expect(at.defaultPrevented).toBe(false);
+    expect(backslash.defaultPrevented).toBe(false);
+    press(input, { key: 'q', code: 'KeyQ', ctrlKey: true, altKey: true });
+    expect(quick).toHaveBeenCalledTimes(1);
     // Ctrl+Alt+T on a layout without an AltGr character there is still the hotkey, and so is any
     // Ctrl+Alt+T outside text fields.
     press(content, { key: 't', code: 'KeyT', ctrlKey: true, altKey: true });

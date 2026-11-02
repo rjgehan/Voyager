@@ -19,8 +19,11 @@ import './tasks.css';
 
 let registered = false;
 
-/** The quick-add hotkey: works while writing in a note too. */
-export const QUICK_ADD_HOTKEY = 'Mod-Alt-t';
+/**
+ * The quick-add hotkey: works while writing in a note too. Mod-Alt-T is New tab's
+ * (defaultHotkeys.test.ts keeps every default key to one command).
+ */
+export const QUICK_ADD_HOTKEY = 'Mod-Alt-q';
 
 /** Quick add from a task page starts in its context: the list of a list page, today on Today. */
 function pageContext(): QuickAddContext {

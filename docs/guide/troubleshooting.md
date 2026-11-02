@@ -78,9 +78,9 @@ The browser does not let NotesApp keep edits on the device until they are saved 
 
 ## Keys
 
-### `Ctrl+Alt+T` opens a new tab instead of adding a task
+### `Ctrl+Alt+Q` types a character instead of adding a task
 
-Quick add and New tab share that default key, and New tab wins. Give **Add task (quick add)** a key of its own under **Settings › Hotkeys**, or use `/task` in a note or **Add task** on the task pages. See [Change a key](keyboard-shortcuts.md#change-a-key).
+On a keyboard where AltGr+Q types a character (`@` on a German one, a backslash on a Czech one), Windows reports AltGr as `Ctrl+Alt`, so in a note or a text field that key types the character, as it should. Press it outside a text field, give **Add task (quick add)** another key under **Settings › Hotkeys**, or use `/task` in a note or **Add task** on the task pages. See [Change a key](keyboard-shortcuts.md#change-a-key).
 
 ### `Ctrl+Shift+T` reopened a browser tab
 
