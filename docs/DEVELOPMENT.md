@@ -9,6 +9,7 @@ How to run, test and change NotesApp locally, how the repository is laid out, an
 | `backend/` | Spring Boot app (`com.rjgehan.notes`), Maven wrapper |
 | `frontend/` | React + TypeScript + Vite SPA |
 | `clipper/` | The web clipper: browser extension, bookmarklet and iOS Shortcut script ([docs/CLIPPER.md](CLIPPER.md)) |
+| `e2e/` | The end-to-end suite (Playwright: API, PC and iPhone), its scratch stack and seed, and the screen inventory ([e2e/README.md](../e2e/README.md)) |
 | `deploy/` | `docker-compose.yml` (tailscale, notes, watchtower; optional backup sidecars), the backup scripts in `backup/`, the empty mirror-token placeholder in `mirror/`, Tailscale serve config, `.env.example`, and for CasaOS `casaos-compose.yml` (the app on the host's Tailscale), the advanced `casaos-compose-sidecar.yml` and the optional `casaos-backup-compose.yml` and `casaos-whisper-compose.yml` |
 | `desktop/` | The Electron desktop app for Windows and macOS ([DESKTOP.md](DESKTOP.md)) |
 | `.github/` | CI, image publishing, the GitHub Pages demo, Dependabot |
@@ -48,13 +49,14 @@ Checks (the same ones CI runs):
 cd backend;  .\mvnw.cmd verify                      # add "-DexcludedGroups=" to include the perf tests
 cd frontend; npx tsc -b; npm run lint; npm test; npm run build; npx vite build --mode demo
 cd clipper;  npm test                              # and desktop: npm test
+cd e2e; npm ci; npm run reset -- --prod; npm test; npm run stop   # end to end, on a scratch vault (e2e/README.md)
 ```
 
 `npm test` includes the accessibility checks that need no browser (axe-core on the app shell, and the theme colours' contrast). The full audit runs axe-core in an installed Chrome or Edge on every screen, both themes, desktop and phone: `cd frontend; npm run test:a11y` (not in CI; see [ACCESSIBILITY.md](ACCESSIBILITY.md)).
 
 ## How a change reaches the server
 
-1. **Pull requests** run the backend tests, the frontend lint, tests and build, and a Docker image build (amd64, not pushed), so the Dockerfile is exercised before anything reaches `main`.
+1. **Pull requests** run the backend tests, the frontend lint, tests and build, the end-to-end suite (the jar serving the built frontend, driven by Chrome as the PC and the iPhone; [e2e/README.md](../e2e/README.md)), and a Docker image build (amd64, not pushed), so the Dockerfile is exercised before anything reaches `main`.
 2. **A push to `main`** (docs-only pushes excepted) runs the same checks and then [`publish.yml`](../.github/workflows/publish.yml), which builds `linux/amd64` and `linux/arm64` images and pushes `ghcr.io/rjgehan/notesapp:latest` and `:sha-<7 hex>` to the GitHub Container Registry (GHCR).
 3. **Watchtower** on the server polls GHCR every 5 minutes, pulls the new image and recreates the `notes` container with a 45 s graceful stop. Open browser tabs reconnect and reload themselves onto the new build.
 4. **The live demo** ([`pages.yml`](../.github/workflows/pages.yml)) is rebuilt and deployed to GitHub Pages on pushes to `main` that touch `frontend/`.

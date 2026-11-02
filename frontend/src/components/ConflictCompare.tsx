@@ -75,8 +75,13 @@ export default function ConflictCompare({ session, merge, onClose }: Props) {
         <div>
           <h2 className="dialog-title">Compare versions</h2>
           <p className="compare-legend">
-            <span className="compare-swatch is-mine" aria-hidden /> Your text
-            <span className="compare-swatch is-theirs" aria-hidden /> Their text. Accept keeps yours, reject takes theirs.
+            <span className="compare-key">
+              <span className="compare-swatch is-mine" aria-hidden /> Your text
+            </span>
+            <span className="compare-key">
+              <span className="compare-swatch is-theirs" aria-hidden /> Their text.
+            </span>
+            <span>Accept keeps yours, reject takes theirs.</span>
           </p>
           {initial.autoMerged && <p className="compare-note">Merged automatically. Review the result before saving.</p>}
         </div>

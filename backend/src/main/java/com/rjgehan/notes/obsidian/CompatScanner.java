@@ -380,6 +380,11 @@ public final class CompatScanner {
 			if (target == null) {
 				continue;
 			}
+			// In a spreadsheet, a task list, a canvas or a drawing the subpath names a range, a section or a task, not a
+			// heading or a block id (API.md §1.8, §20.9; DESIGN §6.21.7): only a note's subpaths can be missing here.
+			if (kinds.kindOf(resolved.target()) != FileKind.NOTE) {
+				continue;
+			}
 			String wanted = lastSegment(subpath);
 			if (block) {
 				String id = wanted.substring(1);

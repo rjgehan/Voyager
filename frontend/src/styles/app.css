@@ -708,7 +708,9 @@ body.is-resizing {
   top: 0;
   z-index: 3;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, auto) minmax(0, 1fr);
+  /* The buttons on either side keep their width; in a narrow pane the breadcrumb shrinks (and
+     ellipsizes) instead of the save status and actions sliding over it. */
+  grid-template-columns: minmax(max-content, 1fr) minmax(0, auto) minmax(max-content, 1fr);
   align-items: center;
   gap: 12px;
   height: 40px;

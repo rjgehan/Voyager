@@ -378,6 +378,14 @@ textarea.text-input {
   color: var(--text-warning);
 }
 
+/* A swatch and its label never part when the legend wraps on a phone. */
+.compare-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
 .compare-swatch {
   display: inline-block;
   width: 10px;
