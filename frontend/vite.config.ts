@@ -1,7 +1,7 @@
 /// <reference types="vitest/config" />
 import { fileURLToPath } from 'node:url'
 import react from '@vitejs/plugin-react'
-import { createReadStream, readdirSync, readFileSync, statSync } from 'node:fs'
+import { copyFileSync, createReadStream, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative, resolve, sep } from 'node:path'
 import { defineConfig, type Plugin } from 'vite'
 import { bundleBudget } from './vite-plugin-budget.ts'
@@ -120,71 +120,120 @@ function clipperDevPlugin(): Plugin {
   }
 }
 
-export default defineConfig({
-  // The service worker is built after the app, from the files the build wrote (DESIGN §6.26).
-  // The main chunk's budget (DESIGN §6.1.1): the build fails when the initial JavaScript exceeds it.
-  plugins: [
-    react(),
-    packageAssetsPlugin(),
-    clipperDevPlugin(),
-    bundleBudget({ entry: 'index.html', maxGzipKiB: 350 }),
-    serviceWorker({ entry: 'src/sw/sw.ts', buildSha }),
-  ],
-  define: {
-    'import.meta.env.VITE_BUILD_SHA': JSON.stringify(buildSha),
-    'import.meta.env.VITE_EXCALIDRAW_ASSETS': JSON.stringify('/' + excalidrawAssets),
-    'import.meta.env.VITE_PDFJS_ASSETS': JSON.stringify('/' + pdfjsAssets),
-  },
-  resolve: {
-    alias: [
-      // Glide Data Grid's cell editor, a lazy chunk of the grid: the spreadsheet view loads it when
-      // the grid mounts, so the first keystrokes of the first edit are not lost while it downloads
-      // (DESIGN §6.21.5). The package exports no such path; this is the file its own import loads.
-      {
-        find: /^glide-overlay-editor$/,
-        replacement: fileURLToPath(
-          new URL('./node_modules/@glideapps/glide-data-grid/dist/esm/internal/data-grid-overlay-editor/data-grid-overlay-editor.js', import.meta.url),
-        ),
-      },
-      // One Mermaid for the app and Excalidraw's Mermaid import, each with its own configuration
-      // (src/render/rich/mermaidShared.ts, which imports the package by its file).
-      { find: /^mermaid$/, replacement: fileURLToPath(new URL('./src/render/rich/mermaidShared.ts', import.meta.url)) },
-      // Mermaid's optional ELK layout: elkjs is EPL-2.0 (not GPL-compatible) and 1.4 MB, so it is
-      // left out of the bundle; diagrams use the dagre layout (src/render/rich/mermaid.ts).
-      { find: /^elkjs\/lib\/elk\.bundled\.js$/, replacement: fileURLToPath(new URL('./src/render/rich/elkStub.ts', import.meta.url)) },
-    ],
-  },
-  server: {
-    // Tests also read docs/API.md (src/api/types.test.ts); the dev server keeps Vite's default allow list.
-    fs: process.env.VITEST ? { allow: ['.', '../docs'] } : undefined,
-    proxy: {
-      // changeOrigin stays false so the backend's Host and Origin checks see the browser's host.
-      '/api': {
-        target: backendUrl,
-        changeOrigin: false,
-        // SSE responses are long-lived; never time them out in the proxy.
-        timeout: 0,
-        proxyTimeout: 0,
-      },
+// The live demo on GitHub Pages (DESIGN §6.45): `vite build --mode demo` (npm run build:demo) builds
+// the app with the in-memory mock API and a showcase vault into dist-demo/, served under a base path
+// (`/notesapp/`, or NOTES_DEMO_BASE). It has no service worker and no manifest (an installed copy of a
+// demo that saves nothing would only confuse), and a 404.html copy of index.html so that GitHub Pages
+// answers deep links with the app.
+const DEMO_DESCRIPTION = 'A live demo of NotesApp, a self-hosted Obsidian-style notes app: Live Preview, formulas in tables, spreadsheets, drawings, canvases, tasks and more. Runs in your browser; nothing is saved.'
+
+function demoPagesPlugin(base: string): Plugin {
+  let outDir = ''
+  return {
+    name: 'notesapp-demo-pages',
+    apply: 'build',
+    configResolved(config) {
+      outDir = resolve(config.root, config.build.outDir)
     },
-  },
-  build: {
-    sourcemap,
-    rolldownOptions: {
-      output: {
-        // React and the router change rarely: in their own chunk they stay cached across deploys.
-        codeSplitting: {
-          groups: [{ name: 'react', test: /node_modules[\\/](react|react-dom|react-router|scheduler)[\\/]/ }],
+    transformIndexHtml(html) {
+      return html
+        .replace(/\s*<link rel="manifest"[^>]*>/, '')
+        .replace('<title>Notes</title>', '<title>NotesApp demo</title>')
+        .replace('<meta name="application-name" content="Notes" />', '<meta name="application-name" content="NotesApp demo" />')
+        .replace(
+          '</title>',
+          `</title>
+    <meta name="description" content="${DEMO_DESCRIPTION}" />
+    <meta property="og:title" content="NotesApp — live demo" />
+    <meta property="og:description" content="${DEMO_DESCRIPTION}" />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="https://rjgehan.github.io${base}social-preview.png" />
+    <meta name="twitter:card" content="summary_large_image" />`,
+        )
+    },
+    closeBundle() {
+      const index = join(outDir, 'index.html')
+      if (!statSync(index, { throwIfNoEntry: false })) return
+      copyFileSync(index, join(outDir, '404.html'))
+      // The social preview (README, docs/images) doubles as the demo's link preview.
+      const preview = resolve('..', 'docs', 'images', 'social-preview.png')
+      if (statSync(preview, { throwIfNoEntry: false })) copyFileSync(preview, join(outDir, 'social-preview.png'))
+    },
+  }
+}
+
+export default defineConfig(({ mode }) => {
+  const demo = mode === 'demo'
+  const base = demo ? process.env.NOTES_DEMO_BASE || '/notesapp/' : '/'
+  return {
+    base,
+    // The service worker is built after the app, from the files the build wrote (DESIGN §6.26).
+    // The main chunk's budget (DESIGN §6.1.1): the build fails when the initial JavaScript exceeds it.
+    plugins: [
+      react(),
+      packageAssetsPlugin(),
+      clipperDevPlugin(),
+      bundleBudget({ entry: 'index.html', maxGzipKiB: 350 }),
+      demo ? demoPagesPlugin(base) : serviceWorker({ entry: 'src/sw/sw.ts', buildSha }),
+    ],
+    define: {
+      'import.meta.env.VITE_BUILD_SHA': JSON.stringify(buildSha),
+      'import.meta.env.VITE_DEMO': JSON.stringify(demo ? '1' : ''),
+      'import.meta.env.VITE_EXCALIDRAW_ASSETS': JSON.stringify(base + excalidrawAssets),
+      'import.meta.env.VITE_PDFJS_ASSETS': JSON.stringify(base + pdfjsAssets),
+    },
+    resolve: {
+      alias: [
+        // Glide Data Grid's cell editor, a lazy chunk of the grid: the spreadsheet view loads it when
+        // the grid mounts, so the first keystrokes of the first edit are not lost while it downloads
+        // (DESIGN §6.21.5). The package exports no such path; this is the file its own import loads.
+        {
+          find: /^glide-overlay-editor$/,
+          replacement: fileURLToPath(
+            new URL('./node_modules/@glideapps/glide-data-grid/dist/esm/internal/data-grid-overlay-editor/data-grid-overlay-editor.js', import.meta.url),
+          ),
+        },
+        // One Mermaid for the app and Excalidraw's Mermaid import, each with its own configuration
+        // (src/render/rich/mermaidShared.ts, which imports the package by its file).
+        { find: /^mermaid$/, replacement: fileURLToPath(new URL('./src/render/rich/mermaidShared.ts', import.meta.url)) },
+        // Mermaid's optional ELK layout: elkjs is EPL-2.0 (not GPL-compatible) and 1.4 MB, so it is
+        // left out of the bundle; diagrams use the dagre layout (src/render/rich/mermaid.ts).
+        { find: /^elkjs\/lib\/elk\.bundled\.js$/, replacement: fileURLToPath(new URL('./src/render/rich/elkStub.ts', import.meta.url)) },
+      ],
+    },
+    server: {
+      // Tests also read docs/API.md (src/api/types.test.ts); the dev server keeps Vite's default allow list.
+      fs: process.env.VITEST ? { allow: ['.', '../docs'] } : undefined,
+      proxy: {
+        // changeOrigin stays false so the backend's Host and Origin checks see the browser's host.
+        '/api': {
+          target: backendUrl,
+          changeOrigin: false,
+          // SSE responses are long-lived; never time them out in the proxy.
+          timeout: 0,
+          proxyTimeout: 0,
         },
       },
     },
-  },
-  test: {
-    environment: 'jsdom',
-    setupFiles: ['./src/test/setup.ts'],
-    // Glide's cell editor is not loaded ahead in tests (src/test/glideOverlayEditor.ts).
-    alias: { 'glide-overlay-editor': fileURLToPath(new URL('./src/test/glideOverlayEditor.ts', import.meta.url)) },
-    include: ['src/**/*.test.{ts,tsx}'],
-    restoreMocks: true,
-  },
+    build: {
+      outDir: demo ? 'dist-demo' : 'dist',
+      sourcemap,
+      rolldownOptions: {
+        output: {
+          // React and the router change rarely: in their own chunk they stay cached across deploys.
+          codeSplitting: {
+            groups: [{ name: 'react', test: /node_modules[\\/](react|react-dom|react-router|scheduler)[\\/]/ }],
+          },
+        },
+      },
+    },
+    test: {
+      environment: 'jsdom',
+      setupFiles: ['./src/test/setup.ts'],
+      // Glide's cell editor is not loaded ahead in tests (src/test/glideOverlayEditor.ts).
+      alias: { 'glide-overlay-editor': fileURLToPath(new URL('./src/test/glideOverlayEditor.ts', import.meta.url)) },
+      include: ['src/**/*.test.{ts,tsx}'],
+      restoreMocks: true,
+    },
+  }
 })

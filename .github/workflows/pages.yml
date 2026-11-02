@@ -1,0 +1,51 @@
+name: Pages
+# The live demo (README "Try the live demo", DESIGN §6.45): the frontend built with its in-memory
+# mock API and a showcase vault, published to GitHub Pages at https://rjgehan.github.io/notesapp/.
+# Nothing in it talks to a server; every visitor gets a fresh copy of the demo vault in the browser.
+on:
+  push:
+    branches: [main]
+    paths: ['frontend/**', 'docs/images/social-preview.png', '.github/workflows/pages.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:                                 # one deployment at a time; never cancel one half-way
+  group: pages
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults: { run: { working-directory: frontend } }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - id: pages
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+      - run: npm ci
+      - run: npm run build:demo
+        env:
+          NOTES_DEMO_BASE: ${{ steps.pages.outputs.base_path }}/
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: frontend/dist-demo
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

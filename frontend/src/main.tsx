@@ -31,8 +31,13 @@ import './workspace/workspace.css';
 import './styles/mobile.css';
 
 async function boot(): Promise<void> {
-  // The in-memory mock replaces the HTTP endpoints before anything fetches (dev only).
-  if (import.meta.env.DEV && import.meta.env.VITE_MOCK_API === '1') {
+  // The in-memory mock replaces the HTTP endpoints before anything fetches: in the GitHub Pages demo
+  // (DESIGN §6.45), with its showcase vault, and on the dev server with VITE_MOCK_API=1. Both tests are
+  // build-time constants (src/demo/mode.ts), so neither chunk is part of the server's build.
+  if (import.meta.env.VITE_DEMO === '1') {
+    const { installDemo } = await import('./demo/install');
+    installDemo();
+  } else if (import.meta.env.DEV && import.meta.env.VITE_MOCK_API === '1') {
     const { installMockApi } = await import('./api/mock');
     installMockApi();
   }
@@ -47,7 +52,8 @@ async function boot(): Promise<void> {
   installPreloadErrorHandler();
   // The installable app (DESIGN §6.26): a build reload first lets the new service worker take over.
   setReloadPreparer(() => prepareReload());
-  registerServiceWorker();
+  // The demo has no server to cache for, and a worker at its base path would outlive it.
+  if (import.meta.env.VITE_DEMO !== '1') registerServiceWorker();
   setOfflineMedia(usePrefs.getState().offlineNotes);
   installOnlineListener();
   documents.installLifecycle(() => currentBreakpoint() === 'desktop');

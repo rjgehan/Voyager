@@ -4,6 +4,10 @@
 // app again, so caches, the event stream and every in-memory store belong to one vault only.
 // Storage that outlives the page (drafts, the offline note cache, the capture queue, the open tabs,
 // recent files) is keyed by vault with `vaultKey`.
+//
+// The app itself is served at the root, except the GitHub Pages demo (DESIGN §6.45), which is built
+// with a Vite `base` such as `/notesapp/`: its addresses carry that prefix before any vault prefix.
+// API paths never do (the demo's mock answers them in the page).
 import { vaultFromPathname } from '../sw/vaultPath';
 
 export { isValidVaultName, vaultFromPathname } from '../sw/vaultPath';
@@ -11,7 +15,19 @@ export { isValidVaultName, vaultFromPathname } from '../sw/vaultPath';
 /** Endpoints that belong to the server, not to a vault: never prefixed. */
 const SERVER_WIDE = ['/api/vaults'];
 
-let current: string | null = typeof window === 'undefined' ? null : vaultFromPathname(window.location.pathname);
+/** Where the app is served, without the trailing slash: '' at the root, `/notesapp` for the demo. */
+let appBase = baseOf(import.meta.env.BASE_URL);
+
+function baseOf(viteBase: string | undefined): string {
+  return (viteBase ?? '/').replace(/\/+$/, '');
+}
+
+function withoutAppBase(pathname: string): string {
+  if (appBase && (pathname === appBase || pathname.startsWith(appBase + '/'))) return pathname.slice(appBase.length) || '/';
+  return pathname;
+}
+
+let current: string | null = typeof window === 'undefined' ? null : vaultFromPathname(withoutAppBase(window.location.pathname));
 
 /** The extra vault this page shows, or null for the default vault. */
 export function currentVault(): string | null {
@@ -23,9 +39,14 @@ export function setCurrentVaultForTests(name: string | null): void {
   current = name;
 }
 
-/** The router's basename: '' for the default vault, `/v/<name>` for an extra one. */
+/** Tests only: pretend the app is served under a base path (`/notesapp/`), as the demo is. */
+export function setAppBaseForTests(viteBase: string): void {
+  appBase = baseOf(viteBase);
+}
+
+/** The router's basename: '' for the default vault, `/v/<name>` for an extra one (after the app's base path). */
 export function vaultBasename(): string {
-  return current === null ? '' : `/v/${current}`;
+  return appBase + (current === null ? '' : `/v/${current}`);
 }
 
 /** An API path (`/api/...`) of this vault. */
