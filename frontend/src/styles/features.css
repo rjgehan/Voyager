@@ -516,6 +516,29 @@ textarea.text-input {
   margin: 0;
 }
 
+/* The new note's body before the note exists (DESIGN §6.15): it looks like the note's text, and a
+   tap anywhere below the title lands in it. 16 px keeps iOS from zooming in on focus. */
+.pending-note-body {
+  display: block;
+  width: 100%;
+  min-height: 40vh;
+  margin: 12px 0 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-normal);
+  font-family: var(--font-text);
+  font-size: var(--font-text-size);
+  line-height: var(--line-height);
+  resize: none;
+  overflow: hidden;
+  outline: none;
+}
+
+.pending-note-body::placeholder {
+  color: var(--text-faint);
+}
+
 /* ---------- search ---------- */
 
 .search-view,

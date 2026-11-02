@@ -24,6 +24,13 @@ export interface TitleHandoff {
   selectionEnd: number;
 }
 
+/** Text typed into a pending note's body, with its selection: it goes into the note once it exists. */
+export interface PendingBody {
+  text: string;
+  selectionStart: number;
+  selectionEnd: number;
+}
+
 interface PendingState {
   pending: PendingNote | null;
   /** Hands the typed title over to the real note's inline title once the note exists. */
@@ -31,6 +38,12 @@ interface PendingState {
 }
 
 export const usePendingNote = create<PendingState>()(() => ({ pending: null, handoff: null }));
+
+/**
+ * The bodies typed so far, by pending id. Kept outside the store, so a keystroke re-renders
+ * nothing, and kept when the pending view goes away (a navigation): the note still gets them.
+ */
+const bodies = new Map<number, PendingBody>();
 
 /** A new pending note (or other file) whose whole title is selected, so typing replaces it. */
 export function startPendingNote(id: number, folder: string, title: string, file: { extension: string; label: string } = { extension: 'md', label: 'note' }): void {
@@ -50,6 +63,23 @@ export function updatePendingSelection(id: number, selectionStart: number, selec
   if (pending?.id === id && (pending.selectionStart !== selectionStart || pending.selectionEnd !== selectionEnd)) {
     usePendingNote.setState({ pending: { ...pending, selectionStart, selectionEnd } });
   }
+}
+
+/** The body of pending note `id` as typed so far (an empty body is no body). */
+export function setPendingBody(id: number, body: PendingBody): void {
+  if (body.text === '') bodies.delete(id);
+  else bodies.set(id, body);
+}
+
+export function hasPendingBody(id: number): boolean {
+  return bodies.has(id);
+}
+
+/** Consumed once, by the note that pending note `id` became. */
+export function takePendingBody(id: number): PendingBody | null {
+  const body = bodies.get(id) ?? null;
+  bodies.delete(id);
+  return body;
 }
 
 export function clearPendingNote(id?: number): void {

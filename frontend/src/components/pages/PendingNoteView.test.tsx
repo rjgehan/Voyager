@@ -1,10 +1,10 @@
 import { QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { queryClient } from '../../api/queryClient';
 import { queryKeys } from '../../api/queryKeys';
 import { DEFAULT_SETTINGS } from '../../features/settings';
-import { startPendingNote, updatePendingTitle, usePendingNote } from '../../state/pendingNote';
+import { startPendingNote, takePendingBody, updatePendingTitle, usePendingNote } from '../../state/pendingNote';
 import { PendingNoteView } from './PendingNoteView';
 
 function view() {
@@ -35,9 +35,36 @@ describe('PendingNoteView', () => {
     const { rerender } = render(view());
     expect(screen.getByLabelText('Drawing title')).toHaveValue('Untitled');
     expect(screen.getByText('Name the new drawing, then press Enter to open it.')).toBeInTheDocument();
+    // A drawing has no text to start writing.
+    expect(screen.queryByLabelText('Note text')).not.toBeInTheDocument();
     updatePendingTitle(2, 'Plan', true);
     rerender(view());
     expect(screen.getByText('Creating the drawing…')).toBeInTheDocument();
+  });
+
+  it('moves on to the body with Enter, and keeps what is written there for the note', () => {
+    queryClient.setQueryData(queryKeys.settings(), { settings: DEFAULT_SETTINGS, version: 'v1', readOnly: false });
+    startPendingNote(5, '', 'Untitled');
+    const { rerender } = render(view());
+    const title = screen.getByLabelText('Note title');
+    fireEvent.change(title, { target: { value: 'Groceries' } });
+    fireEvent.keyDown(title, { key: 'Enter' });
+    const body = screen.getByLabelText<HTMLTextAreaElement>('Note text');
+    expect(body).toHaveFocus();
+    // Leaving the title committed it: the note is being created under that name.
+    expect(usePendingNote.getState().pending).toMatchObject({ title: 'Groceries', committed: true });
+    rerender(view());
+    expect(screen.getByText('Creating the note…')).toBeInTheDocument();
+    fireEvent.change(body, { target: { value: 'milk\neggs' } });
+    expect(takePendingBody(5)).toEqual({ text: 'milk\neggs', selectionStart: 9, selectionEnd: 9 });
+  });
+
+  it('a tap in the body commits the title the same way', () => {
+    queryClient.setQueryData(queryKeys.settings(), { settings: DEFAULT_SETTINGS, version: 'v1', readOnly: false });
+    startPendingNote(6, '', 'Untitled');
+    render(view());
+    screen.getByLabelText('Note text').focus();
+    expect(usePendingNote.getState().pending).toMatchObject({ title: 'Untitled', committed: true });
   });
 
   it('takes the note width of the settings', () => {
