@@ -60,7 +60,17 @@ export default function EncryptedNoteView({ path }: FileViewProps) {
   const editor = useRef<EditorView | null>(null);
   /** The file text this view produced last (the session's serialized text). */
   const ownText = useRef<string | null>(null);
-  const encryption = useRef({ seq: 0, dirty: false, timer: null as ReturnType<typeof setTimeout> | null, pending: Promise.resolve() });
+  /**
+   * The session's `remoteChangeCount` when this view last read its text. While they differ, the
+   * session holds text this view has not read yet (another device's, Take theirs): edits and
+   * encryptions are not handed over, so they cannot shadow it before it is read.
+   */
+  const adopted = useRef(-1);
+  /**
+   * `seq` numbers the encryptions (only the latest one is handed over), `edits` the local edits, so
+   * an encryption clears `dirty` only when no edit came after the text it encrypted.
+   */
+  const encryption = useRef({ seq: 0, edits: 0, dirty: false, timer: null as ReturnType<typeof setTimeout> | null, pending: Promise.resolve() });
   const name = lastSegment(path);
   const syntaxVisibility = usePrefs((s) => s.syntaxVisibility);
   const readOnly = !snapshot.loaded || snapshot.status === 'readonly' || snapshot.lossy;
@@ -71,11 +81,13 @@ export default function EncryptedNoteView({ path }: FileViewProps) {
     (u: Unlocked, text: string): Promise<void> => {
       const enc = encryption.current;
       const seq = ++enc.seq;
+      // `text` holds the edits made so far; one typed while it is encrypted keeps `dirty` set.
+      const edits = enc.edits;
       const run = enc.pending.then(async () => {
         const fileText = await encryptedFileText(text, u.write, u.hint);
-        if (seq !== enc.seq) return;
+        if (seq !== enc.seq || session.remoteChangeCount !== adopted.current) return;
         ownText.current = fileText;
-        enc.dirty = false;
+        if (enc.edits === edits) enc.dirty = false;
         session.markDirty(() => ownText.current ?? fileText);
       });
       enc.pending = run.catch(() => undefined);
@@ -99,12 +111,18 @@ export default function EncryptedNoteView({ path }: FileViewProps) {
   const scheduleEncrypt = useCallback(() => {
     const enc = encryption.current;
     enc.dirty = true;
+    enc.edits++;
+    // The session hears of the edit now, not once it is encrypted: a save from another device
+    // meanwhile is then a conflict (Keep mine or Take theirs), never a silent replacement of text
+    // that is not encrypted yet. Until the new ciphertext lands, the file's text is the last one.
+    const last = ownText.current;
+    if (last !== null && session.remoteChangeCount === adopted.current) session.markDirty(() => ownText.current ?? last);
     if (enc.timer) return;
     enc.timer = setTimeout(() => {
       enc.timer = null;
       void encryptNow();
     }, ENCRYPT_DELAY_MS);
-  }, [encryptNow]);
+  }, [encryptNow, session]);
 
   /** Encrypts what is pending with the key held now, then forgets the plaintext and the key. */
   const teardown = useCallback(
@@ -136,19 +154,38 @@ export default function EncryptedNoteView({ path }: FileViewProps) {
   useEffect(() => {
     if (!snapshot.loaded) return;
     const text = session.getText();
-    if (text === ownText.current && unlocked.current) return;
+    const remote = session.remoteChangeCount;
+    if (text === ownText.current && unlocked.current) {
+      adopted.current = remote;
+      return;
+    }
     let cancelled = false;
     const file = parse(text);
     const payload = typeof file === 'string' || file.encodedData === '' ? null : payloadOf(file);
+    /**
+     * The session's text replaced what this view showed (Take theirs, a restored draft): edits not
+     * encrypted yet, or being encrypted, belong to the text that went away and are never handed
+     * over (nor encrypted again with a key the new text does not use).
+     */
+    const discardPending = () => {
+      const enc = encryption.current;
+      enc.seq++;
+      if (enc.timer) clearTimeout(enc.timer);
+      enc.timer = null;
+      enc.dirty = false;
+    };
     void (async () => {
       // Decided after a microtask: the phase is state derived from the session, set from its events.
       await Promise.resolve();
       if (cancelled) return;
       if (typeof file === 'string' || typeof payload === 'string') {
+        discardPending();
         teardown({ kind: 'invalid', message: typeof file === 'string' ? file : (payload as string) });
+        adopted.current = remote;
         return;
       }
       if (payload === null) {
+        adopted.current = remote;
         if (!unlocked.current) setPhase({ kind: 'new' });
         return;
       }
@@ -161,13 +198,17 @@ export default function EncryptedNoteView({ path }: FileViewProps) {
       opened ??= await openCached(payload);
       if (cancelled) return;
       if (!opened) {
+        discardPending();
         teardown({ kind: 'locked', hint: file.hint, notice: u ? 'This note was encrypted again elsewhere with another passphrase. Unlock it with that one.' : null });
+        adopted.current = remote;
         return;
       }
       ownText.current = text;
+      adopted.current = remote;
       const v = editor.current;
       if (u && v) {
         // Another device's text (or Take theirs): into the open editor, outside its undo history.
+        discardPending();
         u.hint = file.hint;
         u.write = opened.write;
         const spec = remoteTransaction(v.state, opened.text);
@@ -335,15 +376,24 @@ export default function EncryptedNoteView({ path }: FileViewProps) {
           hint={phase.hint}
           notice={phase.notice}
           onUnlock={async (passphrase) => {
-            const file = parse(session.getText());
-            if (typeof file === 'string') return file;
-            const payload = payloadOf(file);
-            if (typeof payload === 'string') return payload;
-            const opened = await unlock(passphrase, payload);
-            if (!opened) return 'Wrong passphrase.';
-            ownText.current = session.getText();
-            showUnlocked({ write: opened.write, hint: file.hint, text: opened.text });
-            return null;
+            // The key derivation takes a moment: when another device's save lands meanwhile, the
+            // text the session holds then is the one that opens (never the one that went away).
+            for (let attempt = 0; attempt < 3; attempt++) {
+              const text = session.getText();
+              const remote = session.remoteChangeCount;
+              const file = parse(text);
+              if (typeof file === 'string') return file;
+              const payload = payloadOf(file);
+              if (typeof payload === 'string') return payload;
+              const opened = (attempt > 0 ? await openCached(payload) : null) ?? (await unlock(passphrase, payload));
+              if (!opened) return 'Wrong passphrase.';
+              if (session.getText() !== text) continue;
+              ownText.current = text;
+              adopted.current = remote;
+              showUnlocked({ write: opened.write, hint: file.hint, text: opened.text });
+              return null;
+            }
+            return 'The note changed on another device while it was being unlocked. Try again.';
           }}
         />
       ) : phase.kind === 'new' ? (
