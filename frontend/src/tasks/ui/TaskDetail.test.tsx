@@ -1,5 +1,5 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { ApiError, TransientError } from '../../api/client';
 import { queryClient } from '../../api/queryClient';
 import type { Problem, Task, TaskWriteResult, TreeResponse } from '../../api/types';
@@ -101,6 +101,10 @@ describe('task detail sheet', () => {
   });
 
   it('shows a rule it cannot offer as a choice by its text, with the next dates', () => {
+    // A fixed today: near Nov 2 the next date reads "Today", "Tomorrow" or a weekday instead.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-20T12:00:00'));
+    onTestFinished(() => void vi.useRealTimers());
     taskStore.upsert([makeTask({ id: 'A', title: 'Report', due: '2026-10-19', recurrence: { rrule: 'FREQ=MONTHLY;BYDAY=1MO', from: 'completion' } })]);
     renderWithApp(<TaskDetail id="A" />);
     const repeat = screen.getByRole('combobox', { name: 'Repeat' });
