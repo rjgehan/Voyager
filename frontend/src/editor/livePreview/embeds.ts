@@ -72,16 +72,25 @@ class FileEmbedWidget extends WidgetType {
   readonly note: NoteContext;
   /** The note's path: a transcluded note's links resolve from it, so a move of the note redraws it. */
   readonly source: string;
-  constructor(entry: FileEntry, spec: EmbedSpec, note: NoteContext) {
+  /** The note can be written: an embed that edits in place may (a spreadsheet's grid, ROADMAP item 42). */
+  readonly editable: boolean;
+  constructor(entry: FileEntry, spec: EmbedSpec, note: NoteContext, editable: boolean) {
     super();
     this.entry = entry;
     this.spec = spec;
     this.note = note;
     this.source = note.path();
+    this.editable = editable;
   }
   override eq(other: FileEmbedWidget): boolean {
-    // The same file at the same version: an edit elsewhere in the note redraws nothing.
-    return other.entry.path === this.entry.path && other.entry.size === this.entry.size && other.entry.mtime === this.entry.mtime && other.source === this.source && sameSpec(other.spec, this.spec);
+    // The same file at the same version: an edit elsewhere in the note redraws nothing. A grid
+    // edited in place follows its file itself, so its own saves do not redraw it either.
+    const sameFile = other.entry.path === this.entry.path && (this.editsInPlace() || (other.entry.size === this.entry.size && other.entry.mtime === this.entry.mtime));
+    return sameFile && other.source === this.source && other.editable === this.editable && sameSpec(other.spec, this.spec);
+  }
+  /** A spreadsheet in an editable note is a grid that follows its file (and its own edits) itself. */
+  private editsInPlace(): boolean {
+    return this.editable && this.entry.path.toLowerCase().endsWith('.sheet');
   }
   toDOM(view: EditorView): HTMLElement {
     const el = document.createElement('span');
@@ -89,7 +98,7 @@ class FileEmbedWidget extends WidgetType {
     const content = document.createElement('span');
     content.className = 'cm-lp-embed-content';
     el.appendChild(content);
-    const unmount = this.note.renderEmbed(content, { entry: this.entry, subpath: this.spec.subpath, display: this.spec.display, size: this.spec.size });
+    const unmount = this.note.renderEmbed(content, { entry: this.entry, subpath: this.spec.subpath, display: this.spec.display, size: this.spec.size, editable: this.editable });
     // An image: a click edits its source. Anything else takes its own clicks: a button does it.
     if (this.entry.kind === 'image') revealOnClick(view, el, content);
     else el.appendChild(editButton(view, el));
@@ -229,11 +238,11 @@ export function cellImage(view: EditorView, spec: EmbedSpec, note: NoteContext, 
 }
 
 /** The widget for an embed: the file, a web image, or a link. */
-export function embedWidget(spec: EmbedSpec, note: NoteContext | null, remoteImages: boolean): WidgetType {
+export function embedWidget(spec: EmbedSpec, note: NoteContext | null, remoteImages: boolean, editable = false): WidgetType {
   if (spec.url !== null) return new WebImageWidget(spec, remoteImages);
   const entry = note ? embeddedFile(spec, note) : null;
   if (!note || !entry) return new EmbedLinkWidget(linkText(spec), true);
   // Transclusion is one level deep and never of the note itself; block references are ROADMAP 20.
   if (entry.kind === 'note' && (entry.path === note.path() || spec.subpath?.startsWith('^'))) return new EmbedLinkWidget(linkText(spec), false);
-  return new FileEmbedWidget(entry, spec, note);
+  return new FileEmbedWidget(entry, spec, note, editable);
 }

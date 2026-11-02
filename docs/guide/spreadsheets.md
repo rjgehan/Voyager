@@ -62,18 +62,45 @@ The tabs under the grid are the spreadsheet's sheets. **+** adds one. Double-cli
 
 Select the data to chart, then **Insert chart** and choose **Bar**, **Line** or **Pie**. Charts appear in a pane under the grid that folds away; each has **Edit chart** and **Delete chart** buttons. On the phone the pane starts folded, so the grid keeps its room.
 
-## Show a spreadsheet in a note
+## Spreadsheets inside notes
 
-Embed it like any file:
+Embed a spreadsheet like any file, and edit it right there in the note:
 
 | Write | Shows |
 |---|---|
-| `![[Budget.sheet]]` | The first sheet, with its charts |
+| `![[Budget.sheet]]` | The first sheet (a picker switches to the others) |
 | `![[Budget.sheet#Summary]]` | The sheet named Summary |
 | `![[Budget.sheet#Budget!A1:C10]]` | Just that range |
 | `![[Budget.sheet#Total]]` | A named range |
+| `![[Budget.sheet#chart:Spending]]` | The chart titled Spending (`#chart:` alone shows the first chart) |
 
-The embed always shows the latest values (up to 100 rows and 26 columns). Click it to open the spreadsheet.
+In a note you can edit, the embed is a small spreadsheet of its own:
+
+- **Click a cell and type** (or double-click it, or press `Enter` or `F2`); `Enter` and `Tab` save and move on, `Esc` cancels, `Delete` clears. On the phone, tap a cell to select it and tap it again to type.
+- **Formulas** work as in the full spreadsheet: suggestions, the hint inside the brackets, and clicking (or tapping) cells to put their names in. The bar above the grid shows the selected cell's formula and explains errors.
+- **The toolbar** has Undo, Redo, Bold rows, Fill down, Insert a row below and Delete rows; `Ctrl+Z`, `Ctrl+D`, `Ctrl+B` and copy and paste work too.
+- **Open full sheet** opens the spreadsheet itself, for everything else: the fill handle, freezing, column widths, number formats and editing charts.
+
+It is the same spreadsheet: an edit in the note is saved, synced and undone exactly like one made in the spreadsheet, and a spreadsheet open in another tab shows it at once. The embed shows up to 100 rows and 26 columns. In a note you cannot edit (a locked one, a note shown inside another note, a canvas), the embed is a read-only table; click it to open the spreadsheet.
+
+## Read notes from a spreadsheet
+
+Four functions bring your notes into a spreadsheet. Name a note as a link would (`"Plan"`, `"Projects/Plan"` or `"[[Plan]]"`):
+
+| Formula | Gives |
+|---|---|
+| `=NOTEPROP("Projects/Plan", "status")` | A property of the note, or a file field such as `file.name`, `file.mtime`, `file.size` or `file.tags` |
+| `=NOTETABLE("Budget note", "budget")` | A table of the note, with its formulas worked out: the table named `^budget` (see [Use a table from elsewhere in the note](tables-and-formulas.md#use-a-table-from-elsewhere-in-the-note)), or the first one without a name. Add `TRUE` to include the header row. |
+| `=NOTECOUNT("tag:work")` | How many notes match (all of them without a query) |
+| `=NOTEQUERY("tag:work status!=done", "title, status, due")` | One row per matching note (up to 500), with the columns you name (`title` alone without them). Add `TRUE` for a header row. |
+
+- **Queries** combine words with AND: `tag:work` or `#work`, `folder:Projects`, `links:Plan` or `[[Plan]]` (notes that link to it), `status=open`, `status!=done`, `prop:status` (has the property), and any other words as a search in the notes' text.
+- `NOTETABLE` and `NOTEQUERY` fill the cells below and to the right, so leave them empty. Write their note and table as text in the formula: with a cell reference instead (`=NOTETABLE(A1)`) they show `#VALUE!`.
+- Dates come in as dates, numbers as numbers, lists joined with commas. A note or table that does not exist shows `#REF!`; a property the note does not have shows `#N/A`. While a note is being read, the cell shows `#N/A` with "Loading…" for a moment.
+- The values follow your notes: change a property or a table, here or on another device, and the spreadsheet shows it within a moment. They are saved in the spreadsheet with its next edit, so a change in a note never adds a history entry to the spreadsheet by itself.
+- A spreadsheet that reads a note with `NOTEPROP` or `NOTETABLE` is one of that note's [backlinks](links-and-tags.md). Renaming the note does not change the name in the formula: correct it if the formula shows `#REF!`.
+
+Notes can read a spreadsheet's cells too: see [Use a spreadsheet's cells in a note](tables-and-formulas.md#use-a-spreadsheets-cells-in-a-note).
 
 ## Good to know
 

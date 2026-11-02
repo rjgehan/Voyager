@@ -214,6 +214,30 @@ describe('switching modes (ROADMAP 10b)', () => {
   });
 });
 
+describe('embeds that edit in place (ROADMAP 42)', () => {
+  const sheetTree = treeOf('Here.md', 'Budget.sheet', 'pic.png');
+
+  it('tells the renderer whether the note can be written', () => {
+    const seen: Array<boolean | undefined> = [];
+    const ctx = { tree: () => sheetTree, renderEmbed: (_el: HTMLElement, embed: { editable?: boolean }) => (seen.push(embed.editable), () => {}) };
+    noteEditor('![[Budget.sheet]]', { ctx });
+    noteEditor('![[Budget.sheet]]', { ctx, readOnly: true });
+    expect(seen).toEqual([true, false]);
+  });
+
+  it('keeps a spreadsheet’s grid through its own saves, and redraws an image whose file changed', () => {
+    let entries = sheetTree;
+    const view = noteEditor('![[Budget.sheet]] ![[pic.png]]', { ctx: { tree: () => entries } });
+    const [sheet, pic] = view.contentDOM.querySelectorAll('.cm-lp-embed');
+    const moved = (path: string) => ({ ...entries.byPath.get(path)!, size: 999, mtime: '2026-11-02T10:00:00.000Z' });
+    entries = { ...entries, byPath: new Map([...entries.byPath].map(([p, e]) => [p, p === 'Here.md' ? e : moved(p)])) };
+    view.dispatch({ effects: vaultChanged.of(null) });
+    const [sheetAfter, picAfter] = view.contentDOM.querySelectorAll('.cm-lp-embed');
+    expect(sheetAfter).toBe(sheet);
+    expect(picAfter).not.toBe(pic);
+  });
+});
+
 describe('embeds and links, review fixes', () => {
   it('an embed shown as a link, and the " > " of a heading link, follow on a click in a locked note', () => {
     const openLink = vi.fn();

@@ -111,9 +111,27 @@ Give a table a name with a line that holds only `^` and the name, after a blank 
 
 Then any formula in the note can use it: `=budget!B2*12`, `=SUM(budget!B2:B4)`. Pointing at a cell of another named table puts its name in for you. (Tables without a name are called `Table1`, `Table2`, … from the top of the note, but those names change when you add a table above, so name the ones you refer to.)
 
+## Use a spreadsheet's cells in a note
+
+A formula in a note's table, or in a sentence, can read a [spreadsheet](spreadsheets.md) by naming the file where a sheet name goes:
+
+| Formula | Reads |
+|---|---|
+| `=Budget.sheet!B10` | Cell B10 of the spreadsheet Budget's first sheet |
+| `=SUM(Budget.sheet!B2:B9)` | A range |
+| `='Budget.sheet#Summary'!A1` | Another sheet of the file (quotes, because of the `#`) |
+| `='Finance/Budget.sheet'!B10` | A spreadsheet in another folder (quotes, because of the `/`) |
+| `=Budget.sheet!Total` | A named range of the spreadsheet |
+
+- The value follows the spreadsheet as it changes, even before it is saved when it is open on this device, and when another device saves it.
+- A formula that is just one cell (`=Budget.sheet!B10`) shows in that cell's number format, such as `$1,450.00`.
+- Filling a column or `Ctrl+D` moves these references like any other (`Budget.sheet!B2` becomes `B3`).
+- `#REF!` means no such spreadsheet or sheet, `#NAME?` no such named range. `#CYCLE!` means the spreadsheet reads this note's values back (with `NOTETABLE`), so neither can use the other's.
+- Reading a spreadsheet does not make a link: to see the note among the spreadsheet's backlinks, link it too (`[[Budget.sheet]]`).
+
 ## Formulas in a sentence
 
-Inline code that starts with `=` is a formula too: type `` `=1450*12` `` (or select `=1450*12` and press `Ctrl+E`) and it shows **17,400**. It can use named tables: `` `=budget!B2*12` ``. Click the result to see the formula again.
+Inline code that starts with `=` is a formula too: type `` `=1450*12` `` (or select `=1450*12` and press `Ctrl+E`) and it shows **17,400**. It can use named tables (`` `=budget!B2*12` ``) and spreadsheets (`` `=Budget.sheet!B10` ``). Click the result to see the formula again.
 
 ## Number formats
 

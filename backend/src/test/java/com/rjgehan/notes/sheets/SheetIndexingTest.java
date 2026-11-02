@@ -46,7 +46,8 @@ class SheetIndexingTest {
 			        "B2": { "v": 1450 },
 			        "A3": { "f": "=\\"Ask [[\\" & \\"Electrician\\" & \\"]]\\"", "c": "Ask [[Electrician]]" },
 			        "B3": { "f": "=SUM(B2:B2)", "c": 1937.5 },
-			        "C3": { "f": "=1/0", "c": { "e": "#DIV/0!" } }
+			        "C3": { "f": "=1/0", "c": { "e": "#DIV/0!" } },
+			        "D2": { "f": "=NOTEPROP(\\"Carpenter\\", \\"status\\")", "c": "busy" }
 			      },
 			      "cols": { "B": { "w": 110, "fmt": "$#,##0.00" } },
 			      "rows": {},
@@ -69,7 +70,7 @@ class SheetIndexingTest {
 
 	@BeforeEach
 	void setUp() throws IOException {
-		for (String note : List.of("Plumber", "Electrician", "Roofer", "Cost")) {
+		for (String note : List.of("Plumber", "Electrician", "Roofer", "Carpenter", "Cost")) {
 			write(note + ".md", "# " + note + "\n");
 		}
 		write("Diary.md", "The Cost went up.\n");
@@ -115,7 +116,12 @@ class SheetIndexingTest {
 	void linksInCellsAndInCachedResultsAreBacklinks() {
 		assertThat(contexts("Plumber.md", "Money/Budget.sheet")).containsExactly("Call [[Plumber]] about the leak #home");
 		assertThat(contexts("Electrician.md", "Money/Budget.sheet")).containsExactly("Ask [[Electrician]]");
-		assertThat(linked("Roofer.md")).isEmpty();
+		assertThat(linked("Cost.md")).isEmpty();
+	}
+
+	@Test
+	void aSheetThatReadsANoteIsOneOfItsBacklinks() {
+		assertThat(contexts("Carpenter.md", "Money/Budget.sheet")).containsExactly("=NOTEPROP([[Carpenter]], \"status\")");
 	}
 
 	@Test
@@ -135,7 +141,7 @@ class SheetIndexingTest {
 
 	@Test
 	void aSheetIsNotANoteAndOffersNoMentionsToLink() {
-		assertThat(this.vault.index.stats().notes()).isEqualTo(5);
+		assertThat(this.vault.index.stats().notes()).isEqualTo(6);
 		assertThatThrownBy(() -> this.notes.meta("Money/Budget.sheet")).isInstanceOfSatisfying(NotesException.class,
 				(ex) -> assertThat(ex.code()).isEqualTo(ErrorCode.TYPE_MISMATCH));
 		// The sheet's B1 says "Cost", but a sheet is never offered as an unlinked mention: the Link action would edit

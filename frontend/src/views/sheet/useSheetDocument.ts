@@ -9,6 +9,7 @@
 import { useSyncExternalStore } from 'react';
 import type { Workbook } from '../../sheets/engine';
 import { parseSheet } from '../../sheets/format';
+import { linkWorkbook, workbookContext } from '../../sheets/links/recalc';
 import { loadSheetEngine, type SheetEngine } from '../../sheets/loadEngine';
 import type { DocumentSession } from '../../sync/DocumentSession';
 
@@ -40,6 +41,8 @@ export class SheetBinding {
   private readonly listeners = new Set<() => void>();
   private offSession: (() => void) | null = null;
   private offWorkbook: (() => void) | null = null;
+  /** Unlinks the workbook from the notes its formulas read (ROADMAP item 42). */
+  private offLinks: (() => void) | null = null;
   lastUsed = 0;
 
   constructor(session: DocumentSession) {
@@ -82,6 +85,8 @@ export class SheetBinding {
     this.offSession = null;
     this.offWorkbook?.();
     this.offWorkbook = null;
+    this.offLinks?.();
+    this.offLinks = null;
     // A dirty session may still serialize this model on its way out: serialize() needs no engine.
     this.workbook?.destroy();
     this.workbook = null;
@@ -138,8 +143,9 @@ export class SheetBinding {
       return;
     }
     let wb: Workbook;
+    const context = workbookContext(() => session.path);
     try {
-      wb = e.Workbook.open(parsed.file);
+      wb = e.Workbook.open(parsed.file, context);
     } catch (err) {
       // The engine could not calculate the file: shown like a refused file, untouched.
       console.error('[notesapp] the sheet engine could not open the file', err);
@@ -148,10 +154,12 @@ export class SheetBinding {
     }
     this.workbook = wb;
     this.offWorkbook = wb.subscribe((change) => {
-      // Text from the session is already in the buffer; everything else is a local edit.
-      if (change.origin !== 'replace') this.session.markDirty(() => wb.serialize());
+      // Text from the session is already in the buffer, and values recalculated because a note
+      // changed are not saved on their own (as NOW() is not); everything else is a local edit.
+      if (change.origin !== 'replace' && change.origin !== 'recalc') this.session.markDirty(() => wb.serialize());
       this.ready();
     });
+    this.offLinks = linkWorkbook(() => session.path, wb, context);
     // Values computed by another engine (or missing) are saved once; repairs wait for an edit.
     if (wb.stale && session.isEditable()) session.markDirty(() => wb.serialize());
     this.ready();
@@ -171,6 +179,8 @@ export class SheetBinding {
       // Another device wrote something this version cannot read: shown as refused, untouched.
       this.offWorkbook?.();
       this.offWorkbook = null;
+      this.offLinks?.();
+      this.offLinks = null;
       wb.destroy();
       this.workbook = null;
       this.set(refusal(parsed));

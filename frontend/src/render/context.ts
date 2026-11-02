@@ -20,10 +20,11 @@ export function makeRenderContext(sourcePath: string, tree: VaultTree, settings:
   };
 }
 
-export function makeEmbedContext(sourcePath: string, tree: VaultTree, depth = 0): EmbedContext {
+export function makeEmbedContext(sourcePath: string, tree: VaultTree, depth = 0, editable = false): EmbedContext {
   return {
     sourcePath,
     depth,
+    editable,
     entry: (path) => tree.byPath.get(path),
     rawUrl: (entry, opts) => api.rawUrl(entry, opts),
   };

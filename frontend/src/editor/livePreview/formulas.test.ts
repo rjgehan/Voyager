@@ -5,6 +5,8 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { buildVaultTree } from '../../api/vaultTree';
 import { DEFAULT_SETTINGS } from '../../features/settings';
 import { formulaEngineForTests } from '../../formulas/load';
+import { resetLinkStore } from '../../sheets/links/store';
+import { useTestLinkHost } from '../../test/linkHost';
 import { setActiveEditor } from '../activeEditor';
 import type { NoteContext } from '../context';
 import { noteExtensions } from '../editorSetup';
@@ -175,5 +177,30 @@ describe('formulas in Live Preview (ROADMAP 39)', () => {
     expect(after.version).toBe(before.version);
     expect(after.entries[0].rows).toBe(before.entries[0].rows);
     expect(formulaResults(view.state)).toBe(results);
+  });
+});
+
+describe('formulas that read other files (ROADMAP 42)', () => {
+  afterEach(() => resetLinkStore());
+
+  const sheet = (b1: number) =>
+    JSON.stringify({ type: 'notesapp-sheet', version: 1, engine: '', sheets: [{ id: 's1', name: 'Budget', cells: { A1: { v: 'Rent' }, B1: { v: b1, fmt: '$#,##0' } }, cols: {}, rows: {}, frozen: { rows: 0, cols: 0 } }], named: {} });
+
+  it('shows a spreadsheet’s values in tables and inline, and follows the spreadsheet as it changes', async () => {
+    const host = useTestLinkHost({ 'Here.md': '', 'Budget.sheet': sheet(100) });
+    const view = editor('| A | B |\n|---|---|\n| =Budget.sheet!A1 | =Budget.sheet!B1*2 |\n\nRent: `=Budget.sheet!B1`, `=NOTEPROP("Here", "file.name")`\n\nEnd');
+    await vi.waitFor(() => expect(cells(view)[1]).toEqual(['Rent', '200']));
+    await vi.waitFor(() => expect([...view.dom.querySelectorAll('.cm-formula-inline')].map((e) => e.textContent)).toEqual(['$100', 'Here']));
+    host.edit('Budget.sheet', sheet(150));
+    await vi.waitFor(() => expect(cells(view)[1]).toEqual(['Rent', '300']), { timeout: 2000 });
+    await vi.waitFor(() => expect(view.dom.querySelector('.cm-formula-inline')?.textContent).toBe('$150'), { timeout: 2000 });
+  });
+
+  it('says what is missing instead of guessing', async () => {
+    useTestLinkHost({ 'Here.md': '' });
+    const view = editor('| A |\n|---|\n| =Nope.sheet!B1 |\n\nEnd');
+    await vi.waitFor(() => expect(cells(view)[1]).toEqual(['#REF!']));
+    const error = view.dom.querySelector('.cm-formula-error') as HTMLElement;
+    expect(error.title).toContain('There is no spreadsheet “Nope.sheet”.');
   });
 });

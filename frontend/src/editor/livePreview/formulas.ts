@@ -6,10 +6,13 @@
 // A state field keeps the note's tables as the engine sees them (their cells, names and column
 // formats), reusing what an edit did not touch. The engine is a lazy chunk; it loads the first time
 // a note with formulas shows, and the results of one version of the tables are computed once.
+// Formulas may read other files (ROADMAP item 42: `Budget.sheet!B10`, NOTEPROP): when one of
+// those changes, the results are computed again.
 import { syntaxTree } from '@codemirror/language';
 import { Prec, StateEffect, StateField, type ChangeDesc, type EditorState, type Extension, type Range } from '@codemirror/state';
 import { Decoration, EditorView, ViewPlugin, WidgetType, type DecorationSet, type ViewUpdate } from '@codemirror/view';
 import type { NoteResults } from '../../formulas/engine';
+import { noteContext } from '../context';
 import { cancelFormulaWait, loadedFormulaEngine, loadFormulaEngine } from '../../formulas/load';
 import { formulasOff, isFormula, sheetNames, tableAnnotations, tableNeedsEngine, type FormulaDisplay, type FormulaModel } from '../../formulas/model';
 import { redrawTableDisplays, refreshTables, tableCellFormatters } from './table';
@@ -41,6 +44,8 @@ export interface FormulaState {
 
 /** The engine finished loading: results can be computed now. */
 const formulasReady = StateEffect.define<null>();
+/** Another file the formulas read changed (ROADMAP item 42): their results are computed again. */
+const linksChanged = StateEffect.define<null>();
 
 const UNDER_LINES = 3;
 
@@ -112,6 +117,11 @@ export const formulaField = StateField.define<FormulaState>({
   create: (state) => gather(state, null, null),
   update(value, tr) {
     if (tr.effects.some((e) => e.is(formulasReady))) return { ...gather(tr.state, value, tr.changes), version: value.version + 1 };
+    if (tr.effects.some((e) => e.is(linksChanged))) {
+      // A new model (by identity) is computed afresh: the old results read the old values.
+      const next = gather(tr.state, value, tr.changes);
+      return { ...next, model: { tables: next.model.tables }, version: Math.max(next.version, value.version) + 1 };
+    }
     if (!tr.docChanged && syntaxTree(tr.startState) === syntaxTree(tr.state)) return value;
     return gather(tr.state, value, tr.changes);
   },
@@ -129,7 +139,9 @@ export function formulaResults(state: EditorState): NoteResults | null {
   if (!value || value.off || !engine) return null;
   let results = computed.get(value.model);
   if (!results) {
-    results = engine.computeNote(value.model);
+    // The note's path: its formulas read other files from it (ROADMAP item 42).
+    const note = state.facet(noteContext);
+    results = engine.computeNote(value.model, engine.noteLinkContext(() => note?.path() ?? null));
     computed.set(value.model, results);
   }
   return results;
@@ -223,13 +235,27 @@ function formulaPlugin(locked: boolean) {
       decorations: DecorationSet = Decoration.none;
       private readonly view: EditorView;
       private waiting = false;
+      private offLinks: (() => void) | null = null;
       private readonly ready = () => {
         this.waiting = false;
+        this.listen();
         this.view.dispatch({ effects: [formulasReady.of(null), refreshTables.of(null)] });
       };
       constructor(view: EditorView) {
         this.view = view;
+        this.listen();
         this.refresh(view);
+      }
+      /** Hears changes of the files the formulas read, once the engine is in. */
+      private listen() {
+        const engine = loadedFormulaEngine();
+        if (!engine || this.offLinks) return;
+        this.offLinks = engine.onLinksChanged((keys) => {
+          const value = this.view.state.field(formulaField, false);
+          const results = value ? computed.get(value.model) : undefined;
+          if (!results || ![...results.reads].some((k) => keys.has(k))) return;
+          this.view.dispatch({ effects: linksChanged.of(null) });
+        });
       }
       update(update: ViewUpdate) {
         const before = update.startState.field(formulaField, false);
@@ -254,6 +280,7 @@ function formulaPlugin(locked: boolean) {
       }
       destroy() {
         cancelFormulaWait(this.ready);
+        this.offLinks?.();
       }
     },
     { decorations: (p) => p.decorations },

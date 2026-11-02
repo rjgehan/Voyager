@@ -14,6 +14,8 @@ import { isMarkdownViewPath, viewFor, type EmbedProps, type FileViewDescriptor }
 export interface EmbedContext {
   sourcePath: string;
   depth: number;
+  /** The host can be written: embeds that can be edited in place may be (EmbedProps.editable). */
+  editable?: boolean;
   entry(path: string): FileEntry | undefined;
   rawUrl(entry: FileEntry, opts?: { download?: boolean }): string;
 }
@@ -130,6 +132,7 @@ export function hydrateEmbeds(container: Element, ctx: EmbedContext): void {
           height={size(el.dataset.height)}
           sourcePath={ctx.sourcePath}
           depth={ctx.depth + 1}
+          editable={ctx.editable === true}
         />,
       );
     }

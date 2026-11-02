@@ -3,7 +3,7 @@
 // case policy, trash, link rewriting on move, backlinks, search, tags, history and events.
 import { BLOCK_ID, blockIdsIn, LINE_BLOCK_ID, newBlockId, noteLines, planBlockId } from '../../features/blocks';
 import { flattenItems as flattenBookmarkItems, rekeyBookmarks } from '../../features/bookmarks';
-import type { TimelineFilter } from '../endpoints';
+import type { NotesQueryFilter, TimelineFilter } from '../endpoints';
 import { buildLinkIndex, createPath, encodeMdPath, linkText, linkTextRaw, resolve, type LinkIndex } from '../../features/links';
 import { extensionOf, folderOf, joinPath, lastSegment, basenameOf, isNotePath, newPathError, pathSafetyError, rebasePath, stripMd } from '../../features/paths';
 import { splitWikiBody } from '../../features/syntax';
@@ -45,6 +45,8 @@ import type {
   PublishResponse,
   PublishedNote,
   NoteMeta,
+  NotesQueryResponse,
+  QueriedNote,
   OnConflict,
   RestoreRequest,
   RestoreResult,
@@ -1164,6 +1166,59 @@ export class MockVault {
         ...(isCanvasPath(note.path) ? { title: basenameOf(note.path), kind: kindOf(note.path) } : {}),
       }));
     return mockSearch(docs, q, limit, sort, prefix);
+  }
+
+  /** `GET /api/notes/query` (API.md §40.1) over the mock's scans: enough for scripts and sheets that read notes. */
+  queryNotes(f: NotesQueryFilter): NotesQueryResponse {
+    const limit = f.limit ?? 500;
+    if (!Number.isInteger(limit) || limit < 1 || limit > 2000) fail('bad-request', 'limit must be 1 to 2000');
+    const excluded = this.settings.files.excludedPaths.map((p) => p.toLowerCase());
+    const index = this.linkIndex();
+    const tags = (f.tag ?? []).map((t) => t.replace(/^#/, '').toLowerCase());
+    const folder = (f.folder ?? '').replace(/^\/+|\/+$/g, '');
+    const linksTo = f.linksTo ? (resolve(f.linksTo, '', index) ?? f.linksTo) : null;
+    // The mock's search returns at most 200 hits, plenty for a mock vault.
+    const searched = f.q ? new Set(this.search(f.q, 200, 'relevance', false).results.map((r) => r.path)) : null;
+    const props = (f.prop ?? []).map((p) => {
+      const m = /^([^=!]+?)\s*(!?=)\s*(.*)$/.exec(p);
+      return m ? { name: m[1].trim().toLowerCase(), op: m[2], value: m[3].trim().toLowerCase() } : { name: p.trim().toLowerCase(), op: null, value: '' };
+    });
+    const text = (v: unknown): string[] => (Array.isArray(v) ? v.flatMap(text) : v === null || v === undefined ? [] : [String(v).replace(/^\[\[(.*)\]\]$/, '$1').toLowerCase()]);
+    const matches = this.notes()
+      .filter((n) => !excluded.some((p) => n.path.toLowerCase().startsWith(p)))
+      .filter((n) => !f.path || n.path === f.path)
+      .filter((n) => folder === '' || n.path.startsWith(folder + '/'))
+      .filter((n) => searched === null || searched.has(n.path))
+      .map((n) => ({ n, scan: this.scanOf(n) }))
+      .filter(({ scan }) => tags.every((t) => scan.tags.some((x) => x.replace(/^#/, '').toLowerCase() === t || x.replace(/^#/, '').toLowerCase().startsWith(t + '/'))))
+      .filter(({ n, scan }) => linksTo === null || scan.links.some((l) => resolve(l.target, n.path, index) === linksTo))
+      .filter(({ scan }) =>
+        props.every((p) => {
+          const fm = scan.frontmatter ?? {};
+          const key = Object.keys(fm).find((k) => k.toLowerCase() === p.name);
+          const values = key === undefined ? [] : text(fm[key]);
+          if (p.op === null) return values.some((v) => v !== '');
+          return p.op === '=' ? values.includes(p.value) : !values.includes(p.value);
+        }),
+      )
+      .sort((a, b) => (a.n.path < b.n.path ? -1 : a.n.path > b.n.path ? 1 : 0));
+    const notes: QueriedNote[] = matches.slice(0, limit).map(({ n, scan }) => ({
+      path: n.path,
+      title: basenameOf(n.path),
+      aliases: scan.aliases,
+      tags: [...new Set(scan.tags.map((t) => t.replace(/^#/, '')))],
+      frontmatter: scan.frontmatter,
+      mtime: isoMs(n.mtime),
+      size: n.bytes.length,
+      links: [...new Set(scan.links.map((l) => resolve(l.target, n.path, index)).filter((p): p is string => p !== null))],
+      tasks: f.tasks
+        ? noteLines(this.textOf(n)).flatMap((line, i) => {
+            const m = /^\s*[-*+] \[(.)\] (.*)$/.exec(line);
+            return m ? [{ line: i, status: m[1], done: m[1] === 'x' || m[1] === 'X', text: m[2] }] : [];
+          })
+        : null,
+    }));
+    return { notes, total: matches.length, truncated: matches.length > notes.length };
   }
 
   /** The link graph (API.md §11.4), built from scratch on every call; the version hashes it. */

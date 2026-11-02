@@ -134,3 +134,29 @@ describe('MockVault block ids (API.md §37)', () => {
     expect(problemCode(() => v.addBlockId({ path: 'Plan.md', line: 0, lineText: 'Nope', placement: 'end' }, 'c1'))).toBe('block-not-found');
   });
 });
+
+describe('MockVault notes query (API.md §40.1)', () => {
+  it('filters by path, tag, folder, property, link and search, in path order with a limit', () => {
+    const v = new MockVault(false);
+    v.createFile({ path: 'Work/A.md', content: '---\nstatus: open\ntags: [work]\n---\nSee [[Plan]]. alpha' }, 'c1');
+    v.createFile({ path: 'Work/B.md', content: '---\nstatus: done\n---\n#work/q4 beta\n- [ ] call\n- [x] mail' }, 'c1');
+    v.createFile({ path: 'Plan.md', content: '#home gamma' }, 'c1');
+    const paths = (f: Parameters<MockVault['queryNotes']>[0]) => v.queryNotes(f).notes.map((n) => n.path);
+    expect(paths({})).toEqual(['Plan.md', 'Work/A.md', 'Work/B.md']);
+    expect(paths({ path: 'Work/B.md' })).toEqual(['Work/B.md']);
+    expect(paths({ tag: ['work'] })).toEqual(['Work/A.md', 'Work/B.md']);
+    expect(paths({ folder: 'Work', prop: ['status!=done'] })).toEqual(['Work/A.md']);
+    expect(paths({ prop: ['status'] })).toEqual(['Work/A.md', 'Work/B.md']);
+    expect(paths({ linksTo: 'Plan' })).toEqual(['Work/A.md']);
+    expect(paths({ q: 'gamma' })).toEqual(['Plan.md']);
+    const limited = v.queryNotes({ limit: 1 });
+    expect([limited.notes.length, limited.total, limited.truncated]).toEqual([1, 3, true]);
+    const b = v.queryNotes({ path: 'Work/B.md', tasks: true }).notes[0];
+    expect(b.frontmatter).toEqual({ status: 'done' });
+    expect(b.tasks?.map((t) => [t.text, t.done])).toEqual([
+      ['call', false],
+      ['mail', true],
+    ]);
+    expect(v.queryNotes({ path: 'Plan.md' }).notes[0].tasks).toBeNull();
+  });
+});

@@ -36,6 +36,7 @@ import type {
   MoveRequest,
   MoveResult,
   NoteMeta,
+  NotesQueryResponse,
   PurgeResult,
   ResolveRequest,
   ResolveResponse,
@@ -105,6 +106,35 @@ export interface TimelineFilter {
   until?: string;
 }
 
+/** The filters of `GET /api/notes/query` (API.md §40.1); they combine with AND. */
+export interface NotesQueryFilter {
+  path?: string | null;
+  tag?: readonly string[];
+  folder?: string | null;
+  /** `name`, `name=value` or `name!=value`. */
+  prop?: readonly string[];
+  linksTo?: string | null;
+  q?: string | null;
+  tasks?: boolean;
+  limit?: number;
+}
+
+/** `GET /api/notes/query` with its filters; tags and properties repeat as parameters. */
+export function notesQueryUrl(f: NotesQueryFilter): string {
+  const params = new URLSearchParams();
+  if (f.path) params.append('path', f.path);
+  for (const t of f.tag ?? []) params.append('tag', t);
+  if (f.folder) params.append('folder', f.folder);
+  for (const p of f.prop ?? []) params.append('prop', p);
+  if (f.linksTo) params.append('linksTo', f.linksTo);
+  if (f.q) params.append('q', f.q);
+  if (f.tasks) params.append('tasks', 'true');
+  if (f.limit !== undefined) params.append('limit', String(f.limit));
+  // encodeURIComponent, not URLSearchParams' `+` for spaces (API.md §1.3).
+  const qs = [...params].map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&');
+  return '/api/notes/query' + (qs ? `?${qs}` : '');
+}
+
 export interface Endpoints {
   getMe(): Promise<MeResponse>;
   getStatus(): Promise<StatusResponse>;
@@ -125,6 +155,8 @@ export interface Endpoints {
   deleteFolder(path: string): Promise<TrashEntry>;
   move(req: MoveRequest): Promise<MoveResult>;
   getNoteMeta(path: string): Promise<NoteMeta>;
+  /** The metadata of the notes matching every filter (API.md §40.1): scripts, Dataview queries and sheets that read notes. */
+  queryNotes(filter: NotesQueryFilter): Promise<NotesQueryResponse>;
   getBacklinks(path: string, unlinked: boolean): Promise<BacklinksResponse>;
   resolveLinks(req: ResolveRequest): Promise<ResolveResponse>;
   search(q: string, opts?: SearchOptions): Promise<SearchResponse>;
@@ -212,6 +244,7 @@ export const httpEndpoints: Endpoints = {
   deleteFolder: (path) => apiFetch('/api/folders' + query(p(path)), { method: 'DELETE' }),
   move: (req) => apiFetch('/api/move', { method: 'POST', json: req }),
   getNoteMeta: (path) => apiFetch('/api/notes/meta' + query(p(path))),
+  queryNotes: (filter) => apiFetch(notesQueryUrl(filter)),
   getBacklinks: (path, unlinked) => apiFetch('/api/notes/backlinks' + query({ path, unlinked })),
   resolveLinks: (req) => apiFetch('/api/links/resolve', { method: 'POST', json: req }),
   search: (q, opts = {}) =>

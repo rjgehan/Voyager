@@ -110,6 +110,27 @@ class SheetDocumentIndexerTest {
 	}
 
 	@Test
+	void formulasThatReadANoteByNameLinkIt() {
+		String text = sheet("""
+				{
+				        "A1": { "f": "=NOTEPROP(\\"Projects/Plan\\", \\"status\\")", "c": "open" },
+				        "A2": { "f": "=SUM(notetable( \\"[[Costs|the costs]]\\" , , FALSE))", "c": 3 },
+				        "A3": { "f": "=NOTEPROP(B1, \\"status\\")", "c": "x" },
+				        "A4": { "f": "=NOTECOUNT(\\"links:Plan\\")", "c": 2 },
+				        "A5": { "f": "=\\"NOTEPROP(\\"\\"Plan\\"\\", 1)\\"", "c": "NOTEPROP(\\"Plan\\", 1)" },
+				        "A6": { "f": "=NOTEPROP(\\"Plan\\" & \\"s\\", \\"x\\")", "c": "x" },
+				        "A7": { "f": "=NOTEPROP(\\"Plan#Due\\", \\"x\\") + NOTETABLE(\\"Say \\"\\"hi\\"\\"\\")" }
+				      }""");
+		assertThat(blocks(text)).containsExactly("Budget", "open", "3", "x", "2", "NOTEPROP(\"Plan\", 1)", "x",
+				"=NOTEPROP([[Projects/Plan]], \"status\")", "=SUM(notetable( [[Costs]] , , FALSE))",
+				"=NOTEPROP(\"Plan#Due\", \"x\") + NOTETABLE([[Say \"hi\"]])");
+		assertThat(SheetDocumentIndexer.noteReads("=SUM(A1:A3)")).isNull();
+		assertThat(SheetDocumentIndexer.noteReads("NOTEPROP(\"Plan\", \"x\")")).isNull();
+		assertThat(SheetDocumentIndexer.noteReads("=NOTEPROP(\"\", \"x\")")).isNull();
+		assertThat(SheetDocumentIndexer.noteReads("=NOTEPROP(\"Plan")).isNull();
+	}
+
+	@Test
 	void emptyAndNewFilesAreEmptyDocuments() {
 		assertThat(blocks("")).isEmpty();
 		assertThat(blocks("  \n")).isEmpty();
