@@ -106,7 +106,8 @@ describe('task detail sheet', () => {
     const repeat = screen.getByRole('combobox', { name: 'Repeat' });
     expect(repeat).toHaveDisplayValue('Every month on the 1st Monday');
     expect(screen.getByRole('combobox', { name: 'Repeat from' })).toHaveValue('completion');
-    expect(screen.getByText(/^Then /)).toHaveTextContent(/Nov 2/);
+    // On 2026-11-02 itself the first date reads "Today".
+    expect(screen.getByText(/^Then /)).toHaveTextContent(/(Nov 2|Today), Dec 7/);
     fireEvent.click(screen.getByRole('button', { name: 'Edit the rule' }));
     expect(screen.getByRole('radio', { name: 'Choose' })).toHaveAttribute('aria-checked', 'true');
     expect(screen.getByRole('radio', { name: /^on the/ })).toBeChecked();
