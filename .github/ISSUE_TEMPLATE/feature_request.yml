@@ -1,0 +1,16 @@
+name: Feature idea
+description: Something NotesApp could do better or do next.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What you are trying to do
+      description: The task or the annoyance, in your own words; how you work around it today.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help
+      description: How it could work. Obsidian or plugin behaviour to match is welcome.

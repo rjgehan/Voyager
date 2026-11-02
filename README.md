@@ -1,99 +1,146 @@
+<div align="center">
+
+<img src="frontend/public/favicon.svg" width="84" height="84" alt="NotesApp icon">
+
 # NotesApp
 
-A self-hosted, single-user notes web app modelled closely on Obsidian. The vault is a folder of plain Markdown files on your own server; every device on your Tailscale tailnet (PC, phone, laptop) opens the same notes at `https://notes.<tailnet>.ts.net`, and changes show up live everywhere.
+**A self-hosted, Obsidian-style notes app. Your notes are plain Markdown files on your own server, and every device you own sees them live.**
 
-## Features (v1)
+[![CI](https://github.com/rjgehan/notesapp/actions/workflows/ci.yml/badge.svg)](https://github.com/rjgehan/notesapp/actions/workflows/ci.yml)
+[![Live demo](https://img.shields.io/badge/live%20demo-open%20in%20your%20browser-8a5cf5)](https://rjgehan.github.io/notesapp/)
+[![Licence: GPL-3.0](https://img.shields.io/badge/licence-GPL--3.0-blue)](LICENSE)
+![Java 21](https://img.shields.io/badge/Java-21-e76f00)
+![Spring Boot 4](https://img.shields.io/badge/Spring%20Boot-4.1-6db33f)
+![React 19](https://img.shields.io/badge/React-19-58c4dc)
+![TypeScript](https://img.shields.io/badge/TypeScript-6-3178c6)
 
-- **Obsidian-compatible vault.** Plain `.md` files in any folder layout, `[[wikilinks]]` (aliases, headings, block ids), `![[embeds]]`, YAML frontmatter shown as properties, nested `#tags`, ordinary attachment files and a `.trash/` folder. Obsidian desktop can open a copy of the vault unchanged.
-- **Never lose a keystroke.** Atomic writes, content-hash version checks, a conflict banner with side-by-side compare, unsaved edits kept in the browser until the server confirms them, and a git history of every change (inside the vault, via JGit) with diff and restore.
-- **Live across devices.** Server-Sent Events update the file tree and any open note that has no unsaved edits; edits made over SSH or by other tools are picked up too.
-- **One view that reads and edits.** CodeMirror 6 with Live Preview: notes render as you type (headings, bold, italic, highlights, links, lists, quotes and clickable checkboxes, and tables as a grid you edit in place: cells, rows and columns, drag to reorder) while the file stays plain Markdown, with the markup hidden or shown at the cursor (a per-device setting). There is no reading/editing switch: every note opens in Live Preview, and everything it renders (images and embeds, callouts, math, diagrams, footnotes, comments, properties) is edited in place with a click. "Show Markdown source" in the note's ⋯ menu is the escape hatch if something looks wrong. No Markdown to type: typing shortcuts (`# `, `- `, `[] `, `---`, a code fence, a `|` header line), formatting keys and a toolbar over selected text (bold, italic, strikethrough, highlight, code, links, headings), formatting buttons on the phone's keyboard toolbar, and rich paste that turns web pages, Google Docs and Word into Markdown. Autocomplete for links, headings and tags; embeds, image sizes, clickable checkboxes, footnotes, `==highlights==` and `%%comments%%`.
-- **Find things.** Quick switcher, command palette, full-text search (phrases, `tag:`, `path:`, negation), backlinks and unlinked mentions, outline and tags panels.
-- **Organise.** Rename and move with automatic link updates (and undo), trash with restore, attachments by paste, drop or upload, daily notes and templates.
-- **Drawings.** Excalidraw drawings as vault files: new `.excalidraw` drawings, and Obsidian Excalidraw `.excalidraw.md` files edited in place. Touch and Apple Pencil on iPhone and iPad, images stored as vault attachments, edits from two devices merged automatically, and changes from another device shown live. `![[Diagram.excalidraw|400]]` embeds a drawing in a note as an image that opens the editor; a drawing's texts are searchable and its links show up as backlinks; the Obsidian plugin's embedded notes, drawings and LaTeX show as static images.
-- **Spreadsheets.** `.sheet` files open in a fast grid with about 400 Google-Sheets-style functions (HyperFormula), a formula bar, several sheets, named ranges, frozen rows and columns, fill, number formats (currency, percent, decimals, dates), bar, line and pie charts, and copy and paste with other spreadsheets. Embed a sheet, a range or a chart in a note with `![[Budget.sheet]]`, `![[Budget.sheet#Summary]]`, `![[Budget.sheet#Budget!A1:C10]]` or `![[Budget.sheet#chart:Spending]]`, and edit the embedded grid right in the note. Notes and spreadsheets read each other: `=NOTEPROP("Plan", "status")`, `=NOTETABLE("Costs", "budget")`, `=NOTECOUNT("tag:work")` and `=NOTEQUERY(…)` in a sheet, `=Budget.sheet!B10` in a note's table or inline formula, all live. Cells are searchable and `[[links]]` in them (and the notes a sheet reads) are backlinks. Import and export CSV and Excel (.xlsx) files. Spreadsheets autosave, sync live and keep their history like notes, and edits of different cells on two devices merge by themselves.
-- **Tasks** *(roadmap item 4; reminder delivery comes with item 9)*. Structured to-do lists kept in the vault as readable `.tasks` JSON files under `Tasks/`: due and start dates, priorities, tags, subtasks, sections, repeating tasks (RFC 5545 rules, from the due date or from completion, read back as text such as "every 2 weeks on Monday", set from common choices, words or a raw RRULE), reminders stored for later delivery, and a yearly archive of tasks completed more than 90 days ago.
-  - **Views.** Today (overdue, due and started tasks); Upcoming (the next 14 days by day, with a week strip); a page per list with sections, subtasks, drag to reorder and inline editing, or the same list as a **Kanban board** with its sections or the statuses as columns and cards that drag between and within them; a Completed log; a Filter page by tag, priority and list (bookmarkable). A detail sheet covers every field.
-  - **Capture.** Quick add from anywhere (`Mod-Alt-Q`, or the floating + on the phone) reads `Pay rent tomorrow 9am every month !high #home @Bills [[Apartment]]` into chips before saving. **Convert checkbox to task** turns the `- [ ]` line under the cursor into a task in the Inbox and leaves a link to it (Obsidian Tasks emoji dates and priorities come along).
-  - **In notes.** `![[Home.tasks]]` embeds a live list you can check off (`#Section` or `#^task-id` for part of it); a `.tasks` file opens as its list, with its JSON a click away; `[[links]]` and `#tags` in tasks show up in backlinks, tags, search and a "Tasks linking to this note" panel.
-  - Changes show at once and on every device; completing a repeating task moves it to its next date; devices editing different tasks of one list never conflict, and edits made by hand are picked up.
-- **Help built in.** The [user guide](docs/guide/index.md) (getting started, writing, tables and formulas, spreadsheets, tasks, every feature, keyboard shortcuts and troubleshooting) is part of the app as a searchable **Help** page that works offline and never touches the vault; the first-run Welcome note is a short tour that points to it.
-- **Phone-first.** A responsive layout tuned for iPhone Safari and the Home Screen app, upright or on its side (keyboard-aware editor, toolbar, drawer, safe areas, 44 px targets, no zoom into fields), dark and light themes.
-- **Zero-touch deploys.** A push to `main` is tested, built for amd64 and arm64, and running on the server within about five minutes.
-- **Nightly backups.** Optional, encrypted restic snapshots of the vault, its history and the Tailscale identity to a second disk and to Backblaze B2 or Amazon S3 (7 daily, 4 weekly, 12 monthly), consistent because the app is stopped for the seconds the snapshot takes, with ntfy alerts (naming the failed steps, never your files) and a documented restore drill.
-- **History mirror on GitHub.** Optionally, the vault's git history is pushed to a private GitHub repository about 10 minutes after you stop editing, with a token from a compose secret; fast-forward only, so a mirror that has diverged is reported, never overwritten. Failures, and a mirror whose settings cannot be used, show in the status bar; failures are retried with backoff.
-- **Small history, large files kept.** Files over 25 MB (configurable), hidden ones included, stay in the vault and in backups but out of git history; the History panel says why, and replacing such a file keeps the old one in the trash.
-- **Status page and app alerts.** `/x/status` shows the server at a glance: problems first, then version and uptime, history (commits, failures, mirror, files kept out of it), the vault and index, disk space, the last backup, live-sync connections and the alerts. The app pushes its own problems (history not saved, mirror failing, disk full, …) to ntfy, deduplicated and rate-limited, without note content; the ntfy settings live outside the vault in `/data/secrets/ntfy.json`.
-- **Desktop app for Windows and macOS** *(roadmap item 41)*. A thin, sandboxed window around your server with a tray icon, a system-wide quick-capture shortcut (`Ctrl+Shift+Space` / `Cmd+Shift+Space`) that opens a small always-on-top capture window, native notifications, launch at login and offline use through the app's own offline mode. Installers are built from `desktop-v*` tags; see [docs/DESKTOP.md](docs/DESKTOP.md).
-- **Fast restarts.** The image runs on JDK 25 with an AOT cache made at build time, so a deploy or a nightly backup restart is back up sooner.
+### [▶ Try the live demo](https://rjgehan.github.io/notesapp/)
+
+It runs entirely in your browser on a sample vault: nothing to install, nothing saved.
+
+<img src="docs/images/live-preview.webp" alt="NotesApp's Live Preview editor: a note with properties and a Markdown table whose totals are spreadsheet formulas" width="100%">
+
+</div>
+
+## What it is
+
+NotesApp is a complete notes app that I built for myself and use every day on an iPhone and a Windows PC. It looks and works like [Obsidian](https://obsidian.md), but the vault lives on a home server instead of a sync service: one Docker image, reachable only over a private [Tailscale](https://tailscale.com) network, with every change kept in git.
+
+- **Write without seeing Markdown.** One Live Preview editor (CodeMirror 6) that renders as you type; tables are editable grids whose cells take spreadsheet formulas.
+- **More than notes.** Spreadsheets, Excalidraw drawings, canvases, Kanban boards, a task manager, a calendar, a graph, flashcards and a habit tracker, all stored as ordinary files in the vault.
+- **Never lose a keystroke.** Atomic writes, version checks with a side-by-side conflict view, drafts kept in the browser until the server confirms them, and a git commit for every change.
+- **Live everywhere.** Server-Sent Events push each change to every open tab, the phone app (an installable PWA with offline mode) and the Windows and macOS desktop app.
+- **Obsidian-compatible.** Open the same folder in Obsidian: wikilinks, embeds, frontmatter, callouts, canvases and Kanban boards are its formats.
+
+Every feature is explained in the user guide, which is built into the app as its **Help** page: [open it in the live demo](https://rjgehan.github.io/notesapp/x/help), or read it here in [docs/guide](docs/guide/index.md).
+
+## See it in action
+
+<img src="docs/images/formulas.gif" alt="Editing a cost in a Live Preview table: the totals, the per-person shares and an inline formula update as you type" width="640">
+
+*A table in a note works like a small spreadsheet: change a cost and the totals, the shares and the inline formula below update as you type.*
+
+| | |
+|:---:|:---:|
+| <img src="docs/images/spreadsheet.webp" alt="Spreadsheet view with a formula bar and a line chart" width="100%"><br>**Spreadsheets** with ~400 Google-Sheets functions (HyperFormula), charts, and CSV and Excel import and export | <img src="docs/images/drawing.webp" alt="An Excalidraw drawing of the NotesApp architecture" width="100%"><br>**Drawings** in Excalidraw, stored in the vault, merged across devices and embeddable in notes |
+| <img src="docs/images/tasks-board.webp" alt="A task list shown as a Kanban board with To do, Doing and Review columns" width="100%"><br>**Tasks** with due dates, priorities, subtasks and repeating rules, as lists or Kanban boards | <img src="docs/images/calendar.webp" alt="Month calendar with daily notes, tasks and meetings" width="100%"><br>**Calendar** of daily notes, tasks and notes dated by a property |
+| <img src="docs/images/canvas.webp" alt="A canvas with cards, embedded notes and links" width="100%"><br>**Canvases** in Obsidian's JSON Canvas format | <img src="docs/images/graph.webp" alt="Graph view of notes and links, colored by folder" width="100%"><br>**Graph** of every note and link, laid out in a Web Worker |
+| <img src="docs/images/kanban.webp" alt="An Obsidian Kanban plugin board" width="100%"><br>**Kanban boards** in the Obsidian Kanban plugin's Markdown format | <img src="docs/images/flashcards.webp" alt="A flashcard review with Again, Hard, Good and Easy" width="100%"><br>**Flashcards** written in notes, scheduled with FSRS |
+| <img src="docs/images/habits.webp" alt="Habit tracker with streaks and a heatmap" width="100%"><br>**Habits** checked in from daily notes, with streaks and a heatmap | <img src="docs/images/light-theme.webp" alt="The Welcome note in the light theme" width="100%"><br>**Dark and light themes**, an outline, backlinks and properties |
+
+<img src="docs/images/phones.webp" alt="Four iPhone screenshots: a note with a table, today's tasks, a spreadsheet and the habits page" width="100%">
+
+*Phone-first: the iPhone home-screen app has a keyboard-aware editor and toolbar, a drawer, quick capture and a share-sheet target.*
+
+The complete list, from search syntax to backups, is in **[docs/FEATURES.md](docs/FEATURES.md)**.
 
 ## Architecture
 
-A Spring Boot 4 backend (Java 21 bytecode, run on JDK 25) serves the REST and SSE API ([docs/API.md](docs/API.md)) and the React 19 + Vite single-page app from one Docker image. The vault is a directory of Markdown files on a Docker volume: an in-memory index (links, tags, full-text search) is built at startup and kept current by a file watcher, and JGit commits every change into the vault's own `.git`. There is no database and no app login. In production the app listens only on `127.0.0.1:8080` inside the network namespace of a kernel-mode Tailscale container, whose `tailscale serve` terminates HTTPS and passes the caller's Tailscale identity; the tailnet plus host and identity allowlists are the security boundary. Watchtower on the server pulls each new image from GHCR and restarts the app. The full design is in [docs/DESIGN.md](docs/DESIGN.md).
+```mermaid
+flowchart TB
+    subgraph devices["Your devices, on your tailnet"]
+        direction LR
+        phone["iPhone / iPad<br/>installed PWA"]
+        desk["Windows / macOS<br/>Electron app"]
+        web["Any browser"]
+    end
+    subgraph server["Home server: one Docker image"]
+        ts["Tailscale<br/>HTTPS + identity"]
+        api["Spring Boot 4<br/>REST + SSE API, serves the React SPA"]
+        index[("In-memory index<br/>links, tags, full text")]
+        vault[("Vault<br/>plain Markdown files")]
+        git[("Git history<br/>JGit")]
+    end
+    devices -- "HTTPS over the tailnet" --> ts --> api
+    api -- "reads" --> index
+    api -- "atomic writes" --> vault
+    api -- "a commit per change" --> git
+    api -. "live changes (SSE)" .-> devices
+```
 
-| Path | What |
+A Spring Boot backend (Java 21, run on JDK 25 with an AOT cache) serves a REST and Server-Sent Events API and the React single-page app from one image. There is **no database**: the vault is a directory of files, an in-memory index of links, tags and full text is built at startup and kept current by a file watcher (edits made over SSH or in Obsidian show up live), and JGit commits every change into the vault's own `.git`. There is no app login either: the app listens only inside Tailscale's network namespace, `tailscale serve` terminates HTTPS and passes the caller's identity, and host and identity allowlists are the security boundary.
+
+The frontend is React 19 + TypeScript on Vite. Each file type (notes, spreadsheets, drawings, canvases, task lists, PDFs) plugs into a view registry and loads as its own lazy chunk, so the first load stays under a **350 KiB gzip budget that the build enforces**. The full design is in [docs/DESIGN.md](docs/DESIGN.md) and the API contract in [docs/API.md](docs/API.md).
+
+## Tech stack
+
+| Area | Technologies |
 |---|---|
-| `backend/` | Spring Boot app (`com.rjgehan.notes`), Maven wrapper |
-| `frontend/` | React + TypeScript + Vite SPA |
-| `clipper/` | The web clipper: browser extension, bookmarklet and iOS Shortcut script ([docs/CLIPPER.md](docs/CLIPPER.md)) |
-| `deploy/` | `docker-compose.yml` (tailscale, notes, watchtower; optional backup sidecars), the backup scripts in `backup/`, the empty mirror-token placeholder in `mirror/`, Tailscale serve config, `.env.example`, and for CasaOS `casaos-compose.yml` (the app on the host's Tailscale), the advanced `casaos-compose-sidecar.yml` and the optional `casaos-backup-compose.yml` and `casaos-whisper-compose.yml` |
-| `.github/` | CI, image publishing, Dependabot |
-| `Dockerfile` | Three stages: frontend build, backend build (JDK 21), JDK 25 runtime with an AOT cache |
-| `docs/` | Design, API contract, deployment runbook, roadmap |
-| `scripts/` | `third-party-notices.mjs`, which regenerates `THIRD_PARTY_NOTICES.md` |
+| **Backend** | Java 21, Spring Boot 4.1, JGit, Server-Sent Events, lib-recur (RRULE), PDFBox, the Anthropic Java SDK (Ask your vault, optional) |
+| **Frontend** | React 19, TypeScript, Vite, CodeMirror 6, TanStack Query, Zustand, HyperFormula, Glide Data Grid, Excalidraw, Mermaid, KaTeX, PDF.js, d3-force, ts-fsrs, QuickJS (sandboxed scripts) |
+| **Apps** | Installable PWA with a service worker and offline mode; Electron desktop app for Windows and macOS; browser extension, bookmarklet and iOS Shortcut web clipper |
+| **Infrastructure** | Docker (multi-stage, amd64 + arm64), GitHub Actions, GitHub Container Registry, Watchtower, Tailscale, restic backups to B2 or S3, ntfy alerts, GitHub Pages for the demo |
 
-## Local development (Windows)
+## How it's built and tested
 
-Needs JDK 21 and Node 24 (npm 11). Docker is not needed. Run the two halves in separate terminals:
+- **3,819 automated tests** at the time of writing: 1,149 backend (JUnit 5, Spring Boot tests and integration tests on a real temporary vault), 2,575 frontend (Vitest and Testing Library, 251 files, including one that boots the whole app on the demo vault), 69 for the web clipper and 26 for the desktop app.
+- **CI on every pull request and push** ([ci.yml](.github/workflows/ci.yml)): backend tests on JDK 21 and JDK 25, frontend type checks, lint, tests and production build (with the bundle budget), the demo build, the clipper, and the deploy and backup scripts (in dash and BusyBox); pull requests also build the Docker image.
+- **Zero-touch deploys.** A push to `main` publishes multi-arch images, Watchtower on the server picks them up within minutes, and open tabs reload themselves onto the new build. A weekly rebuild picks up base-image fixes; Dependabot proposes updates; every action is pinned by commit SHA.
+- **Contracts written down first.** [docs/API.md](docs/API.md) is the binding API contract (a test keeps its type section identical to the frontend's `types.ts`), and [docs/DESIGN.md](docs/DESIGN.md) records each design decision and its reasons.
+- **Ops built in.** A status page, app alerts to ntfy, nightly encrypted backups with a restore drill, and an optional mirror of the vault's history to a private GitHub repository.
 
-```powershell
-# Backend on http://127.0.0.1:8080. The dev profile uses .\dev-vault (created on first start,
-# gitignored), needs no Tailscale and acts as a default "Owner" identity.
-cd backend
-.\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=dev"
-```
+## Self-hosting
 
-```powershell
-# Frontend on http://localhost:5173. Vite proxies /api (REST and SSE) to the backend.
-cd frontend
-npm install
-npm run dev
-```
+You need a Linux server with Docker and [Tailscale](https://tailscale.com). The image is `ghcr.io/rjgehan/notesapp`.
 
-Open <http://localhost:5173>.
+- **CasaOS:** paste one compose file into the CasaOS UI and run two commands. Step by step in **[docs/CASAOS.md](docs/CASAOS.md)**.
+- **Docker Compose:** the full runbook (first deploy, Tailscale, updates, backups, rollback, troubleshooting) is **[docs/DEPLOY.md](docs/DEPLOY.md)**.
 
-- **Another vault:** set `$env:NOTES_VAULT_DIR = "C:\path\to\a\copy"` before starting the backend. Point it at a copy, never at a vault you care about.
-- **Frontend without a backend:** `$env:VITE_MOCK_API = "1"; npm run dev` uses the in-memory mock API.
-- **Ports 8080 or 5173 taken:** start the backend with `"-Dspring-boot.run.arguments=--server.port=18080 --notes.allowed-hosts=localhost:5180,127.0.0.1:5180"`, then the frontend with `$env:NOTES_DEV_BACKEND = "http://127.0.0.1:18080"; npm run dev -- --port 5180 --strictPort`. The allowed hosts must name the Vite origin, because the proxy keeps the browser's `Host`.
-- **Phone against dev:** possible over the tailnet, but read [DESIGN §9.1](docs/DESIGN.md#91-integration-step-after-all-three-work-packages) step 4 first; never bind Vite to `0.0.0.0`.
+Optional extras are off until you set them up: nightly backups, alerts, the GitHub mirror, voice note transcription, Ask your vault with Claude, and public publishing through Tailscale Funnel.
 
-Checks (the same ones CI runs):
+## Desktop app
+
+Windows and macOS installers are attached to the **[GitHub Releases](https://github.com/rjgehan/notesapp/releases)** named `desktop-v…` (`NotesApp-Setup-<version>.exe`, `NotesApp-<version>-mac.dmg`). The app is a thin, sandboxed window around your own server with a tray icon, a system-wide quick-capture shortcut (`Ctrl+Shift+Space` / `Cmd+Shift+Space`), native notifications and launch at login. The installers are not code-signed yet; [docs/DESKTOP.md](docs/DESKTOP.md) has the SmartScreen and Gatekeeper steps.
+
+## Run it locally
+
+Needs JDK 21 and Node 24. Docker is not needed.
 
 ```powershell
-cd backend;  .\mvnw.cmd verify                      # add "-DexcludedGroups=" to include the perf tests
-cd frontend; npm run lint; npm test; npm run build
+# Terminal 1: the API on http://127.0.0.1:8080, with a throwaway vault in .\dev-vault
+cd backend; .\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=dev"
+
+# Terminal 2: the app on http://localhost:5173
+cd frontend; npm install; npm run dev
 ```
 
-## How deploys work
-
-1. **Pull requests** run the backend tests, the frontend lint, tests and build, and a Docker image build (amd64, not pushed), so the Dockerfile is exercised before anything reaches `main`.
-2. **A push to `main`** (docs-only pushes excepted) runs the same checks and then [`publish.yml`](.github/workflows/publish.yml), which builds `linux/amd64` and `linux/arm64` images and pushes `ghcr.io/rjgehan/notesapp:latest` and `:sha-<7 hex>` to the private GHCR package.
-3. **Watchtower** on the server polls GHCR every 5 minutes, pulls the new image and recreates the `notes` container with a 45 s graceful stop. Open browser tabs reconnect and reload themselves onto the new build.
-4. **Weekly**, a scheduled run rebuilds and republishes the image so base-image security fixes arrive without a code change. Dependabot proposes grouped dependency updates weekly.
-
-Rolling back, pausing updates, backups and everything else on the server side are in [docs/DEPLOY.md](docs/DEPLOY.md).
+Or run the frontend alone on the in-memory mock (`$env:VITE_MOCK_API = "1"; npm run dev`), or build the live demo (`npm run build:demo`). Ports, checks and conventions are in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 ## Documentation
 
-- [docs/guide/index.md](docs/guide/index.md): the **user guide**, task by task (the same pages are built into the app: **Help** in the ribbon, the phone's drawer and ⋯ menu, or *Open help* in the command palette)
-- [docs/DESIGN.md](docs/DESIGN.md): technical design (decisive)
-- [docs/API.md](docs/API.md): the REST and SSE contract between backend and frontend
-- [docs/DEPLOY.md](docs/DEPLOY.md): homeserver runbook (first deploy, operations, troubleshooting)
-- [docs/CASAOS.md](docs/CASAOS.md): installing on CasaOS by pasting one compose file, and its optional alerts, mirror and backups
-- [docs/CLIPPER.md](docs/CLIPPER.md): installing the web clipper (browser extension, bookmarklet, iPhone Shortcut)
-- [docs/DESKTOP.md](docs/DESKTOP.md): the Windows and macOS desktop app (install, Gatekeeper steps, usage, building and releases)
-- [docs/SECURITY.md](docs/SECURITY.md): threat model, trust boundaries of each deployment layout, the security audit's findings, residual risks and hardening advice; [SECURITY.md](SECURITY.md): how to report a vulnerability
-- [docs/ROADMAP.md](docs/ROADMAP.md): what comes after v1
+| Document | What it covers |
+|---|---|
+| [User guide](docs/guide/index.md) | Using the app, task by task: the same pages are its built-in **Help** (the ribbon, the phone's drawer and ⋯ menu, or *Open help* in the command palette) |
+| [FEATURES.md](docs/FEATURES.md) | Everything the app does |
+| [DESIGN.md](docs/DESIGN.md) | The technical design, backend and frontend (decisive) |
+| [API.md](docs/API.md) | The REST and SSE contract between backend and frontend |
+| [DEVELOPMENT.md](docs/DEVELOPMENT.md) | Local development, repository layout, checks, how a change reaches the server |
+| [DEPLOY.md](docs/DEPLOY.md) | Home-server runbook: first deploy, operations, backups, troubleshooting |
+| [CASAOS.md](docs/CASAOS.md) | Installing on CasaOS with one compose file |
+| [DESKTOP.md](docs/DESKTOP.md) | The Windows and macOS desktop app |
+| [CLIPPER.md](docs/CLIPPER.md) | The web clipper: browser extension, bookmarklet, iPhone Shortcut |
+| [SECURITY.md](docs/SECURITY.md) | Threat model, the trust boundaries of each deployment layout, the security audit's findings, residual risks and hardening advice ([SECURITY.md](SECURITY.md): how to report a vulnerability) |
+| [ROADMAP.md](docs/ROADMAP.md) | Every roadmap item, what each one became, and the proposals still open |
 
 ## Licence
 

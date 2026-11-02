@@ -1,11 +1,14 @@
-// In-memory implementation of `Endpoints` for VITE_MOCK_API=1 (dev only, loaded with a dynamic
-// import). Adds network-like latency, blob URLs for raw files, and `window.notesMock` helpers to
-// simulate another device: external edits, deletes, moves, dropped connections and failures.
+// In-memory implementation of `Endpoints` for VITE_MOCK_API=1 (dev only) and the GitHub Pages demo
+// (DESIGN §6.46), loaded with a dynamic import. Adds network-like latency, blob URLs for raw files,
+// and `window.notesMock` helpers to simulate another device: external edits, deletes, moves,
+// dropped connections and failures.
 import { clientId } from '../../state/clientId';
 import { ApiError, TransientError } from '../client';
 import { installEndpoints, type Endpoints } from '../endpoints';
 import type { FileEntry, Problem } from '../types';
 import { mockCapture } from './capture';
+import type { SeedFile } from './seed';
+import { installMockServer } from './server';
 import { mimeOf, MockVault } from './vault';
 
 type FailureKind = 'network' | '502' | 'busy' | 'io-error';
@@ -21,6 +24,34 @@ export interface MockControls {
   otherDeviceMove(from: string, to: string): void;
   dropConnections(): void;
   setServerBuild(sha: string): void;
+  /** The latest answers (at most 500): endpoint calls and the features' own requests, with their status. */
+  readonly requests: readonly MockRequestRecord[];
+}
+
+/** One answer of the mock: `call` and the function's name for `Endpoints`, else the HTTP method and path. */
+export interface MockRequestRecord {
+  method: string;
+  path: string;
+  status: number;
+}
+
+/** Records how each endpoint call ended: 200, or the problem's or transient failure's status. */
+function logged(endpoints: Endpoints, record: (r: MockRequestRecord) => void): Endpoints {
+  const out: Record<string, unknown> = { ...endpoints };
+  for (const [name, fn] of Object.entries(endpoints)) {
+    if (typeof fn !== 'function') continue;
+    out[name] = (...args: unknown[]) => {
+      const result: unknown = (fn as (...a: unknown[]) => unknown)(...args);
+      if (result instanceof Promise) {
+        result.then(
+          () => record({ method: 'call', path: name, status: 200 }),
+          (e: unknown) => record({ method: 'call', path: name, status: e instanceof ApiError ? e.status : e instanceof TransientError ? (e.status ?? 0) : 500 }),
+        );
+      }
+      return result;
+    };
+  }
+  return out as unknown as Endpoints;
 }
 
 export function createMockEndpoints(vault: MockVault, controls: { latency: number; failures: FailureKind[] }): Endpoints {
@@ -127,12 +158,27 @@ declare global {
   }
 }
 
-export function installMockApi(): MockControls {
-  const vault = new MockVault();
-  const state = { latency: 60, failures: [] as FailureKind[] };
-  installEndpoints(createMockEndpoints(vault, state));
+export interface MockOptions {
+  /** The vault's files: the dev seed (seed.ts) by default. */
+  seed?: readonly SeedFile[];
+  /** Latency added to every call, in ms (60 by default). */
+  latency?: number;
+}
+
+export function installMockApi(options: MockOptions = {}): MockControls {
+  const vault = new MockVault(options.seed ?? true);
+  const state = { latency: options.latency ?? 60, failures: [] as FailureKind[] };
+  const requests: MockRequestRecord[] = [];
+  const record = (r: MockRequestRecord) => {
+    requests.push(r);
+    if (requests.length > 500) requests.shift();
+  };
+  installEndpoints(logged(createMockEndpoints(vault, state), record));
+  // The endpoints the features keep beside themselves (tasks, flashcards, habits, calendar, ...).
+  installMockServer(vault, record);
   const controls: MockControls = {
     vault,
+    requests,
     get latency() {
       return state.latency;
     },

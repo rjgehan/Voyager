@@ -31,7 +31,7 @@ export function registerReminders(): void {
   });
 }
 
-/** At startup (main.tsx): open a task a notification launched, listen to the worker, report the zone. */
+/** At startup (boot.tsx): open a task a notification launched, listen to the worker, report the zone. */
 export function startReminders(): void {
   listenForWorkerMessages();
   consumeLaunchTask();

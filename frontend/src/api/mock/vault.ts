@@ -77,7 +77,7 @@ import { fail } from './problems';
 import { isCanvasPath, scanCanvas } from './canvasScan';
 import { lineAt, scanNote, type NoteScan, type ScannedLink } from './scan';
 import { mockSearch, type SearchDoc } from './search';
-import { seedFiles } from './seed';
+import { seedFiles, type SeedFile } from './seed';
 import { blobId } from './sha1';
 
 const TEXT_LIMIT = 5 * 1024 * 1024;
@@ -184,11 +184,12 @@ export class MockVault {
   private bookmarksVersion = blobId(encoder.encode(JSON.stringify([])));
   private readonly startedAt = Date.now();
 
-  constructor(seed = true) {
+  /** `true` seeds the dev vault (seed.ts), `false` nothing, a list those files (the demo's, DESIGN §6.46). */
+  constructor(seed: boolean | readonly SeedFile[] = true) {
     this.settingsVersion = blobId(encoder.encode(JSON.stringify(this.settings)));
-    if (!seed) return;
+    if (seed === false) return;
     const now = Date.now();
-    for (const f of seedFiles()) {
+    for (const f of seed === true ? seedFiles() : seed) {
       this.writeRaw(f.path, encoder.encode(f.content), now - f.age * 60_000);
     }
     this.commit('Initial commit', [...this.files.keys()].map((p) => ({ path: p, change: 'added' as const, renamedFrom: null })));
@@ -1528,6 +1529,48 @@ export class MockVault {
       .sort()
       .map((path) => ({ path, name: stripMd(lastSegment(path)) }));
     return { folder, templates };
+  }
+
+  // ---------- the server's own reads and writes (mock/server.ts: tasks, flashcards, habits, ...) ----------
+
+  /** Every file's path, in path order. */
+  paths(): string[] {
+    return [...this.files.keys()].sort(cmp);
+  }
+
+  /** A file's text and version, or null when there is no such file. */
+  textAt(path: string): { content: string; version: string; mtime: string } | null {
+    const f = this.files.get(path);
+    return f ? { content: this.textOf(f), version: blobId(f.bytes), mtime: isoMs(f.mtime) } : null;
+  }
+
+  /** A note's frontmatter, tags (without `#`) and resolved link targets, as the server's index has them. */
+  noteIndex(path: string): { frontmatter: Record<string, unknown> | null; tags: string[]; links: string[] } | null {
+    const f = this.files.get(path);
+    if (!f || kindOf(path) !== 'note') return null;
+    const scan = this.scanOf(f);
+    const index = this.linkIndex();
+    const links = new Set<string>();
+    for (const l of scan.links) {
+      const target = resolve(l.target, path, index);
+      if (target) links.add(target);
+    }
+    return { frontmatter: scan.frontmatter, tags: [...new Set(scan.tags)], links: [...links] };
+  }
+
+  /**
+   * Writes a file as a server operation does (the task API, flashcard records): created or changed,
+   * announced to every other client, committed. Returns the entry the caller applies itself.
+   */
+  serverWrite(path: string, content: string, origin: string | null): { file: FileEntry; created: boolean; createdFolders: string[] } {
+    const existed = this.files.has(path);
+    const createdFolders = existed ? [] : this.missingParents(path);
+    const f = this.writeRaw(path, encoder.encode(content));
+    this.publishFolders(createdFolders, origin);
+    const file = this.entry(f);
+    this.hub.publish(existed ? 'file.changed' : 'file.created', { file, origin }, origin);
+    this.commit(`${existed ? 'Update' : 'Create'} ${path}`, [{ path, change: existed ? 'modified' : 'added', renamedFrom: null }]);
+    return { file, created: !existed, createdFolders };
   }
 
   // ---------- simulated external activity (window.notesMock) ----------

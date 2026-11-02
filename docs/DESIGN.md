@@ -153,7 +153,9 @@ NotesApp/                              (monorepo; branch main)
 │   ├── dependabot.yml                 WP-Infra  weekly grouped updates: actions, docker, compose, maven, npm
 │   └── workflows/
 │       ├── ci.yml                     WP-Infra  tests on PRs, pushes and weekly; PR image build; on main calls publish.yml
-│       └── publish.yml                WP-Infra  reusable: multi-arch image to GHCR
+│       ├── publish.yml                WP-Infra  reusable: multi-arch image to GHCR
+│       ├── desktop.yml                          desktop installers on desktop-v* tags (§6.39)
+│       └── pages.yml                            the live demo on GitHub Pages (§6.46)
 ├── backend/                           WP-Backend
 │   ├── pom.xml                        Boot 4.1.2 parent, Java 21, + JGit, snakeyaml-engine
 │   ├── mvnw, mvnw.cmd, .mvn/wrapper/  Maven 3.10.0 via wrapper 3.3.4 (only-script)
@@ -181,7 +183,10 @@ NotesApp/                              (monorepo; branch main)
 │   └── .env.example                   copied to deploy/.env on homeserver (gitignored)
 ├── docs/
 │   ├── DESIGN.md, API.md, ROADMAP.md  architect
-│   └── DEPLOY.md                      WP-Infra: homeserver runbook
+│   ├── DEPLOY.md                      WP-Infra: homeserver runbook (CASAOS.md: the CasaOS short path)
+│   ├── FEATURES.md, DEVELOPMENT.md    the full feature list; local development, layout, checks (moved out of README.md)
+│   ├── DESKTOP.md, CLIPPER.md         the desktop app and the web clipper
+│   └── images/                        README screenshots, the demo GIF and the social preview, captured from the demo (§6.46)
 ├── scripts/
 │   └── third-party-notices.mjs        regenerates THIRD_PARTY_NOTICES.md from the lockfile and Maven (no npm deps)
 ├── Dockerfile                         WP-Infra  3 stages: node build, maven build (Java 21), JDK 25 runtime with an AOT cache
@@ -1944,14 +1949,16 @@ What a page loads before it can render anything is the entry chunk and every chu
 
 ```
 frontend/src/
-├── main.tsx                  createRoot; QueryClientProvider; BrowserRouter; theme bootstrap; installViewportVars
+├── main.tsx                  the entry: installs the mock API when the build asks for it (§6.46), then boot.tsx
+├── boot.tsx                  startApp(): global listeners, live sync, reminders; createRoot; QueryClientProvider; BrowserRouter
 ├── App.tsx                   <Routes> + <AppShell>
 ├── api/
 │   ├── types.ts              VERBATIM copy of API.md §17 (single source of truth for DTOs)
 │   ├── client.ts             apiFetch(): adds X-Client-Id + Accept (+ Idempotency-Key when given); JSON; reads X-Notes-Build;
 │   │                         throws ApiError(problem) | TransientError (network, 502/504, non-problem 503, busy, non-JSON body)
 │   ├── endpoints.ts          one typed function per endpoint (getTree, readFile, saveFile, ... )
-│   ├── mock/                 in-memory implementation of endpoints.ts for VITE_MOCK_API=1 (dev only, dynamic import)
+│   ├── mock/                 in-memory implementation of endpoints.ts for VITE_MOCK_API=1 (dev) and the demo (§6.46),
+│   │                         dynamic import; server.ts answers the features' own endpoints (tasks, calendar, ...)
 │   ├── queryKeys.ts          key factory (§6.3)
 │   ├── hooks.ts              useTree, useSettings, useSearch, useBacklinks, useHistory, ... (TanStack Query)
 │   └── events.ts             EventStream: EventSource lifecycle, lastEventId, replay countdown, resync buffering,
@@ -1966,6 +1973,7 @@ frontend/src/
 │                             draftReplay (closed tabs' drafts), captureQueue (§6.27); IndexedDB `notesapp-offline`
 ├── pwa/serviceWorker.ts      registration, update checks, prepareReload (§6.26)
 ├── sw/                       the service worker: core.ts (pure decisions), sw.ts (built to dist/sw.js by vite-plugin-sw.ts)
+├── demo/                     the GitHub Pages demo (§6.46): mode.ts (build-time flags), install.ts, seed.ts (showcase vault), banner.ts
 ├── state/
 │   ├── ui.ts                 zustand: sidebars, active panel tabs, overlays, drawer, sheet, widths, desktop search query
 │   ├── prefs.ts              per-device preferences (theme, spellcheck, autocorrect, loadRemoteImages, syntaxVisibility) in localStorage
@@ -3998,7 +4006,7 @@ The target's text comes from its open session when there is one, else from the f
 
 The client side of §5.26, in `features/reminders/`, the service worker's `sw/push.ts`, Settings and the task detail sheet.
 
-- **Startup** (`startReminders()` in `main.tsx`): reports the device's zone (`Intl.DateTimeFormat().resolvedOptions().timeZone`, `PUT /api/reminders/zone`, quiet on failure); opens the task of a `?task=<id>` address (a notification opened the app) and removes the parameter, so a reload does not open it again; and listens for the service worker's `notesapp:open-reminder` messages. `registerReminders()` (from `builtins.ts`) registers the `reminder.due` handler.
+- **Startup** (`startReminders()` in `boot.tsx`): reports the device's zone (`Intl.DateTimeFormat().resolvedOptions().timeZone`, `PUT /api/reminders/zone`, quiet on failure); opens the task of a `?task=<id>` address (a notification opened the app) and removes the parameter, so a reload does not open it again; and listens for the service worker's `notesapp:open-reminder` messages. `registerReminders()` (from `builtins.ts`) registers the `reminder.due` handler.
 - **In-app route** (`inApp.ts`): each `reminder.due` key is shown once per tab, and an event sent more than 15 minutes ago (a replay) not at all. It shows a toast that stays until dismissed, with **Open**, and, when the browser allows notifications, a system `Notification` tagged with the key, so several tabs make one. Browsers that allow notifications only from a service worker (iOS) keep the toast.
 - **Opening** (`open.ts`): `/x/tasks/today?task=<id>` navigates there and opens the task's detail sheet; `/?open=daily` opens today's daily note (`HomePage` treats it like `openOnStartup`, and an open tab calls `openTodaysDailyNote`). Only app paths are followed (`safeAppPath`).
 - **Service worker** (`sw.ts` with the pure `sw/push.ts`): `push` shows the decrypted JSON as a notification (a malformed message still shows one, since browsers penalise silent pushes); task reminders get **Snooze 10 min** and **Done** buttons and `requireInteraction`. `notificationclick` calls `POST /api/reminders/snooze` or `/done` for a button (with the worker's own `X-Client-Id`; if that fails it opens the task instead), otherwise focuses an open NotesApp tab and posts it the URL, or opens a window at it. iOS shows no notification buttons, so on the iPhone a tap always opens the task.
@@ -4243,6 +4251,19 @@ The user guide is a set of Markdown pages in `docs/guide/` (an index and one pag
 **The Welcome note** (§7.8) is a short guided tour that points to Help by the names of its entries ("Help › **Writing**"). It does not link to `/x/help` routes: a note's links are vault links, and a link to `/x/help/writing` would create a note there (§6.6). The mock API's seed holds the same `Welcome.md` (a test compares them) and keeps the editor showcase that used to be its Welcome as `Live Preview demo.md`.
 
 **Keeping the guide true.** `help/guide.test.ts` checks that every page has a title and is listed in the index, that every link between pages lands on a page and a heading that exist, that links to repository documents point to files that exist, that the anchors the Help page renders equal the source's (so GitHub and the app agree), and that the questions the guide was written for find their answers. Guide edits change the app, so CI's path filter deploys pushes that touch only `docs/guide/` (§7.5), while other docs-only pushes still do not restart production.
+
+### 6.46 The live demo on GitHub Pages
+
+A public, server-less demo at `https://rjgehan.github.io/notesapp/`, so people can try the app without installing it: the frontend built with its in-memory mock API (§6.1, `api/mock/`) and a showcase vault, published by `.github/workflows/pages.yml` on every push to `main` that touches `frontend/` (and by hand). It changes nothing in the server's build.
+
+- **Build.** `npm run build:demo` is `vite build --mode demo`: `base` becomes `/notesapp/` (`NOTES_DEMO_BASE` overrides it; the workflow passes the base path that `actions/configure-pages` reports), the output goes to `dist-demo/`, and `import.meta.env.VITE_DEMO` is `'1'` (an empty string in every other build, so `main.tsx`'s demo branch and its chunks are dropped from the server's bundle). The demo build has no service worker plugin and no manifest link (a demo that saves nothing should not be installable), a description and Open Graph tags, a `404.html` copy of `index.html` so GitHub Pages answers deep links (`/notesapp/n/Welcome.md`) with the app, and `docs/images/social-preview.png` as its link preview. The initial-JS budget (§6.1.1) applies to it as well; CI builds it on every push and pull request.
+- **Base path.** Vite's `base` covers the bundle, the worker URLs (`new URL(..., import.meta.url)`), the public files in `index.html` and, through `define`, the Excalidraw and PDF.js asset folders. The app's own addresses go through `state/vault.ts`, which reads the base from `import.meta.env.BASE_URL`: `vaultBasename()` (the router's basename), `appUrl`, `appPathname` and the vault read from the address all carry it before any `/v/<name>` prefix. API paths never do: the mock answers them in the page. At the server's base `/` nothing changes.
+- **Startup** (`demo/install.ts`, loaded by `main.tsx` before anything fetches). `installMockApi` with the showcase vault (`demo/seed.ts`) and 25 ms of latency; default graph color groups by folder (only when this browser has no graph settings yet); the banner. Then `startApp` (`boot.tsx`, the same start as the server's build) without the service worker.
+- **The mock behind it.** Besides `endpoints.ts`, the features that call `apiFetch` themselves (tasks, the calendar's dated notes, flashcard records, habits, properties, note queries, the AI and reminder status) are answered by `api/mock/server.ts`, which wraps `window.fetch` for same-origin `/api/` paths. Note queries have one implementation, `MockVault.queryNotes`, which answers `Endpoints.queryNotes` (scripts and spreadsheets, §6.47) and the route alike. Task views use the client's own view rules (`tasks/model.ts`) over the vault's `.tasks` files and changes are written back to them in their canonical layout, so the tree, search and history see them; recurring tasks roll forward with `tasks/recurrence.ts`. Properties come with their types and the vault-wide rename (only the key's characters change, §38.4). Simplified where one tab needs nothing more: no per-field conflicts, no archive rollover. What needs a real server reports itself off rather than failing: Ask your vault's status is `off`, the reminder status has no routes, a test reminder is `sent: false`, snooze and done change nothing, and Web Push answers `400` (the UI offers it only when the status says it is available); only the AI answer streams and transcription answer `404`. Every answer is recorded with its status in `window.notesMock.requests`. The dev mock (`VITE_MOCK_API=1`) gets the same endpoints, so it shows Live and real data instead of the Offline a missing endpoint used to cause.
+- **Showcase vault** (`demo/seed.ts`). Made-up content, no personal data, dated relative to the day the page opens, so Today, Upcoming, the calendar, the habits' streaks and the daily notes always look current: a Welcome note that links to each feature, a note with a Live Preview table of formulas (§6.42), a spreadsheet with a line and a pie chart, an Excalidraw drawing, a canvas, an Obsidian Kanban board, three task lists (one with sections, for the board view) with repeating tasks, meetings dated by a `date` property, flashcard decks, habits with four months of check-ins, book notes queried by a `dataview` block, and three weeks of daily notes. The dev mock keeps its own seed (`api/mock/seed.ts`), which exercises edge cases instead.
+- **Banner** (`demo/banner.ts`, `demo/demo.css`). One 28 px line above the app, *Demo: runs in your browser, nothing is saved*, with a link to the repository and a close button; while it shows, `.app-shell` moves down by its height. Plain DOM, so it shows before React renders.
+- **Storage.** Everything lives in the tab; a reload starts from the seed again. Device preferences (theme, graph settings, open tabs) persist in the browser's storage for the `rjgehan.github.io` origin, like on any server.
+- **Tests.** `demo/boot.test.tsx` boots the whole app on the mock with the showcase vault (`startApp`) and opens the Welcome note, a note with properties, a `dataview` note, Today, a task board, the calendar, habits and flashcards: every request must succeed (no `4xx`, `5xx` or network failure) and the connection must not read Offline. `demo/seed.test.ts` (every file opens in its view: the sheet parses without repairs, the drawing, the canvas and its file nodes, the Kanban board; today's tasks, dated notes, habits and flashcards come out of the mock), `demo/banner.test.ts`, `api/mock/server.test.ts` (each endpoint and the fetch wrapper), `state/vault.test.ts` (addresses under a base path).
 
 ### 6.47 Notes and spreadsheets together (ROADMAP item 42)
 
@@ -4782,6 +4803,8 @@ updates:
 If the `docker-compose` ecosystem is not available to the repository, the monthly manual update in §7.9 covers the compose images.
 
 `.github/workflows/desktop.yml` (ROADMAP item 41, §6.39) is separate from CI and the image: it runs only on `desktop-v*` tags (and by hand, publishing nothing), tests and packages the desktop shell on a Windows and a macOS runner, and attaches the installer and the dmg to the tag's release. Dependabot does not watch `desktop/` (Electron upgrades are deliberate, with a new tag).
+
+`.github/workflows/pages.yml` (§6.46) publishes the live demo: on pushes to `main` that touch `frontend/` (or the social preview), and by hand, it builds the frontend with `npm run build:demo` under the base path `actions/configure-pages` reports, uploads `frontend/dist-demo` with `actions/upload-pages-artifact` and deploys it with `actions/deploy-pages` to the `github-pages` environment (Pages source: GitHub Actions). It has no server part and needs no secrets; `ci.yml` builds the demo too, so a change that would break it fails before `main`.
 
 ### 7.6 Healthchecks
 

@@ -11,6 +11,7 @@ deploy/*.local.yml
 # Build output and dependencies
 node_modules/
 frontend/dist/
+frontend/dist-demo/
 frontend/coverage/
 backend/target/
 

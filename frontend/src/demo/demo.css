@@ -1,0 +1,68 @@
+/* The demo's banner (DESIGN §6.46): a slim line above the app, which moves down by its height. */
+
+.demo-banner {
+  position: fixed;
+  top: var(--vv-top, 0px);
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 0 36px;
+  background: var(--interactive-accent, #7c3aed);
+  color: var(--text-on-accent, #fff);
+  font-family: var(--font-interface);
+  font-size: 13px;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.demo-banner-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.demo-banner-link {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  flex: none;
+}
+
+.demo-banner-close {
+  position: absolute;
+  right: 4px;
+  top: 2px;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.demo-banner-close:hover,
+.demo-banner-close:focus-visible {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+body.has-demo-banner .app-shell {
+  top: calc(var(--vv-top, 0px) + 28px);
+  height: calc(var(--vvh, 100dvh) - 28px);
+}
+
+@media (max-width: 480px) {
+  .demo-banner {
+    justify-content: flex-start;
+    padding-left: 12px;
+    font-size: 12px;
+  }
+}

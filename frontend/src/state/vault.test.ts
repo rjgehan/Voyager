@@ -1,8 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { apiUrl, appPathname, appTitle, appUrl, currentVault, isValidVaultName, routeOfAppUrl, setCurrentVaultForTests, vaultBasename, vaultFromPathname, vaultKey } from './vault';
+import { apiUrl, appPathname, appTitle, appUrl, currentVault, isValidVaultName, routeOfAppUrl, setAppBaseForTests, setCurrentVaultForTests, vaultBasename, vaultFromPathname, vaultKey } from './vault';
 
 describe('vault addresses (ROADMAP item 37, DESIGN §6.44)', () => {
-  afterEach(() => setCurrentVaultForTests(null));
+  afterEach(() => {
+    setCurrentVaultForTests(null);
+    setAppBaseForTests('/');
+  });
 
   it('reads the vault from the address', () => {
     expect(vaultFromPathname('/')).toBeNull();
@@ -53,5 +56,19 @@ describe('vault addresses (ROADMAP item 37, DESIGN §6.44)', () => {
     expect(routeOfAppUrl('/v/work/?open=daily')).toBe('/?open=daily');
     expect(routeOfAppUrl('/x/tasks')).toBeNull();
     expect(routeOfAppUrl('/v/play/x/tasks')).toBeNull();
+  });
+
+  it('puts the demo’s base path before every app address, never before API paths (DESIGN §6.46)', () => {
+    setAppBaseForTests('/notesapp/');
+    expect(vaultBasename()).toBe('/notesapp');
+    expect(appUrl('/n/a.md')).toBe('/notesapp/n/a.md');
+    expect(appPathname('/notesapp/n/a.md')).toBe('/n/a.md');
+    expect(appPathname('/notesapp')).toBe('/');
+    expect(appPathname('/notesapp/')).toBe('/');
+    expect(apiUrl('/api/files?path=a.md')).toBe('/api/files?path=a.md');
+    expect(routeOfAppUrl('/x/tasks/today')).toBe('/x/tasks/today');
+    setCurrentVaultForTests('work');
+    expect(vaultBasename()).toBe('/notesapp/v/work');
+    expect(appPathname('/notesapp/v/work/n/a.md')).toBe('/n/a.md');
   });
 });

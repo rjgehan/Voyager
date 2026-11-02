@@ -1,7 +1,7 @@
 /// <reference types="vitest/config" />
 import { fileURLToPath } from 'node:url'
 import react from '@vitejs/plugin-react'
-import { createReadStream, readdirSync, readFileSync, statSync } from 'node:fs'
+import { copyFileSync, createReadStream, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative, resolve, sep } from 'node:path'
 import { defineConfig, type Plugin } from 'vite'
 import { bundleBudget } from './vite-plugin-budget.ts'
@@ -121,7 +121,56 @@ function clipperDevPlugin(): Plugin {
   }
 }
 
-export default defineConfig({
+// The live demo on GitHub Pages (DESIGN §6.46): `vite build --mode demo` (npm run build:demo) builds
+// the app with the in-memory mock API and a showcase vault into dist-demo/, served under a base path
+// (`/notesapp/`, or NOTES_DEMO_BASE). It has no service worker and no manifest (an installed copy of a
+// demo that saves nothing would only confuse), and a 404.html copy of index.html so that GitHub Pages
+// answers deep links with the app.
+const DEMO_MODE = 'demo'
+const DEMO_DESCRIPTION = 'A live demo of NotesApp, a self-hosted Obsidian-style notes app: Live Preview, formulas in tables, spreadsheets, drawings, canvases, tasks and more. Runs in your browser; nothing is saved.'
+
+/** Where the build is served: the root, or the demo's base path. */
+function baseFor(mode: string): string {
+  return mode === DEMO_MODE ? process.env.NOTES_DEMO_BASE || '/notesapp/' : '/'
+}
+
+function demoPagesPlugin(base: string): Plugin {
+  let outDir = ''
+  return {
+    name: 'notesapp-demo-pages',
+    apply: 'build',
+    configResolved(config) {
+      outDir = resolve(config.root, config.build.outDir)
+    },
+    transformIndexHtml(html) {
+      return html
+        .replace(/\s*<link rel="manifest"[^>]*>/, '')
+        .replace('<title>Notes</title>', '<title>NotesApp demo</title>')
+        .replace('<meta name="application-name" content="Notes" />', '<meta name="application-name" content="NotesApp demo" />')
+        .replace(
+          '</title>',
+          `</title>
+    <meta name="description" content="${DEMO_DESCRIPTION}" />
+    <meta property="og:title" content="NotesApp — live demo" />
+    <meta property="og:description" content="${DEMO_DESCRIPTION}" />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="https://rjgehan.github.io${base}social-preview.png" />
+    <meta name="twitter:card" content="summary_large_image" />`,
+        )
+    },
+    closeBundle() {
+      const index = join(outDir, 'index.html')
+      if (!statSync(index, { throwIfNoEntry: false })) return
+      copyFileSync(index, join(outDir, '404.html'))
+      // The social preview (README, docs/images) doubles as the demo's link preview.
+      const preview = resolve('..', 'docs', 'images', 'social-preview.png')
+      if (statSync(preview, { throwIfNoEntry: false })) copyFileSync(preview, join(outDir, 'social-preview.png'))
+    },
+  }
+}
+
+export default defineConfig(({ mode }) => ({
+  base: baseFor(mode),
   // The service worker is built after the app, from the files the build wrote (DESIGN §6.26).
   // The main chunk's budget (DESIGN §6.1.1): the build fails when the initial JavaScript exceeds it.
   plugins: [
@@ -131,12 +180,13 @@ export default defineConfig({
     // The user guide, docs/guide/*.md, for the Help page (DESIGN §6.45).
     userGuide(),
     bundleBudget({ entry: 'index.html', maxGzipKiB: 350 }),
-    serviceWorker({ entry: 'src/sw/sw.ts', buildSha }),
+    mode === DEMO_MODE ? demoPagesPlugin(baseFor(mode)) : serviceWorker({ entry: 'src/sw/sw.ts', buildSha }),
   ],
   define: {
     'import.meta.env.VITE_BUILD_SHA': JSON.stringify(buildSha),
-    'import.meta.env.VITE_EXCALIDRAW_ASSETS': JSON.stringify('/' + excalidrawAssets),
-    'import.meta.env.VITE_PDFJS_ASSETS': JSON.stringify('/' + pdfjsAssets),
+    'import.meta.env.VITE_DEMO': JSON.stringify(mode === DEMO_MODE ? '1' : ''),
+    'import.meta.env.VITE_EXCALIDRAW_ASSETS': JSON.stringify(baseFor(mode) + excalidrawAssets),
+    'import.meta.env.VITE_PDFJS_ASSETS': JSON.stringify(baseFor(mode) + pdfjsAssets),
   },
   resolve: {
     alias: [
@@ -172,6 +222,7 @@ export default defineConfig({
     },
   },
   build: {
+    outDir: mode === DEMO_MODE ? 'dist-demo' : 'dist',
     sourcemap,
     rolldownOptions: {
       output: {
@@ -190,4 +241,4 @@ export default defineConfig({
     include: ['src/**/*.test.{ts,tsx}'],
     restoreMocks: true,
   },
-})
+}))
