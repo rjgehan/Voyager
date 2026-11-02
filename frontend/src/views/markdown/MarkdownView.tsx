@@ -16,6 +16,7 @@ import { setSearchHighlight } from '../../editor/searchHighlight';
 import { wantsNoteFocus } from '../../features/focus';
 import { isEditingMode, modeSwitchLine, setTopLineProbe, showLivePreview, takePendingModeLine } from '../../features/noteMode';
 import { useNoteScroll } from '../../features/noteScroll';
+import { noteWidthProps } from '../../features/settings';
 import { highlightTerms } from '../../features/searchTerms';
 import { useDocumentSession, useSessionSnapshot } from '../../sync/useTextDocument';
 import { isKanbanText, KANBAN_PROBE_CHARS, setKanbanAsMarkdown, useKanbanAsMarkdown } from '../kanban/detect';
@@ -137,9 +138,11 @@ export default function MarkdownView({ path, mode }: FileViewProps) {
   }, [scrollRequest, ready, session, scrollToTarget, paneActive]);
 
   const board = ready && kanban && !asMarkdown;
+  // Live Preview and source mode share the note's column and its width (DESIGN §6.6).
+  const width = noteWidthProps(settings.editor);
 
   return (
-    <div className={`markdown-view${settings.editor.readableLineLength && !board ? ' is-readable' : ''}${board ? ' is-kanban' : ''}`} data-mode={board ? 'board' : mode}>
+    <div className={`markdown-view${board ? ' is-kanban' : width.className}`} style={board ? undefined : width.style} data-mode={board ? 'board' : mode}>
       <NoteHeader
         path={session.path}
         snapshot={snapshot}

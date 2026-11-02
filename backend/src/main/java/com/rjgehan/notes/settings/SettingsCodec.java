@@ -33,6 +33,11 @@ final class SettingsCodec {
 
 	private static final JsonNodeFactory NODES = JsonNodeFactory.instance;
 
+	private static final String NOTE_WIDTH = "noteWidth";
+
+	/** The on/off setting {@code editor.noteWidth} replaced. */
+	private static final String READABLE_LINE_LENGTH = "readableLineLength";
+
 	private SettingsCodec() {
 	}
 
@@ -83,13 +88,34 @@ final class SettingsCodec {
 		EditorSettings ed = defaults.editor();
 		EditorSettings editorSettings = new EditorSettings(
 				reader.enumValue(editor, "settings.editor.defaultMode", EditorMode.values(), ed.defaultMode()),
-				reader.bool(editor, "settings.editor.readableLineLength", ed.readableLineLength()),
+				reader.noteWidth(editor, ed.noteWidth()),
 				reader.bool(editor, "settings.editor.strictLineBreaks", ed.strictLineBreaks()));
 		AiSettings aiSettings = reader.ai(node.get("ai"));
 		RemindersSettings remindersSettings = reader.reminders(node.get("reminders"));
 		Settings settings = new Settings(Settings.SCHEMA_VERSION, filesSettings, dailySettings, templatesSettings,
 				editorSettings, aiSettings, remindersSettings);
 		return new Parsed(settings, List.copyOf(reader.errors));
+	}
+
+	/**
+	 * The note width a {@code PUT} body without {@code editor.noteWidth} keeps: a page from before the setting existed
+	 * (it reloads once it notices the new build) sends {@code readableLineLength} at most, so the width that is set
+	 * stays unless that switch says otherwise (on while the width is full: the readable width; off: full). Null when the
+	 * body has a {@code noteWidth} (or no editor group), which then decides.
+	 */
+	static @Nullable NoteWidth keptNoteWidth(@Nullable JsonNode body, NoteWidth current) {
+		JsonNode editor = (body != null) ? body.get("editor") : null;
+		if (editor == null || !editor.isObject() || Reader.present(editor, NOTE_WIDTH)) {
+			return null;
+		}
+		JsonNode readable = editor.get(READABLE_LINE_LENGTH);
+		if (readable == null || !readable.isBoolean()) {
+			return current;
+		}
+		if (!readable.booleanValue()) {
+			return NoteWidth.FULL;
+		}
+		return current.isFull() ? NoteWidth.READABLE : current;
 	}
 
 	/** The integer {@code schemaVersion} of a settings tree, or null when it has none. */
@@ -135,7 +161,14 @@ final class SettingsCodec {
 		EditorSettings e = settings.editor();
 		ObjectNode editor = group(merged, "editor");
 		editor.put("defaultMode", wire(e.defaultMode()));
-		editor.put("readableLineLength", e.readableLineLength());
+		if (e.noteWidth().isFull()) {
+			editor.put(NOTE_WIDTH, NoteWidth.FULL_WIRE);
+		}
+		else {
+			editor.put(NOTE_WIDTH, e.noteWidth().pixels());
+		}
+		// The setting it replaced goes with the first save (its value is in noteWidth now).
+		editor.remove(READABLE_LINE_LENGTH);
 		editor.put("strictLineBreaks", e.strictLineBreaks());
 		AiSettings a = settings.ai();
 		ObjectNode ai = group(merged, "ai");
@@ -286,6 +319,34 @@ final class SettingsCodec {
 		}
 
 		/**
+		 * {@code settings.editor.noteWidth}: a number of pixels from {@link NoteWidth#MIN} to {@link NoteWidth#MAX}, or
+		 * {@code "full"}. It replaced the on/off {@code readableLineLength}, so a file or request without it is valid:
+		 * that older switch decides when it is there (on: {@link NoteWidth#READABLE}, off: full), else the default.
+		 */
+		NoteWidth noteWidth(@Nullable JsonNode group, NoteWidth fallback) {
+			if (group == null) {
+				return fallback;
+			}
+			if (!present(group, NOTE_WIDTH)) {
+				if (!present(group, READABLE_LINE_LENGTH)) {
+					return fallback;
+				}
+				return NoteWidth.fromReadableLineLength(
+						bool(group, "settings.editor." + READABLE_LINE_LENGTH, !fallback.isFull()));
+			}
+			JsonNode value = group.get(NOTE_WIDTH);
+			if (value.isString() && value.stringValue().equals(NoteWidth.FULL_WIRE)) {
+				return NoteWidth.FULL;
+			}
+			if (value.isIntegralNumber() && value.canConvertToInt() && value.intValue() >= NoteWidth.MIN
+					&& value.intValue() <= NoteWidth.MAX) {
+				return new NoteWidth(value.intValue());
+			}
+			return invalid("settings.editor." + NOTE_WIDTH,
+					"must be " + NoteWidth.MIN + " to " + NoteWidth.MAX + " pixels, or \"full\"", fallback);
+		}
+
+		/**
 		 * {@code settings.ai} (ROADMAP item 18). It came after schema version 1 shipped, so a file or request without the
 		 * group, or without one of its fields, is valid and gets the defaults; a field that is present must be valid.
 		 */
@@ -360,7 +421,7 @@ final class SettingsCodec {
 					: fallback;
 		}
 
-		private static boolean present(JsonNode group, String name) {
+		static boolean present(JsonNode group, String name) {
 			JsonNode value = group.get(name);
 			return value != null && !value.isNull();
 		}

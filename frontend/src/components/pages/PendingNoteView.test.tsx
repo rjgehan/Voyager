@@ -40,6 +40,20 @@ describe('PendingNoteView', () => {
     expect(screen.getByText('Creating the drawing…')).toBeInTheDocument();
   });
 
+  it('takes the note width of the settings', () => {
+    queryClient.setQueryData(queryKeys.settings(), { settings: { ...DEFAULT_SETTINGS, editor: { ...DEFAULT_SETTINGS.editor, noteWidth: 900 } }, version: 'v1', readOnly: false });
+    startPendingNote(4, '', 'Untitled');
+    const { container, unmount } = render(view());
+    const column = container.querySelector<HTMLElement>('.markdown-view')!;
+    expect(column).toHaveClass('is-readable');
+    expect(column.style.getPropertyValue('--note-width')).toBe('900px');
+    unmount();
+    queryClient.setQueryData(queryKeys.settings(), { settings: { ...DEFAULT_SETTINGS, editor: { ...DEFAULT_SETTINGS.editor, noteWidth: 'full' } }, version: 'v2', readOnly: false });
+    const full = render(view()).container.querySelector<HTMLElement>('.markdown-view')!;
+    expect(full).not.toHaveClass('is-readable');
+    expect(full.style.getPropertyValue('--note-width')).toBe('');
+  });
+
   it("keeps the title open while a template's questions have the focus, and commits it on any other blur", () => {
     queryClient.setQueryData(queryKeys.settings(), { settings: DEFAULT_SETTINGS, version: 'v1', readOnly: false });
     startPendingNote(3, '', 'Untitled');

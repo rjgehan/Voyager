@@ -5,6 +5,7 @@ import { useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { useVaultSettings } from '../../api/hooks';
 import { autoGrow, useAutoGrow } from '../autoGrow';
 import { validateNewName } from '../../features/fileOps';
+import { noteWidthProps } from '../../features/settings';
 import { updatePendingSelection, updatePendingTitle, type PendingNote } from '../../state/pendingNote';
 
 export function PendingNoteView({ pending }: { pending: PendingNote }) {
@@ -15,6 +16,7 @@ export function PendingNoteView({ pending }: { pending: PendingNote }) {
   const error = title.trim() === '' ? null : validateNewName(`${title.trim()}.${pending.extension}`);
   const note = pending.extension === 'md';
   const kind = pending.label.charAt(0).toUpperCase() + pending.label.slice(1);
+  const width = noteWidthProps(settings.editor);
 
   useLayoutEffect(() => {
     const el = input.current;
@@ -35,7 +37,7 @@ export function PendingNoteView({ pending }: { pending: PendingNote }) {
   };
 
   return (
-    <div className={`markdown-view${settings.editor.readableLineLength ? ' is-readable' : ''}`} aria-busy="true">
+    <div className={`markdown-view${width.className}`} style={width.style} aria-busy="true">
       <header className="note-header">
         <div className="inline-title-wrap">
           <h1 className="inline-title">

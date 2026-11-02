@@ -180,6 +180,15 @@ public class SettingsService {
 					(settings.get("reminders") == null) ? current.settings().reminders() : s.reminders()),
 					parsed.errors());
 		}
+		NoteWidth keptWidth = SettingsCodec.keptNoteWidth(settings, current.settings().editor().noteWidth());
+		if (keptWidth != null) {
+			// A page from before settings.editor.noteWidth keeps the width that is set (SettingsCodec.keptNoteWidth).
+			Settings s = parsed.settings();
+			EditorSettings e = s.editor();
+			parsed = new SettingsCodec.Parsed(new Settings(s.schemaVersion(), s.files(), s.dailyNotes(), s.templates(),
+					new EditorSettings(e.defaultMode(), keptWidth, e.strictLineBreaks()), s.ai(), s.reminders()),
+					parsed.errors());
+		}
 		List<FieldError> errors = new ArrayList<>(parsed.errors());
 		if (baseVersion == null || baseVersion.isBlank()) {
 			errors.add(new FieldError("baseVersion", "is required"));

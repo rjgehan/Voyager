@@ -163,7 +163,7 @@ export interface DailyNotesSettings { format: string; folder: VaultPath; templat
 /** A folder template (ROADMAP item 30): new notes in `folder` (`""`: anywhere) start from `template`. */
 export interface FolderTemplate { folder: VaultPath; template: VaultPath }
 export interface TemplatesSettings { folder: VaultPath; dateFormat: string; timeFormat: string; folderTemplates: FolderTemplate[] }
-export interface EditorSettings { defaultMode: 'edit' | 'read'; readableLineLength: boolean; strictLineBreaks: boolean }
+export interface EditorSettings { defaultMode: 'edit' | 'read'; noteWidth: number | 'full'; strictLineBreaks: boolean }   // noteWidth: 600–1400 CSS pixels
 /** Ask your vault and summaries (§24). Optional in a request: a body without it keeps the current values. */
 export interface AiSettings {
   enabled: boolean;               // off by default: nothing is sent to Anthropic until this is on

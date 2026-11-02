@@ -1179,7 +1179,7 @@ The date token mapping table (moment, dayjs, and java.time for future server-sid
 | | `timeFormat` | `HH:mm` |
 | | `folderTemplates` | `[]` (a list of `{folder, template}`; optional in the file, ROADMAP item 30) |
 | `editor` | `defaultMode` | `edit` |
-| | `readableLineLength` | `true` |
+| | `noteWidth` | `600`: how wide a note's text runs, 600 to 1400 CSS pixels or `"full"` (Settings, Editor, *Note width*, §6.6). It replaced the on/off `readableLineLength`, which a file without `noteWidth` still gives (`true`: 600, the width it used, `false`: full); the first save writes `noteWidth` instead. A `PUT` without `noteWidth` (a page from an earlier build) keeps the stored width unless its `readableLineLength` switched (API.md §5). |
 | | `strictLineBreaks` | `false` (as in Obsidian, a single newline renders as a line break; since ROADMAP 10b this affects embedded notes, the rich blocks of Live Preview (§6.6.1) and rich paste only, §6.7) |
 | `ai` (§5.25; optional in the file and in requests, see API.md §5) | `enabled` | `false`: nothing is sent to Anthropic until it is on |
 | | `model` | `claude-sonnet-5-5` (also `claude-opus-5-5`, `claude-haiku-5-5`) |
@@ -1604,7 +1604,7 @@ An existing Obsidian vault is imported by copying it into the vault directory be
 | `newLinkFormat`, `useMarkdownLinks` | `files.newLinkFormat`, `useWikilinks` (inverted) |
 | `alwaysUpdateLinks: true` | `files.autoUpdateLinks: true` (`false` means "ask" in Obsidian; NotesApp's Move dialog always shows the updates, so it is left alone) |
 | `userIgnoreFilters` | `files.excludedPaths` (paths only; `/regex/` entries are reported, not used) |
-| `strictLineBreaks`, `readableLineLength`, `defaultViewMode` (`source`, `preview`) | `editor.strictLineBreaks`, `readableLineLength`, `defaultMode` (`edit`, `read`) |
+| `strictLineBreaks`, `readableLineLength`, `defaultViewMode` (`source`, `preview`) | `editor.strictLineBreaks`, `noteWidth` (on: 600, off: `full`), `defaultMode` (`edit`, `read`) |
 | `daily-notes.json` `format` (empty is `YYYY-MM-DD`), `folder`, `template` (`.md` added), `autorun` | `dailyNotes.format`, `folder`, `template`, `openOnStartup` |
 | `templates.json` `folder`, `dateFormat`, `timeFormat` (empty is the default) | `templates.*` |
 
@@ -2230,6 +2230,8 @@ Per-device preferences (theme, spellcheck, autocorrect, remote images, syntax vi
 | 17 | `vimCompartment` (`editor/vimMode.ts`) | Empty, or vim mode when this device turned it on (§6.36): a lazy chunk at `Prec.highest` |
 
 The document is always **LF-only**; there is no `lineSeparator` facet. CRLF files are converted at the session boundary (§6.9), because CodeMirror counts a line break as one position whatever the separator, and `Text.toString()` always joins with `\n`.
+
+**Note width.** `editor.noteWidth` (§5.12; Settings, Editor, *Note width*: a slider from 600 to 1400 px in steps of 50, whose last stop is *Full width*) sets how wide a note's text runs. `noteWidthProps(settings.editor)` (`features/settings.ts`) gives the note's column `is-readable` with `--note-width: <n>px`, which caps it at that width plus the gutters and centres it, or nothing at full width. Live Preview and source mode share that column (so do the note's embeds, which never run wider than its text), and so do the encrypted-note view (§6.33) and the pending new note (§6.15). A Kanban board note always takes the full width. A width from an older server (`readableLineLength` without `noteWidth`) reads as 600 or full.
 
 **Opening links.** `nav.openLink(target)` handles clicks, `Mod-Enter`, reading-view clicks and the mobile "Follow" button.
 
@@ -3140,7 +3142,7 @@ The version view of §6.11 also gains **Compare with**: in the History panel it 
 |---|---|
 | **Phone** `< 768 px` | Single column. **TopBar:** ☰ (left drawer), title with the connection dot, **+** (quick capture, §6.27), a switcher/search button (quick switcher; its sheet has a "Search in notes" row), edit/read toggle, a **tabs button** with the number of open tabs (the tab switcher, §6.40), and ⋯ (Command palette, Backlinks, Outline, History, Bookmark, Rename, Move, Delete, Template, Today, Reload). Phones show one pane. **Drawer:** full-height, 88 % width, slides in from the left; Files, Search, Bookmarks, Tags and Recent files tabs (plus registered left panels), **New note** and **Today** buttons, and a footer with **Settings**, **Trash** and the **theme toggle**. Right-side panels open as a **bottom sheet** (70 % height), dismissed by dragging its handle, or by swiping down only when its content is scrolled to the top, so scrolling the sheet never closes it. |
 | **Tablet** `768–1199 px` | The ribbon is a collapsed icon rail (48 px) that is always visible, so every desktop entry point (switcher, search, Today, template, new note, palette, Trash, Settings) stays one tap away on an iPad. Both sidebars are overlays over the editor, toggled from the rail or the TopBar. |
-| **Desktop** `≥ 1200 px` | Ribbon (48 px), left sidebar (default 280 px, resizable 200–480), workspace (readable width 598 px, 46 em of the 13 px UI size, when `readableLineLength`), right sidebar (300 px, resizable). Status bar at the bottom. |
+| **Desktop** `≥ 1200 px` | Ribbon (48 px), left sidebar (default 280 px, resizable 200–480), workspace (a note's text at most `editor.noteWidth` wide, 600 px by default, §6.6; pages use the same 600 px `--readable-width`), right sidebar (300 px, resizable). Status bar at the bottom. |
 
 **iOS and touch specifics:**
 

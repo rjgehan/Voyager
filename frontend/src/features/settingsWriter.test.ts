@@ -76,11 +76,11 @@ describe('SettingsWriter', () => {
 
   it('a real change from another device keeps both changes (FE-6)', async () => {
     const s = server();
-    s.foreign((x) => (x.editor.readableLineLength = false));
+    s.foreign((x) => (x.editor.noteWidth = 'full'));
     s.writer.update({ ...s.view(), files: { ...s.view().files, useWikilinks: false } }, true);
     await vi.advanceTimersByTimeAsync(500);
     expect(s.settings.files.useWikilinks).toBe(false);
-    expect(s.settings.editor.readableLineLength).toBe(false);
+    expect(s.settings.editor.noteWidth).toBe('full');
     expect(s.notices.map(([m]) => m)).toEqual([expect.stringContaining('applied on top')]);
   });
 

@@ -1487,6 +1487,29 @@ mark.match {
   justify-content: flex-end;
 }
 
+.setting-slider {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.setting-slider input[type='range'] {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--tap-target);
+  accent-color: var(--interactive-accent);
+}
+
+.setting-slider-value {
+  flex: none;
+  min-width: 72px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
 .setting-note {
   display: flex;
   align-items: center;

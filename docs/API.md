@@ -287,7 +287,7 @@ Settings follow the same protocol with `PUT /api/settings {settings, baseVersion
     },
     "dailyNotes": { "format": "YYYY-MM-DD", "folder": "Daily", "template": "", "openOnStartup": false },
     "templates": { "folder": "Templates", "dateFormat": "YYYY-MM-DD", "timeFormat": "HH:mm", "folderTemplates": [] },
-    "editor": { "defaultMode": "edit", "readableLineLength": true, "strictLineBreaks": false },
+    "editor": { "defaultMode": "edit", "noteWidth": 600, "strictLineBreaks": false },
     "ai": { "enabled": false, "provider": "claude-code", "model": "claude-sonnet-5-5", "excludedPaths": ["Private"],
             "maxContextChars": 60000, "monthlyBudgetUsd": 5.0 },
     "reminders": { "webPush": false, "ntfy": false, "ntfyTitleOnly": true, "inApp": false, "dailyNote": false,
@@ -341,7 +341,7 @@ Request `SettingsUpdateRequest`: `{"settings": { ...full Settings... }, "baseVer
 | `dailyNotes.*`, `templates.*` | See §15.2 and §15.4. |
 | `templates.folderTemplates` | Applied by the client: a note it creates (New note, a link to a missing note, the quick switcher) in a folder starts from the template of the deepest rule whose `folder` contains it, rendered as in §15.4. Notes created in `templates.folder` get none. |
 | `editor.defaultMode` | Kept for compatibility; both values stay valid. The client ignores it: every note opens in Live Preview, which is rendered and editable (DESIGN §6.6.1), and the Settings page writes `edit` with its next editor change. Source mode is a per-note, per-page-load escape hatch on the client. |
-| `editor.*` | UI preferences that apply on all devices. `strictLineBreaks: false` (the default, as in Obsidian) renders a single newline as a line break in reading view. |
+| `editor.*` | UI preferences that apply on all devices. `strictLineBreaks: false` (the default, as in Obsidian) renders a single newline as a line break in reading view. `noteWidth` is how wide a note's text runs: an integer from 600 to 1400 (CSS pixels; 600 is the default) or `"full"` for the whole pane; anything else is a `400` naming `settings.editor.noteWidth`. It replaced the on/off `readableLineLength`: a file or request without `noteWidth` takes it from `readableLineLength` when present (`true`: 600, `false`: `"full"`), and the first save writes `noteWidth` and drops `readableLineLength`. A `PUT` without `noteWidth` (a page from an earlier build) keeps the stored width unless its `readableLineLength` switched: `false` makes it `"full"`, `true` turns a full width back to 600. |
 | `ai.*` | Ask your vault and summaries (§24). `enabled` is off by default: until it is on, nothing is ever sent to Anthropic. `provider`: `claude-code` (default), the server's Claude Code CLI with the user's Claude subscription, or `api`, the Anthropic API billed per token. `excludedPaths` (default `["Private"]`) and `files.excludedPaths` are never read for a request. `maxContextChars` caps the note text of one request, earlier turns included; `monthlyBudgetUsd` refuses requests once the month's estimated spend reaches it. |
 
 ---
@@ -2015,7 +2015,7 @@ export interface DailyNotesSettings { format: string; folder: VaultPath; templat
 /** A folder template (ROADMAP item 30): new notes in `folder` (`""`: anywhere) start from `template`. */
 export interface FolderTemplate { folder: VaultPath; template: VaultPath }
 export interface TemplatesSettings { folder: VaultPath; dateFormat: string; timeFormat: string; folderTemplates: FolderTemplate[] }
-export interface EditorSettings { defaultMode: 'edit' | 'read'; readableLineLength: boolean; strictLineBreaks: boolean }
+export interface EditorSettings { defaultMode: 'edit' | 'read'; noteWidth: number | 'full'; strictLineBreaks: boolean }   // noteWidth: 600–1400 CSS pixels
 /** Ask your vault and summaries (§24). Optional in a request: a body without it keeps the current values. */
 export interface AiSettings {
   enabled: boolean;               // off by default: nothing is sent to Anthropic until this is on

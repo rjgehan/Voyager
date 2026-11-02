@@ -18,7 +18,7 @@ public record Settings(int schemaVersion, FilesSettings files, DailyNotesSetting
 						"Attachments", "attachments", true, List.of()),
 				new DailyNotesSettings("YYYY-MM-DD", "Daily", "", false),
 				new TemplatesSettings("Templates", "YYYY-MM-DD", "HH:mm"),
-				new EditorSettings(EditorMode.EDIT, true, false), AiSettings.defaults(),
+				new EditorSettings(EditorMode.EDIT, NoteWidth.READABLE, false), AiSettings.defaults(),
 				RemindersSettings.defaults());
 	}
 
