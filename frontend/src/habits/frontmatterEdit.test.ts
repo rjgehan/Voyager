@@ -43,6 +43,15 @@ describe('setProperty', () => {
     expect(() => setProperty('---\n- a\n- b\n---\n', 'x', true)).toThrow(FrontmatterError);
   });
 
+  it('never writes frontmatter whose alias lost its anchor', () => {
+    // Replacing `a: &x 1` dropped the anchor `exercise: *x` refers to: the block no longer parsed,
+    // and reading a property threw.
+    const text = '---\na: &x 1\nexercise: *x\n---\nBody\n';
+    expect(() => setProperty(text, 'a', 2)).toThrow(FrontmatterError);
+    expect(setProperty(text, 'other', true)).toBe('---\na: &x 1\nexercise: *x\nother: true\n---\nBody\n');
+    expect(getProperty('---\nexercise: *x\n---\n', 'exercise')).toBeUndefined();
+  });
+
   it('reads values back', () => {
     expect(getProperty(NOTE, 'ENTRIES')).toEqual(['2026-10-19', '2026-10-20']);
     expect(getProperty(NOTE, 'nothing')).toBeUndefined();
