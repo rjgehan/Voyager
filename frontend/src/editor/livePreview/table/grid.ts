@@ -716,7 +716,8 @@ export class TableGrid {
   private cellExtensions(row: number, column: number): Extension {
     return [
       tableCellHost.of(this.view),
-      EditorView.contentAttributes.of({ 'aria-label': cellLabel(row, column) }),
+      // The cell's own name comes first, so it wins over the cell editor's generic "Table cell" (editorLabel).
+      Prec.highest(EditorView.contentAttributes.of({ 'aria-label': cellLabel(row, column) })),
       singleLine,
       // The function suggestions take these keys while their list is open.
       Prec.highest(keymap.of(ASSIST_KEYS.map((key) => ({ key, run: () => this.assist?.key(key) ?? false })))),

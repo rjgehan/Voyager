@@ -266,6 +266,15 @@ describe('editing a cell', () => {
     expect(view.state.doc.toString()).toBe('| a    | b |\n|------|---|\n| c1 2 | d |');
   });
 
+  it('names the cell being edited by its row and column, not just "Table cell"', () => {
+    // The editor's generic name (editorLabel, DESIGN §6.19) is the fallback; the grid's is more precise.
+    const view = editor('| a | b |\n|---|---|\n| c | d |');
+    grid(view).activate(1, 1);
+    expect(cellEditor(view).contentDOM.getAttribute('aria-label')).toBe('Row 1, column B');
+    grid(view).activate(0, 0);
+    expect(cellEditor(view).contentDOM.getAttribute('aria-label')).toBe('Header, column A');
+  });
+
   it('types into a cell missing from a short row', () => {
     const view = editor('| a | b |\n|---|---|\n| c |\n\nnext');
     grid(view).activate(1, 1);
