@@ -101,15 +101,22 @@ describe('task detail sheet', () => {
   });
 
   it('shows a rule it cannot offer as a choice by its text, with the next dates', () => {
-    taskStore.upsert([makeTask({ id: 'A', title: 'Report', due: '2026-10-19', recurrence: { rrule: 'FREQ=MONTHLY;BYDAY=1MO', from: 'completion' } })]);
-    renderWithApp(<TaskDetail id="A" />);
-    const repeat = screen.getByRole('combobox', { name: 'Repeat' });
-    expect(repeat).toHaveDisplayValue('Every month on the 1st Monday');
-    expect(screen.getByRole('combobox', { name: 'Repeat from' })).toHaveValue('completion');
-    expect(screen.getByText(/^Then /)).toHaveTextContent(/Nov 2/);
-    fireEvent.click(screen.getByRole('button', { name: 'Edit the rule' }));
-    expect(screen.getByRole('radio', { name: 'Choose' })).toHaveAttribute('aria-checked', 'true');
-    expect(screen.getByRole('radio', { name: /^on the/ })).toBeChecked();
+    // The next dates count from today: pinned, so the test does not depend on the day it runs.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 9, 21, 12));
+    try {
+      taskStore.upsert([makeTask({ id: 'A', title: 'Report', due: '2026-10-19', recurrence: { rrule: 'FREQ=MONTHLY;BYDAY=1MO', from: 'completion' } })]);
+      renderWithApp(<TaskDetail id="A" />);
+      const repeat = screen.getByRole('combobox', { name: 'Repeat' });
+      expect(repeat).toHaveDisplayValue('Every month on the 1st Monday');
+      expect(screen.getByRole('combobox', { name: 'Repeat from' })).toHaveValue('completion');
+      expect(screen.getByText(/^Then /)).toHaveTextContent(/Nov 2/);
+      fireEvent.click(screen.getByRole('button', { name: 'Edit the rule' }));
+      expect(screen.getByRole('radio', { name: 'Choose' })).toHaveAttribute('aria-checked', 'true');
+      expect(screen.getByRole('radio', { name: /^on the/ })).toBeChecked();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('renders notes as sanitized Markdown and saves edits made in them', async () => {
