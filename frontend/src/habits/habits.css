@@ -638,3 +638,21 @@
     height: 7px;
   }
 }
+
+/* Touch: the panel's 32 px check and its name are 44 px targets (DESIGN §6.16). */
+@media (pointer: coarse) {
+  .hb-check.is-small {
+    position: relative;
+  }
+
+  .hb-check.is-small::after {
+    content: '';
+    position: absolute;
+    inset: -7px;
+  }
+
+  .hb-panel-name,
+  .hb-panel-more {
+    min-height: 44px;
+  }
+}

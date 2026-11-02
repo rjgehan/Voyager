@@ -46,8 +46,48 @@ select {
   }
 
   .panel-tab {
+    flex: none;
     width: 44px;
     height: 44px;
+  }
+
+  /* More panels than fit (the phone's sheet holds 8 at 375 px) scroll instead of shrinking. */
+  .panel-tab-strip {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+
+  .panel-tab-strip::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Switches the size of iOS's (51 × 31), with a 44 px touch area. */
+  .toggle {
+    width: 51px;
+    height: 31px;
+  }
+
+  .toggle::after {
+    content: '';
+    position: absolute;
+    inset: -7px -4px;
+  }
+
+  .toggle-knob {
+    top: 2px;
+    left: 2px;
+    width: 27px;
+    height: 27px;
+  }
+
+  .toggle.is-on .toggle-knob {
+    transform: translateX(20px);
+  }
+
+  /* Segmented controls (List / Board, Diff / Full text, the vault history's tabs, filters). */
+  .segmented button {
+    min-height: 40px;
   }
 
   /* Every tap target is at least 44 × 44 px (DESIGN §6.16). */
@@ -101,7 +141,37 @@ select {
   }
 }
 
+/* Without a hover, a press shows instead (hover styles are only for a mouse, app.css). */
+@media (hover: none) {
+  .ribbon-button:not(:disabled):active,
+  .icon-button:not(:disabled):active,
+  .panel-tab:active,
+  .tree-row:active,
+  .outline-item:active,
+  .menu-item:active,
+  .button:not(:disabled):active,
+  .settings-nav-item:active,
+  .history-row:active,
+  .tag-row:active {
+    background: var(--background-modifier-hover);
+  }
+
+  .button-primary:not(:disabled):active {
+    background: var(--interactive-accent-hover);
+  }
+
+  .button-danger:not(:disabled):active {
+    background: var(--text-error);
+    filter: brightness(1.1);
+  }
+}
+
 @media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {
+  /* Key hints mean nothing without a keyboard. */
+  .picker-kbd {
+    display: none;
+  }
+
   :root {
     --content-gutter: 16px;
   }

@@ -80,9 +80,12 @@ textarea.text-input {
   color: #fff;
 }
 
-.button-danger:hover {
-  background: var(--text-error);
-  filter: brightness(1.1);
+/* Hover only where there is a hover: on iOS a tap leaves :hover on until the next tap (DESIGN §6.16). */
+@media (hover: hover) {
+  .button-danger:hover {
+    background: var(--text-error);
+    filter: brightness(1.1);
+  }
 }
 
 /* ---------- modal dialogs ---------- */
@@ -475,6 +478,16 @@ textarea.text-input {
 
   .picker-cancel {
     display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0 8px;
+  }
+
+  /* The history panel's rows and links, and the search page's sort, are 44 px targets. */
+  .history-row-main,
+  .history-vault-link,
+  .search-sort select {
+    min-height: 44px;
   }
 }
 
@@ -653,11 +666,13 @@ textarea.text-input {
   white-space: nowrap;
 }
 
-.search-hit-title:hover,
-.backlink-source:hover,
-.search-match:hover,
-.backlink-context:hover {
-  background: var(--background-modifier-hover);
+@media (hover: hover) {
+  .search-hit-title:hover,
+  .backlink-source:hover,
+  .search-match:hover,
+  .backlink-context:hover {
+    background: var(--background-modifier-hover);
+  }
 }
 
 .search-match,
@@ -833,8 +848,10 @@ mark.match {
   border-radius: var(--radius-s);
 }
 
-.tag-row:hover {
-  background: var(--background-modifier-hover);
+@media (hover: hover) {
+  .tag-row:hover {
+    background: var(--background-modifier-hover);
+  }
 }
 
 .tag-chevron {
@@ -859,8 +876,10 @@ mark.match {
   cursor: pointer;
 }
 
-.tag-row-button:hover {
-  color: var(--text-normal);
+@media (hover: hover) {
+  .tag-row-button:hover {
+    color: var(--text-normal);
+  }
 }
 
 .tag-row-name {
@@ -940,8 +959,10 @@ mark.match {
   border-radius: var(--radius-s);
 }
 
-.history-row:hover {
-  background: var(--background-modifier-hover);
+@media (hover: hover) {
+  .history-row:hover {
+    background: var(--background-modifier-hover);
+  }
 }
 
 .history-row.is-pending {
@@ -1248,8 +1269,10 @@ mark.match {
   color: var(--text-faint);
 }
 
-.move-folder:hover {
-  background: var(--background-modifier-hover);
+@media (hover: hover) {
+  .move-folder:hover {
+    background: var(--background-modifier-hover);
+  }
 }
 
 .move-folder.is-selected {
@@ -1486,8 +1509,10 @@ mark.match {
   cursor: pointer;
 }
 
-.timeline-file-main:hover {
-  background: var(--background-modifier-hover);
+@media (hover: hover) {
+  .timeline-file-main:hover {
+    background: var(--background-modifier-hover);
+  }
 }
 
 .timeline-file-name,
@@ -1510,6 +1535,20 @@ mark.match {
 .timeline-open {
   flex: none;
   font-size: var(--font-ui-smaller);
+}
+
+/* Touch: a changed file and its Open link are 44 px targets (DESIGN §6.16). */
+@media (pointer: coarse) {
+  .timeline-file-main {
+    align-items: center;
+    min-height: 44px;
+  }
+
+  .timeline-open {
+    min-width: 44px;
+    min-height: 44px;
+    justify-content: center;
+  }
 }
 
 .settings-page {
@@ -1536,9 +1575,11 @@ mark.match {
   text-decoration: none;
 }
 
-.settings-nav-item:hover {
-  background: var(--background-modifier-hover);
-  color: var(--text-normal);
+@media (hover: hover) {
+  .settings-nav-item:hover {
+    background: var(--background-modifier-hover);
+    color: var(--text-normal);
+  }
 }
 
 .settings-nav-item.is-active {
@@ -2287,8 +2328,10 @@ mark.match {
   cursor: pointer;
 }
 
-.backlink-block:hover {
-  background: var(--background-modifier-hover);
+@media (hover: hover) {
+  .backlink-block:hover {
+    background: var(--background-modifier-hover);
+  }
 }
 
 .backlink-block .backlink-block-chip {

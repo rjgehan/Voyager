@@ -227,10 +227,13 @@ body.is-resizing {
   height: 32px;
 }
 
-.ribbon-button:hover,
-.icon-button:hover {
-  background: var(--background-modifier-hover);
-  color: var(--text-normal);
+/* Hover only where there is a hover: on iOS a tap leaves :hover on until the next tap (DESIGN §6.16). */
+@media (hover: hover) {
+  .ribbon-button:hover,
+  .icon-button:hover {
+    background: var(--background-modifier-hover);
+    color: var(--text-normal);
+  }
 }
 
 .icon-button:disabled {
@@ -315,9 +318,11 @@ body.is-resizing {
   cursor: pointer;
 }
 
-.panel-tab:hover {
-  color: var(--text-normal);
-  background: var(--background-modifier-hover);
+@media (hover: hover) {
+  .panel-tab:hover {
+    color: var(--text-normal);
+    background: var(--background-modifier-hover);
+  }
 }
 
 .panel-tab.is-active {
@@ -404,9 +409,11 @@ body.is-resizing {
   touch-action: manipulation;
 }
 
-.tree-row:hover {
-  background: var(--background-modifier-hover);
-  color: var(--text-normal);
+@media (hover: hover) {
+  .tree-row:hover {
+    background: var(--background-modifier-hover);
+    color: var(--text-normal);
+  }
 }
 
 .tree-row.is-active {
@@ -499,9 +506,11 @@ body.is-resizing {
   white-space: nowrap;
 }
 
-.outline-item:hover {
-  background: var(--background-modifier-hover);
-  color: var(--text-normal);
+@media (hover: hover) {
+  .outline-item:hover {
+    background: var(--background-modifier-hover);
+    color: var(--text-normal);
+  }
 }
 
 /* ---------- workspace ---------- */
@@ -852,8 +861,10 @@ body.is-resizing {
   text-decoration: none;
 }
 
-.link-button:hover {
-  text-decoration: underline;
+@media (hover: hover) {
+  .link-button:hover {
+    text-decoration: underline;
+  }
 }
 
 /* ---------- buttons ---------- */
@@ -876,9 +887,11 @@ body.is-resizing {
   white-space: nowrap;
 }
 
-.button:hover {
-  border-color: var(--background-modifier-border-hover);
-  background: var(--background-modifier-hover);
+@media (hover: hover) {
+  .button:hover {
+    border-color: var(--background-modifier-border-hover);
+    background: var(--background-modifier-hover);
+  }
 }
 
 .button-primary {
@@ -887,8 +900,10 @@ body.is-resizing {
   color: var(--text-on-accent);
 }
 
-.button-primary:hover {
-  background: var(--interactive-accent-hover);
+@media (hover: hover) {
+  .button-primary:hover {
+    background: var(--interactive-accent-hover);
+  }
 }
 
 .button-small {
@@ -1048,10 +1063,15 @@ body.is-resizing {
   cursor: pointer;
 }
 
-.menu-item:hover,
 .menu-item:focus-visible {
   background: var(--background-modifier-hover);
   outline: none;
+}
+
+@media (hover: hover) {
+  .menu-item:hover {
+    background: var(--background-modifier-hover);
+  }
 }
 
 .menu-item svg {
@@ -1237,8 +1257,10 @@ body.is-resizing {
   border-radius: var(--radius-s);
 }
 
-.toast-action:hover {
-  background: var(--background-modifier-hover);
+@media (hover: hover) {
+  .toast-action:hover {
+    background: var(--background-modifier-hover);
+  }
 }
 
 .toast-close {
@@ -1251,8 +1273,10 @@ body.is-resizing {
   border-radius: var(--radius-s);
 }
 
-.toast-close:hover {
-  color: var(--text-normal);
+@media (hover: hover) {
+  .toast-close:hover {
+    color: var(--text-normal);
+  }
 }
 
 @keyframes toast-in {

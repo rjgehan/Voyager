@@ -21,6 +21,49 @@ function declarations(file: string, selector: string): string {
   return out.join('\n');
 }
 
+interface Rule {
+  selectors: string[];
+  body: string;
+  /** The preludes of the at-rules around it, outermost first: `@media (hover: hover)`. */
+  context: string[];
+}
+
+/** Every style rule of a stylesheet with the at-rules it sits in. */
+function rules(file: string): Rule[] {
+  const css = sheets[file];
+  const out: Rule[] = [];
+  const context: string[] = [];
+  let start = 0;
+  for (let i = 0; i < css.length; i++) {
+    if (css[i] === '{') {
+      const prelude = css.slice(start, i).trim();
+      if (prelude.startsWith('@')) {
+        context.push(prelude.replace(/\s+/g, ' '));
+        start = i + 1;
+      } else {
+        const end = css.indexOf('}', i);
+        out.push({ selectors: prelude.split(',').map((s) => s.trim()), body: css.slice(i + 1, end), context: [...context] });
+        i = end;
+        start = end + 1;
+      }
+    } else if (css[i] === '}') {
+      context.pop();
+      start = i + 1;
+    } else if (css[i] === ';' && context.length === 0) {
+      start = i + 1;
+    }
+  }
+  return out;
+}
+
+/** The declarations of the rules that list `selector` inside an at-rule whose prelude is `at`. */
+function declarationsIn(file: string, at: string, selector: string): string {
+  return rules(file)
+    .filter((r) => r.context.includes(at) && r.selectors.includes(selector))
+    .map((r) => r.body)
+    .join('\n');
+}
+
 describe('safe areas', () => {
   it('the drawer and the side panels keep their footers above the home indicator', () => {
     expect(declarations('styles/app.css', '.overlay-left .overlay-panel')).toMatch(/padding-bottom:\s*env\(safe-area-inset-bottom\)/);
@@ -102,6 +145,46 @@ describe('scrolling', () => {
     const body = declarations('styles/app.css', '.panel-body');
     expect(body).toMatch(/min-height:\s*0/);
     expect(body).toMatch(/overflow-y:\s*auto/);
+  });
+});
+
+describe('hover and touch', () => {
+  // On iOS a tap leaves :hover on until the next tap: a top bar button stayed highlighted after the
+  // switcher it opened had closed.
+  const shared = [
+    ['styles/app.css', ['.ribbon-button:hover', '.icon-button:hover', '.panel-tab:hover', '.tree-row:hover', '.outline-item:hover', '.button:hover', '.button-primary:hover', '.menu-item:hover', '.link-button:hover']],
+    ['styles/features.css', ['.button-danger:hover', '.search-hit-title:hover', '.tag-row:hover', '.history-row:hover', '.settings-nav-item:hover', '.timeline-file-main:hover', '.backlink-block:hover']],
+  ] as const;
+
+  it.each(shared)('the shared controls of %s highlight on hover only where there is a hover', (file, selectors) => {
+    for (const selector of selectors) {
+      const found = rules(file).filter((r) => r.selectors.includes(selector));
+      expect(found.length, selector).toBeGreaterThan(0);
+      for (const rule of found) expect(rule.context, selector).toContain('@media (hover: hover)');
+    }
+  });
+
+  it('a press shows on a touch screen instead', () => {
+    expect(declarationsIn('styles/mobile.css', '@media (hover: none)', '.icon-button:not(:disabled):active')).toMatch(/background:/);
+    expect(declarationsIn('styles/mobile.css', '@media (hover: none)', '.button-primary:not(:disabled):active')).toMatch(/--interactive-accent-hover/);
+  });
+
+  it('switches are the size of iOS’s, with a 44 px touch area', () => {
+    const coarse = '@media (pointer: coarse)';
+    expect(declarationsIn('styles/mobile.css', coarse, '.toggle')).toMatch(/width:\s*51px;[\s\S]*height:\s*31px/);
+    expect(declarationsIn('styles/mobile.css', coarse, '.toggle::after')).toMatch(/inset:\s*-7px -4px/);
+    expect(declarationsIn('styles/mobile.css', coarse, '.toggle.is-on .toggle-knob')).toMatch(/translateX\(20px\)/);
+  });
+
+  it('segmented controls and the panel tabs are 44 px targets; tabs that do not fit scroll', () => {
+    const coarse = '@media (pointer: coarse)';
+    expect(declarationsIn('styles/mobile.css', coarse, '.segmented button')).toMatch(/min-height:\s*40px/);
+    expect(declarationsIn('styles/mobile.css', coarse, '.panel-tab')).toMatch(/flex:\s*none/);
+    expect(declarationsIn('styles/mobile.css', coarse, '.panel-tab-strip')).toMatch(/overflow-x:\s*auto/);
+  });
+
+  it('phones hide the key hints of the switcher and the palette', () => {
+    expect(declarationsIn('styles/mobile.css', '@media (max-width: 767px), (max-height: 500px) and (pointer: coarse)', '.picker-kbd')).toMatch(/display:\s*none/);
   });
 });
 

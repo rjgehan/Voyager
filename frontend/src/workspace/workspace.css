@@ -365,3 +365,15 @@ body.is-resizing-rows {
   color: var(--text-muted);
   font-size: 13px;
 }
+
+/* Touch: the new tab's recent files are rows to tap, not a line of small links (DESIGN §6.16). */
+@media (pointer: coarse) {
+  .ws-new-tab-recent {
+    gap: 0;
+  }
+
+  .ws-new-tab-recent .link-button {
+    min-height: 44px;
+    padding: 0 12px;
+  }
+}
