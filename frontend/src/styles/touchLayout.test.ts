@@ -37,6 +37,20 @@ describe('safe areas', () => {
     expect(declarations('styles/app.css', '.keyboard-open .overlay-panel')).toMatch(/padding-bottom:\s*0/);
   });
 
+  it('a long ⋯ menu scrolls instead of running under the home indicator or off a short screen', () => {
+    const more = declarations('styles/features.css', '.top-bar .menu');
+    expect(more).toMatch(/max-height:\s*calc\(var\(--vvh, 100dvh\) - var\(--header-height\) - env\(safe-area-inset-top\) - env\(safe-area-inset-bottom\) - 12px\)/);
+    expect(more).toMatch(/overflow-y:\s*auto/);
+    expect(declarations('styles/features.css', '.context-menu')).toMatch(/env\(safe-area-inset-top\) - env\(safe-area-inset-bottom\)/);
+  });
+
+  it('the / menu docks above the editing toolbar, whose height includes the home indicator until the keyboard opens', () => {
+    const slash = '.cm-editor .cm-tooltip.cm-tooltip-autocomplete.cm-slash-menu';
+    expect(declarations('styles/editor.css', slash)).toMatch(/top:\s*calc\(var\(--vv-top, 0px\) \+ var\(--vvh, 100dvh\) - 56px - env\(safe-area-inset-bottom\)\) !important/);
+    expect(declarations('styles/editor.css', `.keyboard-open ${slash}`)).toMatch(/top:\s*calc\(var\(--vv-top, 0px\) \+ var\(--vvh, 100dvh\) - 56px\) !important/);
+    expect(declarations('styles/mobile.css', '.keyboard-open .mobile-toolbar')).toMatch(/padding-bottom:\s*0/);
+  });
+
   it('full-screen dialogs on a phone keep clear of the notch on either side', () => {
     const sheet = declarations('styles/features.css', '.modal-sheet .modal-panel');
     expect(sheet).toMatch(/padding-left:\s*env\(safe-area-inset-left\)/);
@@ -74,6 +88,20 @@ describe('text fields on a touch screen', () => {
       file === 'styles/mobile.css' ? [] : [...css.matchAll(/font(-size)?:[^;{}]*!important/g)].map((m) => `${file}: ${m[0]}`),
     );
     expect(forced).toEqual([]);
+  });
+});
+
+describe('scrolling', () => {
+  it('a table in a note scrolls sideways only, so a vertical swipe on it scrolls the note', () => {
+    const table = declarations('styles/editor.css', '.cm-lp-table-scroll');
+    expect(table).toMatch(/overflow-x:\s*auto/);
+    expect(table).toMatch(/overflow-y:\s*hidden/);
+  });
+
+  it('a panel that does not scroll a list of its own (the calendar) scrolls in the sheet or sidebar', () => {
+    const body = declarations('styles/app.css', '.panel-body');
+    expect(body).toMatch(/min-height:\s*0/);
+    expect(body).toMatch(/overflow-y:\s*auto/);
   });
 });
 

@@ -5,6 +5,7 @@ import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { returnFocus } from '../../features/focus';
 import { useOverlayHistory } from '../../features/overlayHistory';
+import { fitVertically } from '../../features/visibleArea';
 
 export interface MenuItem {
   id: string;
@@ -32,10 +33,11 @@ export function ContextMenu({ x, y, label, items, onClose }: Props) {
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    // Keep the menu inside the viewport (measured before paint).
+    // Keep the menu inside the viewport (measured before paint): on a phone, above the keyboard and
+    // clear of the status bar and the home indicator.
     const rect = el.getBoundingClientRect();
     el.style.left = `${Math.max(8, Math.min(x, window.innerWidth - rect.width - 8))}px`;
-    el.style.top = `${Math.max(8, Math.min(y, window.innerHeight - rect.height - 8))}px`;
+    el.style.top = `${fitVertically(y, rect.height)}px`;
     el.querySelector<HTMLElement>('[role="menuitem"]:not([disabled])')?.focus({ preventScroll: true });
   }, [x, y]);
 

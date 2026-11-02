@@ -76,6 +76,32 @@ describe('bottom sheet', () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
+  it('leaves a downward drag on something with its own gestures alone (the local graph, a drag handle)', () => {
+    const { onClose, list } = setup();
+    const graph = document.createElement('canvas');
+    graph.setAttribute('style', 'touch-action: none');
+    const dot = document.createElement('span');
+    graph.appendChild(dot);
+    list.appendChild(graph);
+    expect(getComputedStyle(graph).touchAction).toBe('none');
+    touch(dot, 'touchstart', 50, 100);
+    expect(touch(dot, 'touchmove', 50, 110).defaultPrevented).toBe(false);
+    touch(dot, 'touchmove', 50, 400);
+    touch(dot, 'touchend', 50, 400);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('leaves a slider alone too', () => {
+    const { onClose, list } = setup();
+    const slider = document.createElement('input');
+    slider.type = 'range';
+    list.appendChild(slider);
+    touch(slider, 'touchstart', 50, 100);
+    expect(touch(slider, 'touchmove', 52, 110).defaultPrevented).toBe(false);
+    touch(slider, 'touchend', 50, 400);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   it('never turns an upward swipe into a drag', () => {
     const { onClose, list } = setup();
     touch(list, 'touchstart', 50, 300);

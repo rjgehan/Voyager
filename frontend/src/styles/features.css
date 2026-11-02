@@ -1163,9 +1163,22 @@ mark.match {
   right: auto;
   z-index: 90;
   max-width: calc(100vw - 16px);
-  /* A long menu (a table cell's) scrolls rather than leaving the screen. */
-  max-height: calc(var(--vvh, 100dvh) - 16px);
+  /* A long menu (a table cell's) scrolls rather than leaving the screen or running under the
+     status bar and the home indicator (which the keyboard covers when it is open). */
+  max-height: calc(var(--vvh, 100dvh) - 16px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
   overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.keyboard-open .context-menu {
+  max-height: calc(var(--vvh, 100dvh) - 16px);
+}
+
+/* The phone and tablet ⋯ menu hangs from the TopBar: a long one scrolls above the home indicator. */
+.top-bar .menu {
+  max-height: calc(var(--vvh, 100dvh) - var(--header-height) - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 12px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .menu-separator {
