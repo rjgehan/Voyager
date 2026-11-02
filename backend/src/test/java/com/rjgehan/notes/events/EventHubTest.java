@@ -347,6 +347,13 @@ class EventHubTest {
 		assertThat(first.completed).isTrue();
 		assertThat(second.completed).isTrue();
 		assertThat(hub.connectionCount()).isZero();
+
+		// A client reconnecting while the context closes gets no new stream for shutdown to wait for.
+		RecordingEmitter late = new RecordingEmitter();
+		hub.connect(late, "client-a1", null);
+		assertThat(hub.connectionCount()).isZero();
+		await().atMost(Duration.ofSeconds(5)).until(() -> late.completed);
+		assertThat(late.frames).isEmpty();
 	}
 
 }

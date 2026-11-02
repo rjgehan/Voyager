@@ -152,6 +152,22 @@ class PdfTextTest {
 	}
 
 	@Test
+	void aPdfMovedWhileItsTextIsExtractedIsIndexedUnderItsNewName() throws IOException {
+		write("a.pdf", TestPdfs.withPages("alpha text"));
+		start(Map.of());
+		// As if the worker had already taken a.pdf from its queue and were extracting it when the move came: its
+		// text is then stored for the old path, which is refused, so the new path must be queued by the move.
+		this.index.setExtractionListener(null);
+		put("a.pdf");
+		this.index.setExtractionListener(this.indexer);
+		Files.move(this.vault.resolve("a.pdf"), this.vault.resolve("moved.pdf"));
+		this.index.move("a.pdf", "moved.pdf", "moved.pdf");
+		this.indexer.start();
+		awaitIdle();
+		assertThat(search("alpha")).containsExactly("moved.pdf");
+	}
+
+	@Test
 	void changedMovedAndDeletedPdfsKeepTheCacheInStep() throws IOException {
 		write("a.pdf", TestPdfs.withPages("alpha text"));
 		write("b.pdf", TestPdfs.withPages("bravo text"));

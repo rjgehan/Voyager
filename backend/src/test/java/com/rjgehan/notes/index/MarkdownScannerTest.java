@@ -1,7 +1,11 @@
 package com.rjgehan.notes.index;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
+import java.util.regex.Matcher;
 
 import com.rjgehan.notes.api.dto.LinkStyle;
 import com.rjgehan.notes.vault.TextCodec;
@@ -237,6 +241,80 @@ class MarkdownScannerTest {
 		assertThat(decoded.text()).isEqualTo("a�b");
 		assertThat(MarkdownScanner.scan(decoded.text(), false, true).lossy()).isTrue();
 		assertThat(new String(TextCodec.encode("é", false), StandardCharsets.UTF_8)).isEqualTo("é");
+	}
+
+	// ------------------------------------------------------------ linear time on pathological lines
+
+	/** The markdown links a plain {@code MARKDOWN_LINK.find()} loop reports, as [from, to) spans. */
+	private static List<List<Integer>> regexLinks(String text) {
+		List<List<Integer>> spans = new ArrayList<>();
+		Matcher m = Syntax.MARKDOWN_LINK.matcher(text);
+		while (m.find()) {
+			String destination = m.group(3);
+			boolean angle = destination.startsWith("<");
+			if (angle && (destination.length() < 2 || destination.indexOf('>') != destination.length() - 1)) {
+				continue;
+			}
+			if (Syntax.isInternalDestination(angle ? destination.substring(1, destination.length() - 1) : destination)) {
+				spans.add(List.of(m.start(), m.end()));
+			}
+		}
+		return spans;
+	}
+
+	private static List<List<Integer>> scannedLinks(String text) {
+		return scan(text).links()
+			.stream()
+			.filter((link) -> link.style() == LinkStyle.MARKDOWN)
+			.map((link) -> List.of(link.from(), link.to()))
+			.toList();
+	}
+
+	@Test
+	void anOpenAngleBracketWithoutItsCloseIsNoDestination() {
+		// "[a](" with auto-closed parentheses, then "<": the scan threw, so the note could not be saved or indexed.
+		assertThat(scan("see [a](<) and [b](< ) and [c](<d) and [e](<f>g)\n").links()).isEmpty();
+		assertThat(scan("[a](<My Note.md>)\n").links()).singleElement().satisfies((link) -> {
+			assertThat(link.target()).isEqualTo("My Note.md");
+			assertThat(link.angle()).isTrue();
+		});
+		assertThat(MarkdownScanner.scanFragment("- [ ] call [x](<)").links()).isEmpty();
+	}
+
+	@Test
+	void markdownLinksKeepTheRegexMatchesWhenTheScanSkipsBrackets() {
+		assertThat(scan("[a [b](c)").links()).singleElement().satisfies((link) -> {
+			assertThat(link.from()).isZero();
+			assertThat(link.display()).isEqualTo("a [b");
+		});
+		assertThat(scan("x ![a](b) [c](d)").links()).extracting(LinkOcc::embed).containsExactly(true, false);
+		Random random = new Random(20261102);
+		String alphabet = "[]()!<> a\"";
+		for (int round = 0; round < 50_000; round++) {
+			StringBuilder line = new StringBuilder("a");
+			int length = 1 + random.nextInt(24);
+			for (int i = 0; i < length; i++) {
+				line.append(alphabet.charAt(random.nextInt(alphabet.length())));
+			}
+			String text = line.toString();
+			if (!text.contains("[[")) {
+				assertThat(scannedLinks(text)).as(text).isEqualTo(regexLinks(text));
+			}
+		}
+	}
+
+	@Test
+	void pathologicalLinesAreScannedInLinearTime() {
+		List<String> lines = List.of("[".repeat(100_000), "[a".repeat(50_000) + "]x", "![" + " [".repeat(50_000),
+				"# a" + " ".repeat(100_000) + "#x", "# a" + " \t".repeat(50_000) + "#");
+		for (String line : lines) {
+			long started = System.nanoTime();
+			scan(line + "\n");
+			assertThat(Duration.ofNanos(System.nanoTime() - started)).as(line.substring(0, 4))
+				.isLessThan(Duration.ofSeconds(2));
+		}
+		assertThat(scan("# Title  ##\n").headings()).extracting(HeadingOcc::text).containsExactly("Title");
+		assertThat(scan("# a  #x\n").headings()).extracting(HeadingOcc::text).containsExactly("a  #x");
 	}
 
 }

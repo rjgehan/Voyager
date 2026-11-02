@@ -297,6 +297,20 @@ public final class TestVault implements AutoCloseable {
 			return super.commit(present, removed, message, author);
 		}
 
+		/** When set, {@link #push} throws it (an OutOfMemoryError while packing, say). */
+		public volatile @Nullable Error pushError;
+
+		@Override
+		public PushOutcome push(String url, String branch, String commitId,
+				org.eclipse.jgit.transport.@Nullable CredentialsProvider credentials, Duration timeout)
+				throws org.eclipse.jgit.api.errors.GitAPIException {
+			Error error = this.pushError;
+			if (error != null) {
+				throw error;
+			}
+			return super.push(url, branch, commitId, credentials, timeout);
+		}
+
 		@Override
 		public @Nullable Blob readAt(String commitId, String path) throws IOException {
 			Blob blob = super.readAt(commitId, path);

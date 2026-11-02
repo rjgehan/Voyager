@@ -201,7 +201,7 @@ public class GitMirror implements SmartLifecycle {
 			}
 			push(head, branch, manual);
 		}
-		catch (IOException | RuntimeException ex) {
+		catch (IOException | RuntimeException | Error ex) {
 			synchronized (this.state) {
 				this.pushing = false;
 			}
@@ -245,7 +245,8 @@ public class GitMirror implements SmartLifecycle {
 			outcome = this.git.push(this.properties.url().strip(), branch, head, credentials,
 					this.properties.timeout());
 		}
-		catch (Exception ex) {
+		catch (Exception | Error ex) {
+			// An Error too (an OutOfMemoryError while packing a large push): it is a failed push, retried with backoff.
 			outcome = new GitStore.PushOutcome(GitStore.PushStatus.REJECTED, message(ex));
 		}
 		String error = (outcome.message() != null) ? sanitize(outcome.message(), token) : null;

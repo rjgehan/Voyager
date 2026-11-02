@@ -99,9 +99,10 @@ public class PdfTextIndexer implements SmartLifecycle, VaultIndex.ExtractionList
 	@Override
 	public void moved(FileRecord from, FileRecord to) {
 		synchronized (this.monitor) {
-			if (this.pending.remove(from.path())) {
-				this.pending.add(to.path());
-			}
+			// Queued whether or not the old path still waits: the worker may be extracting it right now, and its text
+			// is then refused for the old path. The new path is skipped if its text moved with it.
+			this.pending.remove(from.path());
+			this.pending.add(to.path());
 			this.moves.add(new Move(from, to));
 			this.monitor.notifyAll();
 		}

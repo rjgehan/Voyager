@@ -299,7 +299,7 @@ public class AppAlerts implements DisposableBean {
 				deliver(pending, now);
 			}
 		}
-		catch (RuntimeException ex) {
+		catch (RuntimeException | Error ex) {
 			logger.warn("The app alerts' tick failed; it will run again: {}", ex.toString());
 		}
 	}

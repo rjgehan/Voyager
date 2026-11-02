@@ -929,7 +929,8 @@ public class GitStore implements DisposableBean {
 		StringBuilder disk = new StringBuilder();
 		for (int i = 0; i < segments.length; i++) {
 			Match match = child(reader, current, segments[i]);
-			if (match == null) {
+			// A file where a folder is expected ("Note.md/x") has no children: reading one as a tree would throw.
+			if (match == null || (i < segments.length - 1 && !FileMode.TREE.equals(match.mode()))) {
 				return null;
 			}
 			if (i > 0) {
