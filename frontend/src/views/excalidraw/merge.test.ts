@@ -212,6 +212,23 @@ describe('merging .excalidraw.md files', () => {
     expect(markdownParts(mergeDrawingTexts('markdown', linkedBase, relinked, theirs)!).links).toEqual([{ id: 'Rr11Ss22', link: '[[Mine]]' }]);
   });
 
+  it('keeps a rename’s rewritten text source while merging a move of that text (the JSON has rawText)', () => {
+    // The plugin and this app write rawText into the JSON; parsing theirs then gives the element
+    // the renamed source, so both sides changed the element and the moved one (mine) won, with
+    // its old source: the section kept the broken link while the element's link said Earth.
+    const t = text('Ab12Cd34', 'Hello World', { rawText: 'Hello [[World]]', link: '[[World]]' });
+    const r = el('rect0001');
+    const base = markdownDrawing({ texts: [['Ab12Cd34', 'Hello [[World]]']], scene: scene([t, r]) });
+    const theirs = base.replace('Hello [[World]] ^Ab12Cd34', 'Hello [[Earth]] ^Ab12Cd34');
+    const mine = markdownDrawing({ texts: [['Ab12Cd34', 'Hello [[World]]']], scene: scene([edit(t, { x: 5 }), r]) });
+    const out = mergeDrawingTexts('markdown', base, mine, theirs)!;
+    expect(markdownParts(out).texts).toEqual([{ id: 'Ab12Cd34', raw: 'Hello [[Earth]]' }]);
+    expect(mergedScene('markdown', base, mine, theirs).elements[0]).toMatchObject({ x: 5, link: '[[Earth]]', rawText: 'Hello [[Earth]]', originalText: 'Hello Earth', text: 'Hello Earth' });
+    // A text this side edited itself wins as before.
+    const typed = markdownDrawing({ texts: [['Ab12Cd34', 'Bye [[World]]']], scene: scene([edit(t, { text: 'Bye World', originalText: 'Bye World', rawText: 'Bye [[World]]' }), r]) });
+    expect(markdownParts(mergeDrawingTexts('markdown', base, typed, theirs)!).texts).toEqual([{ id: 'Ab12Cd34', raw: 'Bye [[World]]' }]);
+  });
+
   it('keeps Embedded Files entries from both sides', () => {
     const img = (id: string, fileId: string) => el(id, { type: 'image', fileId });
     const mine = markdownDrawing({ texts: [['Ab12Cd34', 'Hello [[World]]']], embedded: [['f1', '[[one.png]]']], scene: scene([t1, r, img('i1', 'f1')]) });
