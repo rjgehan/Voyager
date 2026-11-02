@@ -1192,3 +1192,43 @@ describe('pivot tables (DESIGN §6.21.17)', () => {
     expect((await saved(path)).sheets.map((s) => s.name)).toEqual(['Budget', 'Notes']);
   });
 });
+
+describe('accessibility of the spreadsheet view', () => {
+  it('names the grid and says the selected cell in words, live', async () => {
+    await openGrid();
+    const grid = screen.getByRole('group', { name: 'Spreadsheet grid, sheet Budget' });
+    const summary = document.getElementById(grid.getAttribute('aria-describedby')!)!;
+    expect(summary).toHaveAttribute('aria-live', 'polite');
+    expect(summary).toHaveTextContent('A1, Item');
+    select(1, 3); // B5
+    expect(summary).toHaveTextContent('B5, formula =SUM(B2:B4), 1937.5');
+    select(0, 0, 2, 2);
+    expect(summary).toHaveTextContent('A2:B3 selected');
+  });
+
+  it('keeps the tablist to tabs, with the sheet’s actions beside it', async () => {
+    await openGrid();
+    const tablist = screen.getByRole('tablist', { name: 'Sheets' });
+    expect(within(tablist).queryAllByRole('button')).toEqual([]);
+    const actions = screen.getByRole('button', { name: 'Actions for sheet Budget' });
+    expect(tablist.contains(actions)).toBe(false);
+    fireEvent.click(actions);
+    expect(screen.getByRole('menuitem', { name: 'Rename' })).toBeInTheDocument();
+  });
+
+  it('gives the toolbar one Tab stop, moved along it with the arrow keys', async () => {
+    await openGrid();
+    const toolbar = screen.getByRole('toolbar', { name: 'Spreadsheet' });
+    const stops = () => within(toolbar).getAllByRole('button').filter((b) => b.tabIndex === 0);
+    expect(stops()).toHaveLength(1);
+    const first = stops()[0];
+    act(() => first.focus());
+    fireEvent.keyDown(first, { key: 'ArrowRight' });
+    expect(document.activeElement).not.toBe(first);
+    expect(stops()).toEqual([document.activeElement]);
+    fireEvent.keyDown(document.activeElement!, { key: 'End' });
+    expect(document.activeElement).toBe(within(toolbar).getAllByRole('button').filter((b) => !(b as HTMLButtonElement).disabled).at(-1));
+    fireEvent.keyDown(document.activeElement!, { key: 'Home' });
+    expect(document.activeElement).toBe(first);
+  });
+});

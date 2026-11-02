@@ -55,7 +55,8 @@
 
 .sheet-toolbar .icon-button[aria-pressed='true'] {
   background: var(--background-modifier-active-hover);
-  color: var(--interactive-accent);
+  /* The accent as a text colour that reads at 4.5:1 (fix/a11y's token; the accent until it lands). */
+  color: var(--text-accent, var(--interactive-accent));
 }
 
 .sheet-toolbar-sep {
@@ -438,7 +439,7 @@
 
 .sheet-format-option[aria-pressed='true'] {
   background: var(--background-modifier-active-hover);
-  color: var(--interactive-accent);
+  color: var(--text-accent, var(--interactive-accent));
 }
 
 .sheet-format-sample {

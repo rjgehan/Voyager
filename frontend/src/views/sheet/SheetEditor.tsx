@@ -25,7 +25,7 @@ import {
   Tag,
   Undo2,
 } from 'lucide-react';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from 'react';
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from 'react';
 import { useLocation } from 'react-router';
 import { SaveStatus } from '../../components/SaveStatus';
 import { useBreakpoint } from '../../components/layout/useBreakpoint';
@@ -96,6 +96,7 @@ import { ChartDialog, ColumnWidthDialog, ImportDialog, NamedRangesDialog, Number
 import { useFormulaAssist } from './formulaAssist';
 import { useReferencePicking } from './referencePicking';
 import { useStraightQuotes } from './straightQuotes';
+import { useRovingToolbar } from './rovingToolbar';
 import { useFormulaKeys } from './formulaKeys';
 import { SheetGrid, type GridFilter, type ScreenRect, type SheetGridHandlers } from './SheetGrid';
 import { SheetTabs } from './SheetTabs';
@@ -219,6 +220,10 @@ export function SheetEditor({ path, snapshot, workbook, version }: Props) {
   const portalRef = useRef<HTMLDivElement | null>(null);
   const gridBox = useRef<HTMLDivElement>(null);
   const bar = useRef<FormulaBarHandle>(null);
+  const toolbar = useRef<HTMLDivElement>(null);
+  // One Tab stop for the toolbar; the arrow keys move along it.
+  const roving = useRovingToolbar(toolbar);
+  const summaryId = useId();
   const editable = snapshot.loaded && snapshot.status !== 'readonly' && snapshot.status !== 'loading' && !snapshot.lossy;
 
   // The workbook's model is mutable; `version` changes with each change.
@@ -531,6 +536,17 @@ ${JSON.stringify(sheet.filter ?? null)}`;
     });
     if (ok) run(() => workbook.setChart(sheet.id, id, null));
   };
+
+  // ---------- the selection in words, for screen readers ----------
+
+  const selectionSummary = (() => {
+    if (!single) return `${rangeText(selectedRange)} selected`;
+    const shown = shownCell(sheet, activeAt.col, activeAt.row).text;
+    const formula = activeCell?.f;
+    const look = looks?.(activeAt.col, activeAt.row);
+    const value = look?.kind === 'checkbox' && !look.invalid ? (look.checked ? 'checked' : 'not checked') : shown === '' ? 'empty' : shown;
+    return `${activeRef}${formula ? `, formula ${formula}` : ''}, ${value}${look?.invalid ? ', invalid' : ''}`;
+  })();
 
   // ---------- find and replace ----------
 
@@ -1110,7 +1126,7 @@ ${JSON.stringify(sheet.filter ?? null)}`;
         <InlineTitle key={path} path={path} editable={editable} label="Spreadsheet title" onEnter={() => gridRef.current?.focus()} />
         {!phone && <SaveStatus snapshot={snapshot} />}
       </header>
-      <div className="sheet-toolbar" role="toolbar" aria-label="Spreadsheet">
+      <div ref={toolbar} className="sheet-toolbar" role="toolbar" aria-label="Spreadsheet" onKeyDown={roving.onKeyDown} onFocus={roving.onFocus}>
         <ToolButton title="Undo" hotkey="Mod-z" disabled={!editable || !workbook.canUndo()} onClick={() => tool('undo')}>
           <Undo2 size={16} />
         </ToolButton>
@@ -1227,7 +1243,11 @@ ${JSON.stringify(sheet.filter ?? null)}`;
         onCancel={focusGrid}
         onGoTo={goTo}
       />
-      <div ref={gridBox} className="sheet-grid-box">
+      {/* Glide draws on a canvas: the grid is named, and the selection is said in words (DESIGN §6.21.5). */}
+      <p id={summaryId} className="visually-hidden" aria-live="polite">
+        {selectionSummary}
+      </p>
+      <div ref={gridBox} className="sheet-grid-box" role="group" aria-label={`Spreadsheet grid, sheet ${sheet.name}`} aria-describedby={summaryId}>
         <SheetGrid
           sheet={sheet}
           layout={layout}

@@ -1,6 +1,7 @@
 // Sheet tabs below the grid (DESIGN §6.21.5): switch, add, rename (double-click or the menu),
-// delete, and reorder (drag on desktop, Move left/right in the menu everywhere). The active tab's
-// ⋯ button opens its menu, so nothing depends on right-click or long-press.
+// delete, and reorder (drag on desktop, Move left/right in the menu everywhere). The button after
+// the tabs opens the active sheet's menu, so nothing depends on right-click or long-press; it is
+// outside the tablist, which may own nothing but tabs.
 import { ChevronDown, ChevronLeft, ChevronRight, Pencil, Plus, Trash } from 'lucide-react';
 import { useRef, useState, type KeyboardEvent } from 'react';
 import { ContextMenu, type MenuEntry } from '../../components/overlays/ContextMenu';
@@ -25,6 +26,7 @@ export function SheetTabs({ sheets, activeId, editable, onSelect, onAdd, onRenam
   const list = useRef<HTMLDivElement>(null);
 
   const openMenu = (id: string, x: number, y: number) => setMenu({ id, x, y });
+  const activeSheet = sheets.find((s) => s.id === activeId);
 
   const items = (id: string): MenuEntry[] => {
     const index = sheets.findIndex((s) => s.id === id);
@@ -67,6 +69,7 @@ export function SheetTabs({ sheets, activeId, editable, onSelect, onAdd, onRenam
           return (
             <div
               key={s.id}
+              role="presentation"
               className={`sheet-tab${active ? ' is-active' : ''}${dropIndex === i ? ' is-drop-target' : ''}`}
               draggable={editable}
               onDragStart={(e) => {
@@ -106,25 +109,24 @@ export function SheetTabs({ sheets, activeId, editable, onSelect, onAdd, onRenam
               >
                 {s.name}
               </button>
-              {active && (
-                <button
-                  type="button"
-                  className="icon-button sheet-tab-menu"
-                  aria-label={`Actions for sheet ${s.name}`}
-                  title="Sheet actions"
-                  tabIndex={-1}
-                  onClick={(e) => {
-                    const r = e.currentTarget.getBoundingClientRect();
-                    openMenu(s.id, r.left, r.top - 8);
-                  }}
-                >
-                  <ChevronDown size={14} />
-                </button>
-              )}
             </div>
           );
         })}
       </div>
+      {activeSheet && (
+        <button
+          type="button"
+          className="icon-button sheet-tab-menu"
+          aria-label={`Actions for sheet ${activeSheet.name}`}
+          title="Sheet actions"
+          onClick={(e) => {
+            const r = e.currentTarget.getBoundingClientRect();
+            openMenu(activeSheet.id, r.left, r.top - 8);
+          }}
+        >
+          <ChevronDown size={14} />
+        </button>
+      )}
       {menu && <ContextMenu x={menu.x} y={menu.y} label={`Actions for sheet ${sheets.find((s) => s.id === menu.id)?.name ?? ''}`} items={items(menu.id)} onClose={() => setMenu(null)} />}
     </div>
   );
