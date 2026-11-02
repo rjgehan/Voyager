@@ -1,11 +1,12 @@
 import { QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { useState } from 'react';
+import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '../../api/endpoints';
 import { queryClient } from '../../api/queryClient';
 import { setTranscribeNewRecordings } from '../../features/voice/voiceNotes';
-import { RemindersSection, TextSetting, VoiceRow } from './SettingsPage';
+import SettingsPage, { RemindersSection, TextSetting, VoiceRow } from './SettingsPage';
 import { remindersApi } from '../../features/reminders/client';
 import { DEFAULT_SETTINGS } from '../../features/settings';
 import type { RemindersStatus, Settings } from '../../api/types';
@@ -121,5 +122,24 @@ describe('Settings › Reminders (ROADMAP item 9)', () => {
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Send a test' })[0]);
     expect(test).toHaveBeenCalledWith({ route: 'webPush', deviceId: 'dev1' });
+  });
+});
+
+describe('Settings and the user guide (DESIGN §6.45)', () => {
+  it('links to Help from the list of sections and from About', async () => {
+    vi.spyOn(api, 'getSettings').mockResolvedValue({ settings: DEFAULT_SETTINGS, version: 'v1', readOnly: false });
+    vi.spyOn(api, 'getStatus').mockReturnValue(new Promise(() => {}));
+    vi.spyOn(api, 'getMe').mockReturnValue(new Promise(() => {}));
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={['/settings/about']}>
+          <SettingsPage />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    const nav = screen.getByRole('navigation', { name: 'Settings sections' });
+    expect(within(nav).getByRole('link', { name: 'Help and user guide' })).toHaveAttribute('href', '/x/help');
+    expect(await screen.findByRole('link', { name: /How to use NotesApp, page by page/ })).toHaveAttribute('href', '/x/help');
+    queryClient.clear();
   });
 });

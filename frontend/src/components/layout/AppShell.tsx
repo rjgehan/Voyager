@@ -3,7 +3,7 @@
 // Tablet: icon rail + workspace, both sidebars as overlays. Desktop: ribbon, resizable sidebars,
 // workspace and status bar. Touch devices get the editing toolbar as the last grid row. The shell
 // also hosts the overlays, the app-level file input and the polite live region.
-import { CalendarDays, FilePlus, Inbox, Moon, RefreshCw, Settings, Sun, Trash, TriangleAlert } from 'lucide-react';
+import { CalendarDays, CircleHelp, FilePlus, Inbox, Moon, RefreshCw, Settings, Sun, Trash, TriangleAlert } from 'lucide-react';
 import { lazy, Suspense, useCallback, useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 import { setFilePicker } from '../../features/attachments';
 import { runCommand } from '../../features/commands';
@@ -179,6 +179,9 @@ function DrawerFooter() {
       </button>
       <button type="button" className="icon-button drawer-footer-button" onClick={() => run('trash.open')}>
         <Trash size={18} aria-hidden /> Trash
+      </button>
+      <button type="button" className="icon-button drawer-footer-button" onClick={() => run('help.open')}>
+        <CircleHelp size={18} aria-hidden /> Help
       </button>
       <button
         type="button"

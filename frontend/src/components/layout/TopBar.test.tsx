@@ -82,6 +82,16 @@ describe('TopBar (phone and tablet, DESIGN §6.16)', () => {
     useUi.setState({ noteModes: {} });
   });
 
+  it('names the Help pages and opens Help from ⋯ on any page (DESIGN §6.45)', () => {
+    const help = renderAt('/x/help/tables-and-formulas');
+    expect(title()).toBe('Help');
+    help.unmount();
+    renderAt('/trash');
+    fireEvent.click(screen.getByRole('button', { name: 'More' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Help' }));
+    expect(window.location.pathname).toBe('/x/help');
+  });
+
   it('offers a push for a failing mirror', () => {
     renderAt('/', { state: 'failing', remote: 'https://github.com/me/vault.git', lastError: 'not authorized' });
     fireEvent.click(screen.getByRole('button', { name: 'More' }));

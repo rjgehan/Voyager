@@ -1,6 +1,8 @@
 .git
 .github
 docs
+# ...except the user guide, which the frontend build bundles into the Help page.
+!docs/guide
 deploy
 dev-vault
 **/node_modules

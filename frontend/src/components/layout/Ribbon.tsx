@@ -1,6 +1,6 @@
 // Ribbon (desktop) and collapsed icon rail (tablet): one tap to every entry point (DESIGN §6.5,
 // §6.16). Entries appear once their command or page is registered.
-import { CalendarDays, Command as CommandIcon, FilePlus, FileSearch, Inbox, LayoutTemplate, Moon, PanelLeft, Search, Settings, Sun, Trash, type LucideIcon } from 'lucide-react';
+import { CalendarDays, CircleHelp, Command as CommandIcon, FilePlus, FileSearch, Inbox, LayoutTemplate, Moon, PanelLeft, Search, Settings, Sun, Trash, type LucideIcon } from 'lucide-react';
 import { menuPages, pageRoute, useExtensionsVersion } from '../../extensions';
 import { getCommand, runCommand, useCommandsVersion } from '../../features/commands';
 import { activePath, navigateTo } from '../../features/navigation';
@@ -20,6 +20,7 @@ const TOP: Array<[string, LucideIcon]> = [
 ];
 
 const BOTTOM: Array<[string, LucideIcon]> = [
+  ['help.open', CircleHelp],
   ['trash.open', Trash],
   ['settings.open', Settings],
 ];
