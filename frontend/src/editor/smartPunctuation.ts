@@ -1,8 +1,10 @@
-// iOS Smart Punctuation guard (DESIGN §6.6 #12). Inside frontmatter, fenced or inline code, and
-// for `--`/`---` at the start of a line, typed em dashes and curly quotes are reverted, so iOS
-// cannot silently break frontmatter delimiters, YAML strings or `"[[Link]]"` property values.
+// iOS Smart Punctuation guard (DESIGN §6.6 #12). Inside frontmatter, fenced or inline code, a
+// table cell holding a formula, and for `--`/`---` at the start of a line, typed em dashes and
+// curly quotes are reverted, so iOS cannot silently break frontmatter delimiters, YAML strings,
+// `"[[Link]]"` property values or a formula's `"text"` and `'Sheet name'!A1`.
 import { EditorState, Transaction, type ChangeSpec, type Extension } from '@codemirror/state';
 import { inCode, inFrontmatter } from './linkAt';
+import { tableCellHost } from './livePreview/table/facets';
 
 const SMART = /[—“”‘’]/;
 
@@ -33,6 +35,9 @@ export const smartPunctuationGuard: Extension = EditorState.transactionFilter.of
   if (!tr.docChanged || !tr.isUserEvent('input')) return tr;
   let needed = false;
   const start = tr.startState;
+  // A table cell's text is one line; starting with `=`, it is a formula (ROADMAP 39), where a
+  // curly quote is no string delimiter and the formula reads as an error.
+  const formulaCell = start.facet(tableCellHost) !== null && /^\s*=/.test(tr.newDoc.toString());
   const specs: ChangeSpec[] = [];
   let delta = 0;
   let cursor: number | null = null;
@@ -41,6 +46,7 @@ export const smartPunctuationGuard: Extension = EditorState.transactionFilter.of
     let insert = text;
     if (SMART.test(text)) {
       const guarded =
+        formulaCell ||
         inTopBlock(start, fromA) ||
         inCode(start, fromA) ||
         (text.includes('—') && atLineStart(start, fromA));
