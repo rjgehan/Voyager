@@ -5,7 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '../../api/endpoints';
 import { queryClient } from '../../api/queryClient';
 import { setTranscribeNewRecordings } from '../../features/voice/voiceNotes';
-import { NumberSetting, RemindersSection, TextSetting, VoiceRow } from './SettingsPage';
+import { NumberSetting, OtherSectionError, RemindersSection, TextSetting, VoiceRow } from './SettingsPage';
+import { MemoryRouter } from 'react-router';
 import { remindersApi } from '../../features/reminders/client';
 import { DEFAULT_SETTINGS } from '../../features/settings';
 import type { RemindersStatus, Settings } from '../../api/types';
@@ -152,5 +153,25 @@ describe('NumberSetting', () => {
     fireEvent.change(input, { target: { value: '35' } });
     expect(input.value).toBe('35');
     expect(values.at(-1)).toBe(35);
+  });
+});
+
+describe('Settings: a field that is not valid in another section', () => {
+  it('says so in the section being edited, where its own error is not seen', () => {
+    const errors = { templatesFolder: 'Not a valid folder path' };
+    const { rerender } = render(
+      <MemoryRouter>
+        <OtherSectionError errors={errors} section="files" />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('alert')).toHaveTextContent('Changes here are not saved while “Template folder location” under Templates is not valid.');
+    expect(screen.getByRole('link', { name: 'Templates' })).toHaveAttribute('href', '/settings/templates');
+    // In its own section the field shows its error itself.
+    rerender(
+      <MemoryRouter>
+        <OtherSectionError errors={errors} section="templates" />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 });
