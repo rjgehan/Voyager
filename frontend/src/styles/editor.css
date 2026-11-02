@@ -1346,6 +1346,15 @@ th.cm-lp-cell {
   }
 }
 
+/* A rendered table (a Dataview TABLE, a script's table) keeps its words whole and scrolls sideways
+   when it does not fit (.markdown-rendered table), instead of inheriting the editor's
+   break-anywhere wrapping, which split "rating" into "ratin|g" on a phone. */
+.cm-content .markdown-rendered th,
+.cm-content .markdown-rendered td {
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
 .cm-lp-script-output > :first-child {
   margin-top: 0;
 }

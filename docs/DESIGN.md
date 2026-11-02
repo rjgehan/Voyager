@@ -1614,7 +1614,7 @@ An existing Obsidian vault is imported by copying it into the vault directory be
 | Category | Findings |
 |---|---|
 | Syntax | Dataview (```` ```dataview ````, ```` ```dataviewjs ````, inline `` `= …` ``), Tasks queries, embedded searches (```` ```query ````), other plugin blocks (```` ```ad-… ````, ```` ```chart ```` …), Templater `<% … %>`, `obsidian://` links, HTML the sanitizer removes |
-| Links | Embeds and attachment links that lead nowhere; links to missing headings (matched as the client does, §6.4) or missing `^block-ids`; links to notes that do not exist yet (informational: following them creates the note) |
+| Links | Embeds and attachment links that lead nowhere; links to missing headings (matched as the client does, §6.4) or missing `^block-ids` of a note (a subpath into an indexed document, such as a spreadsheet's range or a task list's section or task, is not a heading and is never reported); links to notes that do not exist yet (informational: following them creates the note) |
 | Files | Names the index skips (`/api/status` `vault.skipped`), notes over the text limit, invalid UTF-8, frontmatter that does not parse, notes with `excalidraw-plugin` properties not named `.excalidraw.md` (which open as Markdown), canvases, bases |
 
   Callouts, Mermaid and math render since ROADMAP item 3 (§6.7.1), and `.excalidraw`/`.excalidraw.md` drawings open in the drawing editor (item 5), so they are not findings; the plugin table likewise reports bookmarks, Excalidraw, the Tasks plugin and QuickAdd by what items 12, 5, 4 and 7 built.

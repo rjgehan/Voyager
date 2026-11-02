@@ -85,6 +85,14 @@ final class ObsidianFixture {
 				parse.aliases()), path, text, parse);
 	}
 
+	/** An indexed document (a spreadsheet, a task list, a canvas) with its indexed text, as DocumentIndexer makes it. */
+	static IndexedFile document(String path, String indexedText) {
+		byte[] bytes = indexedText.getBytes(StandardCharsets.UTF_8);
+		NoteParse parse = MarkdownScanner.scan(indexedText, false, false);
+		return new IndexedFile(new FileRecord(path, KINDS.kindOf(path), bytes.length, Instant.EPOCH, Hashing.blobId(bytes),
+				List.of()), path, indexedText, parse);
+	}
+
 	static ObsidianConfig config() {
 		return new ObsidianConfigReader(null, JSON).read(VAULT);
 	}
