@@ -3,7 +3,7 @@
 // the field loses the focus, a checkbox, a date or a list item at once. A value that does not fit
 // its type is shown as written, with a warning, and edited as YAML.
 import { AlertTriangle, X } from 'lucide-react';
-import { useState, type KeyboardEvent } from 'react';
+import { useRef, useState, type KeyboardEvent } from 'react';
 import { useTags } from '../../api/hooks';
 import type { PropertyType } from '../../api/types';
 import { openTag } from '../../features/navigation';
@@ -95,8 +95,14 @@ function TextValue({ name, value, sourcePath, onCommit }: ValueEditorProps) {
 function NumberValue({ name, value, onCommit }: ValueEditorProps) {
   const text = typeof value === 'number' ? String(value) : '';
   const [draft, setDraft] = useState<string | null>(null);
+  // Escape blurs the field while it still shows the draft: that blur does not commit it.
+  const cancelled = useRef(false);
   const commit = (v: string) => {
     setDraft(null);
+    if (cancelled.current) {
+      cancelled.current = false;
+      return;
+    }
     const trimmed = v.trim();
     if (trimmed === text) return;
     if (trimmed === '') onCommit(null);
@@ -119,6 +125,7 @@ function NumberValue({ name, value, onCommit }: ValueEditorProps) {
           e.currentTarget.blur();
         } else if (e.key === 'Escape') {
           setDraft(null);
+          cancelled.current = true;
           e.currentTarget.blur();
         }
       }}
