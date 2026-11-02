@@ -1,0 +1,22 @@
+{
+  "name": "notesapp-e2e",
+  "private": true,
+  "license": "GPL-3.0-only",
+  "type": "module",
+  "scripts": {
+    "reset": "node scripts/reset.mjs",
+    "stop": "node scripts/stop.mjs",
+    "seed": "node scripts/seed.ts",
+    "test": "playwright test --project=api --project=desktop --project=iphone",
+    "test:api": "playwright test --project=api",
+    "test:ui": "playwright test --project=desktop --project=iphone",
+    "screens": "playwright test --project=screens && node scripts/build-pdf.mjs",
+    "report": "playwright show-report",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "@types/node": "24.19.2",
+    "typescript": "6.0.3"
+  }
+}
