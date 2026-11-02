@@ -91,7 +91,7 @@ The frontend is React 19 + TypeScript on Vite. Each file type (notes, spreadshee
 
 ## How it's built and tested
 
-- **3,816 automated tests** at the time of writing: 1,149 backend (JUnit 5, Spring Boot tests and integration tests on a real temporary vault), 2,572 frontend (Vitest and Testing Library, 250 files), 69 for the web clipper and 26 for the desktop app.
+- **3,819 automated tests** at the time of writing: 1,149 backend (JUnit 5, Spring Boot tests and integration tests on a real temporary vault), 2,575 frontend (Vitest and Testing Library, 251 files, including one that boots the whole app on the demo vault), 69 for the web clipper and 26 for the desktop app.
 - **CI on every pull request and push** ([ci.yml](.github/workflows/ci.yml)): backend tests on JDK 21 and JDK 25, frontend type checks, lint, tests and production build (with the bundle budget), the demo build, the clipper, and the deploy and backup scripts (in dash and BusyBox); pull requests also build the Docker image.
 - **Zero-touch deploys.** A push to `main` publishes multi-arch images, Watchtower on the server picks them up within minutes, and open tabs reload themselves onto the new build. A weekly rebuild picks up base-image fixes; Dependabot proposes updates; every action is pinned by commit SHA.
 - **Contracts written down first.** [docs/API.md](docs/API.md) is the binding API contract (a test keeps its type section identical to the frontend's `types.ts`), and [docs/DESIGN.md](docs/DESIGN.md) records each design decision and its reasons.

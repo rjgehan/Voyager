@@ -1,25 +1,4 @@
-import { QueryClientProvider } from '@tanstack/react-query';
-import { StrictMode } from 'react';
-import { createRoot } from 'react-dom/client';
-import { BrowserRouter } from 'react-router';
-import App from './App';
-import { queryClient } from './api/queryClient';
-import { currentBreakpoint } from './components/layout/useBreakpoint';
-import { installViewportVars } from './editor/mobileViewport';
-import { registerBuiltins } from './extensions/builtins';
-import { installInputModality } from './features/focus';
-import { clearStaleOverlayEntry } from './features/overlayHistory';
-import { installDesktopBridge } from './desktop/bridge';
-import { installCaptureSync } from './features/captureSync';
-import { startReminders } from './features/reminders/register';
-import { installHotkeys } from './features/hotkeys';
-import { prepareReload, registerServiceWorker, setOfflineMedia } from './pwa/serviceWorker';
-import { installPreloadErrorHandler, setReloadPreparer } from './state/buildCheck';
-import { installOnlineListener } from './state/connection';
-import { applyTheme, installThemeListener, usePrefs } from './state/prefs';
-import { documents } from './sync/instance';
-import { startLiveSync } from './sync/liveSync';
-import { vaultBasename } from './state/vault';
+import { startApp } from './boot';
 import './styles/tokens.css';
 import './styles/app.css';
 import './styles/editor.css';
@@ -32,7 +11,7 @@ import './styles/mobile.css';
 
 async function boot(): Promise<void> {
   // The in-memory mock replaces the HTTP endpoints before anything fetches: in the GitHub Pages demo
-  // (DESIGN §6.45), with its showcase vault, and on the dev server with VITE_MOCK_API=1. Both tests are
+  // (DESIGN §6.46), with its showcase vault, and on the dev server with VITE_MOCK_API=1. Both tests are
   // build-time constants (src/demo/mode.ts), so neither chunk is part of the server's build.
   if (import.meta.env.VITE_DEMO === '1') {
     const { installDemo } = await import('./demo/install');
@@ -41,39 +20,8 @@ async function boot(): Promise<void> {
     const { installMockApi } = await import('./api/mock');
     installMockApi();
   }
-
-  clearStaleOverlayEntry();
-  applyTheme();
-  installThemeListener();
-  registerBuiltins();
-  installViewportVars();
-  installHotkeys();
-  installInputModality();
-  installPreloadErrorHandler();
-  // The installable app (DESIGN §6.26): a build reload first lets the new service worker take over.
-  setReloadPreparer(() => prepareReload());
   // The demo has no server to cache for, and a worker at its base path would outlive it.
-  if (import.meta.env.VITE_DEMO !== '1') registerServiceWorker();
-  setOfflineMedia(usePrefs.getState().offlineNotes);
-  installOnlineListener();
-  documents.installLifecycle(() => currentBreakpoint() === 'desktop');
-  void startLiveSync();
-  installCaptureSync();
-  startReminders();
-  // Inside the desktop app (ROADMAP item 41): tray commands, resume, and the title's connection state.
-  installDesktopBridge();
-
-  // Navigations render synchronously (no transitions), so an input shown by a tap or key handler
-  // can take focus within the same user gesture, which iOS needs to open the keyboard (§6.13).
-  createRoot(document.getElementById('root')!).render(
-    <StrictMode>
-      <QueryClientProvider client={queryClient}>
-        <BrowserRouter basename={vaultBasename() || undefined} useTransitions={false}>
-          <App />
-        </BrowserRouter>
-      </QueryClientProvider>
-    </StrictMode>,
-  );
+  startApp(document.getElementById('root')!, { serviceWorker: import.meta.env.VITE_DEMO !== '1' });
 }
 
 void boot();

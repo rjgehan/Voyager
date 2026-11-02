@@ -1,11 +1,13 @@
 // The smaller feature endpoints for the in-memory mock (dev with VITE_MOCK_API=1 and the GitHub Pages
-// demo, DESIGN §6.45): the calendar's dated notes (API.md §25), flashcard records (§34), habits
-// (§35), properties (§38) and note queries (§40), computed from the mock vault as the server computes
-// them from its index; and "off" answers for what needs a real server (Ask your vault, reminders).
+// demo, DESIGN §6.46): the calendar's dated notes (API.md §25), flashcard records (§34), habits
+// (§35), properties with their types and renames (§38) and note queries (§40), computed from the mock
+// vault as the server computes them from its index; and "off" answers for what needs a real server
+// (Ask your vault, reminder delivery, Web Push).
 import type {
   AiStatus,
   DatedNote,
   DatedNotesResponse,
+  FailedUpdate,
   FlashcardCard,
   FlashcardConfig,
   FlashcardConfigUpdateRequest,
@@ -17,8 +19,11 @@ import type {
   HabitsResponse,
   NotesQueryResponse,
   PropertiesResponse,
+  PropertyRenameRequest,
+  PropertyRenameResult,
   PropertyType,
   PropertyTypesResponse,
+  PropertyUpdate,
   PropertyValuesResponse,
   QueriedNote,
   RemindersStatus,
@@ -271,6 +276,51 @@ export class MockProperties {
     this.types = next;
     this.typesVersion = blobId(new TextEncoder().encode(JSON.stringify(next)));
     return this.getTypes();
+  }
+
+  /**
+   * `POST /api/properties/rename` (API.md §38.4): only the key's characters change in each note's
+   * frontmatter; a note that already has the new name, or whose key is not a plain block key, keeps it.
+   */
+  rename(req: PropertyRenameRequest, origin: string | null): PropertyRenameResult {
+    const from = req?.from?.trim() ?? '';
+    const to = req?.to?.trim() ?? '';
+    if (!from || !to || from === to) fail('bad-request', 'from and to must be different property names', { errors: [{ field: 'to', message: 'invalid' }] });
+    const dryRun = req.dryRun === true;
+    const plain = /^[\p{L}_][\p{L}\p{N} _./-]*$/u.test(to) && !/^(true|false|null)$/i.test(to);
+    const written = plain ? to : JSON.stringify(to);
+    const updates: PropertyUpdate[] = [];
+    const failed: FailedUpdate[] = [];
+    for (const path of notePaths(this.vault)) {
+      const keys = Object.keys(this.vault.noteIndex(path)?.frontmatter ?? {});
+      if (!keys.some((k) => k.toLowerCase() === from.toLowerCase())) continue;
+      if (keys.some((k) => k.toLowerCase() === to.toLowerCase())) {
+        failed.push({ path, reason: 'property-exists' });
+        continue;
+      }
+      const text = this.vault.textAt(path)!.content;
+      const fm = /^(\uFEFF?---\r?\n)([\s\S]*?)(\r?\n(?:---|\.\.\.)[ \t]*(?:\r?\n|$))/.exec(text);
+      const lines = fm ? fm[2].split('\n') : [];
+      const at = lines.findIndex((l) => {
+        const m = /^(["']?)([^"':]+)\1[ \t]*:/.exec(l);
+        return m !== null && m[2].trim().toLowerCase() === from.toLowerCase();
+      });
+      if (!fm || at < 0) {
+        failed.push({ path, reason: 'not-rewritable' });
+        continue;
+      }
+      lines[at] = lines[at].replace(/^(["']?)([^"':]+)\1/, written);
+      const next = fm[1] + lines.join('\n') + fm[3] + text.slice(fm[0].length);
+      updates.push({ path, version: dryRun ? null : this.vault.serverWrite(path, next, origin).file.version });
+    }
+    const typeKey = Object.keys(this.types).find((k) => k.toLowerCase() === from.toLowerCase());
+    const typeMoved = typeKey !== undefined && !Object.keys(this.types).some((k) => k.toLowerCase() === to.toLowerCase());
+    if (typeMoved && !dryRun) {
+      const type = this.types[typeKey] as PropertyType;
+      this.setType(typeKey, null);
+      this.setType(to, type);
+    }
+    return { dryRun, from, to, updates, failed, typeMoved, commitId: null };
   }
 }
 

@@ -2,7 +2,7 @@
 // dev mock answer for tasks, the calendar, flashcards, habits, properties and note queries.
 import { afterEach, describe, expect, it } from 'vitest';
 import { localToday } from '../../tasks/dates';
-import type { DatedNotesResponse, FlashcardsResponse, HabitsResponse, NotesQueryResponse, Problem, PropertiesResponse, Task, TaskListsResponse, TaskListWriteResult, TasksResponse, TaskWriteResult } from '../types';
+import type { DatedNotesResponse, FlashcardsResponse, HabitsResponse, NotesQueryResponse, Problem, PropertiesResponse, PropertyRenameResult, Task, TaskListsResponse, TaskListWriteResult, TasksResponse, TaskWriteResult } from '../types';
 import type { SeedFile } from './seed';
 import { createMockServer, installMockServer, type MockRequest } from './server';
 import { MockVault } from './vault';
@@ -172,6 +172,34 @@ describe('mock calendar, flashcards, habits, properties and queries', () => {
       ['two', true],
     ]);
     expect(call<NotesQueryResponse>('GET', '/notes/query', null, 'linksTo=Plan.md').body.notes.map((n) => n.path)).toEqual(['Meetings/Kickoff.md']);
+  });
+
+  it('renames a property in the frontmatter of every note that has it, keeping the rest of the note', () => {
+    const { call, vault } = setup([
+      ...NOTES,
+      { path: 'Other.md', content: '---\nStatus: done\nphase: two\n---\nBody\n', age: 1 },
+    ]);
+    call('PUT', '/properties/types', { name: 'status', type: 'text' });
+    const dry = call<PropertyRenameResult>('POST', '/properties/rename', { from: 'status', to: 'phase', dryRun: true }).body;
+    expect(dry.updates).toEqual([{ path: 'Plan.md', version: null }]);
+    expect(dry.failed).toEqual([{ path: 'Other.md', reason: 'property-exists' }]);
+    expect(vault.textAt('Plan.md')?.content).toContain('status: draft');
+    const done = call<PropertyRenameResult>('POST', '/properties/rename', { from: 'status', to: 'phase' }).body;
+    expect(done.updates.map((u) => u.path)).toEqual(['Plan.md']);
+    expect(done.typeMoved).toBe(true);
+    expect(vault.textAt('Plan.md')?.content).toBe('---\nphase: draft\nrating: 4\n---\n# Plan\n- [ ] one\n- [x] two\n');
+    expect(call<{ types: Record<string, string> }>('GET', '/properties/types').body.types).toEqual({ phase: 'text' });
+    expect(call<Problem>('POST', '/properties/rename', { from: 'a', to: 'a' }).status).toBe(400);
+  });
+
+  it('answers the reminder and push endpoints without delivering anything', () => {
+    const { call } = setup([]);
+    expect(call('PUT', '/reminders/zone', { zone: 'Europe/Paris' }).status).toBe(204);
+    expect(call<{ sent: boolean }>('POST', '/reminders/test', { route: 'inApp' }).body.sent).toBe(false);
+    expect(call('POST', '/reminders/snooze', { taskId: 'T1', at: '2026-11-02T09:00' }).body).toEqual({ changed: false, until: null });
+    expect(call('POST', '/reminders/done', { taskId: 'T1', at: '2026-11-02T09:00' }).body).toEqual({ changed: false, until: null });
+    expect(call<{ webPush: { available: boolean } }>('GET', '/reminders/status').body.webPush.available).toBe(false);
+    expect(call<Problem>('POST', '/push/key').status).toBe(400);
   });
 
   it('answers 404 for endpoints that need the real server', () => {

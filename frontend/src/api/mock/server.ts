@@ -1,7 +1,7 @@
 // The endpoints that features call with `apiFetch` themselves rather than through `Endpoints`
 // (tasks, calendar, flashcards, habits, properties, note queries, and the status of Ask your vault
 // and reminders), answered in the page for the in-memory mock: the dev server with VITE_MOCK_API=1
-// and the GitHub Pages demo (DESIGN §6.45). `window.fetch` is wrapped for same-origin `/api/` paths
+// and the GitHub Pages demo (DESIGN §6.46). `window.fetch` is wrapped for same-origin `/api/` paths
 // only; every other request goes to the network unchanged. An endpoint the mock does not have
 // answers `404 not-found`, as a server without the feature would.
 import { ApiError } from '../client';
@@ -79,9 +79,16 @@ export function createMockServer(vault: MockVault): (req: MockRequest) => MockRe
         return properties.setType(b.name, b.type);
       },
     ],
+    ['POST', /^\/properties\/rename$/, (r) => properties.rename(r.body as never, r.origin)],
     ['GET', /^\/ai\/status$/, () => aiStatus()],
     ['GET', /^\/reminders\/status$/, () => remindersStatus()],
     ['PUT', /^\/reminders\/zone$/, () => ({ status: 204, body: null })],
+    // Reminders are delivered by the server: a test reaches no route, and snoozing or finishing a
+    // reminder changes nothing (the task itself is changed through the task API).
+    ['POST', /^\/reminders\/test$/, () => ({ sent: false, error: 'Reminders are sent by the NotesApp server; the in-memory mock has none' })],
+    ['POST', /^\/reminders\/(snooze|done)$/, () => ({ changed: false, until: null })],
+    ['POST', /^\/push\/(key|subscriptions)$/, () => fail('bad-request', 'Web Push needs the NotesApp server')],
+    ['DELETE', /^\/push\/subscriptions\/([^/]+)$/, () => fail('not-found', 'No such device')],
   ];
 
   return (req) => {
@@ -116,8 +123,8 @@ function bodyOf(init: RequestInit | undefined): unknown {
   }
 }
 
-/** Wraps `window.fetch` so same-origin `/api/` requests are answered by `createMockServer`. */
-export function installMockServer(vault: MockVault): void {
+/** Wraps `window.fetch` so same-origin `/api/` requests are answered by `createMockServer`; `record` sees each answer. */
+export function installMockServer(vault: MockVault, record?: (r: { method: string; path: string; status: number }) => void): void {
   const handle = createMockServer(vault);
   const native = window.fetch.bind(window);
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
@@ -127,13 +134,9 @@ export function installMockServer(vault: MockVault): void {
     const headers = new Headers(init?.headers);
     // The server's answers take a moment; a little latency keeps the app's loading states honest.
     await new Promise((r) => setTimeout(r, 15));
-    const res = handle({
-      method: (init?.method ?? 'GET').toUpperCase(),
-      path: url.pathname.slice('/api'.length),
-      params: url.searchParams,
-      body: bodyOf(init),
-      origin: headers.get('X-Client-Id'),
-    });
+    const method = (init?.method ?? 'GET').toUpperCase();
+    const res = handle({ method, path: url.pathname.slice('/api'.length), params: url.searchParams, body: bodyOf(init), origin: headers.get('X-Client-Id') });
+    record?.({ method, path: url.pathname, status: res.status });
     if (res.status === 204) return new Response(null, { status: 204 });
     const problem = res.status >= 400;
     return new Response(JSON.stringify(res.body), {
