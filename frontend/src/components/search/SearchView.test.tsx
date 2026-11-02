@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../api/client';
 import { api } from '../../api/endpoints';
 import { queryClient } from '../../api/queryClient';
-import type { SearchResponse } from '../../api/types';
+import type { BookmarksUpdateRequest, SearchResponse } from '../../api/types';
 import { setNavigator } from '../../features/navigation';
 import { hitRoute, pdfViewerUrl } from '../../features/searchLinks';
 import { SearchView } from './SearchView';
@@ -62,10 +62,7 @@ const RESPONSE: SearchResponse = {
 beforeEach(() => {
   setNavigator(navigate);
   navigate.mockClear();
-  vi.spyOn(api, 'getSavedSearches').mockResolvedValue({
-    searches: [{ id: 's-1', name: 'Open loops', query: 'tag:#todo -done', sort: 'mtime' }],
-    version: 'v1',
-  });
+  vi.spyOn(api, 'getBookmarks').mockResolvedValue({ version: 'v1', items: [] });
 });
 
 afterEach(() => {
@@ -74,13 +71,17 @@ afterEach(() => {
 });
 
 describe('SearchView', () => {
-  it('lists saved searches while the field is empty and runs one when picked', async () => {
-    const search = vi.spyOn(api, 'search').mockResolvedValue({ ...RESPONSE, results: [], total: 0, corrections: [] });
+  it('keeps a search only as a search bookmark: the star, and no separate saved searches', async () => {
+    vi.spyOn(api, 'search').mockResolvedValue({ ...RESPONSE, results: [], total: 0, corrections: [] });
+    const put = vi.spyOn(api, 'putBookmarks').mockImplementation(async (req: BookmarksUpdateRequest) => ({ version: 'v2', items: req.items }));
     renderView();
-    fireEvent.click(await screen.findByRole('button', { name: /^Open loops/ }));
-    expect(screen.getByRole('searchbox')).toHaveValue('tag:#todo -done');
-    await waitFor(() => expect(search).toHaveBeenCalledWith('tag:#todo -done', { sort: 'mtime', prefix: true, fuzzy: true }));
-    expect(await screen.findByRole('button', { name: 'Saved as Open loops' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByText('Saved searches')).not.toBeInTheDocument();
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: ' tag:#todo -done ' } });
+    expect(screen.queryByRole('button', { name: /save search/i })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Bookmark this search' }));
+    await waitFor(() => expect(put).toHaveBeenCalled());
+    expect(put.mock.calls[0][0].items).toEqual([expect.objectContaining({ type: 'search', query: 'tag:#todo -done' })]);
+    expect(await screen.findByRole('button', { name: 'Remove the bookmark for this search' })).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('shows PDF hits with their page, and corrections with a way back to exact words', async () => {

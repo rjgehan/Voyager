@@ -207,7 +207,7 @@ NotesApp/                              (monorepo; branch main)
 | `Tasks/*.tasks`, `Tasks/Archive/*.tasks` | Task lists and their archives (§5.20). Any `.tasks` file in the vault is a list; new lists are created in `Tasks/`. | yes (as documents) | committed |
 | `.notesapp/settings.json` | App settings (§5.12) | hidden | committed, so settings have history |
 | `.notesapp/bookmarks.json` | Bookmarks (§5.21), in Obsidian's `bookmarks.json` format | hidden | committed, like the settings |
-| `.notesapp/searches.json` | Saved searches (§5.5.10, API.md §12.4) | hidden | committed, so they sync and have history |
+| `.notesapp/searches.json.migrated` | The saved searches of an earlier build, kept after they became search bookmarks at startup (§5.17, API.md §12.4) | hidden | committed |
 | `.notesapp/trash.json` | Trash metadata (§5.7) | hidden | **excluded** |
 | `.notesapp/reminders.json` | The reminder scheduler's state: baseline, zone, delivered reminders, snoozes (§5.26) | hidden | **excluded** |
 | `.notesapp/srs.json` | Flashcard answers, their cached FSRS state and the flashcard settings (§5.34) | hidden | committed |
@@ -472,10 +472,9 @@ The last section is the large-file policy (§5.8 *Large files*): one line per fi
 | `events` | `EventHub` | SSE connections, the 1024-event replay ring, the publish lock, echo suppression, `ping` heartbeats (§5.10). |
 | | `VaultEvent` | Sealed interface with one record per event type, matching API.md §16. |
 | | `EventIds` | Formats and parses `bootId.seq`. |
-| `search` | `SavedSearchService` | Saved searches in `.notesapp/searches.json`, with a version token (API.md §12.4). |
 | `settings` | `Settings` (+ nested records), `SettingsService`, `SettingsSeed` | Load, validate and save `.notesapp/settings.json`, with a version token, unknown-field preservation and read-only mode (§5.12); a missing file starts from the defaults plus every `SettingsSeed` (§5.23). |
 | `publish` | `PublishService`, `PublishRenderer`, `PublishPage`, `SnapshotStore`, `PublishServer` | Public publishing (§5.28): `.notesapp/publish.json`, the snapshot renderer, the snapshots outside the vault and the separate publish server on 8081. |
-| `bookmarks` | `BookmarkService`, `BookmarkCodec` | Load, check and save `.notesapp/bookmarks.json` with a version token; re-key bookmarks after moves and trash restores (§5.21). |
+| `bookmarks` | `BookmarkService`, `BookmarkCodec` | Load, check and save `.notesapp/bookmarks.json` with a version token; re-key bookmarks after moves and trash restores (§5.21); turn an earlier build's saved searches into search bookmarks at startup (§5.17). |
 | `vault` | `HeadingRenameService` | Rewrites `[[Note#Heading]]` links (and heading bookmarks) after a heading is renamed (§5.22). |
 | `startup` | `VaultStartup` | `SmartInitializingSingleton` that runs the ordered startup sequence (§5.17). |
 | | `TailscaleInterfaceCheck` | Refuses to start outside the dev profile when no kernel Tailscale interface is visible (§5.13). |
@@ -496,7 +495,7 @@ The last section is the large-file policy (§5.8 *Large files*): one line per fi
 | | `AppAlerts` | Counts the markers; deduplicates, rate-limits and sends them to ntfy on its own thread (§5.18.1). |
 | | `BackupStatusReader` | Reads the backup run's `status.json` for the status page (§7.10). |
 | | `RuntimeInfo` | The JVM's version and heap, and whether it uses the AOT cache (§7.1). |
-| `api` | `TreeController`, `FileController`, `AttachmentController`, `FolderController`, `MoveController`, `NoteController`, `LinkController`, `SearchController`, `SavedSearchController`, `TagController`, `TrashController`, `HistoryController`, `TimelineController`, `TemplateController`, `SettingsController`, `BookmarkController`, `HeadingController`, `MeController`, `StatusController`, `StatusDetailsController`, `AlertsController`, `MirrorController`, `GraphController`, `CompatController`, `EventController`, `TaskController`, `TaskListController`, `TranscriptionController`, `AiController` | Thin controllers. They validate input, call services and map results to DTOs. |
+| `api` | `TreeController`, `FileController`, `AttachmentController`, `FolderController`, `MoveController`, `NoteController`, `LinkController`, `SearchController`, `TagController`, `TrashController`, `HistoryController`, `TimelineController`, `TemplateController`, `SettingsController`, `BookmarkController`, `HeadingController`, `MeController`, `StatusController`, `StatusDetailsController`, `AlertsController`, `MirrorController`, `GraphController`, `CompatController`, `EventController`, `TaskController`, `TaskListController`, `TranscriptionController`, `AiController` | Thin controllers. They validate input, call services and map results to DTOs. |
 | | `IdempotencyCache` | Per-boot LRU for the `Idempotency-Key` header (§5.4). |
 | `api.dto` | Records named exactly as listed in API.md §19 | Wire DTOs. |
 | `api.error` | `ErrorCode` (enum of the API.md §3 codes), `NotesException` (extends `ErrorResponseException`), `VersionConflictException`, `ApiExceptionHandler` (extends `ResponseEntityExceptionHandler`) | RFC 9457 errors (§5.15). |
@@ -826,7 +825,7 @@ Tokens are maximal runs of `[\p{L}\p{N}]`, except that each Han, Hiragana or Kat
 - Results are cached in `.notesapp/cache/search-text/<sha1(path)>-<size>-<mtimeMillis>.txt` (outside git, §4.6), so a restart re-extracts nothing; a move renames the entry. When the first backlog after startup is done, entries of files that no longer exist are deleted.
 - Memory: the text is kept in memory like a note's (Latin-1 text takes one byte per character).
 
-**Saved searches** (`SavedSearchService`, API.md §12.4) live in `.notesapp/searches.json` (`{"schemaVersion": 1, "searches": [{id, name, query, sort}]}`), written atomically like settings with the version protocol on its blob id, marked dirty for the next history batch, and announced with `searches.changed`. The whole list is replaced on each save; the client re-applies its change after a `409`.
+**Saved searches are search bookmarks** (§5.21, API.md §12.4; the user's decision). Earlier builds kept a separate list in `.notesapp/searches.json`; the startup step of §5.17 turns it into search bookmarks once and renames the file `searches.json.migrated`.
 
 #### 5.5.11 Tags
 
@@ -1420,7 +1419,7 @@ For phone testing against dev (§9.1 step 4), `NOTES_ALLOWED_HOSTS` overrides th
 
 1. Resolve `notes.vault-dir`, create it if it is missing, and check that it is writable (fail fast with a clear message). Create `.notesapp/` and empty `.notesapp/tmp/`.
 2. Outside the dev profile: the kernel-mode check (§5.13) and the non-empty `notes.allowed-hosts` check.
-3. `SettingsService.load()`, creating defaults if needed (§5.12).
+3. `SettingsService.load()`, creating defaults if needed (§5.12). Then `BookmarkService.migrateSavedSearches()`: an earlier build's `.notesapp/searches.json` becomes search bookmarks at the end of `.notesapp/bookmarks.json` (each name as the title; a query that already has a search bookmark, or an entry without a usable query, is skipped; the sort is dropped), and the file is renamed `searches.json.migrated` (a time stamp is added when that name is taken), so it runs once. A `bookmarks.json` that is not JSON leaves both files until it is fixed; any failure is logged and never stops the start. The files are written directly, without an event (no client is connected yet), and the bootstrap commit of step 8 records them (API.md §12.4).
 4. `GitStore.openOrInit()`: remove stale lock files, apply the config (including `core.hooksPath`), write `info/exclude`, log the branch and remotes (§5.8).
 5. **Welcome note.** Only when the repository was **created in this boot** (or has no commits), the vault has no visible files, and `notes.welcome-note=true`: write `Welcome.md` from the classpath. A user who later deletes everything does not get it back.
 6. `IndexBuilder.build()`: walk the vault, parse notes in parallel, and build the links, tags and search index. Text files above their size limit are listed but not content-indexed. Log the counts and the duration. Then `GitStore.syncLargeFiles()` writes the large-file section of `info/exclude` from the index and a walk of the working tree (§4.6, §5.8 *Large files*), before anything can commit.
@@ -1579,6 +1578,7 @@ A real task manager whose data lives in the vault as JSON, not as `- [ ]` lines.
   - `TrashService` calls `restored(originalPath, target, type)` when an entry comes back at another path (an explicit `to`, or a free name): bookmarks of the original path follow it, but only when nothing exists at the original path, so a bookmark whose path a new note has taken keeps pointing at that note.
   - A delete leaves bookmarks alone, exactly as it leaves links: the client shows them as missing until the target comes back (§6.23). Moves and deletes made outside the app are not followed, as for links (§5.9).
   - A re-key writes the file under the bookmarks lock (taken after the vault lock; the `PUT` path never takes the vault lock, so the order is fixed), marks it dirty with the mover's identity, and publishes `bookmarks.changed` with `origin: null`. The calling client's `MoveResult` says nothing about bookmarks, so the event must reach it too; a failure is logged and never fails the move.
+- **Saved searches** (the user's decision: bookmarks only). A search is kept as a `search` bookmark; there is no other list. At startup, `migrateSavedSearches()` folds an earlier build's `.notesapp/searches.json` into the bookmarks once (§5.17 step 3, API.md §12.4).
 - **Why a whole-list `PUT`** rather than per-item endpoints: Obsidian's items have no ids, the list is small, and the settings already prove the version protocol. Clients apply each change as a function of the latest list and re-apply it after a `409` (§6.23), so concurrent changes from two devices both survive.
 
 ### 5.22 Heading links after a heading is renamed (ROADMAP item 21)
@@ -1837,7 +1837,7 @@ The client edits a note's properties in the note (§6.41); the server adds the v
 
 ### 5.39 Multiple vaults (ROADMAP item 37)
 
-One process serves several independent vaults. The design keeps the single-vault code untouched: every service that holds vault state (VaultFs, the index and search, links, the git store and batcher, the watcher and rescans, the trash, settings, bookmarks, saved searches, tasks and their archiver, reminders, flashcards, habits, the event hub and replay buffer, idempotency keys, the controllers) is still a plain singleton, and **each extra vault gets an application context of its own** built from the same components. Isolation is structural: no bean of one vault can reach another vault's files, and every background thread (watcher, batcher, schedulers, PDF text) belongs to exactly one vault.
+One process serves several independent vaults. The design keeps the single-vault code untouched: every service that holds vault state (VaultFs, the index and search, links, the git store and batcher, the watcher and rescans, the trash, settings, bookmarks, tasks and their archiver, reminders, flashcards, habits, the event hub and replay buffer, idempotency keys, the controllers) is still a plain singleton, and **each extra vault gets an application context of its own** built from the same components. Isolation is structural: no bean of one vault can reach another vault's files, and every background thread (watcher, batcher, schedulers, PDF text) belongs to exactly one vault.
 
 **Vaults and names.**
 - The **default vault** is the main application at `notes.vault-dir` (`/data/vault`), named `notes.vaults.default-name` (`main`). Its URLs do not change: `/`, `/n/...` and `/api/...`, so existing bookmarks, the installed PWA, the desktop app, shortcuts and the clipper keep working with no migration. It also answers as `/api/v/main/...`.
@@ -1861,7 +1861,7 @@ One process serves several independent vaults. The design keeps the single-vault
 
 | Feature | Scope |
 |---|---|
-| Files, index, search, links, tags, graph, history and timeline, trash, settings, bookmarks, saved searches, templates, daily notes, tasks and the task archiver, calendar, kanban, flashcards, habits, compatibility report, transcription of a vault's recordings, the event stream, status (`/api/status`) | per vault: each in its own folder (`.notesapp/…`, `.git`, `.trash`) |
+| Files, index, search, links, tags, graph, history and timeline, trash, settings, bookmarks, templates, daily notes, tasks and the task archiver, calendar, kanban, flashcards, habits, compatibility report, transcription of a vault's recordings, the event stream, status (`/api/status`) | per vault: each in its own folder (`.notesapp/…`, `.git`, `.trash`) |
 | Properties (item 13), and note queries for scripts and Dataview (items 40 and 17) | per vault: each vault has its own `.notesapp/types.json`, property list and rename, `types.changed` events and `/api/v/<name>/notes/query`. Scripts run in the browser, so they read only the vault of the page they are in. The script sandbox worker is one built file under `/assets/` for every vault, with its own CSP there (§6.43.1) |
 | Reminders | per vault: each vault's scheduler reads its own tasks and settings and keeps `.notesapp/reminders.json`. Delivery is shared: ntfy (`ntfy.json`) and Web Push (`push.json`, one subscription per device for all vaults). A notification opens and acts on its own vault (`/v/<name>/x/tasks/…`, `/api/v/<name>/reminders/…`); the in-app route reaches only tabs of that vault. |
 | Ask your vault | per vault (prompts, exclusions and the on/off switch are vault settings); the provider credentials and the monthly spend ledger are server-wide, so each vault's budget applies to the server's total spend |
@@ -2068,7 +2068,6 @@ frontend/src/
 | `['meta', path]` | `GET /api/notes/meta` | 30 s | `[[Note#` heading completion for **other** notes. Headings of the open note (Outline panel, `[[#`) come from its live Lezer tree (§6.6). |
 | `['backlinks', path, unlinked]` | `GET /api/notes/backlinks` | 0 | Refetched when the panel is visible |
 | `['search', q, sort, fuzzy]` | `GET /api/search` | 10 s | Input debounced 200 ms; a `400` is not retried |
-| `['savedSearches']` | `GET /api/searches` | Infinity | Invalidated by `searches.changed`; replaced from each `PUT` response |
 | `['tags']` | `GET /api/tags` | 30 s | |
 | `['history', path]` | `GET /api/history` | 0 | |
 | `['historyContent', commit, path]` | `GET /api/history/content` | Infinity | Immutable |
@@ -2116,7 +2115,6 @@ Per-device preferences (theme, spellcheck, autocorrect, remote images, syntax vi
 | `history.committed` | Invalidate `['history', p]` for each `p` in `paths`, `['vaultHistory']`, and `['status']`. |
 | `settings.changed` | Invalidate `['settings']`. |
 | `bookmarks.changed` | Invalidate `['bookmarks']`. Sent with `origin: null` after a move or restore, so the mover refetches too. |
-| `searches.changed` | Invalidate `['savedSearches']`. |
 | `status.changed` | Invalidate `['status']`. |
 | `ping` | Nothing; it only feeds the watchdog and the Live indicator (§6.18). |
 | Names registered with `registerEventHandler` (§6.8) | The registered handler. |
@@ -2172,7 +2170,7 @@ Per-device preferences (theme, spellcheck, autocorrect, remote images, syntax vi
 - **Highlighting.** `features/searchQuery.ts` parses the API.md §12.1 grammar exactly as the server does; `highlightTerms` takes the positive words and phrases and the positive regular expressions (converted to JavaScript: case-insensitive unless `(?-i)`, skipped when JavaScript cannot compile them). The editor and the reading view highlight both.
 - **Typo tolerance.** When the response has `corrections`, a line reads "Including similar words: ~~recieve~~ → receive. Exact words only"; the link repeats the query with `fuzzy=false` (the query key is `['search', q, sort, fuzzy]`). The replacements are appended to the `q=` of the hit route, so the opened note highlights them too.
 - **Errors.** A `400` (an invalid or runaway regular expression) is shown in place of the results with its `detail`, and is not retried.
-- **Saved searches** (`['savedSearches']`, staleTime Infinity, invalidated by `searches.changed`). With the field empty, the panel lists them above the syntax help; a click fills the field and the sort. A toolbar button saves the current query and sort under a name (prompted; the query is the default) or, when that query and sort are already saved, removes it after confirmation. Rename and delete sit on each row. Every change goes through `updateSavedSearches(change)`: it applies the change to the latest list and `PUT`s it with the cached version, and on `409` fetches the list and re-applies the change (three attempts), so two devices editing at once both keep their change.
+- **Keeping a search.** The star in the toolbar bookmarks the query as typed (a search bookmark, §6.23), or removes that bookmark; the Bookmarks pane lists, renames, groups and opens it on every device. There is no separate saved-searches list (API.md §12.4): with the field empty, the panel shows the syntax help.
 
 ### 6.5 Component tree
 

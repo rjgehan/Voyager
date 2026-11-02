@@ -421,9 +421,6 @@ export interface SearchResponse {
   corrections: SearchCorrection[];
 }
 export type SearchSort = 'relevance' | 'mtime';
-export interface SavedSearch { id: string; name: string; query: string; sort: SearchSort }
-export interface SavedSearchesResponse { searches: SavedSearch[]; version: Version | null }
-export interface SavedSearchesUpdateRequest { searches: SavedSearch[]; baseVersion: Version | null }
 export interface TagCount { tag: string; count: number; total: number }
 export interface TagsResponse { tags: TagCount[] }
 
@@ -659,7 +656,6 @@ export interface SettingsChangedEvent { version: Version; origin: string | null 
 export interface BookmarksChangedEvent { version: Version; origin: string | null }   // origin null: re-keyed by the server after a move or restore
 export interface StatusChangedEvent { reason: 'git' | 'watcher' | 'settings' | 'disk' | 'mirror' }
 export interface ResyncEvent { reason: 'watcher-overflow' | 'bulk-change' | 'rescan-error' }
-export interface SavedSearchesChangedEvent { version: Version; origin: string | null }
 
 export interface VaultEventMap {
   'hello': HelloEvent;
@@ -676,14 +672,13 @@ export interface VaultEventMap {
   'bookmarks.changed': BookmarksChangedEvent;
   'status.changed': StatusChangedEvent;
   'resync': ResyncEvent;
-  'searches.changed': SavedSearchesChangedEvent;
   'types.changed': PropertyTypesChangedEvent;
 }
 export type VaultEventName = keyof VaultEventMap;
 export const VAULT_EVENT_NAMES: readonly VaultEventName[] = [
   'hello', 'ping', 'file.created', 'file.changed', 'file.deleted', 'folder.created', 'folder.deleted',
   'entry.moved', 'trash.changed', 'history.committed', 'settings.changed', 'bookmarks.changed', 'status.changed',
-  'resync', 'searches.changed', 'types.changed',
+  'resync', 'types.changed',
 ];
 // Extensions add their own event names at runtime with registerEventHandler (DESIGN §6.8).
 

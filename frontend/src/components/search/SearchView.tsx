@@ -1,21 +1,17 @@
 // Full-text search (DESIGN §6.4, API.md §12.1), shared by the desktop panel (query in zustand,
 // never in the route) and the phone search page (`/search?q=`). Input is debounced by 200 ms.
-// Saved searches (API.md §12.4) are listed while the field is empty and saved from the toolbar.
-import { ArrowDownWideNarrow, BookmarkCheck, BookmarkPlus, FileText, FileType, Pencil, Search, Star, X } from 'lucide-react';
+// The star keeps a search as a search bookmark (item 12), the one way to save a search.
+import { ArrowDownWideNarrow, FileText, FileType, Search, Star, X } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { errorMessage } from '../../api/client';
-import { useSavedSearches, useSearch } from '../../api/hooks';
-import type { SavedSearch, SearchHit, SearchResponse, SearchSort } from '../../api/types';
+import { useSearch } from '../../api/hooks';
+import type { SearchHit, SearchResponse, SearchSort } from '../../api/types';
 import { findSearchBookmarks } from '../../features/bookmarks';
 import { toggleSearchBookmark, useBookmarks } from '../../features/bookmarkStore';
-import { toastError } from '../../features/errors';
 import { afterOpen, isKeyboardClick } from '../../features/focus';
 import { navigateTo } from '../../features/navigation';
 import { folderOf } from '../../features/paths';
-import { addSavedSearch, deleteSavedSearch, findSavedSearch, renameSavedSearch } from '../../features/savedSearches';
 import { hitRoute } from '../../features/searchLinks';
-import { confirmAction, promptText } from '../../state/dialogs';
-import { toast } from '../../state/toasts';
 import { useUi } from '../../state/ui';
 import { HighlightedText } from '../HighlightedText';
 
@@ -89,49 +85,6 @@ function Corrections({ data, onExact }: { data: SearchResponse; onExact(): void 
   );
 }
 
-function SavedSearches({ searches, onPick }: { searches: SavedSearch[]; onPick(s: SavedSearch): void }) {
-  const rename = async (s: SavedSearch) => {
-    const name = await promptText({ title: 'Rename saved search', label: 'Name', value: s.name, confirmLabel: 'Rename', validate: (v) => (v.trim() ? null : 'Enter a name') });
-    if (name === null || name.trim() === s.name) return;
-    try {
-      await renameSavedSearch(s.id, name);
-    } catch (e) {
-      toastError(e);
-    }
-  };
-  const remove = async (s: SavedSearch) => {
-    const ok = await confirmAction({ title: 'Delete saved search?', message: `“${s.name}” (${s.query}) will be removed on every device.`, confirmLabel: 'Delete', danger: true });
-    if (!ok) return;
-    try {
-      await deleteSavedSearch(s.id);
-    } catch (e) {
-      toastError(e);
-    }
-  };
-  return (
-    <section className="saved-searches" aria-label="Saved searches">
-      <h3 className="saved-searches-title">Saved searches</h3>
-      <ul className="saved-search-list">
-        {searches.map((s) => (
-          <li key={s.id} className="saved-search">
-            <button type="button" className="saved-search-main" onClick={() => onPick(s)} title={s.query}>
-              <BookmarkCheck size={14} aria-hidden />
-              <span className="saved-search-name">{s.name}</span>
-              <code className="saved-search-query">{s.query}</code>
-            </button>
-            <button type="button" className="icon-button saved-search-action" aria-label={`Rename ${s.name}`} title="Rename" onClick={() => void rename(s)}>
-              <Pencil size={13} />
-            </button>
-            <button type="button" className="icon-button saved-search-action" aria-label={`Delete ${s.name}`} title="Delete" onClick={() => void remove(s)}>
-              <X size={14} />
-            </button>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
 function SearchHelp() {
   return (
     <div className="panel-empty search-help">
@@ -165,10 +118,9 @@ export function SearchView({ query, onQuery, autoFocus }: Props) {
   // "Exact words only" applies to the query it was chosen for.
   const fuzzy = exact !== trimmed;
   const search = useSearch(trimmed, sort, fuzzy);
-  const saved = useSavedSearches();
   const focusRequest = useUi((s) => s.searchFocus);
   const { items: bookmarks } = useBookmarks();
-  // A search bookmark (item 12) is for the query as typed; a saved search (item 22) for the one searched.
+  // A search bookmark (item 12) is for the query as typed.
   const typed = query.trim();
   const starred = typed !== '' && findSearchBookmarks(bookmarks, typed).length > 0;
 
@@ -186,31 +138,7 @@ export function SearchView({ query, onQuery, autoFocus }: Props) {
 
   const data = search.data;
   const empty = trimmed === '';
-  const savedList = saved.data?.searches ?? [];
-  const current = empty ? undefined : findSavedSearch(savedList, trimmed, sort);
   const highlight = data && data.corrections.length > 0 ? `${trimmed} ${data.corrections.flatMap((c) => c.replacements).join(' ')}` : trimmed;
-
-  const save = async () => {
-    if (current) {
-      const ok = await confirmAction({ title: 'Remove saved search?', message: `“${current.name}” will be removed on every device.`, confirmLabel: 'Remove' });
-      if (ok) await deleteSavedSearch(current.id).catch(toastError);
-      return;
-    }
-    const name = await promptText({ title: 'Save search', label: 'Name', value: trimmed, confirmLabel: 'Save', validate: (v) => (v.trim() ? null : 'Enter a name') });
-    if (name === null) return;
-    try {
-      await addSavedSearch(name, trimmed, sort);
-      toast(`Saved “${name.trim()}”`);
-    } catch (e) {
-      toastError(e);
-    }
-  };
-
-  const pick = (s: SavedSearch) => {
-    setSort(s.sort);
-    onQuery(s.query);
-    input.current?.focus();
-  };
 
   return (
     <div className="search-view">
@@ -252,18 +180,6 @@ export function SearchView({ query, onQuery, autoFocus }: Props) {
             <Star size={14} fill={starred ? 'currentColor' : 'none'} />
           </button>
         )}
-        {!empty && (
-          <button
-            type="button"
-            className={`icon-button search-save${current ? ' is-active' : ''}`}
-            aria-label={current ? `Saved as ${current.name}` : 'Save search'}
-            title={current ? `Saved as “${current.name}”` : 'Save search'}
-            aria-pressed={!!current}
-            onClick={() => void save()}
-          >
-            {current ? <BookmarkCheck size={14} /> : <BookmarkPlus size={14} />}
-          </button>
-        )}
         <label className="search-sort" title="Sort results">
           <ArrowDownWideNarrow size={14} aria-hidden />
           <select value={sort} onChange={(e) => setSort(e.target.value as SearchSort)} aria-label="Sort results">
@@ -275,10 +191,7 @@ export function SearchView({ query, onQuery, autoFocus }: Props) {
       {!empty && data && !search.isError && <Corrections data={data} onExact={() => setExact(trimmed)} />}
       <div className="search-results">
         {empty ? (
-          <>
-            {savedList.length > 0 && <SavedSearches searches={savedList} onPick={pick} />}
-            <SearchHelp />
-          </>
+          <SearchHelp />
         ) : search.isError ? (
           <div className="panel-empty search-error" role="alert">
             {errorMessage(search.error)}

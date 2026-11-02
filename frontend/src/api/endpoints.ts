@@ -42,8 +42,6 @@ import type {
   RestoreRequest,
   RestoreResult,
   SaveFileRequest,
-  SavedSearchesResponse,
-  SavedSearchesUpdateRequest,
   SearchResponse,
   SearchSort,
   SettingsResponse,
@@ -130,8 +128,6 @@ export interface Endpoints {
   getBacklinks(path: string, unlinked: boolean): Promise<BacklinksResponse>;
   resolveLinks(req: ResolveRequest): Promise<ResolveResponse>;
   search(q: string, opts?: SearchOptions): Promise<SearchResponse>;
-  getSavedSearches(): Promise<SavedSearchesResponse>;
-  putSavedSearches(req: SavedSearchesUpdateRequest): Promise<SavedSearchesResponse>;
   getTags(): Promise<TagsResponse>;
   /** The link graph (API.md §11.4); with `since`, an unchanged graph comes back empty with `unchanged: true`. */
   getGraph(since?: string): Promise<GraphResponse>;
@@ -220,8 +216,6 @@ export const httpEndpoints: Endpoints = {
   resolveLinks: (req) => apiFetch('/api/links/resolve', { method: 'POST', json: req }),
   search: (q, opts = {}) =>
     apiFetch('/api/search' + query({ q, limit: opts.limit, sort: opts.sort, prefix: opts.prefix, fuzzy: opts.fuzzy })),
-  getSavedSearches: () => apiFetch('/api/searches'),
-  putSavedSearches: (req) => apiFetch('/api/searches', { method: 'PUT', json: req }),
   getTags: () => apiFetch('/api/tags'),
   getGraph: (since) => apiFetch('/api/graph' + query({ since })),
   getCompat: () => apiFetch('/api/compat'),

@@ -16,9 +16,13 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.mock.env.MockEnvironment;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.awaitility.Awaitility.await;
 
-/** The startup sequence: settings, git, the first-run welcome rule and the bootstrap commit (DESIGN §5.17, §7.8). */
+/**
+ * The startup sequence: settings, saved searches becoming bookmarks, git, the first-run welcome rule and the bootstrap
+ * commit (DESIGN §5.17, §7.8).
+ */
 class VaultStartupTest {
 
 	@TempDir
@@ -40,8 +44,8 @@ class VaultStartupTest {
 		GitBootstrap bootstrap = new GitBootstrap(this.vault.git, this.vault.batcher, this.vault.hub,
 				this.vault.properties);
 		new VaultStartup(this.vault.properties, environment, this.vault.fs,
-				new TailscaleInterfaceCheck(this.vault.properties), this.vault.settings, this.vault.git,
-				new WelcomeContent(), this.vault.builder, bootstrap)
+				new TailscaleInterfaceCheck(this.vault.properties), this.vault.settings, this.vault.bookmarks,
+				this.vault.git, new WelcomeContent(), this.vault.builder, bootstrap)
 			.afterSingletonsInstantiated();
 		bootstrap.onReady();
 		await().atMost(Duration.ofSeconds(20)).until(() -> !this.vault.batcher.isImporting());
@@ -103,6 +107,30 @@ class VaultStartupTest {
 		HistoryEntry entry = this.vault.history.list("Later.md", 1, 0).entries().get(0);
 		assertThat(entry.message()).isEqualTo("Changes made while NotesApp was stopped");
 		assertThat(entry.authorName()).isEqualTo("External");
+	}
+
+	@Test
+	void savedSearchesOfAnEarlierBuildBecomeSearchBookmarksOnce() throws Exception {
+		boot();
+		Files.writeString(root().resolve(".notesapp/searches.json"), """
+				{ "schemaVersion": 1, "searches": [
+				  { "id": "s-open", "name": "Open loops", "query": "tag:#todo -done", "sort": "relevance" },
+				  { "id": "s-daily", "name": "Recent dailies", "query": "path:Daily", "sort": "mtime" } ] }
+				""");
+		boot();
+		assertThat(root().resolve(".notesapp/searches.json")).doesNotExist();
+		assertThat(root().resolve(".notesapp/searches.json.migrated")).exists();
+		assertThat(this.vault.bookmarks.get().items()).extracting((item) -> item.get("title").asString(),
+				(item) -> item.get("query").asString())
+			.containsExactly(tuple("Open loops", "tag:#todo -done"),
+					tuple("Recent dailies", "path:Daily"));
+		// The startup commit records the new bookmarks and the renamed file.
+		assertThat(this.vault.git.diskPathAtHead(".notesapp/bookmarks.json")).isNotNull();
+		assertThat(this.vault.git.diskPathAtHead(".notesapp/searches.json.migrated")).isNotNull();
+		assertThat(this.vault.git.diskPathAtHead(".notesapp/searches.json")).isNull();
+		// A later start finds nothing to migrate.
+		boot();
+		assertThat(this.vault.bookmarks.get().items()).hasSize(2);
 	}
 
 	@Test
