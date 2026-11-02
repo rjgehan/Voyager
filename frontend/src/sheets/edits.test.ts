@@ -44,6 +44,21 @@ describe('fill', () => {
     expect(fillEdits(t, { col: 2, row: 0, width: 2, height: 1 }, { col: 2, row: 0, width: 4, height: 1 })).toEqual([edit('E1', { v: 15 }), edit('F1', { v: 20 })]);
   });
 
+  it('continues text ending in numbers, and with the fill handle steps a single date or "Item 1"', () => {
+    const s = sheet({ A1: { v: 'Item 1' }, A2: { v: 'Item 3' }, B1: { v: 46296, fmt: 'yyyy-mm-dd' }, C1: { v: 'Week 09' }, D1: { v: 5 }, E1: { v: '007' } });
+    // Two cells step by their difference, wherever the fill starts.
+    expect(fillEdits(s, { col: 0, row: 0, width: 1, height: 2 }, { col: 0, row: 0, width: 1, height: 4 })).toEqual([edit('A3', { v: 'Item 5' }), edit('A4', { v: 'Item 7' })]);
+    const one = (col: number, handle: boolean) => fillEdits(s, { col, row: 0, width: 1, height: 1 }, { col, row: 0, width: 1, height: 3 }, { handle });
+    // The handle steps a date by a day (keeping its format) and text by one (keeping its zeros).
+    expect(one(1, true)).toEqual([edit('B2', { v: 46297 }), edit('B3', { v: 46298 })].map((e) => ({ ...e, fmt: 'yyyy-mm-dd' })));
+    expect(one(2, true)).toEqual([edit('C2', { v: 'Week 10' }), edit('C3', { v: 'Week 11' })]);
+    // A plain number, or digits alone, is copied; and Fill down (no handle) copies dates and text.
+    expect(one(3, true)).toEqual([edit('D2', { v: 5 }), edit('D3', { v: 5 })]);
+    expect(one(4, true)).toEqual([edit('E2', { v: '007' }), edit('E3', { v: '007' })]);
+    expect(one(1, false).map((e) => e.content)).toEqual([{ v: 46296 }, { v: 46296 }]);
+    expect(fillDownEdits(s, { col: 2, row: 0, width: 1, height: 3 }).map((e) => e.content)).toEqual([{ v: 'Week 09' }, { v: 'Week 09' }]);
+  });
+
   it('clears targets of empty source cells and skips cells that already match', () => {
     const s = sheet({ A1: { v: 5 }, A2: { v: 'old' }, A3: { v: 5 } });
     expect(fillEdits(s, { col: 0, row: 0, width: 1, height: 1 }, { col: 0, row: 0, width: 1, height: 3 })).toEqual([edit('A2', { v: 5 })]);

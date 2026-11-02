@@ -682,9 +682,25 @@ export function SheetEditor({ path, snapshot, workbook, version }: Props) {
     });
   }, [path]);
 
-  // A keyboard navigation (or Enter in a new spreadsheet's title) lands in the grid.
+  // A keyboard navigation (or Enter in a new spreadsheet's title) lands in the grid. So does an
+  // opening that leaves the focus nowhere during its first moments (the new file's title it was
+  // named in goes away, and the view it replaced may take and drop the focus meanwhile), so that
+  // typing goes into A1 as in Google Sheets. Glide draws its canvas only once it has measured
+  // itself, so the focus is tried again for a while.
   useEffect(() => {
-    if (wantsNoteFocus()) gridRef.current?.focus();
+    const requested = wantsNoteFocus();
+    if (touch && !requested) return;
+    const nowhere = () => document.activeElement === null || document.activeElement === document.body;
+    let timer = 0;
+    let tries = 0;
+    const attempt = () => {
+      if (nowhere()) gridRef.current?.focus();
+      if (++tries < 30) timer = window.setTimeout(attempt, 50);
+    };
+    if (requested) gridRef.current?.focus();
+    attempt();
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per opened file
   }, [path]);
 
   const handlers: SheetGridHandlers = {
@@ -692,7 +708,7 @@ export function SheetEditor({ path, snapshot, workbook, version }: Props) {
     onEdit: edit,
     onCommit: (at, text) => commit({ ...at, sheet: sheet.id }, text, 'none'),
     onClear: (range) => setCells(clearEdits(sheet, range)),
-    onFill: (source, dest) => setCells(fillEdits(sheet, source, dest)),
+    onFill: (source, dest) => setCells(fillEdits(sheet, source, dest, { handle: true })),
     onUndo: undo,
     onRedo: redo,
     onEscape: () => {

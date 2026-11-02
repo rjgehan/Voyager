@@ -487,6 +487,27 @@ describe('the spreadsheet view', () => {
     await waitFor(() => expect(screen.getByText('Did you mean SUM(…)?')).toBeTruthy());
   });
 
+  it('gives the grid the keys when the spreadsheet opens with the focus nowhere (a new file)', async () => {
+    (document.activeElement as HTMLElement | null)?.blur();
+    await openGrid();
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId('grid')));
+  });
+
+  it('selects everything with Mod-A, the frozen rows included', async () => {
+    await openGrid();
+    select(1, 1);
+    const e = { key: 'a', ctrlKey: true, metaKey: false, shiftKey: false, altKey: false, cancel: vi.fn(), preventDefault: vi.fn(), stopPropagation: vi.fn(), bounds: undefined, keyCode: 65, rawEvent: undefined, location: undefined };
+    act(() => gridProps().onKeyDown!(e));
+    expect(e.cancel).toHaveBeenCalled();
+    expect(nameBox().value).toBe('A1:Z1000');
+    screen.getByTestId('grid').focus();
+    const data = new Map<string, string>();
+    const copy = new Event('copy', { cancelable: true }) as ClipboardEvent;
+    Object.defineProperty(copy, 'clipboardData', { value: { setData: (t: string, v: string) => data.set(t, v), getData: () => '' } });
+    act(() => void window.dispatchEvent(copy));
+    expect(data.get('text/plain')?.split('\n')[0]).toBe('Item\tCost\t');
+  });
+
   it('moves on from the title to the grid with Enter, renamed or not', async () => {
     await openGrid();
     const title = screen.getByLabelText('Spreadsheet title');

@@ -363,6 +363,12 @@ export function SheetGrid({ sheet, layout, version, selection, marked, picked, e
         handlers.onEscape();
         return;
       }
+      if (mod && !e.altKey && key === 'a') {
+        // Everything, the frozen rows included (Glide's own select-all stops at its first row).
+        take();
+        handlers.onSelect({ active: selection.active, range: { col: 0, row: 0, width: layout.cols, height: layout.rows } });
+        return;
+      }
       if (mod && !e.altKey) {
         const command =
           key === 'z' && !e.shiftKey
@@ -412,7 +418,7 @@ export function SheetGrid({ sheet, layout, version, selection, marked, picked, e
         handlers.onEdit({ col, row }, e.key);
       }
     },
-    [handlers, editable, selection, frozenActive, f, touch, layout.cols],
+    [handlers, editable, selection, frozenActive, f, touch, layout.cols, layout.rows],
   );
 
   // ---------- columns and size ----------

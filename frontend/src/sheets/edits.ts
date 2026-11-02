@@ -8,7 +8,7 @@ import { effectiveFormat, shownCell } from './display';
 import type { CellEdit } from './engine';
 import { isCellError, type Sheet, type SheetCell } from './format';
 import { typedInput } from './input';
-import { isGeneral } from './numfmt';
+import { formatKind, isDateKind, isGeneral } from './numfmt';
 import { shiftFormula, type CellRange } from './refs';
 import { numberSeries, seriesValue } from './series';
 import { parseTsv, toTsv } from './tsv';
@@ -95,21 +95,21 @@ export function typedEdit(sheet: Sheet, col: number, row: number, text: string):
  * Fill down and Fill right do: formulas shift their relative references, values are copied (numbers that step evenly continue
  * as a series), and empty source cells clear their targets.
  */
-export function fillEdits(sheet: Sheet, source: CellRange, dest: CellRange): CellEdit[] {
+export function fillEdits(sheet: Sheet, source: CellRange, dest: CellRange, opts: { handle?: boolean } = {}): CellEdit[] {
   const edits: CellEdit[] = [];
-  // Numbers that step evenly along the fill continue as a series (1, 2 → 3, 4), as in Google Sheets.
+  // Numbers that step evenly along the fill continue as a series (1, 2 → 3, 4), as in Google Sheets;
+  // so does text ending in such numbers (Item 1, Item 2 → Item 3). Dragged by the fill handle, a
+  // single date steps a day and a single "Item 1" steps by one (Fill down copies them).
   const down = dest.height > source.height;
   const across = !down && dest.width > source.width;
-  const seriesOf = new Map<number, ReturnType<typeof numberSeries>>();
+  const seriesOf = new Map<number, LineSeries | null>();
   const series = (line: number) => {
     if (!seriesOf.has(line)) {
-      const values: Array<number | null> = [];
+      const cells: Array<SheetCell | undefined> = [];
       const length = down ? source.height : source.width;
-      for (let i = 0; i < length; i++) {
-        const cell = sheet.cells[down ? toA1(line, source.row + i) : toA1(source.col + i, line)];
-        values.push(cell?.f === undefined && typeof cell?.v === 'number' ? cell.v : null);
-      }
-      seriesOf.set(line, down || across ? numberSeries(values) : null);
+      for (let i = 0; i < length; i++) cells.push(sheet.cells[down ? toA1(line, source.row + i) : toA1(source.col + i, line)]);
+      const first = down ? { col: line, row: source.row } : { col: source.col, row: line };
+      seriesOf.set(line, down || across ? lineSeries(cells, opts.handle === true && isDateKind(formatKind(effectiveFormat(sheet, first.col, first.row)))) : null);
     }
     return seriesOf.get(line)!;
   };
@@ -120,12 +120,50 @@ export function fillEdits(sheet: Sheet, source: CellRange, dest: CellRange): Cel
       const srcCol = source.col + mod(col - source.col, source.width);
       const from = sheet.cells[toA1(srcCol, srcRow)];
       const run = series(down ? col : row);
-      const content = run ? { v: seriesValue(run, down ? row - source.row : col - source.col) } : moved(copiedContent(from), row - srcRow, col - srcCol);
+      const index = down ? row - source.row : col - source.col;
+      const content = run && (run.single === undefined || opts.handle) ? { v: run.at(index) } : moved(copiedContent(from), row - srcRow, col - srcCol);
       const edit = { sheet: sheet.id, ref: toA1(col, row), content };
       edits.push(withFormat(sheet, edit, from?.fmt));
     }
   }
   return changed(sheet, edits);
+}
+
+interface LineSeries {
+  /** The value at `index` along the fill (0 is the first source cell). */
+  at(index: number): number | string;
+  /** A series from one cell (a date, `Item 1`), which only the fill handle continues. */
+  single?: true;
+}
+
+/**
+ * The series a line of source cells continues, or null: evenly stepping numbers (or dates), text
+ * ending in evenly stepping numbers with the same text before them (`Item 1`, `Item 2`), and with
+ * `dates`, one date (by a day) or one such text (by one). Formulas never make a series.
+ */
+function lineSeries(cells: ReadonlyArray<SheetCell | undefined>, dates: boolean): LineSeries | null {
+  if (cells.some((c) => c?.f !== undefined)) return null;
+  const values = cells.map((c) => c?.v);
+  if (values.every((v) => typeof v === 'number')) {
+    const nums = values as number[];
+    const run = numberSeries(nums);
+    if (run) return { at: (i) => seriesValue(run, i) };
+    if (nums.length === 1 && dates) return { at: (i) => nums[0] + i, single: true };
+    return null;
+  }
+  if (!values.every((v) => typeof v === 'string')) return null;
+  const parts = (values as string[]).map((v) => /^(.*?)(\d+)$/.exec(v));
+  if (parts.some((p) => p === null)) return null;
+  const prefix = parts[0]![1];
+  if (parts.some((p) => p![1] !== prefix)) return null;
+  const width = parts[0]![2].length;
+  const nums = parts.map((p) => Number(p![2]));
+  const text = (n: number) => prefix + String(Math.max(0, Math.round(n))).padStart(width, '0');
+  const run = numberSeries(nums);
+  if (run) return { at: (i) => text(seriesValue(run, i)) };
+  // One cell: only the fill handle steps it (and not a bare number written as text, such as a code).
+  if (nums.length === 1 && prefix.trim() !== '') return { at: (i) => text(nums[0] + i), single: true };
+  return null;
 }
 
 /**
