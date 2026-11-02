@@ -145,10 +145,15 @@ export function parseCanvas(text: string): CanvasDoc {
   const nodes: CanvasNode[] = [];
   const nodeSpans = members.get('nodes')?.elements ?? [];
   const seen = new Set<string>();
+  // Every usable id, so a repaired one never takes the id of a node or edge further on.
+  const taken = new Set<string>();
+  for (const x of [...((data.nodes as unknown[] | undefined) ?? []), ...((data.edges as unknown[] | undefined) ?? [])]) {
+    if (isObject(x) && typeof x.id === 'string' && x.id !== '') taken.add(x.id);
+  }
   ((data.nodes as unknown[] | undefined) ?? []).forEach((n, i) => {
     if (!isObject(n)) return;
     // A node without a usable id gets one; the repaired node is written only when the canvas changes.
-    if (typeof n.id !== 'string' || n.id === '' || seen.has(n.id)) n = { ...n, id: freshId(seen) };
+    if (typeof n.id !== 'string' || n.id === '' || seen.has(n.id)) n = { ...n, id: freshId(seen, taken) };
     else record(n, nodeSpans[i]);
     seen.add((n as CanvasNode).id);
     nodes.push(n as CanvasNode);
@@ -157,7 +162,7 @@ export function parseCanvas(text: string): CanvasDoc {
   const edgeSpans = members.get('edges')?.elements ?? [];
   ((data.edges as unknown[] | undefined) ?? []).forEach((e, i) => {
     if (!isObject(e)) return;
-    if (typeof e.id !== 'string' || e.id === '' || seen.has(e.id)) e = { ...e, id: freshId(seen) };
+    if (typeof e.id !== 'string' || e.id === '' || seen.has(e.id)) e = { ...e, id: freshId(seen, taken) };
     else record(e, edgeSpans[i]);
     seen.add((e as CanvasEdge).id);
     edges.push(e as CanvasEdge);
@@ -176,11 +181,11 @@ export function parseCanvas(text: string): CanvasDoc {
 /** Raw text of top-level scalar members (strings and numbers cannot be WeakMap keys). */
 const rawScalars = new WeakMap<object, Map<string, string>>();
 
-function freshId(seen: Set<string>): string {
+function freshId(seen: Set<string>, taken: Set<string>): string {
   let i = seen.size;
   for (;;) {
     const id = `repaired-${i++}`;
-    if (!seen.has(id)) return id;
+    if (!seen.has(id) && !taken.has(id)) return id;
   }
 }
 

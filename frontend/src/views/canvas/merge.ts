@@ -51,7 +51,8 @@ function mergeFields<T extends object>(base: T | undefined, mine: T, theirs: T):
   for (const k of keys) {
     const v = mergeValue(b[k], m[k], t[k], CONTENT_FIELDS.has(k));
     if (v === CONFLICT) return null;
-    if (v !== undefined) out[k] = v;
+    // A field named __proto__ is data: assigned, it would set the object's prototype instead.
+    if (v !== undefined) Object.defineProperty(out, k, { value: v, enumerable: true, writable: true, configurable: true });
   }
   return out as T;
 }

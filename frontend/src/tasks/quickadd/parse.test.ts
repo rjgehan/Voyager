@@ -134,6 +134,50 @@ describe('recurrence helpers', () => {
     expect(ruleFromText('nonsense')).toBeNull();
   });
 
+  it('writes an UNTIL typed in words as that local day (east of UTC it lost a day)', () => {
+    // rrule reads the date as local midnight and wrote it in UTC: 20261130T230000Z in Berlin.
+    expect(ruleFromText('every day until December 1, 2026', now)).toBe('FREQ=DAILY;UNTIL=20261201');
+  });
+
+  it('reads an UNTIL without a year as the coming date, not 2001', () => {
+    expect(ruleFromText('every day until dec 1', now)).toBe('FREQ=DAILY;UNTIL=20261201');
+    expect(ruleFromText('every day until march 3', now)).toBe('FREQ=DAILY;UNTIL=20270303');
+    expect(parse('Run every day until dec 1').due).toBe('2026-10-17');
+  });
+
+  it('leaves a time typed with a rule to the task’s date: “at 7pm” is never 7 in the morning', () => {
+    expect(ruleFromText('every monday at 7pm', now)).toBe('FREQ=WEEKLY;BYDAY=MO');
+    const p = parse('Gym every monday at 7pm');
+    expect(p.recurrence?.rrule).toBe('FREQ=WEEKLY;BYDAY=MO');
+    expect(p.due).toBe('2026-10-19T19:00');
+    expect(p.title).toBe('Gym');
+  });
+
+  it('keeps the day of a yearly rule on a date', () => {
+    expect(ruleFromText('every year on april 15', now)).toBe('FREQ=YEARLY;BYMONTH=4;BYMONTHDAY=15');
+    const p = parse('Taxes every year on april 15');
+    expect(p.title).toBe('Taxes');
+    expect(p.due).toBe('2027-04-15');
+  });
+
+  it('dates a time-only recurring task on an occurrence of its rule', () => {
+    expect(parse('Gym at 7pm every monday').due).toBe('2026-10-19T19:00');
+    expect(parse('Standup every weekday 9am').due).toBe('2026-10-19T09:00');
+    // Today is an occurrence and the time is still to come: today.
+    expect(parse('Market every saturday at 11am').due).toBe('2026-10-17T11:00');
+    // Today is an occurrence but the time has passed: the next one.
+    expect(parse('Market every saturday at 9am').due).toBe('2026-10-24T09:00');
+  });
+
+  it('takes the whole recurrence phrase out of the title, “when done” included', () => {
+    const p = parse('Read every day for 10 times');
+    expect(p.title).toBe('Read');
+    expect(p.recurrence?.rrule).toBe('FREQ=DAILY;COUNT=10');
+    const q = parse('Report every 2 weeks when done');
+    expect(q.title).toBe('Report');
+    expect(q.recurrence).toEqual({ rrule: 'FREQ=WEEKLY;INTERVAL=2', from: 'completion' });
+  });
+
   it('finds the first occurrence on or after a day', () => {
     expect(firstOccurrence('FREQ=WEEKLY;BYDAY=SA', '2026-10-17')).toBe('2026-10-17');
     expect(firstOccurrence('FREQ=MONTHLY;BYMONTHDAY=1', '2026-10-17')).toBe('2026-11-01');

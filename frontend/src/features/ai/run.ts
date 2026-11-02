@@ -5,11 +5,23 @@ import { ApiError, TransientError, errorMessage } from '../../api/client';
 import { queryClient } from '../../api/queryClient';
 import type { AiPrompt, AiSummarizeRequest } from '../../api/types';
 import { streamAi, type AiRequest } from './aiClient';
+import { documents } from '../../sync/instance';
 import { currentConversation, historyOf, useConversations } from './conversations';
 
 export const AI_STATUS_KEY = ['ai', 'status'] as const;
 
 const controllers = new Map<string, AbortController>();
+
+/** How long a question waits for the open notes to be saved. */
+const FLUSH_WAIT_MS = 4000;
+
+// A turn that leaves the history while its answer streams (its conversation deleted, or all of
+// them cleared) stops: the server would go on generating (and spending) for nothing.
+useConversations.subscribe((state, prev) => {
+  if (state.conversations === prev.conversations || controllers.size === 0) return;
+  const turns = new Set(state.conversations.flatMap((c) => c.turns.map((t) => t.id)));
+  for (const [turnId, controller] of controllers) if (!turns.has(turnId)) controller.abort();
+});
 
 /** User-facing text for a refused or failed request. */
 export function aiErrorText(e: unknown): string {
@@ -40,16 +52,23 @@ function run(request: AiRequest, prompt: AiPrompt, label: string): string {
   const controller = new AbortController();
   controllers.set(turnId, controller);
   const update = useConversations.getState().updateTurn;
-  void streamAi({ url: request.url, body } as AiRequest, {
-    start: (s) => update(conversationId, turnId, { sources: s.sources, omitted: s.omitted, excluded: s.excluded, model: s.model }),
-    delta: (d) => update(conversationId, turnId, (t) => ({ answer: t.answer + d.text })),
-    restart: (r) => update(conversationId, turnId, { answer: '', model: r.model }),
-    done: (d) => {
-      update(conversationId, turnId, { status: 'done', model: d.model, stopReason: d.stopReason, costUsd: d.costUsd }, true);
-      void queryClient.invalidateQueries({ queryKey: AI_STATUS_KEY });
-    },
-    error: (e) => update(conversationId, turnId, { status: 'error', error: e.message }, true),
-  }, controller.signal)
+  // The server reads the saved notes: what was typed in the last second is saved first (a save
+  // that fails, or takes longer than a few seconds, leaves the last saved text, which is what the
+  // server has anyway).
+  void Promise.race([documents.flushAll(), new Promise((r) => setTimeout(r, FLUSH_WAIT_MS))])
+    .catch(() => undefined)
+    .then(() =>
+      streamAi({ url: request.url, body } as AiRequest, {
+        start: (s) => update(conversationId, turnId, { sources: s.sources, omitted: s.omitted, excluded: s.excluded, model: s.model }),
+        delta: (d) => update(conversationId, turnId, (t) => ({ answer: t.answer + d.text })),
+        restart: (r) => update(conversationId, turnId, { answer: '', model: r.model }),
+        done: (d) => {
+          update(conversationId, turnId, { status: 'done', model: d.model, stopReason: d.stopReason, costUsd: d.costUsd }, true);
+          void queryClient.invalidateQueries({ queryKey: AI_STATUS_KEY });
+        },
+        error: (e) => update(conversationId, turnId, { status: 'error', error: e.message }, true),
+      }, controller.signal),
+    )
     .catch((e: unknown) => {
       if (e instanceof DOMException && e.name === 'AbortError') {
         update(conversationId, turnId, { status: 'stopped' }, true);

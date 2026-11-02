@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '../../api/endpoints';
 import { queryClient } from '../../api/queryClient';
 import { setTranscribeNewRecordings } from '../../features/voice/voiceNotes';
-import SettingsPage, { NoteWidthSlider, RemindersSection, TextSetting, VoiceRow } from './SettingsPage';
+import SettingsPage, { NoteWidthSlider, NumberSetting, OtherSectionError, RemindersSection, TextSetting, VoiceRow } from './SettingsPage';
 import { remindersApi } from '../../features/reminders/client';
 import { DEFAULT_SETTINGS } from '../../features/settings';
 import type { RemindersStatus, Settings } from '../../api/types';
@@ -173,5 +173,56 @@ describe('Settings and the user guide (DESIGN §6.45)', () => {
     expect(within(nav).getByRole('link', { name: 'Help and user guide' })).toHaveAttribute('href', '/x/help');
     expect(await screen.findByRole('link', { name: /How to use NotesApp, page by page/ })).toHaveAttribute('href', '/x/help');
     queryClient.clear();
+  });
+});
+
+describe('NumberSetting', () => {
+  function Budget({ onValue }: { onValue(v: number): void }) {
+    const [value, setValue] = useState(20);
+    return (
+      <NumberSetting
+        label="Monthly budget"
+        value={value}
+        disabled={false}
+        step={1}
+        min={0}
+        onChange={(v) => {
+          setValue(v);
+          onValue(v);
+        }}
+      />
+    );
+  }
+
+  it('clearing the field to type another number keeps the page working (NaN while it is not a number)', () => {
+    const values: number[] = [];
+    render(<Budget onValue={(v) => values.push(v)} />);
+    const input = screen.getByLabelText<HTMLInputElement>('Monthly budget');
+    fireEvent.change(input, { target: { value: '' } });
+    expect(input.value).toBe('');
+    expect(values.at(-1)).toBeNaN();
+    fireEvent.change(input, { target: { value: '35' } });
+    expect(input.value).toBe('35');
+    expect(values.at(-1)).toBe(35);
+  });
+});
+
+describe('Settings: a field that is not valid in another section', () => {
+  it('says so in the section being edited, where its own error is not seen', () => {
+    const errors = { templatesFolder: 'Not a valid folder path' };
+    const { rerender } = render(
+      <MemoryRouter>
+        <OtherSectionError errors={errors} section="files" />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('alert')).toHaveTextContent('Changes here are not saved while “Template folder location” under Templates is not valid.');
+    expect(screen.getByRole('link', { name: 'Templates' })).toHaveAttribute('href', '/settings/templates');
+    // In its own section the field shows its error itself.
+    rerender(
+      <MemoryRouter>
+        <OtherSectionError errors={errors} section="templates" />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 });

@@ -67,6 +67,7 @@ import { clearActiveCanvas, setActiveCanvas, type ActiveCanvas } from './active'
 import { CanvasTitle } from './CanvasTitle';
 import './canvas.css';
 import { CanvasController, type Gesture, type Viewport } from './controller';
+import { loadViewport, saveViewport } from './savedView';
 import { EdgeLabel, EdgeView } from './EdgeView';
 import {
   boundsOf,
@@ -97,38 +98,6 @@ import { setCanvasMerge } from './register';
 setCanvasMerge(mergeCanvas);
 
 const LOW_DETAIL_ZOOM = 0.45;
-const VIEW_KEY = 'notesapp:canvas-view:';
-
-/** Where this device last looked at a canvas: the world point at the middle of the stage, and the zoom. */
-interface SavedView {
-  cx: number;
-  cy: number;
-  zoom: number;
-}
-
-function loadViewport(path: string): SavedView | undefined {
-  try {
-    const raw = localStorage.getItem(VIEW_KEY + path);
-    if (!raw) return undefined;
-    const v = JSON.parse(raw) as SavedView;
-    return Number.isFinite(v.cx) && Number.isFinite(v.cy) && Number.isFinite(v.zoom) && v.zoom > 0 ? v : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function saveViewport(path: string, v: Viewport, stage: { width: number; height: number }): void {
-  try {
-    const saved: SavedView = {
-      cx: Math.round((stage.width / 2 - v.x) / v.zoom),
-      cy: Math.round((stage.height / 2 - v.y) / v.zoom),
-      zoom: Math.round(v.zoom * 1000) / 1000,
-    };
-    localStorage.setItem(VIEW_KEY + path, JSON.stringify(saved));
-  } catch {
-    // Storage full or disabled: the viewport is a convenience.
-  }
-}
 
 const baseRects = new WeakMap<CanvasNode, Rect>();
 

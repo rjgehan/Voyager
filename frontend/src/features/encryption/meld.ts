@@ -78,12 +78,13 @@ const SUFFIX_VISIBLE = ` ${LOCK}`;
 /**
  * Every section on one line: the commented form with its own suffix, else the visible one (which
  * needs its α or β mark, so words between two lock emoji are never taken for one). The payload
- * is base64 of 16 characters or more; the optional hint is anything up to the next 💡. The same
- * pattern is used by the server (EncryptedSections.java), so what search skips is exactly what
- * this finds.
+ * is base64 of 16 characters or more; the optional hint is anything up to the next 💡 (a hint
+ * never holds one; a lazy `[^\n]*?` rescanned the line from every start, quadratic on a long
+ * line). The same pattern is used by the server (EncryptedSections.java), so what search skips is
+ * exactly what this finds.
  */
 const SECTION = new RegExp(
-  `%%${LOCK}([αβ]?) (?:${HINT_MARK}([^\\n]*?)${HINT_MARK})?([A-Za-z0-9+/=]{16,}) ${LOCK}%%|${LOCK}([αβ]) (?:${HINT_MARK}([^\\n]*?)${HINT_MARK})?([A-Za-z0-9+/=]{16,}) ${LOCK}`,
+  `%%${LOCK}([αβ]?) (?:${HINT_MARK}([^\\n${HINT_MARK}]*)${HINT_MARK})?([A-Za-z0-9+/=]{16,}) ${LOCK}%%|${LOCK}([αβ]) (?:${HINT_MARK}([^\\n${HINT_MARK}]*)${HINT_MARK})?([A-Za-z0-9+/=]{16,}) ${LOCK}`,
   'gu',
 );
 

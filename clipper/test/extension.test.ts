@@ -120,7 +120,7 @@ describe('deliverClip', () => {
 
   it('waits for the page, posts the clip to its own origin and returns', async () => {
     const post = vi.spyOn(window, 'postMessage');
-    const done = deliverClip(message(false), 5000);
+    const done = deliverClip(message(false), 5000, window.location.origin);
     expect(post).not.toHaveBeenCalled();
     window.dispatchEvent(new MessageEvent('message', { data: { type: 'notesapp-clip-ready' }, origin: window.location.origin }));
     await expect(done).resolves.toEqual({ type: 'notesapp-clip-result', status: 'delivered' });
@@ -130,16 +130,27 @@ describe('deliverClip', () => {
   it('posts at once to a page that is already ready, and waits for its save', async () => {
     document.documentElement.dataset.notesappClip = 'ready';
     const post = vi.spyOn(window, 'postMessage').mockImplementation(() => undefined);
-    const done = deliverClip(message(true), 5000);
+    const done = deliverClip(message(true), 5000, window.location.origin);
     expect(post).toHaveBeenCalledTimes(1);
     window.dispatchEvent(new MessageEvent('message', { data: { type: 'notesapp-clip-result', status: 'saved', path: 'Clippings/T.md' }, origin: 'https://evil.example.com' }));
     window.dispatchEvent(new MessageEvent('message', { data: { type: 'notesapp-clip-result', status: 'saved', path: 'Clippings/T.md' }, origin: window.location.origin }));
     await expect(done).resolves.toMatchObject({ status: 'saved', path: 'Clippings/T.md' });
   });
 
+  it('never hands the clip to another site the tab ended up on', async () => {
+    // A sign-in page or a captive portal the app's address redirected to: with access to every
+    // site (for images) the script would run there, and the page could ask for the clip.
+    const post = vi.spyOn(window, 'postMessage');
+    document.documentElement.dataset.notesappClip = 'ready';
+    const done = deliverClip(message(true), 5000, 'https://notes.x.ts.net');
+    window.dispatchEvent(new MessageEvent('message', { data: { type: 'notesapp-clip-ready' }, origin: window.location.origin }));
+    await expect(done).resolves.toMatchObject({ status: 'failed' });
+    expect(post).not.toHaveBeenCalled();
+  });
+
   it('gives up after its time', async () => {
     vi.useFakeTimers();
-    const done = deliverClip(message(false), 1000);
+    const done = deliverClip(message(false), 1000, window.location.origin);
     vi.advanceTimersByTime(1000);
     await expect(done).resolves.toMatchObject({ status: 'timeout' });
     vi.useRealTimers();
@@ -207,6 +218,7 @@ describe('clipTab', () => {
     expect(b.tabs.create).toHaveBeenCalledWith({ url: 'https://notes.x.ts.net/clip?via=extension', active: true, openerTabId: 1 });
     expect(calls[2].target.tabId).toBe(99);
     expect(calls[2].args?.[0]).toMatchObject({ kind: 'clip', clip: CLIP, images: [], folder: 'Web', autoSave: false });
+    expect(calls[2].args?.[2]).toBe('https://notes.x.ts.net');
     expect(b.tabs.remove).not.toHaveBeenCalled();
   });
 

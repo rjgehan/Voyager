@@ -195,6 +195,33 @@ describe('VoiceRecorder', () => {
     expect(canRecord(env().env)).toBe(true);
   });
 
+  it('releases the microphone and the meter when the recorder cannot start after the microphone was granted', async () => {
+    // MediaRecorder's start() throws for an inactive stream (InvalidStateError), and its
+    // constructor for a type it cannot record: the microphone stayed on until the tab closed.
+    for (const failing of ['constructor', 'start'] as const) {
+      class Failing extends FakeRecorder {
+        constructor(stream: MediaStream, options?: MediaRecorderOptions) {
+          if (failing === 'constructor') throw new DOMException('Unsupported', 'NotSupportedError');
+          super(stream, options);
+        }
+        override start() {
+          throw new DOMException('The MediaStream is inactive', 'InvalidStateError');
+        }
+      }
+      const close = vi.fn(() => Promise.resolve());
+      const context = { createAnalyser: () => ({ fftSize: 0 }), createMediaStreamSource: () => ({ connect: vi.fn() }), resume: () => Promise.resolve(), close };
+      const AudioContext = vi.fn(function (this: unknown) {
+        return context;
+      }) as unknown as typeof window.AudioContext;
+      const { env: e, track } = env({ MediaRecorder: Failing as unknown as typeof MediaRecorder, AudioContext });
+      const r = new VoiceRecorder(e);
+      await expect(r.start()).rejects.toBeInstanceOf(DOMException);
+      expect(track.stopped).toBe(true);
+      expect(close).toHaveBeenCalled();
+      expect(r.status).toBe('idle');
+    }
+  });
+
   it('releases a microphone granted after the recording was cancelled', async () => {
     let grant!: (s: MediaStream) => void;
     const { stream, track } = fakeStream();

@@ -153,8 +153,12 @@ export function mergeElements(base: readonly SceneElement[], mine: readonly Scen
     if (!side) continue;
     let element = side === 'mine' ? mineEl! : theirsEl!;
     if (element.isDeleted) continue;
-    // Both changed it: a link that only the other side changed (a rename rewrote it there) stays.
+    // Both changed it: a link that only the other side changed (a rename rewrote it there) stays,
+    // and so does a text's Markdown source (with the text it shows) that only the other side changed.
     const other = side === 'mine' ? theirsEl : mineEl;
+    if (base && other && typeof base.rawText === 'string' && typeof other.rawText === 'string' && element.rawText === base.rawText && other.rawText !== base.rawText) {
+      element = { ...element, rawText: other.rawText, originalText: other.originalText, ...(deepEqual(element.text, base.text) ? { text: other.text } : {}) };
+    }
     const linkOf = (e: SceneElement) => loadedValue(e, 'link');
     if (base && other && deepEqual(linkOf(element), linkOf(base)) && !deepEqual(linkOf(other), linkOf(base))) element = { ...element, link: other.link };
     elements.push(element);
@@ -229,6 +233,8 @@ export function mergeDrawingTexts(format: DrawingFormat, baseText: string, mineT
     rawText: (e) => {
       const side = from.get(e.id);
       if (!side) return undefined;
+      // The merged element's own source (each side's parse took it from its section).
+      if (typeof e.rawText === 'string') return e.rawText;
       const own = sourceOf(side, e);
       const other = sourceOf(side === 'mine' ? 'theirs' : 'mine', e);
       return own !== undefined && own === baseTexts.get(e.id) && other !== undefined && other !== own ? other : own;

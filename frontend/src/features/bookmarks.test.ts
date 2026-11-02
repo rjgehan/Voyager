@@ -14,6 +14,7 @@ import {
   insertAt,
   itemAt,
   moveItem,
+  onItem,
   rekeyBookmarks,
   removeAll,
   removeAt,
@@ -168,6 +169,24 @@ describe('BookmarkWriter', () => {
       ['v1', ['A.md', 'B.md', 'C.md']],
     ]);
     expect(paths(t.writer.view(t.cache()?.items))).toEqual(['A.md', 'B.md', 'C.md']);
+  });
+
+  it('an edit of a bookmark finds it again after another device changed the list', async () => {
+    // Remove and Move used the index path the menu was opened on: replayed on the server's list
+    // after a conflict, they removed or moved the bookmark that had taken its place.
+    const a = file('A.md', { ctime: 1 });
+    const b = file('B.md', { ctime: 2 });
+    const c = file('C.md', { ctime: 3 });
+    const t = setup([a, b, c]);
+    t.setServer({ version: 'other', items: [b, c] });
+    await t.writer.edit(onItem(b, [1], (items, at) => removeAt(items, at)));
+    expect(paths(t.server().items)).toEqual(['C.md']);
+    // Gone meanwhile: nothing happens.
+    expect(onItem(a, [0], (items, at) => removeAt(items, at))([b, c])).toEqual([b, c]);
+    // Into a group that moved: the group is found again too.
+    const g = group('G', []);
+    const into = onItem(c, [2], (items, at) => moveItem(items, at, [0], Number.MAX_SAFE_INTEGER));
+    expect(paths(into([g, b, c]))).toEqual(['G', 'C.md', 'B.md']);
   });
 
   it('applies the edit again on top of another device’s change after a conflict', async () => {

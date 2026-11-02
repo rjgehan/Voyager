@@ -91,6 +91,16 @@ describe('SettingsWriter', () => {
     expect(s.notices.map(([m]) => m)).toEqual([expect.stringContaining('applied on top')]);
   });
 
+  it('a conflict keeps an edit of Ask and summaries', async () => {
+    const s = server();
+    s.foreign((x) => (x.editor.noteWidth = 'full'));
+    s.writer.update({ ...s.view(), ai: { ...s.view().ai, enabled: true } }, true);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(s.notices.map(([m]) => m)).toEqual([expect.stringContaining('applied on top')]);
+    expect(s.settings.editor.noteWidth).toBe('full');
+    expect(s.settings.ai.enabled).toBe(true);
+  });
+
   it('a debounced edit is written once typing pauses, staying on the page', async () => {
     const s = server();
     s.writer.update({ ...s.view(), templates: { ...s.view().templates, timeFormat: 'HH:mm:ss' } }, false);
@@ -147,6 +157,15 @@ describe('SettingsWriter', () => {
 });
 
 describe('applyDelta', () => {
+  it('takes the edits of every section, Ask and summaries and Reminders included', () => {
+    // A conflict re-applied only files, daily notes, templates and editor: a toggle under Ask
+    // and summaries or Reminders was dropped while the notice said it was applied.
+    const base = DEFAULT_SETTINGS;
+    const edited = { ...base, ai: { ...base.ai, enabled: true }, reminders: { ...base.reminders, ntfy: true } };
+    const theirs = { ...base, editor: { ...base.editor, noteWidth: 'full' as const }, ai: { ...base.ai, monthlyBudgetUsd: 42 } };
+    expect(applyDelta(base, edited, theirs)).toEqual({ ...theirs, ai: { ...theirs.ai, enabled: true }, reminders: { ...theirs.reminders, ntfy: true } });
+  });
+
   it('takes only the fields that were edited', () => {
     const base = DEFAULT_SETTINGS;
     const edited = { ...base, files: { ...base.files, useWikilinks: !base.files.useWikilinks } };

@@ -30,7 +30,7 @@ import { useTree } from '../../api/hooks';
 import type { BookmarkItem } from '../../api/types';
 import type { VaultTree } from '../../api/vaultTree';
 import { INTERNAL_PATH_TYPE } from '../../editor/pasteAndDrop';
-import { bookmarkLabel, fileBookmark, folderBookmark, groupsOf, insertAt, isGroup, itemAt, moveItem, removeAt, shiftItem, subpathTarget, type PlacedItem } from '../../features/bookmarks';
+import { bookmarkLabel, fileBookmark, folderBookmark, groupsOf, insertAt, isGroup, itemAt, locateItem, moveItem, onItem, removeAt, shiftItem, subpathTarget, type ItemPath, type PlacedItem } from '../../features/bookmarks';
 import { editBookmarks, isFileBookmarked, promptNewGroup, toggleFileBookmark, useBookmarks } from '../../features/bookmarkStore';
 import { isKeyboardClick } from '../../features/focus';
 import { isCoarsePointer } from '../../features/platform';
@@ -107,10 +107,18 @@ function menuItems(row: PlacedItem, all: readonly BookmarkItem[], tree: VaultTre
   entries.push({ id: 'rename', label: group ? 'Rename group…' : 'Rename…', icon: <Pencil size={16} />, run: () => void renameBookmark(item, path) });
   if (group) entries.push({ id: 'new-group', label: 'New group inside', icon: <FolderPlus size={16} />, run: () => void promptNewGroup(path) });
   entries.push('separator');
-  entries.push({ id: 'up', label: 'Move up', icon: <ArrowUp size={16} />, disabled: index === 0, run: () => void editBookmarks((items) => shiftItem(items, path, -1)) });
-  entries.push({ id: 'down', label: 'Move down', icon: <ArrowDown size={16} />, disabled: index >= siblings.length - 1, run: () => void editBookmarks((items) => shiftItem(items, path, 1)) });
+  // Each edit finds the bookmark again (the list may change while the menu is open, and an edit
+  // is applied again to another device's list after a conflict).
+  const edit = (fn: (items: BookmarkItem[], at: ItemPath) => BookmarkItem[]) => void editBookmarks(onItem(item, path, fn));
+  entries.push({ id: 'up', label: 'Move up', icon: <ArrowUp size={16} />, disabled: index === 0, run: () => edit((items, at) => shiftItem(items, at, -1)) });
+  entries.push({ id: 'down', label: 'Move down', icon: <ArrowDown size={16} />, disabled: index >= siblings.length - 1, run: () => edit((items, at) => shiftItem(items, at, 1)) });
   if (parent.length > 0) {
-    entries.push({ id: 'out', label: 'Move out of the group', icon: <FolderOutput size={16} />, run: () => void editBookmarks((items) => moveItem(items, path, parent.slice(0, -1), parent[parent.length - 1] + 1)) });
+    entries.push({
+      id: 'out',
+      label: 'Move out of the group',
+      icon: <FolderOutput size={16} />,
+      run: () => edit((items, at) => (at.length > 1 ? moveItem(items, at, at.slice(0, -2), at[at.length - 2] + 1) : items)),
+    });
   }
   const targets = groupsOf(all)
     // Not the group it is in, and never itself or a group inside it.
@@ -122,12 +130,16 @@ function menuItems(row: PlacedItem, all: readonly BookmarkItem[], tree: VaultTre
       id: `to:${g.path.join('.')}`,
       label: `Move to “${bookmarkLabel(g.item)}”`,
       icon: <FolderInput size={16} />,
-      run: () => void editBookmarks((items) => moveItem(items, path, g.path, Number.MAX_SAFE_INTEGER)),
+      run: () =>
+        edit((items, at) => {
+          const target = locateItem(items, g.item, g.path);
+          return target ? moveItem(items, at, target, Number.MAX_SAFE_INTEGER) : items;
+        }),
     });
   }
   entries.push('separator');
-  if (group) entries.push({ id: 'remove-group', label: 'Remove group (keep its bookmarks)', icon: <Trash2 size={16} />, danger: true, run: () => void removeGroup(path) });
-  else entries.push({ id: 'remove', label: 'Remove bookmark', icon: <Trash2 size={16} />, danger: true, run: () => void editBookmarks((items) => removeAt(items, path)) });
+  if (group) entries.push({ id: 'remove-group', label: 'Remove group (keep its bookmarks)', icon: <Trash2 size={16} />, danger: true, run: () => void removeGroup(path, item) });
+  else entries.push({ id: 'remove', label: 'Remove bookmark', icon: <Trash2 size={16} />, danger: true, run: () => edit(removeAt) });
   return entries;
 }
 
@@ -168,7 +180,7 @@ export default function BookmarksPanel({ activePath }: { activePath: string | nu
         void renameBookmark(row.item, row.path);
         break;
       case 'Delete':
-        void (isGroup(row.item) ? removeGroup(row.path) : editBookmarks((list) => removeAt(list, row.path)));
+        void (isGroup(row.item) ? removeGroup(row.path, row.item) : editBookmarks(onItem(row.item, row.path, removeAt)));
         break;
       case 'ContextMenu':
         openAt(row, el);
@@ -202,7 +214,8 @@ export default function BookmarksPanel({ activePath }: { activePath: string | nu
     const moving = e.dataTransfer.getData(BOOKMARK_DRAG_TYPE);
     if (moving) {
       const from = JSON.parse(moving) as number[];
-      void editBookmarks((list) => moveItem(list, from, parent, index));
+      const item = itemAt(items, from);
+      if (item) void editBookmarks(onItem(item, from, (list, at) => moveItem(list, at, parent, index)));
       return;
     }
     const path = e.dataTransfer.getData(INTERNAL_PATH_TYPE);

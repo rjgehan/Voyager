@@ -1,6 +1,8 @@
 // Per-device PDF state (DESIGN §6.8.3): the last page of recently read PDFs, so reopening one continues
 // where it was left, and whether pages are dimmed in the dark theme. Kept in localStorage like the
-// other per-device preferences; never in the vault.
+// other per-device preferences; never in the vault. Pages are remembered per vault (paths repeat).
+
+import { vaultKey } from '../../state/vault';
 
 const POSITIONS_KEY = 'notesapp:pdf-positions';
 const DARK_PAGES_KEY = 'notesapp:pdf-dark-pages';
@@ -11,7 +13,7 @@ type Positions = Record<string, number>;
 
 function readPositions(): Positions {
   try {
-    const parsed: unknown = JSON.parse(localStorage.getItem(POSITIONS_KEY) ?? '{}');
+    const parsed: unknown = JSON.parse(localStorage.getItem(vaultKey(POSITIONS_KEY)) ?? '{}');
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
     const out: Positions = {};
     for (const [path, page] of Object.entries(parsed as Record<string, unknown>)) {
@@ -36,7 +38,7 @@ export function rememberPage(path: string, page: number): void {
   const paths = Object.keys(positions);
   for (const old of paths.slice(0, Math.max(0, paths.length - MAX_POSITIONS))) delete positions[old];
   try {
-    localStorage.setItem(POSITIONS_KEY, JSON.stringify(positions));
+    localStorage.setItem(vaultKey(POSITIONS_KEY), JSON.stringify(positions));
   } catch {
     // Private mode or quota: the page is simply not remembered.
   }

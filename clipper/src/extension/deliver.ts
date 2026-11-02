@@ -2,10 +2,17 @@
 // from outside its own body): waits until the page is ready, posts it the clip, and, when the clip
 // saves itself, resolves with the page's result. Content scripts share the page's window, so the
 // message arrives from the app's own origin, which is how /clip knows it came from the extension.
+// It hands the clip over only while the tab shows NotesApp's origin.
 import type { ClipResultMessage, ExtractedClipMessage } from '../core/protocol';
 
-export function deliverClip(message: ExtractedClipMessage, waitMs: number): Promise<ClipResultMessage | { type: 'notesapp-clip-result'; status: 'delivered' | 'timeout' }> {
+export function deliverClip(message: ExtractedClipMessage, waitMs: number, origin: string): Promise<ClipResultMessage | { type: 'notesapp-clip-result'; status: 'delivered' | 'timeout' }> {
   return new Promise((resolve) => {
+    // The tab must still show NotesApp: after a redirect (a sign-in page, a captive portal) the clip
+    // would go to another site's page, which could ask for it with a ready message of its own.
+    if (window.location.origin !== origin) {
+      resolve({ type: 'notesapp-clip-result', status: 'failed', error: 'The NotesApp tab shows another site (signed out, or redirected), so the clip was not handed over.' });
+      return;
+    }
     let sent = false;
     const send = () => {
       if (sent) return;

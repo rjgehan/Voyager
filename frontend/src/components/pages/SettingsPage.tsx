@@ -122,6 +122,45 @@ function validate(s: Settings): Record<string, string> {
 }
 
 
+/** Where each validation error's field is: its section and its label. */
+const ERROR_FIELDS: Record<string, [SectionId, string]> = {
+  newNoteFolder: ['files', 'Folder for new notes'],
+  attachmentFolder: ['files', 'Attachment folder'],
+  attachmentSubfolder: ['files', 'Attachment subfolder name'],
+  excludedPaths: ['files', 'Excluded files'],
+  dailyFormat: ['daily', 'Date format'],
+  dailyFolder: ['daily', 'New file location'],
+  dailyTemplate: ['daily', 'Template file location'],
+  templatesFolder: ['templates', 'Template folder location'],
+  dateFormat: ['templates', 'Date format'],
+  timeFormat: ['templates', 'Time format'],
+  folderTemplates: ['templates', 'Folder templates'],
+  aiExcludedPaths: ['ai', 'Never send'],
+  aiMaxContext: ['ai', 'Context per request'],
+  aiBudget: ['ai', 'Monthly budget (USD)'],
+  reminderTime: ['reminders', 'Daily-note nudge'],
+};
+
+/**
+ * Vault settings are saved together, and never while one of them is not valid: a section says so
+ * when the invalid field is in another section, where its own error is not seen.
+ */
+export function OtherSectionError({ errors, section }: { errors: Record<string, string>; section: SectionId }) {
+  const other = Object.keys(errors)
+    .map((key) => ERROR_FIELDS[key])
+    .find((f) => f !== undefined && f[0] !== section);
+  if (!other) return null;
+  const [where, label] = other;
+  return (
+    <div className="banner banner-warning" role="alert">
+      <Info size={14} aria-hidden />
+      <span>
+        Changes here are not saved while “{label}” under <NavLink to={`/settings/${where}`}>{SECTIONS.find((s) => s.id === where)?.title}</NavLink> is not valid.
+      </span>
+    </div>
+  );
+}
+
 // ---------- vault settings writer ----------
 
 function useSettingsDraft(response: SettingsResponse | undefined) {
@@ -475,12 +514,13 @@ export function NoteWidthSlider({ value, onChange, disabled }: { value: number |
 }
 
 /** A number field that keeps what is typed and passes on the number (NaN while it is not one). */
-function NumberSetting({ value, onChange, disabled, label, step, min }: { value: number; onChange(v: number): void; disabled: boolean; label: string; step: number; min: number }) {
+export function NumberSetting({ value, onChange, disabled, label, step, min }: { value: number; onChange(v: number): void; disabled: boolean; label: string; step: number; min: number }) {
   const [text, setText] = useState(String(value));
   const [shown, setShown] = useState(value);
-  if (value !== shown) {
+  // Object.is: NaN (a cleared field) equals itself, so it is not a new value on every render.
+  if (!Object.is(value, shown)) {
     setShown(value);
-    if (Number(text) !== value) setText(String(value));
+    if (!Number.isNaN(value) && Number(text) !== value) setText(String(value));
   }
   return (
     <input
@@ -1120,6 +1160,7 @@ export default function SettingsPage() {
                 </div>
               )}
               {query.isError && <p className="field-error">{errorMessage(query.error)}</p>}
+              <OtherSectionError errors={errors} section={section} />
             </>
           )}
           {section === 'files' && <FilesSection {...props} />}

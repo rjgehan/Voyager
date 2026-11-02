@@ -64,6 +64,11 @@ describe('frontmatter', () => {
   it('reduces the published date to a day', () => {
     expect(publishedDate('2026-09-30T23:00:00-05:00')).toBe('2026-09-30');
     expect(publishedDate('Tue, 01 Sep 2026 10:00:00 GMT')).toBe('2026-09-01');
+    // Without a zone, the day as written (it was turned into UTC: the next day in the evening
+    // west of UTC, the day before in the morning east of it).
+    expect(publishedDate('October 21, 2026 11:30 PM')).toBe('2026-10-21');
+    expect(publishedDate('October 21, 2026 00:30')).toBe('2026-10-21');
+    expect(publishedDate('October 21, 2026')).toBe('2026-10-21');
     expect(publishedDate('last week')).toBeNull();
     expect(publishedDate(null)).toBeNull();
   });

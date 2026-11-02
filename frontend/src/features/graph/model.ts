@@ -85,7 +85,7 @@ export function graphTags(base: BaseGraph): string[] {
  * - Orphans (no link left after filtering) are hidden unless `showOrphans`.
  * - With `local`, only nodes up to `depth` links away from the note remain, walking the links
  *   allowed by `incoming` / `outgoing` (tags both ways); without `neighborLinks`, a link between
- *   two nodes at the same distance from the note is left out. The note itself always stays.
+ *   two nodes at the same distance from the note is left out. The file at the center always stays (also an attachment while attachments are hidden).
  */
 export function buildView(base: BaseGraph, o: FilterOptions, local?: LocalScope): ViewGraph {
   const n = base.nodes.length;
@@ -99,7 +99,7 @@ export function buildView(base: BaseGraph, o: FilterOptions, local?: LocalScope)
   const keep = new Uint8Array(n);
   for (let i = 0; i < n; i++) {
     const node = base.nodes[i]!;
-    if (node.type === 'attachment' && !o.showAttachments) continue;
+    if (node.type === 'attachment' && !o.showAttachments && i !== centerBase) continue;
     if (node.type === 'unresolved' && o.hideUnresolved) continue;
     if (search && !search(node) && i !== centerBase) continue;
     if (node.type === 'note' && i !== centerBase) {
@@ -169,6 +169,7 @@ export function buildView(base: BaseGraph, o: FilterOptions, local?: LocalScope)
   let center = -1;
   if (local) {
     center = index[centerBase]!;
+    if (center < 0) return { nodes: [], links: new Int32Array(0), center: -1 };
     const adjacency: number[][] = nodes.map(() => []);
     for (const [key, dir] of pairs) {
       const a = Math.floor(key / 0x200000);

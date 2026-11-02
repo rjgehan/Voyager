@@ -68,6 +68,14 @@ export function setProperty(text: string, key: string, value: PropertyValue | nu
     const replacement = value === null ? '' : serialize(name, value);
     next = yaml.slice(0, lineStart) + replacement + yaml.slice(end);
   }
+  // A property another one refers to (an anchor and its alias): the edit would break the block.
+  const check = parseDocument(next);
+  if (check.errors.length || check.warnings.some((w) => w.code === 'BAD_ALIAS')) throw new FrontmatterError('Changing this property would break the frontmatter');
+  try {
+    check.toJS();
+  } catch {
+    throw new FrontmatterError('Changing this property would break the frontmatter');
+  }
   return text.slice(0, yamlStart) + next + text.slice(yamlStart + yaml.length);
 }
 
@@ -79,5 +87,11 @@ export function getProperty(text: string, key: string): unknown {
   if (doc.errors.length || !isMap(doc.contents)) return undefined;
   const wanted = key.toLowerCase();
   const pair = (doc.contents.items as Pair[]).find((p) => keyOf(p)?.toLowerCase() === wanted);
-  return pair ? (doc.toJS() as Record<string, unknown>)[keyOf(pair)!] : undefined;
+  if (!pair) return undefined;
+  try {
+    return (doc.toJS() as Record<string, unknown>)[keyOf(pair)!];
+  } catch {
+    // An alias without its anchor.
+    return undefined;
+  }
 }

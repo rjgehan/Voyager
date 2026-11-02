@@ -98,6 +98,15 @@ describe('mergeCanvas', () => {
     expect(mergeCanvas(base, '{oops', base.replace('Project board', 'Board'))).toBeNull();
   });
 
+  it('keeps a node field named __proto__ (it is data in a file)', () => {
+    const b = '{"nodes":[{"id":"a","type":"text","text":"x","x":0,"y":0,"width":10,"height":10,"__proto__":{"k":1}},{"id":"b","type":"text","text":"y","x":0,"y":0,"width":10,"height":10}],"edges":[]}';
+    const mine = b.replace('"x":0,"y":0,"width":10,"height":10,"__proto__"', '"x":5,"y":0,"width":10,"height":10,"__proto__"');
+    const theirs = b.replace('"text":"x"', '"text":"X"');
+    const merged = mergeCanvas(b, mine, theirs)!;
+    expect(merged).toContain('"__proto__":{"k":1}');
+    expect(merged).toContain('"text":"X"');
+  });
+
   it('refuses to choose between conflicting unknown top-level data', () => {
     const mine = base.replace('"version":"1.0-1.0"', '"version":"2"');
     const theirs = base.replace('"version":"1.0-1.0"', '"version":"3"');

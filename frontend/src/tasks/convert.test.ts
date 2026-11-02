@@ -142,6 +142,25 @@ describe('Convert checkbox to task (ROADMAP item 4)', () => {
     expect(create.mock.calls[1][0]).toEqual({ title: 'Odd 🔁 every blue moon' });
   });
 
+  it('reads Obsidian Tasks’ “when done” as repeating from the completion', async () => {
+    const { session } = await open('- [ ] Water plants 🔁 every week when done 📅 2026-11-03\n- [ ] Odd 🔁 every blue moon when done\n');
+    const create = vi.fn(async (req: CreateTaskRequest) => created(req, `W${create.mock.calls.length}`));
+    await convertCheckbox(checkboxAt(session, 'Weekend.md', 3)!, create);
+    expect(create.mock.calls[0][0]).toEqual({ title: 'Water plants', due: '2026-11-03', recurrence: { rrule: 'FREQ=WEEKLY', from: 'completion' } });
+    // A rule it cannot read stays in the title as written.
+    await convertCheckbox(checkboxAt(session, 'Weekend.md', lineStart(session, '- [ ] Odd') + 3)!, create);
+    expect(create.mock.calls[1][0]).toEqual({ title: 'Odd 🔁 every blue moon when done' });
+  });
+
+  it('keeps a block id at the end of the line, out of the task’s title', async () => {
+    // Links to the line ([[Weekend#^rent]]) keep working only while the line ends with its id.
+    const { session } = await open('- [ ] Pay rent 📅 2026-11-01 ^rent\n');
+    const create = vi.fn(async (req: CreateTaskRequest) => created(req));
+    await convertCheckbox(checkboxAt(session, 'Weekend.md', 3)!, create);
+    expect(create.mock.calls[0][0]).toEqual({ title: 'Pay rent', due: '2026-11-01' });
+    expect(session.getText()).toBe('- [[Inbox.tasks#^T1|Pay rent]] ^rent\n');
+  });
+
   it('offers nothing on a line that is not an open checkbox', async () => {
     const { session } = await open('- [x] Done\nplain\n');
     expect(checkboxAt(session, 'Weekend.md', 2)).toBeNull();

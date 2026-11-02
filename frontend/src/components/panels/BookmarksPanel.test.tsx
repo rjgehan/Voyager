@@ -2,6 +2,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ApiError } from '../../api/client';
 import { api } from '../../api/endpoints';
 import { queryClient } from '../../api/queryClient';
 import { queryKeys } from '../../api/queryKeys';
@@ -119,6 +120,24 @@ describe('BookmarksPanel', () => {
     expect(put.mock.calls[0][0].items).toHaveLength(ITEMS.length - 1);
     await bookmarkWriter.idle();
     expect(queryClient.getQueryData(queryKeys.bookmarks())).toMatchObject({ version: 'v2' });
+  });
+
+  it('removes the bookmark its menu was opened on after another device changed the list', async () => {
+    // The server has the list without its first bookmark: the save conflicts and the removal is
+    // applied again to that list, where index 2 is the search, not the folder.
+    const server = { version: 'v9', items: ITEMS.slice(1) };
+    vi.spyOn(api, 'getBookmarks').mockImplementation(async () => server);
+    const put = vi.spyOn(api, 'putBookmarks').mockImplementation(async (req: BookmarksUpdateRequest) => {
+      if (req.baseVersion !== server.version) throw new ApiError({ type: 'urn:notesapp:problem:version-conflict', title: 'conflict', status: 409, code: 'version-conflict' });
+      return { version: 'v10', items: req.items };
+    });
+    renderPanel();
+    fireEvent.contextMenu(row('Projects'));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Remove bookmark' }));
+    await waitFor(() => expect(put).toHaveBeenCalledTimes(2));
+    await bookmarkWriter.idle();
+    const saved = put.mock.calls[1][0].items;
+    expect(saved.map((i) => i.path ?? i.query ?? i.title)).toEqual(['projects/plan.md', 'tag:#work', 'Reading', 'Gone.md']);
   });
 
   it('moves a bookmark into a group from its menu', async () => {

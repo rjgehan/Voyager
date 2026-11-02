@@ -162,6 +162,32 @@ export class VoiceRecorder {
       return;
     }
     this.#stream = stream;
+    try {
+      this.#record(stream, Recorder);
+    } catch (e) {
+      // The microphone was granted but the recorder cannot run (a type it cannot record, an
+      // inactive stream): the microphone and the meter are released, as when it was refused.
+      this.#recorder = null;
+      this.#done = null;
+      this.#finish();
+      this.#status = 'idle';
+      throw e;
+    }
+    if (this.#audio) {
+      try {
+        this.#audio.context.createMediaStreamSource(stream).connect(this.#audio.analyser);
+        void this.#audio.context.resume?.().catch(() => {});
+      } catch {
+        this.#closeAudio();
+      }
+    }
+    void this.#env.wakeLock?.().then((lock) => {
+      if (this.#status === 'recording' || this.#status === 'paused') this.#wakeLock = lock;
+      else void lock?.release().catch(() => {});
+    });
+  }
+
+  #record(stream: MediaStream, Recorder: typeof MediaRecorder): void {
     const mimeType = pickMimeType((t) => Recorder.isTypeSupported(t));
     const recorder = new Recorder(stream, { ...(mimeType ? { mimeType } : {}), audioBitsPerSecond: AUDIO_BITS_PER_SECOND });
     this.#recorder = recorder;
@@ -190,18 +216,6 @@ export class VoiceRecorder {
     this.#mimeType = recorder.mimeType || mimeType;
     this.#status = 'recording';
     this.#runningSince = this.#env.now();
-    if (this.#audio) {
-      try {
-        this.#audio.context.createMediaStreamSource(stream).connect(this.#audio.analyser);
-        void this.#audio.context.resume?.().catch(() => {});
-      } catch {
-        this.#closeAudio();
-      }
-    }
-    void this.#env.wakeLock?.().then((lock) => {
-      if (this.#status === 'recording' || this.#status === 'paused') this.#wakeLock = lock;
-      else void lock?.release().catch(() => {});
-    });
   }
 
   pause(): void {

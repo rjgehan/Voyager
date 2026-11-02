@@ -1,7 +1,8 @@
 // Graph view options (ROADMAP item 16, DESIGN §6.28). The names and ranges follow Obsidian's
 // `.obsidian/graph.json`, so an imported vault's graph settings carry over (ROADMAP item 24).
 // They are per-device preferences in localStorage, like the theme: the phone and the PC show the
-// graph at different sizes.
+// graph at different sizes. Each vault keeps its own (its folders, tags and groups).
+import { vaultKey } from '../../state/vault';
 
 export interface ColorGroup {
   query: string;
@@ -161,9 +162,10 @@ export function sanitizeLocalOptions(raw: unknown): LocalGraphOptions {
   };
 }
 
+/** Options of this vault (a folder or a group of one vault means nothing in another). */
 export function loadOptions<T>(key: string, sanitize: (raw: unknown) => T): T {
   try {
-    const raw = localStorage.getItem(key);
+    const raw = localStorage.getItem(vaultKey(key));
     return sanitize(raw ? JSON.parse(raw) : {});
   } catch {
     return sanitize({});
@@ -172,7 +174,7 @@ export function loadOptions<T>(key: string, sanitize: (raw: unknown) => T): T {
 
 export function saveOptions(key: string, options: object): void {
   try {
-    localStorage.setItem(key, JSON.stringify(options));
+    localStorage.setItem(vaultKey(key), JSON.stringify(options));
   } catch {
     // Private mode or quota: the options still apply to this page load.
   }

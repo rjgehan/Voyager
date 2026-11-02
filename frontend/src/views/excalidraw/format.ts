@@ -240,6 +240,8 @@ const COMMENT_LINE = /^%%[ \t]*$/;
 const ANY_HEADING = /^#{1,6} /;
 /** ` ^id` closing a text entry (the plugin's ids are 8 characters). */
 const TEXT_ID = /[ \t\n]\^([A-Za-z0-9_-]{8})[ \t]*(?:\n+|$)/g;
+/** The last line of a text entry. */
+const TEXT_ENTRY_END = /(?:^|[ \t])\^[A-Za-z0-9_-]{8}[ \t]*$/;
 const PLUGIN_FRONTMATTER = /^---\n(?:[^\n]*\n)*?excalidraw-plugin[ \t]*:/;
 /** The plugin's raw mode shows each text's Markdown source as it is (the default, parsed, shows links as their text). */
 const RAW_MODE_FRONTMATTER = /^---\n(?:[^\n]*\n)*?excalidraw-plugin[ \t]*:[ \t]*raw[ \t]*\n/;
@@ -344,14 +346,22 @@ export function markdownParts(text: string): MarkdownParts {
     if (!textSection && TEXT_HEADING.test(line.text)) {
       const from = lineEnd(text, line);
       let end = limit < lines.length ? lines[limit].from : text.length;
+      let endLine = limit;
+      // A heading ends the section only between entries (after one's ` ^id`, or right after the
+      // section's own heading): a text element may have a line `# Drawing` of its own.
+      let betweenEntries = true;
       for (let j = i + 1; j < limit; j++) {
         const t = lines[j].text;
-        if (TEXT_SECTION_END.test(t) || (COMMENT_LINE.test(t) && j + 1 === drawingLine)) {
+        if ((betweenEntries && TEXT_SECTION_END.test(t)) || (COMMENT_LINE.test(t) && j + 1 === drawingLine)) {
           end = lines[j].from;
+          endLine = j;
           break;
         }
+        if (t.trim() !== '') betweenEntries = TEXT_ENTRY_END.test(t);
       }
       textSection = { from, to: Math.max(from, end) };
+      // The section's lines are the texts' own: none of them starts another section.
+      i = endLine - 1;
     } else if (!embeddedSection && EMBEDDED_HEADING.test(line.text) && (!textSection || line.from >= textSection.to)) {
       embeddedSection = sectionAfter(i);
     }
@@ -435,6 +445,8 @@ function withSectionTexts(scene: Scene, parts: MarkdownParts): Scene {
   const elements = scene.elements.map((e) => {
     const raw = entries.get(e.id);
     if (!isLiveText(e) || raw === undefined || typeof e.rawText !== 'string' || e.rawText === raw) return e;
+    // An entry cannot start with a line break (it would end the entry before it): the same text.
+    if (e.rawText.replace(/^\n+/, '') === raw) return e;
     changed = true;
     const next: SceneElement = { ...e, rawText: raw };
     const link = firstLink(raw);

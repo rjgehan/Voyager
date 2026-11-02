@@ -42,6 +42,18 @@ describe('Meld Encrypt formats (item 27)', () => {
     expect(stripSections('no sections')).toBe('no sections');
   });
 
+  it('scans a long line of unclosed hint markers in linear time', () => {
+    // The lazy hint ran to the end of the line from every section start: 32 KB took seconds, on
+    // every keystroke and scroll of the editor (and in Ask your vault's stripping).
+    const line = '%%🔐β 💡'.repeat(4000);
+    const t = performance.now();
+    expect(findSections(line)).toEqual([]);
+    expect(stripSections(line)).toBe(line);
+    expect(performance.now() - t).toBeLessThan(500);
+    // A hint still runs to the next 💡.
+    expect(findSections(`%%🔐β 💡a b c💡${B64} 🔐%%`)[0]).toMatchObject({ hint: 'a b c', base64: B64 });
+  });
+
   it('locates a section at a position and at its exact start', () => {
     const text = `before ${formatSection(B64, '')} after`;
     expect(sectionAt(text, 10)?.base64).toBe(B64);

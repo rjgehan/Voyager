@@ -183,6 +183,8 @@ export function startVoiceNote(session: DocumentSession): void {
     },
     (e: unknown) => {
       if (active !== a) return;
+      // Whatever was granted is released (the recorder does so itself; this is the backstop).
+      recorder.cancel();
       end(a);
       toast(recordingErrorMessage(e), { kind: 'error' });
     },

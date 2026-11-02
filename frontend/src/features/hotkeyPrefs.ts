@@ -32,8 +32,10 @@ function read(): HotkeyOverrides {
   try {
     text = localStorage.getItem(HOTKEYS_KEY);
   } catch {
-    // Private mode: defaults only, or what this page set.
-    return cache ?? {};
+    // Private mode: defaults only, or what this page set (the same object on every read, which
+    // useSyncExternalStore needs).
+    cache ??= {};
+    return cache;
   }
   if (cache === null || text !== raw) {
     raw = text;

@@ -177,6 +177,35 @@ describe('CanvasController and the document session', () => {
     expect(controller.getState().doc).toBe(doc);
     expect(moveNodes(doc, new Set([PLAN]), 0, 0)).toBe(doc);
   });
+
+  it('keeps its undo and redo steps through Mod-Z pressed while it is read-only', async () => {
+    const { controller } = await setup();
+    const set = (p: object) => (controller as unknown as { set(p: object): void }).set(p);
+    controller.updateNode(TEXT, { text: 'Changed' });
+    set({ readOnly: true });
+    controller.undo();
+    set({ readOnly: false });
+    expect(controller.getState().canUndo).toBe(true);
+    controller.undo();
+    expect(controller.getState().canRedo).toBe(true);
+    set({ readOnly: true });
+    controller.redo();
+    set({ readOnly: false });
+    expect(controller.getState().canRedo).toBe(true);
+  });
+});
+
+describe('CanvasController viewport of a hand-written file', () => {
+  it('keeps a usable view when coordinates overflow the bounds to infinity', async () => {
+    const { controller } = await setup(
+      '{"nodes":[{"id":"a","type":"text","text":"x","x":0,"y":0,"width":250,"height":60},{"id":"b","type":"text","text":"far","x":1e308,"y":0,"width":1e308,"height":60}],"edges":[]}',
+    );
+    controller.setStage(1000, 800);
+    controller.zoomToFit();
+    controller.panBy(10, 10);
+    const v = controller.getState().view;
+    expect(Number.isFinite(v.x) && Number.isFinite(v.y) && Number.isFinite(v.zoom)).toBe(true);
+  });
 });
 
 describe('CanvasController viewport', () => {
