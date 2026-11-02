@@ -137,6 +137,16 @@ describe('rich blocks while editing (Live Preview)', () => {
     expect(view.contentDOM.textContent).toContain('$E=mc^2$');
   });
 
+  it('inline math over a soft line break shows as typed, and the note opens (and edits)', () => {
+    const text = 'The sum $a +\nb$ is small, and $E=mc^2$ too.\n\nEnd';
+    const view = noteEditor(text, { ctx: testContext(app) });
+    expect(view.contentDOM.querySelectorAll('.cm-lp-math')).toHaveLength(1);
+    expect(view.contentDOM.textContent).toContain('$a +');
+    view.dispatch({ changes: { from: text.length, insert: '!' } });
+    view.dispatch({ selection: { anchor: 0 } });
+    expect(view.state.doc.toString().endsWith('End!')).toBe(true);
+  });
+
   it('source mode shows the text', () => {
     const view = noteEditor(NOTE, { mode: 'source', ctx: testContext(app) });
     expect(view.contentDOM.querySelector('.cm-lp-rich, .cm-lp-math')).toBeNull();

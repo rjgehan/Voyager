@@ -269,6 +269,9 @@ function buildMath(view: EditorView): DecorationSet {
         const marks = node.node.getChildren('InlineMathMark');
         if (marks.length < 2) return false;
         if (reveal && touches(state, node.from, node.to)) return false;
+        // Math over a soft line break (`$a +⏎b$`) shows as typed: a view plugin's replaced range
+        // may not cross a line break (the editor would throw, and the note not open).
+        if (state.doc.lineAt(node.from).to < node.to) return false;
         const open = marks[0];
         const close = marks[marks.length - 1];
         const tex = state.sliceDoc(open.to, close.from);
