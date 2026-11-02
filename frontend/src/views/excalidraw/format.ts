@@ -445,6 +445,8 @@ function withSectionTexts(scene: Scene, parts: MarkdownParts): Scene {
   const elements = scene.elements.map((e) => {
     const raw = entries.get(e.id);
     if (!isLiveText(e) || raw === undefined || typeof e.rawText !== 'string' || e.rawText === raw) return e;
+    // An entry cannot start with a line break (it would end the entry before it): the same text.
+    if (e.rawText.replace(/^\n+/, '') === raw) return e;
     changed = true;
     const next: SceneElement = { ...e, rawText: raw };
     const link = firstLink(raw);

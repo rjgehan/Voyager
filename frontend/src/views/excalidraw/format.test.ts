@@ -293,6 +293,15 @@ describe('texts with a line like a section heading', () => {
   }
 });
 
+describe('texts that start with a line break', () => {
+  it('keep it after a save and a reload (the section cannot hold it, the JSON can)', () => {
+    const d0 = parsed('markdown', markdownDrawing({ texts: [['Ab12Cd34', 'First'], ['Xy98Zw76', 'Second']], scene: scene([text('Ab12Cd34', 'First'), text('Xy98Zw76', 'Second')]) }));
+    const typed = '\nSecond';
+    const out = writeDrawing(d0, { ...d0.scene, elements: d0.scene.elements.map((e) => (e.id === 'Xy98Zw76' ? { ...e, text: typed, originalText: typed, rawText: typed, version: 2 } : e)) });
+    expect(parsed('markdown', out).scene.elements.find((e) => e.id === 'Xy98Zw76')).toMatchObject({ text: typed, originalText: typed, rawText: typed });
+  });
+});
+
 describe('Element Links (Obsidian Excalidraw)', () => {
   const linked = scene([
     text('Ab12Cd34', 'Hello', { link: '[[Old]]' }),
