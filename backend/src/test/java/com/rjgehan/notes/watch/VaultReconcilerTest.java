@@ -1,10 +1,23 @@
 package com.rjgehan.notes.watch;
 
+import java.io.IOException;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.AclEntry;
+import java.nio.file.attribute.AclEntryPermission;
+import java.nio.file.attribute.AclEntryType;
+import java.nio.file.attribute.AclFileAttributeView;
 import java.nio.file.attribute.FileTime;
+import java.nio.file.attribute.PosixFileAttributeView;
+import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.UserPrincipal;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.EnumSet;
+import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -25,6 +38,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /** The per-path reconcile that services run inline; the watcher and full rescan build on it. */
 class VaultReconcilerTest {
@@ -170,6 +184,58 @@ class VaultReconcilerTest {
 		this.vault.hub.published.clear();
 		assertThat(this.vault.reconciler.fullRescan(false)).isZero();
 		assertThat(this.vault.hub.published).isEmpty();
+	}
+
+	/** Takes away the right to list {@code folder} (POSIX permissions or a Windows deny entry) until closed. */
+	private static AutoCloseable denyListing(Path folder) throws IOException {
+		PosixFileAttributeView posix = Files.getFileAttributeView(folder, PosixFileAttributeView.class);
+		if (posix != null) {
+			Set<PosixFilePermission> original = posix.readAttributes().permissions();
+			posix.setPermissions(EnumSet.noneOf(PosixFilePermission.class));
+			return () -> posix.setPermissions(original);
+		}
+		AclFileAttributeView acl = Files.getFileAttributeView(folder, AclFileAttributeView.class);
+		assumeTrue(acl != null, "no POSIX permissions and no ACLs");
+		List<AclEntry> original = acl.getAcl();
+		UserPrincipal me = folder.getFileSystem()
+			.getUserPrincipalLookupService()
+			.lookupPrincipalByName(System.getProperty("user.name"));
+		List<AclEntry> denied = new ArrayList<>(original);
+		denied.add(0, AclEntry.newBuilder()
+			.setType(AclEntryType.DENY)
+			.setPrincipal(me)
+			.setPermissions(AclEntryPermission.LIST_DIRECTORY)
+			.build());
+		acl.setAcl(denied);
+		return () -> acl.setAcl(original);
+	}
+
+	@Test
+	void aFolderThatCannotBeListedKeepsItsFiles() throws Exception {
+		this.vault.files.createText("Locked/a.md", "a", OnConflict.FAIL, TestVault.ALICE, "client-a1");
+		this.vault.flush();
+		this.vault.hub.published.clear();
+		Path folder = this.dir.resolve("Locked");
+		try (AutoCloseable restore = denyListing(folder)) {
+			boolean listable;
+			try (DirectoryStream<Path> children = Files.newDirectoryStream(folder)) {
+				listable = true;
+			}
+			catch (IOException ex) {
+				listable = false;
+			}
+			assumeTrue(!listable, "the folder can still be listed (running as root?)");
+			// Its permissions changed, not its contents: nothing may be announced or committed as deleted.
+			assertThat(this.vault.reconciler.fullRescan(false)).isZero();
+			reconcile("Locked/a.md");
+			assertThat(this.vault.index.file("Locked/a.md")).isNotNull();
+			assertThat(this.vault.hub.published).isEmpty();
+			assertThat(this.vault.batcher.isPending("Locked/a.md")).isFalse();
+		}
+		assertThat(this.vault.reconciler.fullRescan(false)).isZero();
+		Files.delete(folder.resolve("a.md"));
+		reconcile("Locked/a.md");
+		assertThat(this.vault.index.file("Locked/a.md")).isNull();
 	}
 
 	@Test
