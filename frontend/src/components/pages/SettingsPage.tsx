@@ -151,8 +151,10 @@ export function OtherSectionError({ errors, section }: { errors: Record<string, 
   const [where, label] = other;
   return (
     <div className="banner banner-warning" role="alert">
-      <Info size={14} aria-hidden /> Changes here are not saved while “{label}” under{' '}
-      <NavLink to={`/settings/${where}`}>{SECTIONS.find((s) => s.id === where)?.title}</NavLink> is not valid.
+      <Info size={14} aria-hidden />
+      <span>
+        Changes here are not saved while “{label}” under <NavLink to={`/settings/${where}`}>{SECTIONS.find((s) => s.id === where)?.title}</NavLink> is not valid.
+      </span>
     </div>
   );
 }
