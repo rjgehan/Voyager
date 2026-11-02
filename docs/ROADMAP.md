@@ -91,6 +91,7 @@ DESIGN.md has the details.
 | 38 | Ops polish: JDK 25 runtime, faster start, app-error alerts, status page | M | S | |
 | 41 | **Desktop app (Windows and macOS) with live sync** *(new, 2026-10-17)* | M | M | 7 for quick capture; 8 for offline |
 | 42 | **Notes ↔ sheets linking: editable sheet embeds, sheets reading notes, notes reading sheets** *(new, approved 2026-11-02; built 2026-11-02, `feat/notes-sheets`)* | H | M | 6, 39, 10, 40 |
+| 44 | Security audit follow-ups *(proposed 2026-11-02, not approved)* | M | M | |
 
 ---
 
@@ -1259,6 +1260,16 @@ Deviations and limits:
 - The embedded grid has no fill handle, frozen panes, column resizing, number-format dialog or charts editor: **Open full sheet** has them. Cut in an embed clears the cells at once (the spreadsheet view moves them on paste).
 - Search and other devices' read-only tables show a spreadsheet's note-derived values as of its last save.
 - Item 6's embed note ("Embeds in Live Preview") is superseded: Live Preview renders embeds, and spreadsheets edit there.
+
+### 44. Security audit follow-ups *(proposed 2026-11-02, not approved)*
+
+The audit of 2026-11-02 (docs/SECURITY.md) fixed what could be fixed in small steps; these are the residual risks that need a decision or a larger change. Each is independent.
+
+- **a. A CasaOS layout that does not open the app's port to the LAN** (R1, F5: in the simple layout any LAN device can forge the identity headers until the firewall rules are applied). Options: `network_mode: host` with `SERVER_ADDRESS: 127.0.0.1`, so the app listens on the host's loopback only and `tailscale serve` keeps reaching it; or make the sidecar layout the recommended one. Needs a test on a real CasaOS host, and the user pastes the new compose file once. **S**.
+- **b. Formulas off the page's thread** (R6, F10: `MMULT`/`SEQUENCE` over hundreds of rows freeze the tab for seconds to minutes, in note tables, `.sheet` files and scripts). Evaluate in a worker with a deadline, or cap the size of arrays a formula may build. **M**.
+- **c. PDF text extraction in a child process** with its own small heap (R4, F3), so a crafted PDF costs nothing instead of one restart. **S**.
+- **d. Scripts in notes default to *Ask before running*** (R3), at least for notes that arrived from elsewhere (an import, a clip, a file created outside the app). **S**.
+- **e. Web Push connections pinned to the checked address** (R5, DNS rebinding), with a socket factory that refuses non-public peers at connect time. **S**, low value: only an admitted caller can subscribe.
 
 ---
 

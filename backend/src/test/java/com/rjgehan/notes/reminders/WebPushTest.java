@@ -110,6 +110,19 @@ class WebPushTest {
 	}
 
 	@Test
+	void theKeyFileAndASecretsFolderTheAppCreatesAreTheOwnersAlone() throws Exception {
+		// Security audit (docs/SECURITY.md, F8): created owner-only, never readable by others even for a moment.
+		org.junit.jupiter.api.Assumptions
+			.assumeTrue(this.dir.getFileSystem().supportedFileAttributeViews().contains("posix"));
+		PushStore store = new PushStore(this.dir.resolve("new-secrets/push.json"), MAPPER);
+		store.ensureVapid();
+		assertThat(java.nio.file.attribute.PosixFilePermissions
+			.toString(Files.getPosixFilePermissions(this.dir.resolve("new-secrets")))).isEqualTo("rwx------");
+		assertThat(java.nio.file.attribute.PosixFilePermissions
+			.toString(Files.getPosixFilePermissions(this.dir.resolve("new-secrets/push.json")))).isEqualTo("rw-------");
+	}
+
+	@Test
 	void aMalformedFileMakesWebPushUnavailable() throws Exception {
 		Files.writeString(this.dir.resolve("push.json"), "[1]");
 		PushStore store = new PushStore(this.dir.resolve("push.json"), MAPPER);
@@ -136,7 +149,8 @@ class WebPushTest {
 		Files.write(this.dir.resolve("push.json"), MAPPER.writeValueAsBytes(root));
 		store = new PushStore(this.dir.resolve("push.json"), MAPPER);
 		assertThat(store.subscriptions()).hasSize(1);
-		WebPushRoute route = new WebPushRoute(store, new WebPushSender()::send, MAPPER, TestVault.newClock(),
+		// The test's push service is on this machine, which the real sender refuses: no address check here.
+		WebPushRoute route = new WebPushRoute(store, new WebPushSender(null)::send, MAPPER, TestVault.newClock(),
 				"https://notes.example.ts.net");
 
 		ReminderMessage message = new ReminderMessage("task:t1:2026-10-16T12:05", "task", "t1", "2026-10-16T12:05",
@@ -197,6 +211,66 @@ class WebPushTest {
 		assertThat(MAPPER.readTree(work.payload(nudge)).get("tag").asString()).isEqualTo("v/work:daily:2026-10-16");
 		assertThat(WebPushRoute.topic(work.tag(nudge.key()))).isNotEqualTo(WebPushRoute.topic(main.tag(nudge.key())))
 			.hasSize(16);
+	}
+
+	@Test
+	void subscriptionsToThisMachineThePrivateNetworksOrTheTailnetAreRefused() throws Exception {
+		// Security audit (docs/SECURITY.md, F4): the endpoint is the one destination an API caller picks.
+		PushStore store = new PushStore(this.dir.resolve("push.json"), MAPPER);
+		KeyPair device = WebPushCrypto.generateKeyPair();
+		String p256dh = base64Url(WebPushCrypto.encodePublic((ECPublicKey) device.getPublic()));
+		String auth = base64Url(new byte[16]);
+		for (String endpoint : List.of("https://localhost/x", "https://notes.localhost/x", "https://127.0.0.1:8080/x",
+				"https://[::1]/x", "https://0.0.0.0/x", "https://10.1.2.3/x", "https://172.17.0.1:2375/x",
+				"https://192.168.1.1/x", "https://169.254.169.254/latest/meta-data/", "https://100.101.102.103/x",
+				"https://[fd7a:115c:a1e0::1]/x", "https://[fe80::1]/x", "https://[::ffff:10.0.0.1]/x",
+				"https://[64:ff9b::a00:1]/x", "https://[2002:c0a8:101::1]/x", "https://2130706433/x")) {
+			assertThatThrownBy(() -> store.subscribe(endpoint, p256dh, auth, "Phone", Instant.EPOCH)).as(endpoint)
+				.isInstanceOf(PushStore.InvalidSubscriptionException.class)
+				.hasMessageContaining("endpoint");
+		}
+		assertThat(store.subscribe("https://fcm.googleapis.com/fcm/send/abc", p256dh, auth, "Phone", Instant.EPOCH))
+			.isNotNull();
+		assertThat(store.subscribe("https://[2001:4860:4860::8888]/x", p256dh, auth, "Phone", Instant.EPOCH)).isNotNull();
+	}
+
+	@Test
+	void nothingIsSentToAnEndpointThatResolvesToAPrivateAddress() throws Exception {
+		PushStore store = new PushStore(this.dir.resolve("push.json"), MAPPER);
+		KeyPair device = WebPushCrypto.generateKeyPair();
+		PushStore.Vapid vapid = store.ensureVapid();
+		String p256dh = base64Url(WebPushCrypto.encodePublic((ECPublicKey) device.getPublic()));
+		// Written by hand, as by an older version or a hand edit: the check at send time is the one that counts.
+		PushStore.Subscription local = new PushStore.Subscription("id1", localEndpoint(), p256dh,
+				base64Url(new byte[16]), "Phone", Instant.EPOCH, null, null, null);
+		WebPushSender.Result direct = new WebPushSender().send(local, new byte[] { 1 }, vapid,
+				"https://notes.example.ts.net", null, Instant.EPOCH);
+		assertThat(direct.delivered()).isFalse();
+		assertThat(direct.error()).isEqualTo(WebPushSender.NOT_PUBLIC);
+
+		// A name is judged by what it resolves to (here, a rebinding name that points at the LAN).
+		PushStore.Subscription named = new PushStore.Subscription("id2",
+				"http://push.rebind.example:" + this.server.getAddress().getPort() + "/push/abc", p256dh,
+				base64Url(new byte[16]), "Phone", Instant.EPOCH, null, null, null);
+		WebPushSender rebinding = new WebPushSender((host) -> new java.net.InetAddress[] {
+				java.net.InetAddress.getByName("93.184.215.14"), java.net.InetAddress.getByName("192.168.1.20") });
+		assertThat(rebinding.send(named, new byte[] { 1 }, vapid, "https://notes.example.ts.net", null, Instant.EPOCH)
+			.error()).isEqualTo(WebPushSender.NOT_PUBLIC);
+		assertThat(this.bodies).isEmpty();
+	}
+
+	@Test
+	void onlyPublicAddressesArePublic() throws Exception {
+		for (String address : List.of("127.0.0.1", "10.0.0.1", "172.31.255.255", "192.168.0.1", "169.254.169.254",
+				"100.64.0.1", "100.127.255.255", "0.0.0.0", "224.0.0.1", "255.255.255.255", "198.18.0.1", "192.0.2.1",
+				"::1", "::", "fe80::1", "fec0::1", "fc00::1", "fd7a:115c:a1e0::53", "ff02::1", "::ffff:127.0.0.1",
+				"::127.0.0.1", "64:ff9b::7f00:1", "2002:a00:1::", "2001:db8::1")) {
+			assertThat(PublicAddresses.isPublic(java.net.InetAddress.getByName(address))).as(address).isFalse();
+		}
+		for (String address : List.of("8.8.8.8", "142.250.80.10", "100.63.255.255", "100.128.0.1", "172.32.0.1",
+				"2001:4860:4860::8888", "2a00:1450:4001::200e", "64:ff9b::808:808", "2002:808:808::")) {
+			assertThat(PublicAddresses.isPublic(java.net.InetAddress.getByName(address))).as(address).isTrue();
+		}
 	}
 
 	@Test

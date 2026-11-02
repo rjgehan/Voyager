@@ -19,7 +19,6 @@ import java.security.interfaces.ECPublicKey;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 
 import com.rjgehan.notes.config.NotesProperties;
 import com.rjgehan.notes.vaults.ServerWide;
@@ -307,7 +306,7 @@ public class PushStore {
 		if (uri.getRawUserInfo() != null || uri.getRawFragment() != null) {
 			return "endpoint must not contain credentials or a fragment";
 		}
-		return null;
+		return PublicAddresses.hostError(uri.getHost());
 	}
 
 	private static String cleanName(@Nullable String name) {
@@ -408,26 +407,26 @@ public class PushStore {
 		}
 		byte[] bytes = this.mapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(root);
 		Path dir = this.file.toAbsolutePath().getParent();
-		Files.createDirectories(dir);
+		boolean posix = dir.getFileSystem().supportedFileAttributeViews().contains("posix");
+		if (posix && !Files.isDirectory(dir)) {
+			// A secrets directory the app creates is the owner's alone, as DEPLOY.md has the user create it.
+			Files.createDirectories(dir, PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwx------")));
+		}
+		else {
+			Files.createDirectories(dir);
+		}
 		Path tmp = dir.resolve("." + FILE_NAME + ".tmp");
+		Files.deleteIfExists(tmp);
+		if (posix) {
+			// Created owner-only, so the private key is never readable by others, not even until a chmod.
+			Files.createFile(tmp, PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------")));
+		}
 		Files.write(tmp, bytes);
-		ownerOnly(tmp);
 		try {
 			Files.move(tmp, this.file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
 		}
 		catch (AtomicMoveNotSupportedException ex) {
 			Files.move(tmp, this.file, StandardCopyOption.REPLACE_EXISTING);
-		}
-	}
-
-	private static void ownerOnly(Path path) {
-		if (!System.getProperty("os.name", "").toLowerCase(Locale.ROOT).startsWith("windows")) {
-			try {
-				Files.setPosixFilePermissions(path, PosixFilePermissions.fromString("rw-------"));
-			}
-			catch (IOException | UnsupportedOperationException ex) {
-				// Best effort: the secrets directory itself should not be readable by others.
-			}
 		}
 	}
 

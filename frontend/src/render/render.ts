@@ -16,6 +16,7 @@ import { isInternalDestination, isWhitespace, matchWikiLinkAt, parseMarkdownDest
 import { blockSubpathId, extractBlock } from '../features/blocks';
 import { isMarkdownViewPath } from '../views/registry';
 import { richMarkdown } from './rich';
+import { isRemoteUrl, removeRemoteLoads, safeInlineStyle } from './urlSafety';
 import { findSections, LOCK, sectionStartingAt } from '../features/encryption/meld';
 
 export interface RenderContext {
@@ -493,23 +494,6 @@ function newNonce(): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-const REMOTE_URL = /^\s*(?:https?:)?\/\//i;
-const CSS_URL = /url\s*\(|image-set\s*\(/i;
-
-/**
- * A declaration as the browser reads it: CSS escapes (`u\72l(`, `f\ixed`) decoded and comments
- * dropped, so the checks below see `url(` and `fixed` however they are written.
- */
-function cssPlain(decl: string): string {
-  return decl
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/\\([0-9a-fA-F]{1,6})[ \t\n\r\f]?|\\([^\n\r\f0-9a-fA-F])/g, (_m, hex: string | undefined, ch: string | undefined) => {
-      if (ch !== undefined) return ch;
-      const code = Number.parseInt(hex!, 16);
-      return code > 0 && code <= 0x10ffff && (code < 0xd800 || code > 0xdfff) ? String.fromCodePoint(code) : '�';
-    });
-}
-
 let purifier: ReturnType<typeof DOMPurify> | null = null;
 
 function purify(): ReturnType<typeof DOMPurify> {
@@ -528,24 +512,15 @@ function purify(): ReturnType<typeof DOMPurify> {
     const blockRemote = pass !== null && !pass.loadRemoteImages;
     const style = node.getAttribute('style');
     if (style) {
-      const cleaned = style
-        .split(';')
-        .filter((decl) => {
-          const plain = cssPlain(decl);
-          const [prop, value = ''] = plain.split(':').map((s) => s.trim().toLowerCase());
-          if (prop === 'z-index') return false;
-          if (prop === 'position' && /fixed|sticky/.test(value)) return false;
-          // "Load remote images: off" covers CSS backgrounds as well (tracking pixels).
-          if (blockRemote && CSS_URL.test(plain)) return false;
-          return decl.trim() !== '';
-        })
-        .join(';');
+      // "Load remote images: off" covers CSS backgrounds as well (tracking pixels).
+      const cleaned = safeInlineStyle(style, blockRemote);
       if (cleaned) node.setAttribute('style', cleaned);
       else node.removeAttribute('style');
     }
     if (node.tagName === 'A') {
       const href = node.getAttribute('href') ?? '';
-      if (/^[a-z][a-z0-9+.-]*:/i.test(href) || href.startsWith('//')) {
+      // Resolved as well as matched: `/\host` and `https:\\host` lead to another site too.
+      if (/^[a-z][a-z0-9+.-]*:/i.test(href) || href.startsWith('//') || (href !== '' && isRemoteUrl(href))) {
         node.setAttribute('target', '_blank');
         node.setAttribute('rel', 'noopener noreferrer');
       }
@@ -565,15 +540,15 @@ const SANITIZE_CONFIG = {
 
 /**
  * "Load remote images: off" (DESIGN §6.7) for raw HTML too: `<img>` from other sites becomes the
- * same click-to-load placeholder as a Markdown image, and remote media sources are dropped, so
- * opening a clipped note fetches nothing from other hosts.
+ * same click-to-load placeholder as a Markdown image, and every other remote load (media sources,
+ * srcsets, SVG references) is dropped, so opening a clipped note fetches nothing from other hosts.
+ * URLs are resolved as the browser resolves them (urlSafety.ts), whatever their spelling.
  */
 function blockRemoteMedia(fragment: DocumentFragment): void {
   for (const img of fragment.querySelectorAll('img')) {
-    const srcset = img.getAttribute('srcset');
-    if (srcset !== null && REMOTE_URL.test(srcset)) img.removeAttribute('srcset');
+    img.removeAttribute('srcset');
     const src = img.getAttribute('src') ?? '';
-    if (!REMOTE_URL.test(src)) continue;
+    if (!isRemoteUrl(src)) continue;
     const placeholder = document.createElement('span');
     placeholder.className = 'remote-image-placeholder';
     placeholder.dataset.src = src;
@@ -583,12 +558,7 @@ function blockRemoteMedia(fragment: DocumentFragment): void {
     placeholder.textContent = img.getAttribute('alt') || 'Remote image';
     img.replaceWith(placeholder);
   }
-  for (const el of fragment.querySelectorAll('video, audio, source, track, image, feImage, use, [background]')) {
-    for (const name of ['src', 'srcset', 'poster', 'background', 'href', 'xlink:href']) {
-      const value = el.getAttribute(name);
-      if (value !== null && REMOTE_URL.test(value)) el.removeAttribute(name);
-    }
-  }
+  removeRemoteLoads(fragment);
 }
 
 function buildImages(fragment: DocumentFragment, ctx: RenderContext): void {

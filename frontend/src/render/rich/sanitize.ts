@@ -4,28 +4,31 @@
 // serialized and parsed again (no mutation-XSS window). The note HTML sanitizer in render.ts is
 // separate: it forbids `<style>`, which Mermaid's SVG needs.
 import DOMPurify from 'dompurify';
+import { cssLoadsRemote, decodeCss, isRemoteUrl, safeInlineStyle, svgAttributeLoads } from '../urlSafety';
 
 type Purifier = ReturnType<typeof DOMPurify>;
 
 const REMOTE = /^\s*(?:[a-z][a-z0-9+.-]*:|\/\/)/i;
 const CSS_REMOTE_URL = /url\(\s*(['"]?)\s*(?!#|data:image\/(?:png|gif|jpeg|webp);)[^)]*\)/gi;
 
-/** Removes `position: fixed|sticky` and `z-index` (as for note HTML) and remote `url(…)`s. */
+/** As for note HTML (urlSafety.ts): no `position: fixed|sticky`, `z-index`, indirection or escapes, and nothing remote. */
 function cleanStyleAttribute(node: Element): void {
   const style = node.getAttribute('style');
   if (!style) return;
-  const cleaned = style
-    .split(';')
-    .filter((decl) => {
-      const [prop, value = ''] = decl.split(':').map((s) => s.trim().toLowerCase());
-      if (prop === 'z-index') return false;
-      if (prop === 'position' && /fixed|sticky/.test(value)) return false;
-      return decl.trim() !== '';
-    })
-    .join(';')
-    .replace(CSS_REMOTE_URL, 'none');
+  const cleaned = safeInlineStyle(style, true);
   if (cleaned) node.setAttribute('style', cleaned);
   else node.removeAttribute('style');
+}
+
+/**
+ * A diagram's own stylesheet without `@import` and remote `url()`s. Should what is left still load
+ * something once its escapes and comments are read as the browser reads them, the whole stylesheet
+ * goes: the diagram loses its colours, never its privacy.
+ */
+export function cleanStylesheet(css: string): string {
+  const cleaned = css.replace(/@import[^;]*;?/gi, '').replace(CSS_REMOTE_URL, 'none');
+  const decoded = decodeCss(cleaned);
+  return /@import/i.test(decoded) || cssLoadsRemote(decoded) ? '' : cleaned;
 }
 
 let mathPurifier: Purifier | null = null;
@@ -61,13 +64,17 @@ export function sanitizeSvg(svg: string): DocumentFragment {
       cleanStyleAttribute(node);
       for (const name of ['href', 'xlink:href', 'src']) {
         const value = node.getAttribute(name);
-        if (value !== null && REMOTE.test(value)) node.removeAttribute(name);
+        if (value !== null && (REMOTE.test(value) || isRemoteUrl(value))) node.removeAttribute(name);
+      }
+      // Presentation attributes are CSS too: fill="url(https://…)" loads.
+      for (const attr of [...node.attributes]) {
+        if (svgAttributeLoads(attr.name, attr.value)) node.removeAttribute(attr.name);
       }
     });
     svgPurifier.addHook('uponSanitizeElement', (node, data) => {
       // CSS inside the SVG's own <style>: no remote url(), no @import.
       if (data.tagName === 'style' && node.textContent) {
-        node.textContent = node.textContent.replace(/@import[^;]*;?/gi, '').replace(CSS_REMOTE_URL, 'none');
+        node.textContent = cleanStylesheet(node.textContent);
       }
     });
   }

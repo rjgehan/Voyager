@@ -204,6 +204,30 @@ class PdfTextTest {
 	}
 
 	@Test
+	void aPdfWhoseReadingStoppedTheServerIsFoundByNameAndNeverReadAgain() throws IOException {
+		// Security audit (docs/SECURITY.md, F3): a crafted PDF can make PDFBox exhaust the heap, and the JVM exits on
+		// OutOfMemoryError. The marker it leaves behind must stop the next start from reading the file again.
+		write("Bomb.pdf", TestPdfs.withPages("decoy text"));
+		write("Fine.pdf", TestPdfs.withPages("fine text"));
+		Path cache = Files.createDirectories(this.vault.resolve(PdfTextIndexer.CACHE_DIR));
+		Files.write(cache.resolve(PdfTextIndexer.cacheName(record("Bomb.pdf")) + PdfTextIndexer.INFLIGHT_SUFFIX),
+				new byte[0]);
+		start(Map.of());
+		put("Bomb.pdf");
+		put("Fine.pdf");
+		this.indexer.start();
+		awaitIdle();
+		assertThat(search("bomb")).containsExactly("Bomb.pdf");
+		assertThat(search("decoy")).isEmpty();
+		assertThat(search("fine text")).containsExactly("Fine.pdf");
+		await().atMost(Duration.ofSeconds(10)).until(() -> cacheFiles().size() == 2);
+		// Both are cached (the stopped one as empty text), and no marker is left.
+		assertThat(cacheFiles()).containsExactlyInAnyOrder(PdfTextIndexer.cacheName(record("Bomb.pdf")),
+				PdfTextIndexer.cacheName(record("Fine.pdf")));
+		assertThat(Files.readString(cache.resolve(PdfTextIndexer.cacheName(record("Bomb.pdf"))))).isEmpty();
+	}
+
+	@Test
 	void unreadableAndOversizedPdfsAreFoundByName() throws IOException {
 		write("Broken scan.pdf", "not a pdf".getBytes(StandardCharsets.UTF_8));
 		write("Huge report.pdf", TestPdfs.withPages("secret content"));
