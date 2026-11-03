@@ -1122,7 +1122,8 @@ export class DocumentSession {
       return;
     }
     if (isTransient(e) || isStorageProblem(e)) {
-      this.error = errorMessage(e);
+      // A save that could not reach the server keeps the text here (the draft) and retries.
+      this.error = isTransient(e) ? 'Offline: changes kept on this device' : errorMessage(e);
       this.status = isTransient(e) ? 'offline' : 'storage-error';
       this.scheduleRetry(isTransient(e) ? e.retryAfterMs : null);
       this.emit();

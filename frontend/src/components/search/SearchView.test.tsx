@@ -3,7 +3,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { useState } from 'react';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ApiError } from '../../api/client';
+import { ApiError, TransientError } from '../../api/client';
 import { api } from '../../api/endpoints';
 import { queryClient } from '../../api/queryClient';
 import type { BookmarksUpdateRequest, SearchResponse } from '../../api/types';
@@ -152,6 +152,18 @@ describe('SearchView', () => {
       expect(await screen.findByRole('alert')).toHaveTextContent('Offline: search needs the server');
       expect(screen.queryByText('Searching…')).not.toBeInTheDocument();
       expect(search).not.toHaveBeenCalled();
+    });
+
+    it('says search needs the server when the browser is online but the server cannot be reached', async () => {
+      queryClient.setDefaultOptions({ queries: { retryDelay: 0 } });
+      try {
+        vi.spyOn(api, 'search').mockRejectedValue(new TransientError('Failed to fetch'));
+        renderView('plan');
+        expect(await screen.findByRole('alert')).toHaveTextContent('Offline: search needs the server.');
+        expect(screen.getByRole('alert')).not.toHaveTextContent(/kept/);
+      } finally {
+        queryClient.setDefaultOptions({ queries: { retryDelay: undefined } });
+      }
     });
 
     it('still shows a search it already has', async () => {

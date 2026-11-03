@@ -7,7 +7,7 @@
 // edited, closed and reopened; the embed and then the transcript go where the cursor was.
 import { create } from 'zustand';
 import { api } from '../../api/endpoints';
-import { ApiError, errorMessage, TransientError } from '../../api/client';
+import { ApiError, errorMessage, isTransient, TransientError } from '../../api/client';
 import { currentTree } from '../../api/hooks';
 import { queryClient } from '../../api/queryClient';
 import { queryKeys, STALE } from '../../api/queryKeys';
@@ -270,8 +270,9 @@ export async function insertRecording(session: DocumentSession, file: File, rang
   } catch (e) {
     if (uploadId !== null) session.cancelUpload(uploadId);
     if (transcriptId !== null) session.cancelUpload(transcriptId);
-    toast(`${file.name}: ${errorMessage(e)}`, {
-      kind: 'error',
+    // Out of reach is no error of the recording (DESIGN §6.20): a notice, with the same Retry.
+    toast(isTransient(e) ? `${file.name} was not uploaded: the server can't be reached. Retry before closing this, or the recording is lost.` : `${file.name}: ${errorMessage(e)}`, {
+      kind: isTransient(e) ? 'info' : 'error',
       timeout: 0,
       action: { label: 'Retry', run: () => void insertRecording(session, file, session.insertionRange(), transcribe) },
     });

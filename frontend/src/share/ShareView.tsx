@@ -5,7 +5,7 @@ import { StateEffect } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { ArrowLeft, CircleAlert, Copy, Eye, File, FilePlus, FileText, Folder, Image, Music, Pencil, Video } from 'lucide-react';
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { errorMessage } from '../api/client';
+import { toastError } from '../features/errors';
 import type { FileEntry, GuestShareResponse, TreeResponse } from '../api/types';
 import { queryKeys } from '../api/queryKeys';
 import { SaveStatus } from '../components/SaveStatus';
@@ -153,7 +153,7 @@ function GuestNote({ sync, path, editable, env, treeKey, autoFocus }: { sync: Gu
     try {
       await action();
     } catch (e) {
-      toast(errorMessage(e), { kind: 'error' });
+      toastError(e);
     } finally {
       setBusy(false);
     }
@@ -400,7 +400,7 @@ export default function ShareView({ shareKey, path, navigate }: { shareKey: stri
             setCreated(result.file.path);
             open(result.file.path);
           } catch (e) {
-            toast(errorMessage(e), { kind: 'error' });
+            toastError(e);
           }
         }
       : null;
