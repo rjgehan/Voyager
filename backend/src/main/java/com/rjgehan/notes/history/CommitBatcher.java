@@ -6,6 +6,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -613,9 +614,19 @@ public class CommitBatcher implements SmartLifecycle {
 			};
 			return new GitStore.Message(verb + change.path(), null);
 		}
-		String names = changes.stream().limit(3).map(GitStore.Change::path).collect(Collectors.joining(", "));
+		// Notes first: hidden app files (.notesapp/, .obsidian/) are named only when fewer than 3 notes changed.
+		String names = changes.stream()
+			.sorted(Comparator.comparing((GitStore.Change c) -> isHidden(c.path())))
+			.limit(3)
+			.map(GitStore.Change::path)
+			.collect(Collectors.joining(", "));
 		String more = (count > 3) ? " (+" + (count - 3) + " more)" : "";
 		return new GitStore.Message("Update " + count + " files: " + names + more, body);
+	}
+
+	/** A path with a segment starting with a dot, such as {@code .notesapp/bookmarks.json}. */
+	private static boolean isHidden(String path) {
+		return path.startsWith(".") || path.contains("/.");
 	}
 
 	private static String letter(ChangeType type) {

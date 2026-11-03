@@ -371,6 +371,26 @@ class CommitBatcherTest {
 		assertThat(GitStore.truncate("x".repeat(200))).hasSize(120);
 	}
 
+	@Test
+	void batchSubjectsNameVisibleFilesBeforeHiddenOnes() {
+		Author alice = Author.of(TestVault.ALICE);
+		GitStore.Message three = CommitBatcher.batchMessage(
+				List.of(change("M", ".notesapp/bookmarks.json"), change("M", "Ideas.md"), change("M", "Plan.md")), alice);
+		assertThat(three.subject()).isEqualTo("Update 3 files: Ideas.md, Plan.md, .notesapp/bookmarks.json");
+		assertThat(three.body()).isEqualTo("M .notesapp/bookmarks.json\nM Ideas.md\nM Plan.md");
+		assertThat(CommitBatcher
+			.batchMessage(List.of(change("M", ".notesapp/bookmarks.json"), change("M", ".notesapp/srs.json"),
+					change("M", "A.md"), change("M", "B.md"), change("M", "C.md")), alice)
+			.subject()).isEqualTo("Update 5 files: A.md, B.md, C.md (+2 more)");
+		assertThat(CommitBatcher
+			.batchMessage(List.of(change("M", ".notesapp/bookmarks.json"), change("M", ".notesapp/settings.json")),
+					alice)
+			.subject()).isEqualTo("Update 2 files: .notesapp/bookmarks.json, .notesapp/settings.json");
+		assertThat(CommitBatcher.batchMessage(List.of(change("M", "Projects/.obsidian/x.json"), change("M", "z.md")),
+				alice)
+			.subject()).isEqualTo("Update 2 files: z.md, Projects/.obsidian/x.json");
+	}
+
 	private static GitStore.Change change(String letter, String path) {
 		return new GitStore.Change(switch (letter) {
 			case "A" -> com.rjgehan.notes.api.dto.ChangeType.ADDED;

@@ -972,7 +972,7 @@ This is `MoveService.move(from, to, updateLinks, dryRun, identity, origin)`. `up
 | Trigger | Subject | Body |
 |---|---|---|
 | Autosave batch, 1 file | `Update Projects/Plan.md` | |
-| Autosave batch, n files | `Update 3 files: a.md, b.md, c.md` (at most 3 names, then ` (+N more)`) | One line per path: `A`, `M` or `D`, then the path |
+| Autosave batch, n files | `Update 3 files: a.md, b.md, c.md` (at most 3 names, then ` (+N more)`; notes before hidden app files such as `.notesapp/bookmarks.json`, which are named only when fewer than 3 other files changed) | One line per path: `A`, `M` or `D`, then the path |
 | New note in a batch | `Create Ideas.md` if it is the only change | |
 | Delete | `Delete Projects/Old plan.md` / `Delete folder Archive (12 files)` | |
 | Move or rename (first commit, pure rename) | `Rename A.md → B.md` (same parent) / `Move A.md → Folder/A.md` | |
