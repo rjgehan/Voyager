@@ -26,7 +26,9 @@ npm run test:scripts       # the tooling's own tests (no server needed)
   reset.
 - **Ports and processes.** Only :18570 and :5153 (`E2E_API_PORT`, `E2E_WEB_PORT` to change them).
   `reset` refuses to start when something else listens there, and stops only the processes it
-  recorded in `.run/pids.json`, by PID, after checking each is still the java or node it started.
+  recorded in `.run/pids.json`, by PID, after checking each is still the java or node it started
+  (with `tasklist` on Windows, `/proc` on Linux, `ps` on macOS). A recorded process it cannot check
+  is left running and stays recorded, and `reset` names it.
 - **Browser.** `channel: 'chrome'`. Without Chrome the suite uses the installed Edge (also
   Chromium); `PW_CHANNEL=chrome|msedge|chromium` picks one (`chromium` is Playwright's own build,
   which CI installs only when the runner has no Chrome).
@@ -62,7 +64,7 @@ for it, as for the unit tests: a change that renames a button or label a test us
 | `tests/ui/layout.spec.ts` | Layout regressions jsdom cannot see: the note header in a narrow split pane, Dataview tables on a phone |
 | `tests/ui/known-bugs.spec.ts` | Bugs found and not fixed yet (below) |
 | `tests/screens/inventory.spec.ts` | Not a test: captures every page, panel and sheet for the PDF |
-| `scripts/*.test.mjs` | The suite's own tooling, with `npm run test:scripts` (no server, no browser; CI runs it before the suite): each project lists only its own folder wherever the checkout lives |
+| `scripts/*.test.mjs` | The suite's own tooling, with `npm run test:scripts` (no server, no browser; CI runs it before the suite): each project lists only its own folder wherever the checkout lives; `stop` stops what was recorded on Windows, Linux and macOS, and never forgets a process it could not check |
 
 UI tests run on both devices (`desktop`, 1366 × 860, and `iphone`, 390 × 844 with touch, no hover
 and an iPhone user agent, so the app takes its iOS paths); a title with `@desktop` or `@phone` keeps

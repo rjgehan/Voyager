@@ -129,11 +129,15 @@ function start(name, image, cmd, cmdArgs, { cwd, env = {}, log }) {
 }
 
 // ---------------------------------------------------------------------------------------------
-await stopRecorded();
+const unchecked = await stopRecorded();
 for (const port of prod ? [API_PORT] : [API_PORT, WEB_PORT]) {
   // A process just stopped can hold its port for a moment.
   for (let i = 0; i < 20 && (await listening(port)); i++) await sleep(500);
   if (await listening(port)) {
+    if (unchecked.length > 0) {
+      const list = unchecked.map((e) => `${e.name} (pid ${e.pid})`).join(', ');
+      throw new Error(`Port ${port} is in use, and the last reset's ${list} could not be checked, so it was left running. Stop it yourself.`);
+    }
     throw new Error(
       `Port ${port} is in use by a process this script did not start. Stop it yourself, or pick ` +
         'other ports with E2E_API_PORT / E2E_WEB_PORT.',
