@@ -1043,7 +1043,7 @@ ${JSON.stringify(sheet.filter ?? null)}`;
   // typing goes into A1 as in Google Sheets. Glide draws its canvas only once it has measured
   // itself, so the focus is tried again for a while.
   useEffect(() => {
-    const requested = wantsNoteFocus();
+    const requested = wantsNoteFocus(path);
     if (touch && !requested) return;
     const nowhere = () => document.activeElement === null || document.activeElement === document.body;
     let timer = 0;

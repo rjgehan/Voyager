@@ -124,7 +124,7 @@ async function openWhenReady(path: string, id: number, note: boolean): Promise<v
     // A title still being typed continues in the inline title; after a committed one the writing
     // continues in the note's text. The navigation then clears the pending view (App's guard).
     openPendingNote(id, path);
-    if (pending.committed) requestNoteFocus();
+    if (pending.committed) requestNoteFocus(path);
     openPath(path, null, { newNote: true });
   } finally {
     if (session) documents.release(session, BODY_HOLDER);

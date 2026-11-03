@@ -108,7 +108,7 @@ export function NoteEditor({ session, readOnly, preview, extensions = noteExtens
     };
     v.contentDOM.addEventListener('focus', onFocus);
     callbacks.current.onView?.(v);
-    if (paneActiveRef.current && (autoFocus || wantsNoteFocus())) v.focus();
+    if (paneActiveRef.current && (autoFocus || wantsNoteFocus(session.path))) v.focus();
     return () => {
       v.contentDOM.removeEventListener('focus', onFocus);
       clearActiveEditor(v);
