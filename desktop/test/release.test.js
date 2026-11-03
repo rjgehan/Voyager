@@ -43,3 +43,21 @@ test('the Windows installer is for x64', () => {
   assert.deepEqual(packaged(scripts['dist:win'], Platform.WINDOWS), { x64: ['nsis'] });
   assert.deepEqual(packaged(workflowCommand('windows'), Platform.WINDOWS), { x64: ['nsis'] });
 });
+
+test('a tag makes a draft release, published only after both packages are attached', () => {
+  // The shell commands of a job, with continued lines joined.
+  const runs = (job) => (workflow.jobs[job].steps ?? []).map((s) => (s.run ?? '').replace(/\\\n\s*/g, ' ')).join('\n');
+  assert.match(runs('release'), /gh release create [^\n]*--draft/, 'the release starts as a draft');
+  // Nothing before the packages are built makes it public.
+  for (const job of ['release', 'build']) assert.doesNotMatch(runs(job), /--draft=false/, job);
+  const publishers = Object.keys(workflow.jobs).filter((job) => /gh release edit [^\n]*--draft=false/.test(runs(job)));
+  assert.equal(publishers.length, 1, 'one job publishes the release');
+  const publish = workflow.jobs[publishers[0]];
+  assert.deepEqual([publish.needs].flat(), ['build']);
+  // Only when every package job succeeded (fail-fast is off, so one platform can fail alone), and only for a tag.
+  assert.match(publish.if, /needs\.build\.result == 'success'/);
+  assert.match(publish.if, /startsWith\(github\.ref, 'refs\/tags\/desktop-v'\)/);
+  // And only with both packages on the release.
+  assert.match(runs(publishers[0]), /\.exe\b/);
+  assert.match(runs(publishers[0]), /\.dmg\b/);
+});
