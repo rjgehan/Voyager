@@ -1102,7 +1102,7 @@ ${JSON.stringify(sheet.filter ?? null)}`;
 
   const widthColumns: number[] = Array.from({ length: Math.min(selection.range.width, 200) }, (_, i) => selection.range.col + i);
   const widthLabel = widthColumns.length === 1 ? columnLetters(widthColumns[0]) : `${columnLetters(widthColumns[0])}–${columnLetters(widthColumns[widthColumns.length - 1])}`;
-  const boldOn = wholeColumns ? sheet.cols[columnLetters(selection.range.col)]?.bold === true : sheet.rows[String(selection.range.row + 1)]?.bold === true;
+  const boldOn = wholeColumns ? sheet.cols[columnLetters(selection.range.col)]?.bold === true : sheet.rows[String(view.sheetRow(selection.range.row) + 1)]?.bold === true;
   // Google Sheets' View > Freeze: none, 1, 2, or up to the active cell's row or column; the current one ticked.
   const tick = (on: boolean) => (on ? <Check size={14} aria-hidden /> : <span className="sheet-menu-blank" aria-hidden />);
   const upToRow = activeAt.row + 1;
