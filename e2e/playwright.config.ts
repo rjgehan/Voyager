@@ -14,7 +14,13 @@ const channel = browserChannel();
 // The inventory wipes screens-output/ and takes minutes: it runs only when asked for by name
 // (`npm run screens`), never as part of a bare `npx playwright test`.
 // Workers load this file again without the command line, so the choice travels in the environment.
-if (process.argv.some((a) => a.includes('screens'))) process.env.E2E_SCREENS = '1';
+// Only a project selection counts (`--project=screens`, `--project screens`): a
+// substring of any argument also matched a checkout under ".../screenshots/" or `--grep screenshare`.
+const namesScreens = (value: string | undefined) => value?.split(',').includes('screens') ?? false;
+const projectArgs = process.argv.flatMap((a, i, all) =>
+  a.startsWith('--project=') ? [a.slice('--project='.length)] : a === '--project' ? [all[i + 1]] : [],
+);
+if (projectArgs.some(namesScreens)) process.env.E2E_SCREENS = '1';
 const wantScreens = process.env.E2E_SCREENS === '1';
 const device = (d: typeof desktop | typeof iphone) => ({
   ...d,
