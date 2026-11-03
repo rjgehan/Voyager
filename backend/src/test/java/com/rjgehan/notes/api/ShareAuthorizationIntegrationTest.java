@@ -477,6 +477,28 @@ class ShareAuthorizationIntegrationTest {
 	}
 
 	@Test
+	void aGuestsNewNoteNeverLandsInAPrivateFolderSpelledLikeAMissingSharedOne() {
+		create("Clan/List.md", "# List\n");
+		String clan = owner()
+			.postJson("/api/shares", Map.of("path", "Clan", "mode", "edit", "recipients", List.of(MOM)), LOGIN, OWNER)
+			.ok(201)
+			.get("share")
+			.get("id")
+			.asString();
+		// The shared folder goes; a private one spelled in another case takes its place.
+		owner().delete("/api/folders?path=" + Api.enc("Clan"), LOGIN, OWNER).ok(200);
+		create("clan/Secret.md", "# Secret\n");
+		for (String onConflict : List.of("fail", "rename")) {
+			Reply reply = this.api.postJson("/api/s/" + clan + "/files",
+					Map.of("path", "Clan/Groceries.md", "content", "milk\n", "onConflict", onConflict), LOGIN, MOM);
+			assertThat(reply.status()).as(onConflict).isNotEqualTo(201);
+			assertThat(reply.text()).as(onConflict).doesNotContain("clan/");
+		}
+		assertThat(paths(owner().get("/api/tree", LOGIN, OWNER).ok(200).get("files")))
+			.noneMatch((path) -> path.endsWith("Groceries.md") && path.toLowerCase(Locale.ROOT).startsWith("clan/"));
+	}
+
+	@Test
 	void aGuestsConflictTellsWhereAMovedNoteWentOnlyInsideTheShare() {
 		String edit = "/api/s/" + editFolderShare;
 		create("Family/Recipes/Stew.md", "# Stew\n");
