@@ -23,7 +23,7 @@ The top row, **Uncommitted changes**, means your latest edits are not in the his
 
 **Vault history** (ribbon, drawer, or the link at the bottom of the History tab) shows the whole vault:
 
-- **Timeline**: every recorded change, newest first, filtered by folder or file, by author and by period (today, this week, this month, the last 30 days, all time). Click a file to see that version.
+- **Timeline**: every recorded change, newest first, filtered by folder or file, by author and by period (today, this week, this month, the last 30 days, all time). Click a file to see that version. A note renamed or moved since is compared with, and restored into, the note under its new name; if Voyager cannot tell where it went, it says there is no file at that path now, and restoring creates a new note there.
 - **Changes**: what changed over a period ("This week" by default), file by file, with a diff from the start to the end of the period.
 - **Deleted files**: every file that was ever deleted and is not back, with a search box. **Preview** shows its last version; **Restore** brings it back, even if it is long gone from the trash.
 

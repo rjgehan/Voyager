@@ -2,7 +2,7 @@
 // week to check in late, every habit on one calendar, one habit (`?habit=`), and the habit form
 // (`?view=new`, `?view=edit&habit=`). Phone first: 48 px check buttons, rows of 64 px.
 import { ChevronLeft, Plus, RefreshCw, Target } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useLocation } from 'react-router';
 import { errorMessage } from '../../api/client';
 import { queryClient } from '../../api/queryClient';
@@ -11,7 +11,8 @@ import { navigateTo } from '../../features/navigation';
 import { habitKeys } from '../api';
 import type { CheckInContext } from '../actions';
 import { dayLabel } from '../labels';
-import { isScheduled, overviewLevel, progressOf, todayString } from '../progress';
+import { useToday } from '../../tasks/dates';
+import { isScheduled, overviewLevel, progressOf } from '../progress';
 import { HABITS_ROUTE, habitsUrl } from '../routes';
 import { useHabits } from '../useHabits';
 import { HabitDetail } from './HabitDetail';
@@ -19,16 +20,6 @@ import { HabitForm } from './HabitForm';
 import { Heatmap } from './Heatmap';
 import { DayPicker, HabitRow } from './parts';
 import '../habits.css';
-
-/** Today's date, kept current past midnight. */
-function useToday(): string {
-  const [today, setToday] = useState(() => todayString());
-  useEffect(() => {
-    const timer = window.setInterval(() => setToday(todayString()), 60_000);
-    return () => window.clearInterval(timer);
-  }, []);
-  return today;
-}
 
 const LEVEL_TEXT = ['none done', 'some done', 'about half done', 'most done', 'all done'];
 

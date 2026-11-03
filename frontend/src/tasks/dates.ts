@@ -93,16 +93,22 @@ export function dateTone(value: TaskDate, today: LocalDate): DateTone {
   return day <= addDays(today, 6) ? 'soon' : 'later';
 }
 
-/** The local date, kept current across midnight and while the page sleeps in the background. */
+/**
+ * The local date, kept current across midnight and while the page sleeps in the background: an
+ * iPhone PWA is frozen while hidden, so the date is checked again when it shows (`visibilitychange`)
+ * and when it comes back from the back-forward cache (`pageshow`), before the first tap.
+ */
 export function useToday(): LocalDate {
   const [today, setToday] = useState(localToday);
   useEffect(() => {
     const check = () => setToday(localToday());
     const timer = setInterval(check, 60_000);
     document.addEventListener('visibilitychange', check);
+    window.addEventListener('pageshow', check);
     return () => {
       clearInterval(timer);
       document.removeEventListener('visibilitychange', check);
+      window.removeEventListener('pageshow', check);
     };
   }, []);
   return today;

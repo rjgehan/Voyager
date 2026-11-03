@@ -15,7 +15,7 @@ import { toLf } from '../../features/eol';
 import { toastError } from '../../features/errors';
 import { kindOfPath } from '../../features/fileKinds';
 import { formatDateTime, formatRelative } from '../../features/format';
-import { groupByDay, historyEntryOf, PERIODS, periodStart, type Period } from '../../features/historyPeriods';
+import { groupByDay, historyEntryOf, laterPathOf, PERIODS, periodStart, type Period } from '../../features/historyPeriods';
 import { navigateTo } from '../../features/navigation';
 import { displayName, folderOf, isNotePath, noteRoute } from '../../features/paths';
 import { confirmAction } from '../../state/dialogs';
@@ -100,7 +100,13 @@ function FileLine({ file, onShow, exists }: { file: TimelineFile; onShow(): void
 
 // ---------------------------------------------------------------- timeline
 
-function Timeline({ onVersion }: { onVersion(entry: HistoryEntry): void }) {
+/** A version to show, and the file it is compared with and restored into now. */
+interface Shown {
+  entry: HistoryEntry;
+  currentPath: string;
+}
+
+function Timeline({ onVersion }: { onVersion(shown: Shown): void }) {
   const [path, setPath] = useState('');
   const [author, setAuthor] = useState('');
   const [period, setPeriod] = useState<Period>('all');
@@ -108,6 +114,11 @@ function Timeline({ onVersion }: { onVersion(entry: HistoryEntry): void }) {
   const log = useHistoryLog(filter);
   const tree = useTree().data;
   const entries = log.data?.pages.flatMap((p) => p.entries) ?? [];
+  // A file renamed since is compared with, and restored into, the note under its new name.
+  const shownOf = (c: (typeof entries)[number], f: TimelineFile): Shown => {
+    const later = f.change === 'deleted' ? null : laterPathOf(entries, c.commitId, f.path);
+    return { entry: historyEntryOf(c, f), currentPath: later && tree?.byPath.has(later) ? later : f.path };
+  };
   return (
     <section className="timeline" aria-label="Timeline">
       <div className="timeline-filters">
@@ -146,7 +157,7 @@ function Timeline({ onVersion }: { onVersion(entry: HistoryEntry): void }) {
                     {c.files.length > 0 && (
                       <ul className="timeline-files">
                         {c.files.map((f) => (
-                          <FileLine key={f.path} file={f} exists={!!tree?.byPath.has(f.path)} onShow={() => onVersion(historyEntryOf(c, f))} />
+                          <FileLine key={f.path} file={f} exists={!!tree?.byPath.has(f.path)} onShow={() => onVersion(shownOf(c, f))} />
                         ))}
                         {c.filesTotal > c.files.length && <li className="timeline-more">and {c.filesTotal - c.files.length} more</li>}
                       </ul>
@@ -395,7 +406,7 @@ const TABS: ReadonlyArray<{ id: Tab; label: string }> = [
 export default function VaultHistoryPage() {
   usePageTitle('Vault history');
   const [tab, setTab] = useState<Tab>('timeline');
-  const [version, setVersion] = useState<HistoryEntry | null>(null);
+  const [version, setVersion] = useState<Shown | null>(null);
   return (
     <div className="page vault-history-page">
       <header className="page-header">
@@ -408,8 +419,8 @@ export default function VaultHistoryPage() {
           </button>
         ))}
       </div>
-      {tab === 'timeline' ? <Timeline onVersion={setVersion} /> : tab === 'changes' ? <Changes /> : <Deleted onVersion={setVersion} />}
-      {version && <HistoryVersion entry={version} currentPath={version.path} onClose={() => setVersion(null)} />}
+      {tab === 'timeline' ? <Timeline onVersion={setVersion} /> : tab === 'changes' ? <Changes /> : <Deleted onVersion={(entry) => setVersion({ entry, currentPath: entry.path })} />}
+      {version && <HistoryVersion entry={version.entry} currentPath={version.currentPath} onClose={() => setVersion(null)} />}
     </div>
   );
 }
