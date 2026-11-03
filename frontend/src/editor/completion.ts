@@ -282,34 +282,32 @@ interface LocalTag {
  * through edits (only the lines an edit touched are read again), so a keystroke after `#` in a
  * 5 MB note does not walk the whole syntax tree. Filled when completion first asks.
  */
-class LocalTags {
-  constructor(
-    public tags: LocalTag[] | null,
-    /** Ranges edited since the tags were read, to read again. */
-    public dirty: Array<{ from: number; to: number }>,
-  ) {}
+interface LocalTags {
+  tags: LocalTag[] | null;
+  /** Ranges edited since the tags were read, to read again. */
+  dirty: Array<{ from: number; to: number }>;
 }
 
 /** Text that can turn whole stretches of the note into code or a comment: the tags are read again. */
 const BLOCK_MARKS = /```|~~~|%%|<!--|-->|\$\$/;
 
 export const localTagIndex = StateField.define<LocalTags>({
-  create: () => new LocalTags(null, []),
+  create: () => ({ tags: null, dirty: [] }),
   update(value, tr) {
     if (!tr.docChanged) return value;
-    if (value.tags === null) return new LocalTags(null, []);
+    if (value.tags === null) return { tags: null, dirty: [] };
     let reread = false;
     const dirty = value.dirty.map((r) => ({ from: tr.changes.mapPos(r.from, -1), to: tr.changes.mapPos(r.to, 1) }));
     tr.changes.iterChanges((fromA, toA, fromB, toB, inserted) => {
       if (BLOCK_MARKS.test(inserted.toString()) || BLOCK_MARKS.test(tr.startState.sliceDoc(fromA, toA))) reread = true;
       dirty.push({ from: fromB, to: toB });
     });
-    if (reread) return new LocalTags(null, []);
+    if (reread) return ({ tags: null, dirty: [] });
     const tags: LocalTag[] = [];
     for (const t of value.tags) {
       if (!tr.changes.touchesRange(t.from, t.to)) tags.push({ from: tr.changes.mapPos(t.from, 1), to: tr.changes.mapPos(t.to, -1), name: t.name });
     }
-    return new LocalTags(tags, dirty);
+    return { tags, dirty };
   },
 });
 
