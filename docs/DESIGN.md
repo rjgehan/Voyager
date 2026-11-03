@@ -3395,7 +3395,7 @@ Built (6a, 6b, 6c): the file format, its parser and serializer, the formula engi
 | `numfmt.ts`, `input.ts`, `display.ts` | Number formats (§6.21.8), typed input with the formats it implies, how a cell shows (in its format: the cell's, else the row's, else the column's) | main |
 | `target.ts` | What an embed's or link's subpath names: a sheet, a named range or a range (§6.21.7) | main |
 | `merge.ts` | `mergeSheetText(base, mine, theirs)`: the descriptor's `merge()` | main |
-| `engine.ts` | `Workbook`: HyperFormula adapter, cached values, undo and redo, remote replace | **lazy chunk** (764 kB, 163 kB gzipped) |
+| `engine.ts` | `Workbook`: HyperFormula adapter, cached values, undo and redo, remote replace | **lazy chunk** (816 kB, 182 kB gzipped, HyperFormula 3.5.0) |
 | `loadEngine.ts` | `loadSheetEngine()`, the only way in to `engine.ts` | main |
 | `refs.ts`, `tsv.ts`, `edits.ts` | Moving formulas (`shiftFormula`, `renameSheetInFormula`), the TSV clipboard format, and fill, clear, copy and paste as cell edits (§6.21.5) | main |
 | `charts.ts`, `csv.ts` | What a chart shows of its range (§6.21.9); CSV in and out (§6.21.10) | with the view's or the embed's chunk |
