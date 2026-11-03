@@ -25,6 +25,14 @@ describe('noteBasename', () => {
     ['50%% off', '50% off'],
     ['  ..hidden.  ', 'hidden'],
     ['con', '_con'],
+    // A device name with any extension is refused by the server (API.md §1.3) and by Windows.
+    ['Aux. power checklist', '_Aux. power checklist'],
+    ['CON. 2026 recap', '_CON. 2026 recap'],
+    ['nul.txt', '_nul.txt'],
+    ['com1.backup', '_com1.backup'],
+    ['con.tmp', '_con.tmp clip'],
+    ['Aux power checklist', 'Aux power checklist'],
+    ['Conference', 'Conference'],
     ['backup~', 'backup~ clip'],
     ['report.tmp', 'report.tmp clip'],
     ['', 'Clipping'],
@@ -33,6 +41,14 @@ describe('noteBasename', () => {
     ['Cafe' + String.fromCharCode(0x301), 'Caf' + String.fromCharCode(0xe9)],
   ])('%j becomes %j', (input, expected) => {
     expect(noteBasename(input)).toBe(expected);
+  });
+
+  it('never gives a path segment the server refuses as a device name', () => {
+    const device = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\..*)?$/i;
+    for (const [folder, title] of [['Clippings', 'Aux. power checklist'], ['Con.x', 'lpt1.notes'], ['nul', 'PRN.']]) {
+      for (const seg of notePath(folder, title).replace(/\.md$/, '').split('/')) expect(seg).not.toMatch(device);
+    }
+    expect(notePath('Clippings', 'Aux. power checklist')).toBe('Clippings/_Aux. power checklist.md');
   });
 
   it('fits 200 UTF-8 bytes on a code-point boundary', () => {
