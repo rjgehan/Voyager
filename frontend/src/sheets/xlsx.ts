@@ -75,6 +75,39 @@ function outsideQuotes(formula: string, fn: (part: string) => string): string {
   return out + fn(part);
 }
 
+/**
+ * `formula` (as Excel stores it, without `=`) with every `ARRAYFORMULA(…)` replaced by what it
+ * wraps, or null when it has none: Excel has no such function, and an array formula (`{=…}`)
+ * computes the whole formula with arrays, as ARRAYFORMULA does here.
+ */
+function withoutArrayFormula(formula: string): string | null {
+  let found = false;
+  let out = '';
+  /** Unmatched brackets: whether each one opened an ARRAYFORMULA (whose close is dropped). */
+  const open: boolean[] = [];
+  for (let i = 0; i < formula.length; i++) {
+    const ch = formula[i];
+    if (ch === '"' || ch === "'") {
+      let j = i + 1;
+      while (j < formula.length && !(formula[j] === ch && formula[j + 1] !== ch)) j += formula[j] === ch ? 2 : 1;
+      out += formula.slice(i, j + 1);
+      i = j;
+      continue;
+    }
+    const call = /^ARRAYFORMULA\s*\(/i.exec(formula.slice(i, i + 20));
+    if (call && !/[A-Za-z0-9_.]/.test(formula[i - 1] ?? '')) {
+      found = true;
+      open.push(true);
+      i += call[0].length - 1;
+      continue;
+    }
+    if (ch === '(') open.push(false);
+    if (ch === ')' && open.pop()) continue;
+    out += ch;
+  }
+  return found ? out : null;
+}
+
 /** A formula as Excel stores it: no `=`, newer functions with `_xlfn.`. */
 export function toExcelFormula(formula: string): string {
   const body = formula.startsWith('=') ? formula.slice(1) : formula;
@@ -130,7 +163,10 @@ export function readWorkbook(data: Uint8Array): ImportedBook {
       if (!at || at.col >= MAX_COLUMNS || at.row >= MAX_ROWS) continue;
       const out: SheetCell = {};
       if (typeof cell.f === 'string' && cell.f !== '') {
-        out.f = fromExcelFormula(cell.f);
+        // An array formula's first cell (a {=…} formula, or Excel 365's dynamic arrays) computes with
+        // arrays, which the engine does inside ARRAYFORMULA (Google Sheets imports them the same way).
+        const f = fromExcelFormula(cell.f);
+        out.f = cell.F && !/^=\s*ARRAYFORMULA\s*\(/i.test(f) ? `=ARRAYFORMULA(${f.slice(1)})` : f;
         const c = cachedFrom(cell);
         if (c !== undefined) out.c = c;
       } else if (cell.F) {
@@ -172,7 +208,11 @@ export function readWorkbook(data: Uint8Array): ImportedBook {
   return { sheets, named, skipped: [...skipped] };
 }
 
-/** The cells an array formula at `ref` spills into, as a range (null when it spills nowhere). */
+/**
+ * The cells an array formula at `ref` spills into, as a range (null when it spills nowhere). A value
+ * to the right that a formula above it spilled down belongs to that formula, not to this one
+ * (`=TEXTJOIN(…)` in C2 beside `=SEQUENCE(3)` in D1 spills nowhere).
+ */
 function spillRange(cells: Record<string, SheetCell>, ref: string): string | null {
   const at = parseA1(ref);
   if (!at) return null;
@@ -180,10 +220,15 @@ function spillRange(cells: Record<string, SheetCell>, ref: string): string | nul
     const c = cells[toA1(col, row)];
     return c !== undefined && c.v === undefined && c.f === undefined && c.c !== undefined;
   };
+  const spilledDown = (col: number, row: number) => {
+    let r = row - 1;
+    while (r >= 0 && spilled(col, r)) r--;
+    return r >= 0 && cells[toA1(col, r)]?.f !== undefined;
+  };
   let lastRow = at.row;
   while (spilled(at.col, lastRow + 1)) lastRow++;
   let lastCol = at.col;
-  while (spilled(lastCol + 1, at.row)) lastCol++;
+  while (spilled(lastCol + 1, at.row) && !spilledDown(lastCol + 1, at.row)) lastCol++;
   if (lastRow === at.row && lastCol === at.col) return null;
   return `${ref}:${toA1(lastCol, lastRow)}`;
 }
@@ -226,12 +271,14 @@ export function writeWorkbook(file: SheetFile): Uint8Array {
       let out: XLSX.CellObject | null;
       if (cell.f !== undefined) {
         out = valueCell(cell.c ?? null) ?? { t: 'z' };
-        out.f = toExcelFormula(follow(cell.f));
+        const excel = toExcelFormula(follow(cell.f));
+        const arrays = withoutArrayFormula(excel);
+        out.f = arrays ?? excel;
         const spill = spillRange(sheet.cells, ref);
         if (spill) {
           out.F = spill;
           out.D = true;
-        }
+        } else if (arrays !== null) out.F = `${ref}:${ref}`;
       } else out = valueCell(cellValue(cell));
       if (!out) continue;
       const fmt = effectiveFormat(sheet, at.col, at.row);
