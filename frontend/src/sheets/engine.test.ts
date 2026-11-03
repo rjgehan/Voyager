@@ -1,6 +1,7 @@
 import { HyperFormula } from 'hyperformula';
 import { describe, expect, it, vi } from 'vitest';
 import { shownCell } from './display';
+import { typedEdit } from './edits';
 import { ENGINE_ID, Workbook, type WorkbookChange } from './engine';
 import { cellValue, parseSheet, serializeSheet, SHEET_ENGINE, type SheetFile } from './format';
 import { loadSheetEngine } from './loadEngine';
@@ -731,6 +732,17 @@ describe('moving cells (cut and paste)', () => {
     expect(wb.file.named).toEqual({ Doubled: 'Data!$B$1' });
     wb.redo();
     expect(wb.file.sheets[0].cells.C1).toEqual({ f: '=B5+1', c: 21 });
+  });
+
+  it('keeps the curly apostrophe of a sheet renamed on an iPhone (Mom’s) when its formula is edited', () => {
+    const wb = workbook([
+      { name: 'Sheet1', cells: { A1: { f: '=Moms!B2' } } },
+      { name: 'Moms', cells: { B2: { v: 42 }, B3: { v: 43 } } },
+    ]);
+    wb.renameSheet('s2', 'Mom’s');
+    expect(wb.file.sheets[0].cells.A1).toEqual({ f: "='Mom’s'!B2", c: 42 });
+    wb.setCells([typedEdit(wb.file.sheets[0], 0, 0, "='Mom’s'!B3")]);
+    expect(wb.file.sheets[0].cells.A1).toEqual({ f: "='Mom’s'!B3", c: 43 });
   });
 
   it('quotes a sheet name with a dot in the formulas a move rewrites', () => {
