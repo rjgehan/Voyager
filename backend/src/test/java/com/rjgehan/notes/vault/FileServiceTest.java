@@ -156,6 +156,44 @@ class FileServiceTest {
 	}
 
 	@Test
+	void duringTheStartupImportKeepMineAndAnotherAuthorsWriteNeverDropAnUncommittedVersion() throws Exception {
+		String v1 = create("Import.md", "base\n");
+		this.vault.flush();
+		this.vault.batcher.setImportWait(java.time.Duration.ofMillis(50));
+		this.vault.batcher.beginImport();
+		String theirs = this.files.saveText("Import.md", "theirs\n", v1, false, TestVault.BOB, "client-b2")
+			.result()
+			.file()
+			.version();
+		NotesException keepMine = (NotesException) org.assertj.core.api.Assertions
+			.catchThrowable(() -> this.files.saveText("Import.md", "mine\n", theirs, true, TestVault.ALICE, "client-a1"));
+		assertThat(keepMine.code()).isEqualTo(ErrorCode.HISTORY_UNAVAILABLE);
+		assertThat(keepMine.getBody().getProperties()).containsEntry("reason", "importing");
+		assertThat(codeOf(() -> save("Import.md", "mine\n", theirs))).isEqualTo(ErrorCode.BUSY);
+		assertThat(Files.readString(this.dir.resolve("Import.md"))).isEqualTo("theirs\n");
+
+		// Once the import ends, Keep mine commits the other author's version first.
+		Thread.ofVirtual().start(() -> {
+			try {
+				Thread.sleep(20);
+			}
+			catch (InterruptedException ex) {
+				Thread.currentThread().interrupt();
+			}
+			this.vault.batcher.endImport();
+		});
+		this.vault.batcher.setImportWait(java.time.Duration.ofSeconds(10));
+		this.files.saveText("Import.md", "mine\n", theirs, true, TestVault.ALICE, "client-a1");
+		this.vault.flush();
+		List<String> contents = new ArrayList<>();
+		for (GitStore.LogEntry entry : this.vault.git.log("Import.md", 0, 10).entries()) {
+			contents.add(new String(this.vault.git.readAt(entry.commit().name(), "Import.md").bytes(),
+					StandardCharsets.UTF_8));
+		}
+		assertThat(contents).containsExactly("mine\n", "theirs\n", "base\n");
+	}
+
+	@Test
 	void putWithNullBaseCreatesMissingFilesWithoutNewNameRules() throws Exception {
 		FileService.Saved created = this.files.saveText("Plan #2.md", "x", null, false, TestVault.ALICE, "client-a1");
 		assertThat(created.created()).isTrue();

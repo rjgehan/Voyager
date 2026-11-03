@@ -543,10 +543,15 @@ public class FileService {
 	 * <em>Preserve before overwrite</em>: makes sure the content on disk (including an external edit the watcher has
 	 * not reconciled yet) is committed before it is replaced. Called under the caller's locks.
 	 * @throws NotesException {@code 503 history-unavailable} ({@code commit-failed}) when git is enabled and the
-	 * commit fails; nothing may be written then
+	 * commit fails, or ({@code importing}) when a version is pending and the startup import is still running after a
+	 * short wait; nothing may be written then
 	 */
 	public void preserve(ApiPath path) throws IOException {
 		reconcileIfStale(path);
+		if (!this.batcher.awaitImport()) {
+			throw NotesException.historyUnavailable("importing",
+					"The vault is still being imported into history, so nothing was overwritten");
+		}
 		try {
 			this.batcher.flush();
 		}

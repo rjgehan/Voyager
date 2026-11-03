@@ -153,6 +153,22 @@ class CompatScannerTest {
 	}
 
 	@Test
+	void theAppsOwnInlineFormulasAreNotReportedAsDataview() {
+		VaultIndex index = new VaultIndex();
+		index.put(ObsidianFixture.note("Budget.md", String.join("\n", "| Item | Cost |", "|---|---|", "| Rent | 1450 |", "",
+				"Yearly: `=1450*12`", "Monthly: `=costs!D5/12`", "Name: `= this.file.name`",
+				"JS: `$= dv.current().file.name`", "Sheet: `=Budget.sheet!B10` and `=STDEV.S(1, 2, 3)`",
+				"Quoted: `='Finance/Budget.sheet'!B10`", "Field: `= [[Home]].rating`")));
+		CompatIssue issue = CompatScanner
+			.scan(index.noteViews(), index.filesUnder(""), List.of(), ObsidianFixture.KINDS::kindOf)
+			.stream()
+			.filter((i) -> i.id().equals("dataview"))
+			.findFirst()
+			.orElseThrow();
+		assertThat(where(issue)).containsExactly("Budget.md:6", "Budget.md:7", "Budget.md:10");
+	}
+
+	@Test
 	void tellsTheDataviewSubsetFromTheRest() {
 		assertThat(CompatScanner.dataviewUnsupported("TABLE file.name FROM #project")).isFalse();
 		assertThat(CompatScanner.dataviewUnsupported("task from [[Home]] where !completed")).isFalse();
