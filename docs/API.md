@@ -3644,7 +3644,7 @@ A reminder's `at` is a local date-time with no zone. The server reads it in the 
 
 - `webPush.available` is false, with `reason`, when `<secrets-dir>/push.json` cannot be read or is malformed. `webPush.publicKey` is null until the key pair exists (`POST /api/push/key`).
 - `ntfy.configured` is false, with `reason`, when `<secrets-dir>/ntfy.json` is missing or invalid (the same file as the app alerts, §6.6). `ownTopic` is true when it has `"reminders": {"topic": …}`; otherwise reminders go to its default topic. The topic and token are never shown.
-- `inApp.connections` counts the open event streams.
+- `inApp.connections` counts the owner's open event streams (`GET /api/events`); a guest's share page (§42) is not one.
 
 **`PUT /api/reminders/zone`** `ReminderZoneRequest` → `204`. `400 bad-request` for anything but an IANA zone id (`Europe/Berlin`, `America/New_York`, `UTC`). Clients send it at startup.
 
@@ -3680,7 +3680,7 @@ Both take `ReminderActionRequest` with the `taskId` and `at` of the notification
 
 ### 28.5 `reminder.due`
 
-The in-app route publishes `ReminderDueEvent` on the event stream (§16.4) for each reminder it delivers. It counts as delivered only when at least one stream is connected. Clients show each `key` once (a replay after a reconnect repeats it) and ignore events sent more than 15 minutes ago. `kind` is `task`, `daily` or `test`.
+The in-app route publishes `ReminderDueEvent` on the event stream (§16.4) for each reminder it delivers. It counts as delivered only when at least one of the owner's streams (`GET /api/events`) is connected; a guest's share stream (§42) never carries it and does not count. Clients show each `key` once (a replay after a reconnect repeats it) and ignore events sent more than 15 minutes ago. `kind` is `task`, `daily` or `test`.
 
 ---
 

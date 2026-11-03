@@ -713,6 +713,16 @@ class ShareAuthorizationIntegrationTest {
 		}
 	}
 
+	@Test
+	void aGuestStreamIsNotAnOpenNotesAppTabForInAppReminders() throws Exception {
+		try (SseRecorder stream = SseRecorder.openPath(this.port,
+				"/api/s/" + editFolderShare + "/events?clientId=mom-client-002", Map.of(LOGIN, MOM))) {
+			assertThat(stream.frames().get(0).event()).isEqualTo("hello");
+			JsonNode status = this.api.get("/api/reminders/status", LOGIN, OWNER).ok(200);
+			assertThat(status.get("inApp").get("connections").asInt()).isZero();
+		}
+	}
+
 	private static List<String> paths(JsonNode files) {
 		List<String> out = new ArrayList<>();
 		files.forEach((file) -> out.add(file.get("path").asString()));

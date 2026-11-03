@@ -336,6 +336,32 @@ class EventHubTest {
 	}
 
 	@Test
+	void ownerConnectionsLeaveOutFilteredGuestStreams() {
+		EventHub hub = hub(1024);
+		EventHub.ConnectionFilter guest = new EventHub.ConnectionFilter() {
+
+			@Override
+			public VaultEvent map(VaultEvent event) {
+				return event;
+			}
+
+			@Override
+			public boolean open() {
+				return true;
+			}
+
+		};
+		hub.connect(new RecordingEmitter(), "guest-client-1", null, guest);
+		assertThat(hub.connectionCount()).isEqualTo(1);
+		assertThat(hub.ownerConnectionCount()).isZero();
+		hub.connect(new RecordingEmitter(), "client-a1", null);
+		assertThat(hub.connectionCount()).isEqualTo(2);
+		assertThat(hub.ownerConnectionCount()).isEqualTo(1);
+		hub.closeAll();
+		assertThat(hub.ownerConnectionCount()).isZero();
+	}
+
+	@Test
 	void closeAllCompletesEveryStream() {
 		EventHub hub = hub(1024);
 		RecordingEmitter first = new RecordingEmitter();
