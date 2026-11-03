@@ -16,6 +16,8 @@ const PARTS = new Set(['FREQ', 'INTERVAL', 'COUNT', 'UNTIL', 'BYDAY', 'BYMONTHDA
 const FREQUENCIES = new Set(['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY']);
 /** The parts that set the days a rule falls on (Recurrence.SET_DAYS). */
 const SET_DAYS = ['BYDAY', 'BYMONTHDAY', 'BYMONTH', 'BYYEARDAY', 'BYWEEKNO', 'BYSETPOS'];
+/** The parts of a monthly or yearly rule that takes its day of the month from its start (Recurrence.DAY_FROM_START). */
+const DAY_FROM_START = new Set(['FREQ', 'INTERVAL', 'WKST']);
 const NUMBER = /^[1-9][0-9]{0,4}$/;
 const UNTIL = /^(\d{8})(T\d{6}Z?)?$/;
 const MAX_LENGTH = 300;
@@ -347,7 +349,9 @@ export function ruleFromDraft(d: RuleDraft): string {
  * The occurrence after the one being completed, mirrored from the server (API.md §20.6,
  * `Recurrence.next`): null when the rule has no more (the task closes), undefined when the rule
  * cannot be evaluated here. `anchor` is the due date, else the start date. A rule on set days
- * counted from completion never lands on or before the anchor (ticked early, it moves on).
+ * counted from completion never lands on or before the anchor (ticked early, it moves on). A
+ * monthly or yearly rule that takes its day from its start, counted from completion, lands a month
+ * or a year after the completion day, on the month's last day when it is shorter.
  */
 export function nextOccurrence(rrule: string, from: 'due' | 'completion', anchor: TaskDate | null, completionDay: LocalDate): { value: TaskDate; rrule: string } | null | undefined {
   let parts: Map<string, string>;
@@ -365,6 +369,16 @@ export function nextOccurrence(rrule: string, from: 'due' | 'completion', anchor
   const timed = anchor !== null && anchor.length > 10;
   const fromDue = from === 'due' && anchor !== null;
   const start = utcOf(fromDue ? anchor : timed ? `${completionDay}T${timePart(anchor)}` : completionDay);
+  const freq = parts.get('FREQ');
+  const own = [...parts.keys()].filter((k) => k !== 'COUNT' && k !== 'UNTIL' && (timed || (k !== 'BYHOUR' && k !== 'BYMINUTE')));
+  if (!fromDue && (freq === 'MONTHLY' || freq === 'YEARLY') && own.every((k) => DAY_FROM_START.has(k))) {
+    const interval = parts.get('INTERVAL') ?? '1';
+    if (!NUMBER.test(interval)) return undefined;
+    const date = addMonthsClamped(completionDay, (freq === 'YEARLY' ? 12 : 1) * Number(interval));
+    if (until && date > until) return null;
+    if (count !== null) parts.set('COUNT', String(count - 1));
+    return { value: timed ? `${date}T${timePart(anchor)}` : date, rrule: count !== null ? joinParts(parts) : rrule };
+  }
   const earliest = fromDue ? utcOf(addDays(completionDay, 1)) : null;
   const floor = !fromDue && anchor !== null && SET_DAYS.some((p) => parts.has(p)) ? utcOf(anchor) : null;
   try {
@@ -377,6 +391,16 @@ export function nextOccurrence(rrule: string, from: 'due' | 'completion', anchor
   } catch {
     return undefined;
   }
+}
+
+/** `day` plus `months`, on the month's last day when it is shorter (java.time's plusMonths). */
+function addMonthsClamped(day: LocalDate, months: number): LocalDate {
+  const [y, m, d] = day.split('-').map(Number);
+  const total = m - 1 + months;
+  const year = y + Math.floor(total / 12);
+  const month = total - Math.floor(total / 12) * 12;
+  const last = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  return `${String(year).padStart(4, '0')}-${pad2(month + 1)}-${pad2(Math.min(d, last))}`;
 }
 
 function shift(value: TaskDate, days: number): TaskDate {

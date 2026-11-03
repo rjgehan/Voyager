@@ -44,6 +44,9 @@ final class Recurrence {
 	private static final Set<String> SET_DAYS = Set.of("BYDAY", "BYMONTHDAY", "BYMONTH", "BYYEARDAY", "BYWEEKNO",
 			"BYSETPOS");
 
+	/** The parts of a monthly or yearly rule that takes its day of the month from its start. */
+	private static final Set<String> DAY_FROM_START = Set.of("FREQ", "INTERVAL", "WKST");
+
 	private static final Pattern NUMBER = Pattern.compile("[1-9][0-9]{0,4}");
 
 	private static final Pattern UNTIL = Pattern.compile("(\\d{8})(T\\d{6}Z?)?");
@@ -114,7 +117,10 @@ final class Recurrence {
 	 * an overdue task skips the occurrences already missed; counting from completion, it is the first one after the
 	 * completion day (at the anchor's time, if it has one). A rule on set days ({@code BYDAY}, {@code BYMONTHDAY}, ...)
 	 * counted from completion also skips the occurrences up to the anchor: ticked the day before its due Wednesday, a
-	 * weekly Wednesday task moves to the next Wednesday, never to the one being completed.
+	 * weekly Wednesday task moves to the next Wednesday, never to the one being completed. A monthly or yearly rule
+	 * that takes its day from its start, counted from completion, lands a month or a year after the completion day,
+	 * on the month's last day when it is shorter ("every month when done" completed on 30 January: 28 February, where
+	 * RFC 5545 would skip to 30 March).
 	 * <p>
 	 * A rule from a file edited by hand is not always one {@link #normalize} would store: an {@code INTERVAL} or
 	 * {@code COUNT} that is not a whole number from 1 to 99999 cannot be evaluated (lib-recur's lax mode would read
@@ -140,6 +146,18 @@ final class Recurrence {
 				parts.remove("BYMINUTE");
 			}
 			boolean fromDue = from == RecurrenceFrom.DUE && anchor != null;
+			String freq = parts.get("FREQ");
+			if (!fromDue && ("MONTHLY".equals(freq) || "YEARLY".equals(freq))
+					&& DAY_FROM_START.containsAll(parts.keySet())) {
+				String intervalValue = parts.get("INTERVAL");
+				int interval = (intervalValue != null) ? Integer.parseInt(intervalValue) : 1;
+				LocalDate day = "MONTHLY".equals(freq) ? completionDay.plusMonths(interval)
+						: completionDay.plusYears(interval);
+				if (until != null && day.isAfter(until)) {
+					return null;
+				}
+				return new Next(TaskDates.withTimeOf(day, anchor), (count != null) ? withCount(rrule, count - 1) : rrule);
+			}
 			LocalDateTime start = fromDue ? TaskDates.dateTime(anchor)
 					: TaskDates.dateTime(TaskDates.withTimeOf(completionDay, anchor));
 			LocalDate earliest = fromDue ? completionDay.plusDays(1) : null;

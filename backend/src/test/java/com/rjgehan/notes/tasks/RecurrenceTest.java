@@ -118,6 +118,38 @@ class RecurrenceTest {
 	}
 
 	@Test
+	void fromCompletionAMonthOrAYearLaterEndsOnTheLastDayOfAShorterMonth() {
+		// "Pay the card every month when done": a month after the completion day, never two.
+		RecurrenceFrom completion = RecurrenceFrom.COMPLETION;
+		assertThat(next("FREQ=MONTHLY", completion, null, LocalDate.of(2026, 1, 30))).isEqualTo("2026-02-28");
+		assertThat(next("FREQ=MONTHLY", completion, null, LocalDate.of(2026, 1, 29))).isEqualTo("2026-02-28");
+		assertThat(next("FREQ=MONTHLY", completion, "2026-01-30", LocalDate.of(2026, 1, 30))).isEqualTo("2026-02-28");
+		assertThat(next("FREQ=MONTHLY", completion, null, LocalDate.of(2026, 3, 31))).isEqualTo("2026-04-30");
+		assertThat(next("FREQ=MONTHLY;INTERVAL=3", completion, null, LocalDate.of(2026, 11, 30)))
+			.isEqualTo("2027-02-28");
+		assertThat(next("FREQ=MONTHLY", completion, "2026-01-05T09:00", LocalDate.of(2026, 1, 31)))
+			.isEqualTo("2026-02-28T09:00");
+		assertThat(next("FREQ=YEARLY", completion, null, LocalDate.of(2028, 2, 29))).isEqualTo("2029-02-28");
+		// Without a date, "from due" counts from the completion day too.
+		assertThat(next("FREQ=MONTHLY", RecurrenceFrom.DUE, null, LocalDate.of(2026, 1, 30))).isEqualTo("2026-02-28");
+		// A day that every month has is kept, and COUNT and UNTIL still apply.
+		assertThat(next("FREQ=MONTHLY", completion, null, LocalDate.of(2026, 1, 15))).isEqualTo("2026-02-15");
+		Recurrence.Next counted = Recurrence.next("FREQ=MONTHLY;COUNT=3", completion, null, LocalDate.of(2026, 1, 30));
+		assertThat(counted).isNotNull();
+		assertThat(counted.value()).isEqualTo("2026-02-28");
+		assertThat(counted.rrule()).isEqualTo("FREQ=MONTHLY;COUNT=2");
+		assertThat(Recurrence.next("FREQ=MONTHLY;UNTIL=20260227", completion, null, LocalDate.of(2026, 1, 30)))
+			.isNull();
+		assertThat(next("FREQ=MONTHLY;UNTIL=20260228", completion, null, LocalDate.of(2026, 1, 30)))
+			.isEqualTo("2026-02-28");
+		// A rule that names its days is left to them.
+		assertThat(next("FREQ=MONTHLY;BYMONTHDAY=31", completion, null, LocalDate.of(2026, 1, 31)))
+			.isEqualTo("2026-03-31");
+		assertThat(next("FREQ=MONTHLY;BYMONTH=1,4,7,10", completion, null, LocalDate.of(2026, 1, 15)))
+			.isEqualTo("2026-04-15");
+	}
+
+	@Test
 	void countIsTheNumberOfOccurrencesLeft() {
 		Recurrence.Next next = Recurrence.next("FREQ=DAILY;COUNT=3", RecurrenceFrom.DUE, "2026-10-14", WEDNESDAY);
 		assertThat(next).isNotNull();

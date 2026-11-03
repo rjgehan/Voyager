@@ -130,6 +130,23 @@ describe('rolling forward, as the server does (API.md §20.6 examples, completed
     });
   });
 
+  it('lands a month or a year after completion on the last day of a shorter month (as the server)', () => {
+    expect(nextOccurrence('FREQ=MONTHLY', 'completion', null, '2026-01-30')?.value).toBe('2026-02-28');
+    expect(nextOccurrence('FREQ=MONTHLY', 'completion', '2026-01-30', '2026-01-30')?.value).toBe('2026-02-28');
+    expect(nextOccurrence('FREQ=MONTHLY', 'completion', null, '2026-03-31')?.value).toBe('2026-04-30');
+    expect(nextOccurrence('FREQ=MONTHLY;INTERVAL=3', 'completion', null, '2026-11-30')?.value).toBe('2027-02-28');
+    expect(nextOccurrence('FREQ=MONTHLY', 'completion', '2026-01-05T09:00', '2026-01-31')?.value).toBe('2026-02-28T09:00');
+    expect(nextOccurrence('FREQ=YEARLY', 'completion', null, '2028-02-29')?.value).toBe('2029-02-28');
+    expect(nextOccurrence('FREQ=MONTHLY', 'due', null, '2026-01-30')?.value).toBe('2026-02-28');
+    expect(nextOccurrence('FREQ=MONTHLY', 'completion', null, '2026-01-15')?.value).toBe('2026-02-15');
+    expect(nextOccurrence('FREQ=MONTHLY;COUNT=3', 'completion', null, '2026-01-30')).toEqual({ value: '2026-02-28', rrule: 'FREQ=MONTHLY;COUNT=2' });
+    expect(nextOccurrence('FREQ=MONTHLY;UNTIL=20260227', 'completion', null, '2026-01-30')).toBeNull();
+    expect(nextOccurrence('FREQ=MONTHLY;UNTIL=20260228', 'completion', null, '2026-01-30')?.value).toBe('2026-02-28');
+    expect(nextOccurrence('FREQ=MONTHLY;BYMONTHDAY=31', 'completion', null, '2026-01-31')?.value).toBe('2026-03-31');
+    expect(nextOccurrence('FREQ=MONTHLY;BYMONTH=1,4,7,10', 'completion', null, '2026-01-15')?.value).toBe('2026-04-15');
+    expect(rollForward({ due: null, start: null, recurrence: { rrule: 'FREQ=MONTHLY', from: 'completion' }, reminders: [] }, '2026-01-30')).toMatchObject({ due: '2026-02-28' });
+  });
+
   it('counts COUNT down and stops at the last occurrence or after UNTIL', () => {
     expect(nextOccurrence('FREQ=DAILY;COUNT=3', 'due', day, day)).toEqual({ value: '2026-10-15', rrule: 'FREQ=DAILY;COUNT=2' });
     expect(nextOccurrence('FREQ=DAILY;COUNT=1', 'due', day, day)).toBeNull();
