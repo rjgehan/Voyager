@@ -236,6 +236,20 @@ class RecurrenceTest {
 			.isNotNull();
 	}
 
+	@Test
+	void aHandEditedRuleWithThePrefixOrSpacesRepeatsLikeTheStoredForm() {
+		// API §20.6 accepts an RRULE: prefix and surrounding spaces; a rule edited by hand keeps them in the file.
+		LocalDate monday = LocalDate.of(2026, 11, 2);
+		for (String rule : new String[] { "RRULE:FREQ=WEEKLY;BYDAY=MO", " FREQ=WEEKLY;BYDAY=MO ",
+				"rrule: FREQ=WEEKLY;BYDAY=MO" }) {
+			assertThat(Recurrence.storedRuleProblem(rule)).as(rule).isNull();
+			assertThat(Recurrence.next(rule, RecurrenceFrom.DUE, "2026-11-02", monday)).as(rule)
+				.isEqualTo(new Recurrence.Next("2026-11-09", "FREQ=WEEKLY;BYDAY=MO"));
+		}
+		assertThat(Recurrence.next("rrule:FREQ=DAILY;COUNT=3", RecurrenceFrom.DUE, "2026-11-02", monday))
+			.isEqualTo(new Recurrence.Next("2026-11-03", "FREQ=DAILY;COUNT=2"));
+	}
+
 	private static String next(String rule, RecurrenceFrom from, String anchor, LocalDate day) {
 		Recurrence.Next next = Recurrence.next(rule, from, anchor, day);
 		assertThat(next).as(rule).isNotNull();

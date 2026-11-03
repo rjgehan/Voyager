@@ -69,10 +69,7 @@ final class Recurrence {
 	 * or never produces an occurrence
 	 */
 	static String normalize(String rrule) {
-		String rule = rrule.strip();
-		if (rule.regionMatches(true, 0, "RRULE:", 0, 6)) {
-			rule = rule.substring(6).strip();
-		}
+		String rule = clean(rrule);
 		if (rule.isEmpty() || rule.length() > MAX_LENGTH || rule.indexOf('\n') >= 0 || rule.indexOf('\r') >= 0) {
 			throw new IllegalArgumentException("must be a single RRULE of at most " + MAX_LENGTH + " characters");
 		}
@@ -111,7 +108,8 @@ final class Recurrence {
 	 * {@code FREQ=HOURLY}, and an {@code UNTIL} that cannot be read would mean no end. The client does not evaluate
 	 * such a rule either (DESIGN §6.22).
 	 */
-	static @Nullable Next next(String rrule, RecurrenceFrom from, @Nullable String anchor, LocalDate completionDay) {
+	static @Nullable Next next(String stored, RecurrenceFrom from, @Nullable String anchor, LocalDate completionDay) {
+		String rrule = clean(stored);
 		try {
 			Map<String, String> parts = parts(rrule);
 			if (ruleProblem(parts) != null) {
@@ -229,11 +227,23 @@ final class Recurrence {
 	 */
 	static @Nullable String storedRuleProblem(String rrule) {
 		try {
-			return ruleProblem(parts(rrule));
+			return ruleProblem(parts(clean(rrule)));
 		}
 		catch (IllegalArgumentException ex) {
 			return ex.getMessage();
 		}
+	}
+
+	/**
+	 * The rule without surrounding spaces or an {@code RRULE:} prefix (any case), which the API accepts and a file
+	 * edited by hand can keep: {@link #normalize}, {@link #next} and {@link #storedRuleProblem} all read it this way.
+	 */
+	private static String clean(String rrule) {
+		String rule = rrule.strip();
+		if (rule.regionMatches(true, 0, "RRULE:", 0, 6)) {
+			rule = rule.substring(6).strip();
+		}
+		return rule;
 	}
 
 	/** The rule's parts, upper case, in order; rejects unknown and repeated parts. */
