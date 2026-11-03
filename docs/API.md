@@ -618,12 +618,13 @@ Request `SaveFileRequest`:
 | `baseVersion` | The version the edit started from, or `null` to create a file that does not exist. A missing field is treated as `null`, which is safe: for an existing file it can only produce a 409. The rules and their order are in §4. |
 | `flushHistory` | Optional, default `false`. When `true`, the server commits its current copy to git before overwriting it, and answers `503 history-unavailable` instead of writing if that commit fails. Clients set it for Keep mine, Save merged and Recreate. |
 
-`200 WriteResult` (`created: false`, `createdFolders: []`). `file.version` is the new version, or the current version when the content was already on disk (an idempotent retry). `201 WriteResult` (`created: true`) when `baseVersion` was `null` and the file was created; its missing parents are in `createdFolders`. Creating through `PUT` does not apply the new-name rules (§1.3).
+`200 WriteResult` (`created: false`, `createdFolders: []`). `file.version` is the new version, or the current version when the content was already on disk (an idempotent retry). `201 WriteResult` (`created: true`) when `baseVersion` was `null` and the file was created; its missing parents are in `createdFolders`. Creating through `PUT` does not apply the new-name rules (§1.3), but the vault stays case-insensitively unique: the parents resolve ignoring case to existing folders (`Projects/B.md` when `projects/` exists is created as `projects/B.md`, and `file.path` carries the real path), and a name that differs from an existing file or folder only by case is `409 case-collision`.
 
 | Errors |
 |---|
 | `400`, `403` |
 | `409 version-conflict` (§4), with `movedTo` when the path was moved |
+| `409 case-collision` (`baseVersion: null`, and an entry whose name differs only by case exists; `existingPath` names it) |
 | `409 type-mismatch` |
 | `413 too-large`, `415 not-text` |
 | `503 history-unavailable` (`reason: "commit-failed"`) with `flushHistory: true` |
@@ -1379,7 +1380,7 @@ Request `HistoryRestoreRequest`:
 
 | Field | Meaning |
 |---|---|
-| `path` | Where to write: the file's current path (or its last path, if it no longer exists). The new-name rules are not applied. |
+| `path` | Where to write: the file's current path (or its last path, if it no longer exists). The new-name rules are not applied. When the file does not exist, the parents resolve ignoring case to existing folders (a folder renamed `Projects` to `projects` since then receives the file), and `file.path` carries the real path. |
 | `sourcePath` | The path at `commit`; defaults to `path` |
 | `baseVersion` | **Text kinds:** the client's current version of `path`, or `null` when the file does not exist now (it is then recreated). A mismatch is `409 version-conflict`; `null` while the file exists is `409 already-exists`. **Non-text kinds:** must be `null`; an existing file is overwritten, and `already-exists` never applies. |
 
@@ -1401,6 +1402,7 @@ The server commits immediately: `Restore <path> to version <shortId>`. `commitId
 |---|
 | `400`, `403`, `404` |
 | `409 version-conflict` (text kinds) / `already-exists` (text kinds, `baseVersion: null` but the file exists) |
+| `409 case-collision`: the file does not exist, but an entry whose name differs only by case does (`existingPath`) |
 | `503 history-unavailable` |
 
 Events: `file.changed` or `file.created` (with `folder.created` first for any re-created parents), then `trash.changed` when a large file was kept in the trash, then `history.committed`.
@@ -1460,7 +1462,7 @@ What changed over a period ("what changed this week"): the net difference betwee
 
 ### 14.8 `GET /api/history/deleted[?q=][&limit=50][&offset=0]`
 
-Files that were deleted at some point and do not exist now, so they can be brought back from git even after the trash was emptied. Each path is listed once, with its latest deletion; newest first. A path whose latest change is not a deletion (it was re-created, or renamed away) is not listed, nor is a path that exists now.
+Files that were deleted at some point and do not exist now, so they can be brought back from git even after the trash was emptied. Each path is listed once, with its latest deletion; newest first. A path whose latest change is not a deletion (it was re-created, or renamed away) is not listed, nor is a path that exists now, also in another case (`Plan.md` is not listed while `plan.md` exists).
 
 | Parameter | Meaning |
 |---|---|

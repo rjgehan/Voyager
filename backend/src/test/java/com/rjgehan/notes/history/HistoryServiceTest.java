@@ -28,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
 class HistoryServiceTest {
@@ -305,6 +306,51 @@ class HistoryServiceTest {
 
 	static String text(byte[] bytes) {
 		return new String(bytes, StandardCharsets.UTF_8);
+	}
+
+
+	@Test
+	void restoringADeletedFileRefusesANameThatNowExistsInAnotherCase() throws Exception {
+		create("Plan.md", "old\n");
+		GitStore.Commit first = this.vault.flush();
+		Files.delete(this.dir.resolve("Plan.md"));
+		this.vault.index.removeFile("Plan.md");
+		create("plan.md", "new\n");
+		this.vault.flush();
+		assertThatThrownBy(() -> this.history.restore(new HistoryRestoreRequest("Plan.md", first.id(), "Plan.md", null),
+				TestVault.ALICE, "client-a1"))
+			.isInstanceOfSatisfying(NotesException.class, (ex) -> {
+				assertThat(ex.code()).isEqualTo(ErrorCode.CASE_COLLISION);
+				assertThat(ex.getBody().getProperties()).containsEntry("existingPath", "plan.md");
+			});
+		try (var listing = Files.list(this.dir)) {
+			assertThat(listing.map((path) -> path.getFileName().toString()).filter((name) -> !name.startsWith(".")))
+				.containsExactly("plan.md");
+		}
+		assertThat(Files.readString(this.dir.resolve("plan.md"))).isEqualTo("new\n");
+	}
+
+	@Test
+	void restoringIntoAFolderRenamedOnlyByCaseUsesTheFolder() throws Exception {
+		create("Projects/Old.md", "old\n");
+		create("Projects/Keep.md", "keep\n");
+		GitStore.Commit first = this.vault.flush();
+		Files.delete(this.dir.resolve("Projects/Old.md"));
+		this.vault.index.removeFile("Projects/Old.md");
+		this.vault.flush();
+		this.vault.moves.move("Projects", "projects", null, false, TestVault.ALICE, "client-a1");
+		HistoryRestoreResult result = this.history.restore(
+				new HistoryRestoreRequest("Projects/Old.md", first.id(), "Projects/Old.md", null), TestVault.ALICE,
+				"client-a1");
+		assertThat(result.created()).isTrue();
+		assertThat(result.file().path()).isEqualTo("projects/Old.md");
+		assertThat(result.createdFolders()).isEmpty();
+		assertThat(this.vault.index.isFolder("Projects")).isFalse();
+		try (var listing = Files.list(this.dir)) {
+			assertThat(listing.map((path) -> path.getFileName().toString()).filter((name) -> !name.startsWith(".")))
+				.containsExactly("projects");
+		}
+		assertThat(Files.readString(this.dir.resolve("projects/Old.md"))).isEqualTo("old\n");
 	}
 
 }
