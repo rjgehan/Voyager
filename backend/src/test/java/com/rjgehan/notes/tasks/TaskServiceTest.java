@@ -357,6 +357,21 @@ class TaskServiceTest {
 		assertThat(this.fx.read("Tasks/Inbox.tasks")).contains("\"FREQ=DAILY;INTERVAL=0\"");
 	}
 
+	@Test
+	void completingAHandEditedRuleWithATypoOrAnUnreadableEndClosesTheTask() throws Exception {
+		// Lax evaluation would drop THU and move the task to Tuesday 2026-11-10, or ignore UNTIL and repeat forever.
+		for (String rule : List.of("FREQ=WEEKLY;BYDAY=TU,THU", "FREQ=DAILY;UNTIL=2026-11-03")) {
+			Task task = this.fx.create("{\"title\": \"Gym\", \"due\": \"2026-11-04\", \"recurrence\": {\"rrule\": \"FREQ=DAILY\"}}");
+			String file = this.fx.read("Tasks/Inbox.tasks");
+			this.fx.write("Tasks/Inbox.tasks", file.replace("\"FREQ=DAILY\"", "\"" + rule + "\""));
+			TaskWriteResult done = this.fx.tasks.complete(task.id(), new CompleteTaskRequest(null, "2026-11-05", null),
+					TestVault.ALICE, TaskFixture.CLIENT);
+			assertThat(done.rolledForward()).as(rule).isFalse();
+			assertThat(done.task().status()).as(rule).isEqualTo(TaskStatus.DONE);
+			assertThat(done.task().due()).as(rule).isEqualTo("2026-11-04");
+		}
+	}
+
 	// ---------------------------------------------------------------- reorder and delete
 
 	@Test

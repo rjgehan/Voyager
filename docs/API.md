@@ -3266,7 +3266,7 @@ Names are 1 to 200 characters on one line, trimmed. `color` is `#rrggbb` or a lo
 - `INTERVAL`, `BYDAY`, `BYMONTHDAY`, `BYMONTH`, `BYYEARDAY`, `BYWEEKNO`, `BYSETPOS`, `WKST`, `BYHOUR`, `BYMINUTE` (hours and minutes apply only to a task with a time);
 - `COUNT` or `UNTIL` (not both). `COUNT` is the number of occurrences left, including the current one: each roll-forward decreases it, and completing the last one closes the task. `UNTIL` (`YYYYMMDD` or `YYYYMMDDTHHMMSSZ`) is compared by date.
 
-Rules are evaluated on local dates and times, so daylight-saving changes never shift a task. A rule that never produces an occurrence (`FREQ=YEARLY;BYMONTH=2;BYMONTHDAY=30`) is refused with `400`.
+Rules are evaluated on local dates and times, so daylight-saving changes never shift a task. A rule that never produces an occurrence (`FREQ=YEARLY;BYMONTH=2;BYMONTHDAY=30`) is refused with `400`. A `.tasks` file edited by hand can hold a rule outside the subset (no `FREQ` or `FREQ=HOURLY`, `BYDAY=THU`, `BYMONTHDAY=32`, `UNTIL=2026-11-03`, `COUNT` with `UNTIL`, a bad `INTERVAL`): it is served as written with a problem `"recurrence.rrule" cannot repeat: <reason>`, it is never evaluated, and completing the task closes it.
 
 | `from` | The next occurrence is |
 |---|---|

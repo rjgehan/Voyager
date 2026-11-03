@@ -206,6 +206,36 @@ class RecurrenceTest {
 		assertThat(Recurrence.next("FREQ=DAILY;COUNT=2", RecurrenceFrom.DUE, "2026-10-14", WEDNESDAY)).isNotNull();
 	}
 
+	@ParameterizedTest
+	@ValueSource(strings = { "FREQ=DAILY;UNTIL=2026-11-03", "FREQ=DAILY;UNTIL=20261120Z", "FREQ=WEEKLY;BYDAY=TU,THU",
+			"FREQ=WEEKLY;BYDAY=THU", "FREQ=MONTHLY;BYMONTHDAY=0", "FREQ=MONTHLY;BYMONTHDAY=32", "FREQ=YEARLY;BYMONTH=13",
+			"FREQ=WEEKLY;WKST=XX", "FREQ=HOURLY", "FREQ=MINUTELY", "FREQ=SECONDLY", "INTERVAL=2", "BYDAY=MO",
+			"FREQ=FORTNIGHTLY", "FREQ=DAILY;COUNT=3;UNTIL=20261120", "FREQ=MONTHLY;WKST=XX" })
+	void aHandEditedRuleTheApiWouldRefuseIsReportedAndNeverEvaluated(String rule) {
+		// A .tasks file edited by hand can hold any rule: what normalize refuses is reported as a problem, and
+		// completing the task closes it rather than evaluating a guess (lib-recur's lax mode drops what it cannot
+		// read: THU, an unreadable UNTIL that would mean "no end", a frequency of hours).
+		assertThat(Recurrence.storedRuleProblem(rule)).as(rule).isNotNull();
+		assertThatThrownBy(() -> Recurrence.normalize(rule)).isInstanceOf(IllegalArgumentException.class);
+		LocalDate day = LocalDate.of(2026, 11, 5);
+		for (RecurrenceFrom from : RecurrenceFrom.values()) {
+			assertThat(Recurrence.next(rule, from, "2026-11-02", day)).as(rule + " " + from).isNull();
+			assertThat(Recurrence.next(rule, from, "2026-11-02T09:00", day)).as(rule + " " + from).isNull();
+			assertThat(Recurrence.next(rule, from, null, day)).as(rule + " " + from).isNull();
+		}
+	}
+
+	@ParameterizedTest
+	@ValueSource(strings = { "FREQ=WEEKLY;BYDAY=TU,TH", "FREQ=DAILY;UNTIL=20261120", "FREQ=DAILY;UNTIL=20261120T235959Z",
+			"FREQ=MONTHLY;BYMONTHDAY=-1", "FREQ=YEARLY;BYMONTH=12;BYMONTHDAY=31", "FREQ=WEEKLY;WKST=SU;BYDAY=MO",
+			"FREQ=DAILY;BYHOUR=9;BYMINUTE=30", "FREQ=MONTHLY;BYDAY=-1FR", "FREQ=MONTHLY;BYDAY=TU;BYSETPOS=2",
+			"freq=weekly;byday=mo" })
+	void aHandEditedRuleTheApiWouldStoreIsFine(String rule) {
+		assertThat(Recurrence.storedRuleProblem(rule)).as(rule).isNull();
+		assertThat(Recurrence.next(rule, RecurrenceFrom.DUE, "2026-11-02", LocalDate.of(2026, 11, 2))).as(rule)
+			.isNotNull();
+	}
+
 	private static String next(String rule, RecurrenceFrom from, String anchor, LocalDate day) {
 		Recurrence.Next next = Recurrence.next(rule, from, anchor, day);
 		assertThat(next).as(rule).isNotNull();

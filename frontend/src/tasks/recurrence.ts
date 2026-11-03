@@ -145,6 +145,28 @@ function untilDate(value: string): LocalDate | null {
 }
 
 /**
+ * Why a rule is not in the server's subset, or null (Recurrence.ruleProblem): FREQ missing or not
+ * one of the four, a bad INTERVAL or COUNT, COUNT with UNTIL, an UNTIL that is not a date, or a WKST
+ * that is not a weekday. A hand-edited file can hold such a rule: it is shown as written and never
+ * evaluated (an unreadable UNTIL would otherwise mean no end), as on the server. What rrule cannot
+ * parse (`BYDAY=THU`) is caught where it is evaluated.
+ */
+function ruleProblem(parts: ReadonlyMap<string, string>): string | null {
+  const freq = parts.get('FREQ');
+  if (!freq || !FREQUENCIES.has(freq)) return 'FREQ must be DAILY, WEEKLY, MONTHLY or YEARLY';
+  for (const numeric of ['INTERVAL', 'COUNT']) {
+    const value = parts.get(numeric);
+    if (value !== undefined && !NUMBER.test(value)) return `${numeric} must be a whole number from 1 to 99999`;
+  }
+  if (parts.has('COUNT') && parts.has('UNTIL')) return 'COUNT and UNTIL cannot be combined';
+  const until = parts.get('UNTIL');
+  if (until !== undefined && untilDate(until) === null) return 'UNTIL must be a date (YYYYMMDD) or a date-time (YYYYMMDDTHHMMSSZ)';
+  const wkst = parts.get('WKST');
+  if (wkst !== undefined && !(WEEKDAYS as readonly string[]).includes(wkst)) return 'WKST must be a day of the week (MO to SU)';
+  return null;
+}
+
+/**
  * A rule without COUNT and UNTIL (the app handles those), bounded so a rule that never matches cannot
  * spin. Throws for an INTERVAL that is not a positive number (a hand-edited file can hold one): rrule
  * would step through it forever.
@@ -176,15 +198,8 @@ export function validateRule(text: string): { rrule: string } | { error: string 
   } catch (e) {
     return { error: (e as Error).message };
   }
-  const freq = parts.get('FREQ');
-  if (!freq || !FREQUENCIES.has(freq)) return { error: 'FREQ must be DAILY, WEEKLY, MONTHLY or YEARLY' };
-  for (const numeric of ['INTERVAL', 'COUNT']) {
-    const value = parts.get(numeric);
-    if (value !== undefined && !NUMBER.test(value)) return { error: `${numeric} must be a whole number from 1 to 99999` };
-  }
-  if (parts.has('COUNT') && parts.has('UNTIL')) return { error: 'COUNT and UNTIL cannot be combined' };
-  const until = parts.get('UNTIL');
-  if (until !== undefined && untilDate(until) === null) return { error: 'UNTIL must be a date (YYYYMMDD) or a date-time (YYYYMMDDTHHMMSSZ)' };
+  const problem = ruleProblem(parts);
+  if (problem !== null) return { error: problem };
   try {
     const probe = utcOf('2026-01-01');
     const rule = evaluator(parts, probe, false);
@@ -360,7 +375,7 @@ export function nextOccurrence(rrule: string, from: 'due' | 'completion', anchor
   } catch {
     return undefined;
   }
-  if (!FREQUENCIES.has(parts.get('FREQ') ?? '')) return undefined;
+  if (ruleProblem(parts) !== null) return undefined;
   const countValue = parts.get('COUNT');
   const count = countValue !== undefined ? Number(countValue) : null;
   if (count !== null && count <= 1) return null;
@@ -453,6 +468,7 @@ export function upcomingOccurrences(rrule: string, anchor: TaskDate | null, toda
   } catch {
     return [];
   }
+  if (ruleProblem(parts) !== null) return [];
   const timed = anchor !== null && anchor.length > 10;
   const start = utcOf(anchor ?? today);
   const count = parts.has('COUNT') ? Number(parts.get('COUNT')) - 1 : Infinity;
@@ -490,7 +506,7 @@ export function occurrencesBetween(rrule: string, anchor: TaskDate, from: LocalD
   } catch {
     return [];
   }
-  if (!FREQUENCIES.has(parts.get('FREQ') ?? '') || to < from || datePart(anchor) > to) return [];
+  if (ruleProblem(parts) !== null || to < from || datePart(anchor) > to) return [];
   const timed = anchor.length > 10;
   const start = utcOf(anchor);
   const left = parts.has('COUNT') ? Number(parts.get('COUNT')) - 1 : Infinity;

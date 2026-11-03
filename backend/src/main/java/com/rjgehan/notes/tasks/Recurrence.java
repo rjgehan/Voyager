@@ -77,31 +77,14 @@ final class Recurrence {
 			throw new IllegalArgumentException("must be a single RRULE of at most " + MAX_LENGTH + " characters");
 		}
 		Map<String, String> parts = parts(rule.toUpperCase(Locale.ROOT));
-		String freq = parts.get("FREQ");
-		if (freq == null || !FREQUENCIES.contains(freq)) {
-			throw new IllegalArgumentException("FREQ must be DAILY, WEEKLY, MONTHLY or YEARLY");
-		}
-		String numeric = numericProblem(parts);
-		if (numeric != null) {
-			throw new IllegalArgumentException(numeric);
-		}
-		if (parts.containsKey("COUNT") && parts.containsKey("UNTIL")) {
-			throw new IllegalArgumentException("COUNT and UNTIL cannot be combined");
-		}
-		String until = parts.get("UNTIL");
-		if (until != null && untilDate(until) == null) {
-			throw new IllegalArgumentException("UNTIL must be a date (YYYYMMDD) or a date-time (YYYYMMDDTHHMMSSZ)");
+		String problem = ruleProblem(parts);
+		if (problem != null) {
+			throw new IllegalArgumentException(problem);
 		}
 		Map<String, String> unbounded = new LinkedHashMap<>(parts);
 		unbounded.remove("COUNT");
 		unbounded.remove("UNTIL");
 		String probe = join(unbounded);
-		try {
-			new RecurrenceRule(probe, RecurrenceRule.RfcMode.RFC5545_STRICT);
-		}
-		catch (InvalidRecurrenceRuleException | RuntimeException ex) {
-			throw new IllegalArgumentException("is not a valid RRULE: " + ex.getMessage());
-		}
 		// A rule such as "every February 30th" parses but has no occurrences.
 		if (next(probe, RecurrenceFrom.COMPLETION, null, PROBE_START) == null
 				&& next(probe, RecurrenceFrom.COMPLETION, PROBE_START + "T09:00", PROBE_START) == null) {
@@ -122,15 +105,16 @@ final class Recurrence {
 	 * on the month's last day when it is shorter ("every month when done" completed on 30 January: 28 February, where
 	 * RFC 5545 would skip to 30 March).
 	 * <p>
-	 * A rule from a file edited by hand is not always one {@link #normalize} would store: an {@code INTERVAL} or
-	 * {@code COUNT} that is not a whole number from 1 to 99999 cannot be evaluated (lib-recur's lax mode would read
-	 * {@code INTERVAL=0}, {@code -1} or {@code abc} as 1 and make up a step), so such a rule has no next occurrence,
-	 * as on the client (DESIGN §6.22).
+	 * A rule from a file edited by hand is not always one {@link #normalize} would store, and such a rule has no next
+	 * occurrence ({@link #ruleProblem}): lib-recur's lax mode would read {@code INTERVAL=0}, {@code -1} or {@code abc}
+	 * as 1 and make up a step, drop a {@code BYDAY} of {@code THU} or a {@code BYMONTHDAY} of 32, and evaluate
+	 * {@code FREQ=HOURLY}, and an {@code UNTIL} that cannot be read would mean no end. The client does not evaluate
+	 * such a rule either (DESIGN §6.22).
 	 */
 	static @Nullable Next next(String rrule, RecurrenceFrom from, @Nullable String anchor, LocalDate completionDay) {
 		try {
 			Map<String, String> parts = parts(rrule);
-			if (numericProblem(parts) != null) {
+			if (ruleProblem(parts) != null) {
 				return null;
 			}
 			String countValue = parts.remove("COUNT");
@@ -204,13 +188,48 @@ final class Recurrence {
 	}
 
 	/**
-	 * Why a rule read from a file cannot be repeated, or null when it can be evaluated: a cheap check, without
-	 * evaluating the rule, for what {@link #next} refuses (parts it does not know, a bad {@code INTERVAL} or
-	 * {@code COUNT}). A file edited by hand can hold any rule; the API only stores normalized ones.
+	 * Why a rule is not in the supported subset, or null: {@code FREQ} missing or not one of the four, a bad
+	 * {@code INTERVAL} or {@code COUNT}, {@code COUNT} with {@code UNTIL}, an {@code UNTIL} that is not a date, or a
+	 * part lib-recur's strict RFC 5545 mode refuses ({@code BYDAY=THU}, {@code BYMONTHDAY=32}). Shared by
+	 * {@link #normalize} (the API refuses the rule), {@link #next} (it is not evaluated) and
+	 * {@link #storedRuleProblem} (the task list reports it).
+	 */
+	private static @Nullable String ruleProblem(Map<String, String> parts) {
+		String freq = parts.get("FREQ");
+		if (freq == null || !FREQUENCIES.contains(freq)) {
+			return "FREQ must be DAILY, WEEKLY, MONTHLY or YEARLY";
+		}
+		String numeric = numericProblem(parts);
+		if (numeric != null) {
+			return numeric;
+		}
+		if (parts.containsKey("COUNT") && parts.containsKey("UNTIL")) {
+			return "COUNT and UNTIL cannot be combined";
+		}
+		String until = parts.get("UNTIL");
+		if (until != null && untilDate(until) == null) {
+			return "UNTIL must be a date (YYYYMMDD) or a date-time (YYYYMMDDTHHMMSSZ)";
+		}
+		Map<String, String> unbounded = new LinkedHashMap<>(parts);
+		unbounded.remove("COUNT");
+		unbounded.remove("UNTIL");
+		try {
+			new RecurrenceRule(join(unbounded), RecurrenceRule.RfcMode.RFC5545_STRICT);
+		}
+		catch (InvalidRecurrenceRuleException | RuntimeException ex) {
+			return "is not a valid RRULE: " + ex.getMessage();
+		}
+		return null;
+	}
+
+	/**
+	 * Why a rule read from a file cannot be repeated, or null when it can be evaluated: what {@link #next} refuses
+	 * ({@link #ruleProblem}, and parts it does not know), checked without evaluating the rule. A file edited by hand
+	 * can hold any rule; the API only stores normalized ones.
 	 */
 	static @Nullable String storedRuleProblem(String rrule) {
 		try {
-			return numericProblem(parts(rrule));
+			return ruleProblem(parts(rrule));
 		}
 		catch (IllegalArgumentException ex) {
 			return ex.getMessage();

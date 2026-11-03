@@ -170,16 +170,31 @@ class TaskFileTest {
 				 "tasks": [
 				   {"id": "zero", "title": "Z", "due": "2026-10-14", "recurrence": {"rrule": "FREQ=DAILY;INTERVAL=0"}},
 				   {"id": "word", "title": "W", "due": "2026-10-14", "recurrence": {"rrule": "FREQ=WEEKLY;INTERVAL=abc"}},
-				   {"id": "fine", "title": "F", "due": "2026-10-14", "recurrence": {"rrule": "FREQ=WEEKLY;INTERVAL=2"}}
+				   {"id": "fine", "title": "F", "due": "2026-10-14", "recurrence": {"rrule": "FREQ=WEEKLY;INTERVAL=2"}},
+				   {"id": "thu", "title": "T", "due": "2026-11-04", "recurrence": {"rrule": "FREQ=WEEKLY;BYDAY=TU,THU"}},
+				   {"id": "dashes", "title": "D", "due": "2026-11-02", "recurrence": {"rrule": "FREQ=DAILY;UNTIL=2026-11-03"}},
+				   {"id": "hourly", "title": "H", "due": "2026-11-02T09:00", "recurrence": {"rrule": "FREQ=HOURLY"}},
+				   {"id": "nofreq", "title": "N", "due": "2026-11-02", "recurrence": {"rrule": "INTERVAL=2"}}
 				 ]}
 				""";
 		TaskSnapshot snapshot = TaskSnapshot.of("Tasks/L.tasks", "v",
 				TaskFile.parse(content.getBytes(StandardCharsets.UTF_8), TestVault.JSON));
 		assertThat(snapshot.tasks()).extracting((t) -> t.recurrence().rrule())
-			.containsExactly("FREQ=DAILY;INTERVAL=0", "FREQ=WEEKLY;INTERVAL=abc", "FREQ=WEEKLY;INTERVAL=2");
+			.containsExactly("FREQ=DAILY;INTERVAL=0", "FREQ=WEEKLY;INTERVAL=abc", "FREQ=WEEKLY;INTERVAL=2",
+					"FREQ=WEEKLY;BYDAY=TU,THU", "FREQ=DAILY;UNTIL=2026-11-03", "FREQ=HOURLY", "INTERVAL=2");
 		assertThat(snapshot.problems()).extracting((p) -> p.taskId() + ": " + p.reason())
-			.containsExactly("zero: \"recurrence.rrule\" cannot repeat: INTERVAL must be a whole number from 1 to 99999",
-					"word: \"recurrence.rrule\" cannot repeat: INTERVAL must be a whole number from 1 to 99999");
+			.satisfiesExactly(
+					(p) -> assertThat(p).isEqualTo(
+							"zero: \"recurrence.rrule\" cannot repeat: INTERVAL must be a whole number from 1 to 99999"),
+					(p) -> assertThat(p).isEqualTo(
+							"word: \"recurrence.rrule\" cannot repeat: INTERVAL must be a whole number from 1 to 99999"),
+					(p) -> assertThat(p).startsWith("thu: \"recurrence.rrule\" cannot repeat: is not a valid RRULE: "),
+					(p) -> assertThat(p).isEqualTo("dashes: \"recurrence.rrule\" cannot repeat: "
+							+ "UNTIL must be a date (YYYYMMDD) or a date-time (YYYYMMDDTHHMMSSZ)"),
+					(p) -> assertThat(p).isEqualTo(
+							"hourly: \"recurrence.rrule\" cannot repeat: FREQ must be DAILY, WEEKLY, MONTHLY or YEARLY"),
+					(p) -> assertThat(p).isEqualTo(
+							"nofreq: \"recurrence.rrule\" cannot repeat: FREQ must be DAILY, WEEKLY, MONTHLY or YEARLY"));
 	}
 
 	@Test
