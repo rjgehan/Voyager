@@ -41,7 +41,7 @@ import { guessChartOptions } from '../../sheets/charts';
 import { pivotTable, type PivotOptions } from '../../sheets/pivot';
 import { columnFiltered, dataRegion, filterRange, looksLikeHeader } from '../../sheets/filter';
 import type { Separator } from '../../sheets/csv';
-import { effectiveFormat, formatShown, shownCell } from '../../sheets/display';
+import { effectiveFormat, shownCell } from '../../sheets/display';
 import { dropPendingCut, setSheetClip, sheetClip } from '../../sheets/clipboard';
 import { clearEdits, clipStillHolds, copyRange, fillDownEdits, fillEdits, fillRightEdits, pasteEdits, typedEdit, usedExtent, type SheetClip } from '../../sheets/edits';
 import type { CellEdit, FormatEdit, Workbook } from '../../sheets/engine';
@@ -60,7 +60,7 @@ import {
   type SheetFilter,
   type ValidationType,
 } from '../../sheets/format';
-import { dropdownItems, holdsItem, isValid, validationLooks, validations } from '../../sheets/validation';
+import { dropdownItems, holdsItem, refusesInput, validationLooks, validations } from '../../sheets/validation';
 import { changeDecimals, isGeneral } from '../../sheets/numfmt';
 import { absoluteRangeText, parseRangeText, rangeText, type CellRange } from '../../sheets/refs';
 import { typedInput } from '../../sheets/input';
@@ -332,9 +332,7 @@ ${JSON.stringify(sheet.filter ?? null)}`;
     if (changed && text !== editText(s, target)) {
       const typed = typedEdit(s, target.col, target.row, text);
       // A strict validation refuses other input, as Google Sheets' "Reject the input".
-      const rule = validations(s)?.(target.col, target.row)?.validation;
-      const value = typed.content?.v;
-      if (rule?.strict && value !== undefined && !isValid(workbook.file, s, rule, value, formatShown(value, typed.fmt ?? effectiveFormat(s, target.col, target.row)).text)) {
+      if (refusesInput(workbook.file, s, typed)) {
         toast(`“${text}” is not one of the values ${toA1(target.col, target.row)} takes.`, { kind: 'error' });
         if (!touch) focusGrid();
         return;
@@ -555,7 +553,7 @@ ${JSON.stringify(sheet.filter ?? null)}`;
   /** Shows a match: its sheet, with the cell selected (the grid scrolls to it); the panel keeps the keys. */
   const goToMatch = (m: { sheet: string; col: number; row: number }) => {
     const dest = sheetById(workbook.file, m.sheet);
-    if (dest) showRange(dest, { col: m.col, row: m.row, width: 1, height: 1 });
+    if (dest) return { sheet: dest.id, ...showRange(dest, { col: m.col, row: m.row, width: 1, height: 1 }) };
   };
 
   // ---------- data validation: checkboxes and dropdowns ----------
@@ -832,12 +830,13 @@ ${JSON.stringify(sheet.filter ?? null)}`;
     return true;
   };
 
-  /** Opens sheet `dest` with `r` (sheet rows) selected. */
-  const showRange = (dest: Sheet, sheetR: CellRange) => {
+  /** Opens sheet `dest` with `r` (sheet rows) selected; returns the active cell (sheet rows) it selected. */
+  const showRange = (dest: Sheet, sheetR: CellRange): CellAt => {
     setSheetId(dest.id);
     // On this sheet, a filter view may show the rows elsewhere, or hide them.
     let r = sheetR;
-    if (dest.id === sheet.id && view.active) {
+    const filtered = dest.id === sheet.id && view.active;
+    if (filtered) {
       const shown = displayRange(view, sheetR);
       if (shown) r = shown;
       else {
@@ -852,6 +851,7 @@ ${JSON.stringify(sheet.filter ?? null)}`;
       const g = m.get(dest.id);
       return new Map(m).set(dest.id, { rows: Math.max(g?.rows ?? 0, r.row + r.height + 100), cols: Math.max(g?.cols ?? 0, r.col + r.width + 4) });
     });
+    return { col: r.col, row: filtered ? view.sheetRow(r.row) : r.row };
   };
 
   // A link or embed that opened `Budget.sheet#Summary` or `#Budget!A1:C3` (DESIGN §6.21.7).

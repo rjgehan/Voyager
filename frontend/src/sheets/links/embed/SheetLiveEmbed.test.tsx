@@ -19,6 +19,7 @@ import { sheetClip, setSheetClip } from '../../clipboard';
 import { copyRange } from '../../edits';
 import { parseSheet } from '../../format';
 import { loadSheetEngine } from '../../loadEngine';
+import { useToasts } from '../../../state/toasts';
 import { resetLinkStore } from '../store';
 import SheetLiveEmbed from './SheetLiveEmbed';
 
@@ -140,6 +141,55 @@ describe('a spreadsheet embedded in a note that can be written', () => {
     expect(cell(container, 'B4').classList.contains('is-active')).toBe(true);
     await waitFor(() => expect(saved(path).B3.v).toBe(500), { timeout: 4000 });
     expect(saved(path).B4.c).toBe(1950);
+  });
+
+  it('refuses a value a strict dropdown does not take, as the spreadsheet view does', async () => {
+    const sheets = [{ ...BUDGET.sheets[0], validation: { v1: { range: 'A2:A20', type: 'list', values: ['Rent', 'Food', 'Gym'], strict: true } } }, BUDGET.sheets[1]];
+    const path = newFile({ ...BUDGET, version: 2, sheets });
+    const { container } = show(path);
+    await waitFor(() => expect(cell(container, 'A3').textContent).toBe('Food'));
+    fireEvent.doubleClick(cell(container, 'A3'));
+    const input = screen.getByRole('textbox', { name: 'Cell' }) as HTMLInputElement;
+    fireEvent.change(input, { target: { value: 'maybe' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() => expect(useToasts.getState().toasts.map((t) => t.message)).toContain('“maybe” is not one of the values A3 takes.'));
+    // The editor stays open on the refused text, and nothing is written.
+    expect(input.hidden).toBe(false);
+    expect(input.value).toBe('maybe');
+    expect(cell(container, 'A3').textContent).toBe('Food');
+    fireEvent.change(input, { target: { value: 'Gym' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() => expect(saved(path).A3.v).toBe('Gym'), { timeout: 4000 });
+  });
+
+  it('keeps the sheet picked in a whole-file embed through a rename, and falls back to the first when it is deleted', async () => {
+    const path = newFile();
+    const { container } = show(path);
+    await waitFor(() => expect(cell(container, 'B2').textContent).toBe('$1,450.00'));
+    const picker = screen.getByRole('combobox', { name: 'Sheet' }) as HTMLSelectElement;
+    fireEvent.change(picker, { target: { value: 's2' } });
+    await waitFor(() => expect(cell(container, 'A1').textContent).toBe('Q1'));
+    const remote = async (next: typeof BUDGET) => {
+      vault.externalWrite(path, JSON.stringify(next));
+      await act(async () => {
+        await documents.get(path)!.onRemoteChanged({ version: vault.readFile(path).version });
+      });
+    };
+    // Another device renames Summary (its id stays).
+    const renamed = structuredClone(BUDGET);
+    renamed.sheets[1].name = 'Totals';
+    await remote(renamed);
+    await waitFor(() => expect(screen.getByRole('option', { name: 'Totals' })).toBeTruthy());
+    expect(cell(container, 'A1').textContent).toBe('Q1');
+    expect(picker.value).toBe('s2');
+    expect(container.textContent).not.toContain('is not a sheet');
+    // Then deletes it: the embed shows the first sheet.
+    const deleted = structuredClone(BUDGET);
+    deleted.sheets[0].name = 'Budget';
+    deleted.sheets.splice(1, 1);
+    await remote(deleted);
+    await waitFor(() => expect(cell(container, 'A1').textContent).toBe('Item'));
+    expect(container.textContent).not.toContain('is not a sheet');
   });
 
   it('writes nothing when a cell is opened and left untouched, even after another device changed it', async () => {

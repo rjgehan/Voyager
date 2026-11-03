@@ -242,15 +242,19 @@ function valueCell(value: CachedValue): XLSX.CellObject | null {
 }
 
 /**
- * Sheet names as Excel takes them (at most 31 characters, unique without regard to case), and a
+ * Sheet names as Excel takes them (at most 31 characters, unique without regard to case, not
+ * "History", not ending in an apostrophe), and a
  * function that points formulas at them.
  */
 function excelNames(file: SheetFile): { names: string[]; follow(formula: string): string } {
   const names: string[] = [];
   const renamed: Array<[string, string]> = [];
+  // Excel reserves "History", and a name cannot end in an apostrophe (one cannot start with one here).
+  const taken = (name: string) => name.toLowerCase() === 'history' || names.some((x) => x.toLowerCase() === name.toLowerCase());
+  const cut = (name: string, length: number) => name.slice(0, length).replace(/'+$/, '');
   for (const sheet of file.sheets) {
-    let name = sheet.name.slice(0, 31);
-    for (let n = 2; names.some((x) => x.toLowerCase() === name.toLowerCase()); n++) name = `${sheet.name.slice(0, 31 - String(n).length - 3)} (${n})`;
+    let name = cut(sheet.name, 31);
+    for (let n = 2; taken(name); n++) name = `${cut(sheet.name, 31 - String(n).length - 3)} (${n})`;
     names.push(name);
     if (name !== sheet.name) renamed.push([sheet.name, name]);
   }

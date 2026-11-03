@@ -24,6 +24,8 @@ import { cellText, cellValue, compareIds, isCellError, sheetById, type Sheet, ty
 import { pickSlot, placeReference, spanOf, type PickedSlot } from '../../formulaText';
 import { rangeText, type CellRange } from '../../refs';
 import { resolveTarget, usedRange } from '../../target';
+import { refusesInput } from '../../validation';
+import { toast } from '../../../state/toasts';
 import { setSheetClip, sheetClip } from '../../clipboard';
 
 /** An embed shows at most this many rows and columns (as item 6b's); the spreadsheet has the rest. */
@@ -49,6 +51,13 @@ interface Props {
   engineFailed: string | null;
   /** The workbook is needed (a cell was touched). */
   onWant(): void;
+  /**
+   * Saves edits the workbook never took, without the engine: its chunk did not load, or the embed
+   * goes away before it arrives. False when they could not be kept.
+   */
+  keep(edits: CellEdit[]): boolean;
+  /** Loads the engine again after it failed. */
+  onRetry(): void;
 }
 
 interface At {
@@ -87,6 +96,7 @@ export function EmbedGrid(props: Props) {
   const table = useRef<HTMLTableElement>(null);
   /** The cell editor: a one-row textarea, so a cell's line breaks survive an edit. */
   const input = useRef<HTMLTextAreaElement>(null);
+  /** The id of the sheet picked in a whole-file embed, so a rename keeps it (a delete falls back to the first). */
   const [sheetChoice, setSheetChoice] = useState<string | null>(null);
   const [chosen, setActive] = useState<At>({ col: 0, row: 0 });
   const [chosenAnchor, setAnchor] = useState<At>({ col: 0, row: 0 });
@@ -104,7 +114,8 @@ export function EmbedGrid(props: Props) {
   const pending = useRef<CellEdit[]>([]);
   const touch = useRef<{ x: number; y: number; moved: boolean } | null>(null);
 
-  const target = model ? resolveTarget(model, sheetChoice ?? subpath) : null;
+  const pickedSheet = model && sheetChoice !== null ? (sheetById(model, sheetChoice) ?? null) : null;
+  const target = model ? (pickedSheet ? { sheet: pickedSheet, range: null } : resolveTarget(model, subpath)) : null;
   const sheet = target?.sheet ?? null;
   const { range, full } = sheet ? shownRange(sheet, target?.range ?? null, editable) : { range: null, full: null };
   // The selection is always in the shown range (it starts at its first cell).
@@ -114,23 +125,49 @@ export function EmbedGrid(props: Props) {
   const anchor = inside(chosen) && inside(chosenAnchor) ? chosenAnchor : active;
   const selection = spanOf(active, anchor);
 
-  // Typed before the workbook loaded: applied now, as one undo step.
+  /** Typed edits that could not be kept (the file cannot be read either). */
+  const [lost, setLost] = useState(false);
+  const keep = useRef(props.keep);
   useEffect(() => {
-    if (!workbook || pending.current.length === 0) return;
-    const edits = pending.current;
-    pending.current = [];
-    try {
-      workbook.setCells(edits, { implyFormats: true });
-    } catch (e) {
-      console.error('[links] an embed edit failed', e);
+    keep.current = props.keep;
+  });
+  const failed = props.engineFailed !== null || props.problem !== null;
+
+  // Typed before the workbook loaded: applied now, as one undo step. When the engine fails
+  // instead, they are saved without it, so a typed value is never dropped.
+  useEffect(() => {
+    if (pending.current.length === 0) return;
+    if (workbook) {
+      const edits = pending.current;
+      pending.current = [];
+      try {
+        workbook.setCells(edits, { implyFormats: true });
+      } catch (e) {
+        console.error('[links] an embed edit failed', e);
+      }
+    } else if (failed) {
+      const edits = pending.current;
+      pending.current = [];
+      if (!keep.current(edits)) setLost(true);
     }
-  }, [workbook]);
+  }, [workbook, failed]);
+
+  // Leaving before the engine arrived (the note scrolled the embed away): the edits are saved now.
+  useEffect(
+    () => () => {
+      if (pending.current.length === 0) return;
+      const edits = pending.current;
+      pending.current = [];
+      keep.current(edits);
+    },
+    [],
+  );
 
   const open = (e?: MouseEvent) => {
     e?.stopPropagation();
     if (e && (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0)) return;
     e?.preventDefault();
-    openPath(path, sheetChoice ?? subpath ?? null);
+    openPath(path, pickedSheet?.name ?? subpath ?? null);
   };
 
   // ---------- editing ----------
@@ -186,17 +223,27 @@ export function EmbedGrid(props: Props) {
    * with (a typed first key always counts): opening a cell and leaving it writes nothing, even when
    * another device changed the cell meanwhile.
    */
-  const commit = (move: 'down' | 'up' | 'right' | 'left' | 'none') => {
+  const commit = (move: 'down' | 'up' | 'right' | 'left' | 'none', leaving = false): boolean => {
     const el = input.current;
     const at = editingNow.current;
-    if (!at || !el || !model) return;
+    if (!at || !el || !model) return true;
     const s = sheetById(model, at.sheet);
     const text = el.value;
     const changed = text !== editStart.current;
+    const typed = s && changed && text !== editText(s, at) ? typedEdit(s, at.col, at.row, text) : null;
+    // A strict validation refuses other input, as in the spreadsheet view (Google Sheets' "Reject
+    // the input"): the editor stays open on the text, unless the focus left it.
+    if (s && typed && refusesInput(model, s, typed)) {
+      toast(`“${text}” is not one of the values ${toA1(at.col, at.row)} takes.`, { kind: 'error' });
+      if (leaving) stopEdit();
+      else el.focus({ preventScroll: true });
+      return false;
+    }
     stopEdit();
-    if (s && changed && text !== editText(s, at)) apply([typedEdit(s, at.col, at.row, text)]);
+    if (typed) apply([typed]);
     if (move !== 'none') moveTo(step(at, move), false);
     if (!coarse()) table.current?.focus({ preventScroll: true });
+    return true;
   };
 
   const cancel = () => {
@@ -252,7 +299,10 @@ export function EmbedGrid(props: Props) {
       e.preventDefault();
       return;
     }
-    if (editingNow.current) commit('none');
+    if (editingNow.current && !commit('none')) {
+      e.preventDefault();
+      return;
+    }
     props.onWant();
     moveTo(at, e.shiftKey);
   };
@@ -281,7 +331,7 @@ export function EmbedGrid(props: Props) {
     e.preventDefault();
     e.stopPropagation();
     if (editingNow.current && point(at, 'tap')) return;
-    if (editingNow.current) commit('none');
+    if (editingNow.current && !commit('none')) return;
     const again = active.col === at.col && active.row === at.row && selection.width === 1 && selection.height === 1;
     if (again) startEdit(at);
     else {
@@ -414,7 +464,7 @@ export function EmbedGrid(props: Props) {
 
   const value = sheet ? cellValue(sheet.cells[toA1(active.col, active.row)]) : null;
   const errorHint = sheet && workbook && isCellError(value) ? workbook.errorMessage(sheet.id, toA1(active.col, active.row)) : null;
-  const charts = sheet && !target?.range && !sheetChoice && !subpath ? Object.entries(sheet.charts).sort(([a], [b]) => compareIds(a, b)) : [];
+  const charts = sheet && !target?.range && !pickedSheet && !subpath ? Object.entries(sheet.charts).sort(([a], [b]) => compareIds(a, b)) : [];
   const sheets = model?.sheets ?? [];
   // Conditional formatting of the shown sheet (DESIGN §6.21.12), worked out once per render.
   const styleAt = sheet ? conditionalStyles(sheet) : null;
@@ -536,7 +586,7 @@ export function EmbedGrid(props: Props) {
             onKeyDown={onInputKeyDown}
             onBlur={() => {
               // A press on a cell that points at it keeps the focus; anything else ends the edit.
-              if (editingNow.current) commit('none');
+              if (editingNow.current) commit('none', true);
             }}
           />
         )}
@@ -559,7 +609,7 @@ export function EmbedGrid(props: Props) {
           <span>{caption}</span>
         </a>
         {editable && sheets.length > 1 && !subpath && (
-          <select className="sheet-live-sheets" aria-label="Sheet" value={sheet?.id ?? ''} onChange={(e) => setSheetChoice(sheetById(model!, e.target.value)?.name ?? null)}>
+          <select className="sheet-live-sheets" aria-label="Sheet" value={sheet?.id ?? ''} onChange={(e) => setSheetChoice(e.target.value)}>
             {sheets.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
@@ -601,7 +651,19 @@ export function EmbedGrid(props: Props) {
           {errorHint && <span className="sheet-live-error">{errorHint}</span>}
         </div>
       )}
-      {props.engineFailed && <p className="sheet-embed-note">The spreadsheet engine could not be loaded, so this grid is read-only for now.</p>}
+      {props.engineFailed && (
+        <p className="sheet-embed-note">
+          The spreadsheet engine could not be loaded, so this grid is read-only for now.{' '}
+          <button type="button" className="link-button" onClick={props.onRetry}>
+            Try again
+          </button>
+        </p>
+      )}
+      {lost && (
+        <p className="sheet-embed-note sheet-live-error" role="alert">
+          The change you typed could not be saved. Open the spreadsheet to make it there.
+        </p>
+      )}
       {body}
       {range && full && (full.height > range.height || full.width > range.width) && (
         <p className="sheet-embed-note">

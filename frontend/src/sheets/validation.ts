@@ -2,7 +2,9 @@
 // dropdown (its own items, or the values of a range on any sheet) or are checkboxes (TRUE or FALSE;
 // empty is unchecked). Other input is marked as invalid, or refused when the validation is strict.
 // When validations overlap, the newest one applies. Pure and engine-free, from cached values.
-import { shownCell } from './display';
+import { parseA1 } from './a1';
+import { effectiveFormat, formatShown, shownCell } from './display';
+import type { CellEdit } from './engine';
 import { compareIds, sheetByName, type CachedValue, type Sheet, type SheetFile, type Validation } from './format';
 import { typedInput } from './input';
 import { parseRangeText, type CellRange } from './refs';
@@ -121,4 +123,17 @@ export function describeValidation(v: Validation): string {
   if (v.type === 'range') return `Dropdown from ${v.source ?? ''}`;
   if (v.type === 'list') return `Dropdown: ${(v.values ?? []).join(', ')}`;
   return 'Unknown validation';
+}
+
+/**
+ * Whether a strict validation refuses typed input (`edit`, from typedEdit) in its cell, as Google
+ * Sheets' "Reject the input": the spreadsheet view and the grids embedded in notes both ask.
+ */
+export function refusesInput(file: SheetFile, sheet: Sheet, edit: CellEdit): boolean {
+  const at = parseA1(edit.ref);
+  const value = edit.content?.v;
+  if (!at || value === undefined) return false;
+  const rule = validations(sheet)?.(at.col, at.row)?.validation;
+  if (!rule?.strict) return false;
+  return !isValid(file, sheet, rule, value, formatShown(value, edit.fmt ?? effectiveFormat(sheet, at.col, at.row)).text);
 }

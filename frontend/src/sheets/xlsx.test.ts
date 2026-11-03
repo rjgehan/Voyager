@@ -209,4 +209,33 @@ describe('sheet names Excel cannot take', () => {
     expect(book.sheets[2].cells.A1.f).toBe(`=${a}!A1*10+${b}!A1`);
     expect(book.named).toEqual({ First: `${a}!$A$1`, Second: `${b}!$A$1` });
   });
+
+  it('exports a sheet named History, which Excel reserves, under another name', () => {
+    for (const reserved of ['History', 'history', 'HISTORY']) {
+      const book = readWorkbook(
+        writeWorkbook(
+          file({
+            type: 'notesapp-sheet',
+            version: 1,
+            engine: '',
+            sheets: [
+              { id: 's1', name: reserved, cells: { A1: { v: 1 } } },
+              { id: 's2', name: 'Sum', cells: { A1: { f: `=${reserved}!A1*10`, c: 10 } } },
+            ],
+          }),
+        ),
+      );
+      expect(book.sheets[0].name).toBe(`${reserved} (2)`);
+      expect(cellValue(book.sheets[0].cells.A1)).toBe(1);
+      expect(book.sheets[1].cells.A1.f).toBe(`=${formulaSheetName(`${reserved} (2)`)}!A1*10`);
+    }
+  });
+
+  it('drops an apostrophe the 31-character cut leaves at the end of a name', () => {
+    const name = 'A'.repeat(30) + "'s data";
+    const book = readWorkbook(
+      writeWorkbook(file({ type: 'notesapp-sheet', version: 1, engine: '', sheets: [{ id: 's1', name, cells: { A1: { v: 1 } } }] })),
+    );
+    expect(book.sheets[0].name).toBe('A'.repeat(30));
+  });
 });
