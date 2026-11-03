@@ -196,3 +196,11 @@ describe('the tablet rail', () => {
     expect(declarations('styles/app.css', '.ribbon-group:last-child')).toMatch(/flex:\s*none/);
   });
 });
+
+describe('rendered blocks on a touch screen', () => {
+  it('a Dataview or script block’s ↻ and </> bar takes a row of its own above the output, never over a table’s header (F11)', () => {
+    const bar = declarationsIn('styles/editor.css', '@media (hover: none)', '.cm-lp-script-bar');
+    expect(bar).toMatch(/position:\s*static/);
+    expect(bar).toMatch(/justify-content:\s*flex-end/);
+  });
+});

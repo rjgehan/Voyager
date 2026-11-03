@@ -1340,8 +1340,13 @@ th.cm-lp-cell {
   opacity: 1;
 }
 
+/* A touch screen shows the bar all the time, so it takes a row of its own above the output instead
+   of sitting over it (it hid the last column of a Dataview table's header). */
 @media (hover: none) {
   .cm-lp-script-bar {
+    position: static;
+    justify-content: flex-end;
+    margin-bottom: 2px;
     opacity: 0.8;
   }
 }
