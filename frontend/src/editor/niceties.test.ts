@@ -2,12 +2,13 @@
 // markup, heading folds.
 import { indentLess, indentMore } from '@codemirror/commands';
 import { foldedRanges } from '@codemirror/language';
-import { EditorSelection } from '@codemirror/state';
+import { EditorSelection, EditorState, Text } from '@codemirror/state';
 import type { EditorView } from '@codemirror/view';
 import { afterEach, describe, expect, it } from 'vitest';
 import { destroyEditors, marked, noteEditor, parsed, press, typeText } from '../test/noteEditor';
 import { foldAllHeadings, foldHeading, unfoldAllHeadings, unfoldHeading } from './headingFold';
-import { listRun, renumberList } from './listRenumber';
+import { markdownNoteLanguage } from './language';
+import { listRenumbering, listRun, renumberList } from './listRenumber';
 
 afterEach(destroyEditors);
 
@@ -72,6 +73,41 @@ describe('numbered lists', () => {
     const view = noteEditor('3. a\n9. b‸\n1. c\n\nText', { mode: 'source' });
     renumberList(view);
     expect(view.state.doc.toString()).toBe('3. a\n4. b\n5. c\n\nText');
+  });
+
+  /** How many document lines `run` looks up. */
+  function lineLookups(run: () => void): number {
+    type Line = (this: Text, n: number) => unknown;
+    const protos = new Set<{ line: Line }>([Object.getPrototypeOf(Text.of(['a'])), Object.getPrototypeOf(Text.of(Array<string>(100).fill('a')))]);
+    const saved = [...protos].map((p) => [p, p.line] as const);
+    let calls = 0;
+    for (const [p, line] of saved) {
+      p.line = function (n) {
+        calls++;
+        return line.call(this, n);
+      };
+    }
+    try {
+      run();
+    } finally {
+      for (const [p, line] of saved) p.line = line;
+    }
+    return calls;
+  }
+
+  it('deletes, cuts or pastes a long numbered list without freezing (work grows with the list, not its square)', () => {
+    const n = 3000;
+    const list = Array.from({ length: n }, (_, i) => `${i + 1}. item`).join('\n');
+    const extensions = [markdownNoteLanguage(), listRenumbering];
+    for (const userEvent of ['delete.selection', 'delete.cut']) {
+      const state = EditorState.create({ doc: list, extensions });
+      expect(lineLookups(() => state.update({ changes: { from: 0, to: state.doc.length }, userEvent }))).toBeLessThan(20 * n);
+    }
+    const empty = EditorState.create({ doc: 'Intro\n', extensions });
+    let pasted = empty;
+    const ones = list.replace(/^\d+/gm, '1');
+    expect(lineLookups(() => (pasted = empty.update({ changes: { from: 6, insert: ones }, userEvent: 'input.paste' }).state))).toBeLessThan(20 * n);
+    expect(pasted.doc.line(n + 1).text).toBe(`${n}. item`);
   });
 });
 
