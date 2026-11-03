@@ -94,7 +94,11 @@ export function patchRecords(data: FlashcardsResponse, cards: Readonly<Record<st
 
 export interface OutboxDeps {
   load(): OutboxOp[];
-  save(ops: OutboxOp[]): void;
+  /**
+   * Saves the pending operations. `dropped` are those this outbox took out since its last save
+   * (sent, refused or taken back): other tabs' operations in the same storage stay.
+   */
+  save(ops: OutboxOp[], dropped: readonly OutboxOp[]): void;
   sendReviews(reviews: FlashcardReview[]): Promise<FlashcardWriteResult>;
   sendUndo(op: Extract<OutboxOp, { kind: 'undo' }>): Promise<FlashcardWriteResult>;
   onResult(result: FlashcardWriteResult): void;
@@ -115,6 +119,8 @@ export class Outbox {
   private attempt = 0;
   private readonly listeners = new Set<() => void>();
   private snapshotOps: readonly OutboxOp[] = [];
+  /** Taken out since the last save. */
+  private dropped: OutboxOp[] = [];
 
   constructor(deps: OutboxDeps) {
     this.deps = deps;
@@ -136,7 +142,9 @@ export class Outbox {
 
   private changed(): void {
     this.snapshotOps = [...this.ops];
-    this.deps.save(this.ops);
+    const dropped = this.dropped;
+    this.dropped = [];
+    this.deps.save(this.ops, dropped);
     for (const l of this.listeners) l();
   }
 
@@ -153,7 +161,7 @@ export class Outbox {
   undo(card: string, at: string, state?: FlashcardCardState): void {
     const i = this.ops.findIndex((op) => op.kind === 'review' && op.review.card === card && op.review.at === at);
     if (i >= 0 && !this.inFlight.includes(this.ops[i])) {
-      this.ops.splice(i, 1);
+      this.dropped.push(...this.ops.splice(i, 1));
       this.changed();
       return;
     }
@@ -197,6 +205,7 @@ export class Outbox {
 
   private settleSent(batch: OutboxOp[]): void {
     this.ops = this.ops.filter((op) => !batch.includes(op));
+    this.dropped.push(...batch);
     this.inFlight = [];
     this.changed();
   }
@@ -221,7 +230,7 @@ export class Outbox {
 
 const STORAGE_KEY = 'notesapp:flashcards:outbox';
 
-function loadOps(): OutboxOp[] {
+export function loadOps(): OutboxOp[] {
   try {
     const raw = localStorage.getItem(vaultKey(STORAGE_KEY));
     const ops: unknown = raw ? JSON.parse(raw) : [];
@@ -231,9 +240,27 @@ function loadOps(): OutboxOp[] {
   }
 }
 
-function saveOps(ops: OutboxOp[]): void {
+/** An operation's identity: an answer is keyed by its card and instant (API.md §34.1), as is its undo. */
+function opKey(op: OutboxOp): string {
+  return op.kind === 'review' ? `review ${op.review.card} ${op.review.at}` : `undo ${op.card} ${op.at}`;
+}
+
+/**
+ * What the shared storage holds after one tab's save: what is stored (other tabs of the vault
+ * save there too), without what this tab took out, plus this tab's pending operations.
+ */
+export function mergeOps(stored: readonly OutboxOp[], ops: readonly OutboxOp[], dropped: readonly OutboxOp[]): OutboxOp[] {
+  const gone = new Set(dropped.map(opKey));
+  const out = stored.filter((op) => !gone.has(opKey(op)));
+  const have = new Set(out.map(opKey));
+  for (const op of ops) if (!have.has(opKey(op))) out.push(op);
+  return out;
+}
+
+export function saveOps(ops: OutboxOp[], dropped: readonly OutboxOp[] = []): void {
   try {
-    if (ops.length) localStorage.setItem(vaultKey(STORAGE_KEY), JSON.stringify(ops));
+    const all = mergeOps(loadOps(), ops, dropped);
+    if (all.length) localStorage.setItem(vaultKey(STORAGE_KEY), JSON.stringify(all));
     else localStorage.removeItem(vaultKey(STORAGE_KEY));
   } catch {
     // Storage full or blocked: the answers stay in memory and are sent while the page lives.
