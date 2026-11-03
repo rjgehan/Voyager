@@ -24,6 +24,8 @@ import { cellText, cellValue, compareIds, isCellError, sheetById, type Sheet, ty
 import { pickSlot, placeReference, spanOf, type PickedSlot } from '../../formulaText';
 import { rangeText, type CellRange } from '../../refs';
 import { resolveTarget, usedRange } from '../../target';
+import { refusesInput } from '../../validation';
+import { toast } from '../../../state/toasts';
 import { setSheetClip, sheetClip } from '../../clipboard';
 
 /** An embed shows at most this many rows and columns (as item 6b's); the spreadsheet has the rest. */
@@ -219,17 +221,27 @@ export function EmbedGrid(props: Props) {
    * with (a typed first key always counts): opening a cell and leaving it writes nothing, even when
    * another device changed the cell meanwhile.
    */
-  const commit = (move: 'down' | 'up' | 'right' | 'left' | 'none') => {
+  const commit = (move: 'down' | 'up' | 'right' | 'left' | 'none', leaving = false): boolean => {
     const el = input.current;
     const at = editingNow.current;
-    if (!at || !el || !model) return;
+    if (!at || !el || !model) return true;
     const s = sheetById(model, at.sheet);
     const text = el.value;
     const changed = text !== editStart.current;
+    const typed = s && changed && text !== editText(s, at) ? typedEdit(s, at.col, at.row, text) : null;
+    // A strict validation refuses other input, as in the spreadsheet view (Google Sheets' "Reject
+    // the input"): the editor stays open on the text, unless the focus left it.
+    if (s && typed && refusesInput(model, s, typed)) {
+      toast(`“${text}” is not one of the values ${toA1(at.col, at.row)} takes.`, { kind: 'error' });
+      if (leaving) stopEdit();
+      else el.focus({ preventScroll: true });
+      return false;
+    }
     stopEdit();
-    if (s && changed && text !== editText(s, at)) apply([typedEdit(s, at.col, at.row, text)]);
+    if (typed) apply([typed]);
     if (move !== 'none') moveTo(step(at, move), false);
     if (!coarse()) table.current?.focus({ preventScroll: true });
+    return true;
   };
 
   const cancel = () => {
@@ -285,7 +297,10 @@ export function EmbedGrid(props: Props) {
       e.preventDefault();
       return;
     }
-    if (editingNow.current) commit('none');
+    if (editingNow.current && !commit('none')) {
+      e.preventDefault();
+      return;
+    }
     props.onWant();
     moveTo(at, e.shiftKey);
   };
@@ -314,7 +329,7 @@ export function EmbedGrid(props: Props) {
     e.preventDefault();
     e.stopPropagation();
     if (editingNow.current && point(at, 'tap')) return;
-    if (editingNow.current) commit('none');
+    if (editingNow.current && !commit('none')) return;
     const again = active.col === at.col && active.row === at.row && selection.width === 1 && selection.height === 1;
     if (again) startEdit(at);
     else {
@@ -569,7 +584,7 @@ export function EmbedGrid(props: Props) {
             onKeyDown={onInputKeyDown}
             onBlur={() => {
               // A press on a cell that points at it keeps the focus; anything else ends the edit.
-              if (editingNow.current) commit('none');
+              if (editingNow.current) commit('none', true);
             }}
           />
         )}

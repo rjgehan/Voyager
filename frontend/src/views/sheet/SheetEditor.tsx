@@ -41,7 +41,7 @@ import { guessChartOptions } from '../../sheets/charts';
 import { pivotTable, type PivotOptions } from '../../sheets/pivot';
 import { columnFiltered, dataRegion, filterRange, looksLikeHeader } from '../../sheets/filter';
 import type { Separator } from '../../sheets/csv';
-import { effectiveFormat, formatShown, shownCell } from '../../sheets/display';
+import { effectiveFormat, shownCell } from '../../sheets/display';
 import { dropPendingCut, setSheetClip, sheetClip } from '../../sheets/clipboard';
 import { clearEdits, clipStillHolds, copyRange, fillDownEdits, fillEdits, fillRightEdits, pasteEdits, typedEdit, usedExtent, type SheetClip } from '../../sheets/edits';
 import type { CellEdit, FormatEdit, Workbook } from '../../sheets/engine';
@@ -60,7 +60,7 @@ import {
   type SheetFilter,
   type ValidationType,
 } from '../../sheets/format';
-import { dropdownItems, holdsItem, isValid, validationLooks, validations } from '../../sheets/validation';
+import { dropdownItems, holdsItem, refusesInput, validationLooks, validations } from '../../sheets/validation';
 import { changeDecimals, isGeneral } from '../../sheets/numfmt';
 import { absoluteRangeText, parseRangeText, rangeText, type CellRange } from '../../sheets/refs';
 import { typedInput } from '../../sheets/input';
@@ -332,9 +332,7 @@ ${JSON.stringify(sheet.filter ?? null)}`;
     if (changed && text !== editText(s, target)) {
       const typed = typedEdit(s, target.col, target.row, text);
       // A strict validation refuses other input, as Google Sheets' "Reject the input".
-      const rule = validations(s)?.(target.col, target.row)?.validation;
-      const value = typed.content?.v;
-      if (rule?.strict && value !== undefined && !isValid(workbook.file, s, rule, value, formatShown(value, typed.fmt ?? effectiveFormat(s, target.col, target.row)).text)) {
+      if (refusesInput(workbook.file, s, typed)) {
         toast(`“${text}” is not one of the values ${toA1(target.col, target.row)} takes.`, { kind: 'error' });
         if (!touch) focusGrid();
         return;
