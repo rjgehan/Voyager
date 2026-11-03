@@ -140,5 +140,7 @@ Notes can read a spreadsheet's cells too: see [Use a spreadsheet's cells in a no
 
 - Spreadsheets save as you type, keep their [history](history-and-trash.md) and show changes from your other devices live. Two devices changing different cells at the same time never conflict, except when one of them inserts or deletes rows or columns, sorts, or cuts and pastes cells: cells moved, so you choose which version to keep.
 - Search finds the text and numbers in cells, and `[[links]]` in cells count as backlinks.
+- `SPLIT` spills its parts across cells when the text is written in the formula, `=SPLIT("a,b", ",")`. For text in a cell, take one part at a time: `=INDEX(SPLIT(A2, ","), 1, 2)` is the second.
+- Lookups (`MATCH`, `VLOOKUP`, `XLOOKUP`) treat `é` and `e` as the same letter; comparisons, `COUNTIF` and `UNIQUE` keep them apart, as Google Sheets does.
 - On Excel files: number formats, column widths and row heights carry over both ways; colours, borders, merged cells, comments, filters, conditional formatting, drop-down lists and Excel's charts do not (an import says what it left out).
 - A spreadsheet with a filter, conditional formatting, checkboxes or drop-down lists can only be changed by this version of Voyager or a later one; an older one (a phone that has not updated yet) shows it read-only until it updates.

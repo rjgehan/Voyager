@@ -71,16 +71,17 @@ import {
 } from './refs';
 // The functions that read notes (ROADMAP item 42), registered before any engine is built.
 import './links/noteFunctions';
-// Built-in functions given their Google Sheets meaning (TEXT), registered the same way.
+// Built-in functions given their Google Sheets meaning (TEXT, SPLIT), registered the same way.
 import './sheetsFunctions';
 
 export { functionCatalog } from './functions';
 
 /**
  * Counts this app's changes to the engine that alter results (its configuration, the functions it
- * replaces): 1 is TEXT with Google Sheets' format codes, 2 text comparison that keeps accents apart.
+ * replaces): 1 is TEXT with Google Sheets' format codes, 2 text comparison that keeps accents apart,
+ * 3 SPLIT with Google Sheets' meaning.
  */
-export const ENGINE_REVISION = 2;
+export const ENGINE_REVISION = 3;
 
 /** The engine identity written to `engine`. A config change that alters results must change ENGINE_REVISION. */
 export const ENGINE_ID = `hyperformula@${HyperFormula.version}+${ENGINE_REVISION}`;

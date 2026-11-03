@@ -18,7 +18,7 @@ export const SHEET_VERSION = 2;
  * The engine whose results new files carry. engine.test.ts checks it against the running
  * HyperFormula, so an engine upgrade cannot slip in without updating it.
  */
-export const SHEET_ENGINE = 'hyperformula@3.5.0+2';
+export const SHEET_ENGINE = 'hyperformula@3.5.0+3';
 
 export type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 /** Keys this version does not know (or values it cannot use), kept and written back verbatim. */

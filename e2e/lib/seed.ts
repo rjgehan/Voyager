@@ -44,7 +44,7 @@ function sheetFile() {
     '{',
     '  "type": "notesapp-sheet",',
     '  "version": 1,',
-    '  "engine": "hyperformula@3.5.0+2",',
+    '  "engine": "hyperformula@3.5.0+3",',
     '  "sheets": [',
     '    {',
     '      "id": "s1",',

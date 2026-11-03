@@ -68,6 +68,41 @@ describe('functions with Google Sheets’ meaning', () => {
   });
 });
 
+describe('SPLIT with Google Sheets’ meaning', () => {
+  it('splits by each character of the delimiter into a spilled row, without empty parts, numbers as numbers', () => {
+    const wb = workbook([
+      {
+        name: 'S',
+        cells: {
+          A1: { f: '=SPLIT("a,b", ",")' },
+          A2: { f: '=SPLIT("a b c", 1)' },
+          A3: { f: '=SPLIT("1, 2;;3", ", ;")' },
+          A4: { f: '=SPLIT("a--b-c", "--", FALSE)' },
+          A5: { f: '=SPLIT("a,,b", ",", TRUE, FALSE)' },
+          A6: { v: 'x,y,z' },
+          B6: { f: '=INDEX(SPLIT(A6, ","), 1, 2)' },
+          C6: { f: '=SPLIT(A6, ",")' },
+          D6: { f: '=COUNTA(SPLIT(A6, ","))' },
+          A7: { v: 'solo' },
+          B7: { f: '=SPLIT(A7, ",")' },
+          A8: { f: '=SPLIT("a", "")' },
+        },
+      },
+    ]);
+    expect([value(wb, 'A1'), value(wb, 'B1')]).toEqual(['a', 'b']);
+    expect(value(wb, 'A2')).toBe('a b c');
+    expect([value(wb, 'A3'), value(wb, 'B3'), value(wb, 'C3')]).toEqual([1, 2, 3]);
+    expect([value(wb, 'A4'), value(wb, 'B4')]).toEqual(['a', 'b-c']);
+    expect([value(wb, 'A5'), value(wb, 'B5'), value(wb, 'C5')]).toEqual(['a', null, 'b']);
+    expect(value(wb, 'B6')).toBe('y');
+    expect(value(wb, 'D6')).toBe(3);
+    expect(value(wb, 'B7')).toBe('solo');
+    // A cell's text cannot spill (the engine sizes a spill before it runs); the error says what works.
+    expect(wb.errorMessage('s1', 'C6')).toMatch(/INDEX\(SPLIT\(A2/);
+    expect(value(wb, 'A8')).toMatchObject({ e: '#VALUE!' });
+  });
+});
+
 describe('text comparison', () => {
   it('keeps accents apart, as Google Sheets does, and ignores case', () => {
     const wb = workbook([
