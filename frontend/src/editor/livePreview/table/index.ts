@@ -14,6 +14,7 @@ import { provideTableRanges, refreshTables, tableCellHost, tableEdit, tablesConf
 import { gridAt, gridsOf, TableWidget, type TableBlock } from './grid';
 import { newTableText, parseTable, rowCount, type TableModel } from './model';
 import { parsedPast, topLevel, wholeLines } from '../topLevel';
+import { isBlankForBlock } from '../../blankLine';
 
 export { historyEditor, isTableCell, refreshTables, tableCellFormatters, tableCellSetup, type TableCellFormatter, type TableGridData } from './facets';
 export type { TableBlock } from './grid';
@@ -341,7 +342,7 @@ export const insertTable: Command = (view) => {
     return true;
   }
   const line = state.doc.lineAt(state.selection.main.head);
-  const blank = line.text.trim() === '';
+  const blank = isBlankForBlock(line.text);
   const previous = line.number > 1 ? state.doc.line(line.number - 1) : null;
   const next = line.number < state.doc.lines ? state.doc.line(line.number + 1) : null;
   const before = blank ? (previous && previous.text.trim() !== '' ? '\n' : '') : '\n\n';

@@ -761,6 +761,12 @@ describe('inserting a table', () => {
     expect(view.state.doc.toString()).toBe('Some text\n\n|     |     |\n| --- | --- |\n|     |     |\n|     |     |');
   });
 
+  it('replaces an empty list item (the phone toolbar and the palette on a fresh bullet)', () => {
+    const view = editor('- one\n- ‸');
+    insertTable(view);
+    expect(view.state.doc.toString()).toBe('- one\n\n|     |     |\n| --- | --- |\n|     |     |\n|     |     |');
+  });
+
   it('inserts the text in source mode, with the caret in the first cell', () => {
     const view = editor('‸', { config: null });
     insertTable(view);

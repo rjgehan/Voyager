@@ -123,6 +123,42 @@ describe('the / menu', () => {
     expect(view.state.doc.toString()).toMatch(/^\| +\| +\|\n\| -+ \| -+ \|(\n\| +\| +\|)+$/);
   });
 
+  it('a block picked on an empty list, task or quote line replaces that line', () => {
+    const table = /^\| +\| +\|\n\| -+ \| -+ \|(\n\| +\| +\|)+$/;
+    let view = noteEditor('- /table‸', { mode: 'source' });
+    pick(view, 'Table');
+    expect(view.state.doc.toString()).toMatch(table);
+
+    view = noteEditor('- /calloutwarn‸', { mode: 'source' });
+    pick(view, 'Callout: Warning');
+    expect(marked(view)).toBe('> [!warning]\n> ‸');
+
+    view = noteEditor('- [ ] /code‸', { mode: 'source' });
+    pick(view, 'Code block');
+    expect(marked(view)).toBe('```‸\n```');
+
+    view = noteEditor('1. /math‸', { mode: 'source' });
+    pick(view, 'Math block');
+    expect(marked(view)).toBe('$$\n‸\n$$');
+
+    view = noteEditor('> /div‸', { mode: 'source' });
+    pick(view, 'Divider');
+    expect(view.state.doc.toString()).toBe('---\n');
+
+    // Inside a list: the empty item goes, and blank lines keep the list apart from the table.
+    view = noteEditor('- a\n- /table‸\n- b', { mode: 'source' });
+    pick(view, 'Table');
+    const doc = view.state.doc.toString();
+    expect(doc.startsWith('- a\n\n| ')).toBe(true);
+    expect(doc.endsWith(' |\n\n- b')).toBe(true);
+    expect(doc).not.toContain('- \n');
+
+    // A list item with text keeps it: the block goes after the line.
+    view = noteEditor('- a /code‸', { mode: 'source' });
+    pick(view, 'Code block');
+    expect(marked(view)).toBe('- a \n\n```‸\n```');
+  });
+
   it('inserts links, embeds and dates at the cursor', () => {
     let view = noteEditor('See /inter‸', { mode: 'source' });
     pick(view, 'Internal link');
