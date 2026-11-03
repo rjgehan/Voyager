@@ -510,8 +510,8 @@ export function adoptUrl(ws: Workspace, route: string): Workspace {
   if (inActive) return selectTab(ws, ws.activePane, inActive.id);
   const anywhere = allTabs(ws).find(({ tab }) => tab.route === route);
   if (anywhere) return selectTab(ws, anywhere.pane.id, anywhere.tab.id);
-  // '/' (the installed app's start, the desktop app) only redirects to the last note, which is
-  // usually the tab's own route: it is no step of the tab's history.
+  // '/' only redirects to the last note: it is no step of the tab's history. (At startup,
+  // loadWorkspace keeps the saved active tab instead.)
   return navigate(ws, route, route === '/' ? 'replace' : 'push');
 }
 

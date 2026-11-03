@@ -7,6 +7,8 @@ import { setNavigator } from './features/navigation';
 import { navigateOverOverlays } from './features/overlayHistory';
 import { usePendingNoteGuard } from './features/pendingNoteGuard';
 import { RouteSync } from './workspace/RouteSync';
+import { startedAtHome } from './workspace/store';
+import { StartupDailyNote } from './components/pages/HomePage';
 import { WorkspaceLayout } from './workspace/WorkspaceLayout';
 
 // The web clipper's page renders Markdown (markdown-it, DOMPurify, YAML): a chunk of its own.
@@ -52,6 +54,7 @@ export default function App() {
     <AppShell>
       <NavigationBridge />
       <RouteSync />
+      {startedAtHome() && <StartupDailyNote />}
       <WorkspaceLayout />
     </AppShell>
   );

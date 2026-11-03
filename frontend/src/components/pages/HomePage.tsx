@@ -14,6 +14,29 @@ import { useOffline } from '../../offline/offlineStore';
 /** Once per page load. */
 let startupHandled = false;
 
+/** Waits for the settings only while their first request runs and the tree is the server's. */
+function useWaitSettings(settings: ReturnType<typeof useSettings>): boolean {
+  const fromSnapshot = useOffline((s) => s.treeSnapshotAt) !== null;
+  return settings.isPending && settings.failureCount === 0 && settings.fetchStatus !== 'paused' && !fromSnapshot;
+}
+
+/**
+ * The page started at `/` but the workspace came back on its saved page (workspace/store.ts
+ * `startedAtHome`), so HomePage does not show: today's note still opens when
+ * `dailyNotes.openOnStartup` asks for it, once per page load (DESIGN §6.4).
+ */
+export function StartupDailyNote() {
+  const settings = useSettings();
+  const waitSettings = useWaitSettings(settings);
+  const wantsDaily = !!settings.data?.settings.dailyNotes.openOnStartup;
+  useEffect(() => {
+    if (waitSettings || startupHandled) return;
+    startupHandled = true;
+    if (wantsDaily) void openTodaysDailyNote();
+  }, [waitSettings, wantsDaily]);
+  return null;
+}
+
 export function HomePage() {
   useCommandsVersion();
   const tree = useTree();
@@ -26,8 +49,7 @@ export function HomePage() {
   // an offline start (the tree is the device's snapshot) or once a request failed, the retries
   // can take minutes (and a request paused offline waits for the network), and the last note opens
   // without them (DESIGN §6.26).
-  const fromSnapshot = useOffline((s) => s.treeSnapshotAt) !== null;
-  const waitSettings = settings.isPending && settings.failureCount === 0 && settings.fetchStatus !== 'paused' && !fromSnapshot;
+  const waitSettings = useWaitSettings(settings);
   const settingsPending = waitSettings && !handled;
 
   useEffect(() => {

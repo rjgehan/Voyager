@@ -7,7 +7,7 @@ import { create } from 'zustand';
 import { useFocusRequests } from '../features/focus';
 import { navigateTo } from '../features/navigation';
 import { takeNewTabGesture } from './gesture';
-import { appPathname, vaultKey } from '../state/vault';
+import { appPathname, appUrl, vaultKey } from '../state/vault';
 import {
   activeTab,
   adoptUrl,
@@ -50,7 +50,19 @@ function currentRoute(): string {
   return routeOf({ pathname: appPathname(), search: window.location.search, hash: window.location.hash });
 }
 
+let restoredAtHome = false;
+
+/**
+ * The page started at `/` and the workspace came back on its saved page instead (the installed
+ * app and the desktop app start there): the start page's daily note is then up to
+ * `StartupDailyNote`, since the start page itself does not show.
+ */
+export function startedAtHome(): boolean {
+  return restoredAtHome;
+}
+
 export function loadWorkspace(): Workspace {
+  restoredAtHome = false;
   let saved: Workspace | null;
   try {
     const raw = localStorage.getItem(vaultKey(WORKSPACE_KEY));
@@ -59,6 +71,15 @@ export function loadWorkspace(): Workspace {
     saved = null;
   }
   if (outsideWorkspace(appPathname())) return saved ?? createWorkspace('/');
+  // `/` (the installed app's start URL, the desktop app's start) reopens the tabs as they were:
+  // the active tab keeps its page, pinned or not, and the URL is brought to it before the router
+  // reads it. The start page shows only when that tab was on it (DESIGN §6.40).
+  const route = currentRoute();
+  if (saved && route === '/' && activeTab(saved).route !== '/') {
+    restoredAtHome = true;
+    window.history.replaceState(window.history.state, '', appUrl(activeTab(saved).route));
+    return saved;
+  }
   // A deep link, a bookmark or a reload shows its route in the active pane.
   return saved ? adoptUrl(saved, currentRoute()) : createWorkspace(currentRoute());
 }
