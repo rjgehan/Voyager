@@ -5,7 +5,7 @@
 // (java or node; tasklist on Windows, /proc on Linux, ps on macOS) and to date from this boot, so a
 // PID the system has since reused is left alone.
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, readlinkSync, rmSync, writeFileSync } from 'node:fs';
 import { uptime } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -55,7 +55,8 @@ export function imageOf(pid, platform = process.platform, run = execFileSync) {
       const m = /^"([^"]+)"/m.exec(out);
       return m ? m[1].toLowerCase().replace(/\.exe$/, '') : null;
     }
-    if (platform === 'linux') return readFileSync(`/proc/${pid}/comm`, 'utf8').trim().toLowerCase();
+    // The executable, not /proc/<pid>/comm: Node names its main thread "MainThread", and comm shows that.
+    if (platform === 'linux') return basename(readlinkSync(`/proc/${pid}/exe`)).toLowerCase();
     // macOS has no /proc; its ps prints the program's full path (".../Contents/Home/bin/java").
     const out = String(run('ps', ['-p', String(pid), '-o', 'comm='], { encoding: 'utf8' })).trim();
     return out ? basename(out).toLowerCase() : null;
