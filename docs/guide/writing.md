@@ -99,6 +99,7 @@ Properties are facts about a note, such as its tags, a due date or a status, sho
 
 - Each property has a type, shown by its icon: text, list, number, checkbox, date, date and time, tags or aliases. Click the icon to change the type, rename the property, move it or remove it. The type applies to that property in every note.
 - Dates use your device's date picker; tags and lists add an item on `Enter`.
+- A number can use a comma for its decimals (`3,5`). Something that is not a number stays in the field, outlined as invalid, until you correct it or press `Esc`.
 - The **Properties** tab of the left sidebar lists every property in the vault with how many notes use it. From there you can rename a property in every note at once (also **Rename property in every note…** in the palette).
 - Search for notes by property with `[status]` or `[status:done]` (see [Search](search-and-bookmarks.md#search-syntax)).
 

@@ -11,7 +11,7 @@ import { MockVault } from '../api/mock/vault';
 import { queryClient } from '../api/queryClient';
 import { queryKeys } from '../api/queryKeys';
 import { registerBuiltins } from '../extensions/builtins';
-import { updatePendingTitle, usePendingNote } from '../state/pendingNote';
+import { updatePendingSelection, updatePendingTitle, usePendingNote } from '../state/pendingNote';
 import { documents } from '../sync/instance';
 import { createWorkspace } from '../workspace/model';
 import { RouteSync } from '../workspace/RouteSync';
@@ -146,5 +146,32 @@ describe('New note in the workspace (DESIGN §6.15)', () => {
     expect(planEditor).not.toBe(aEditor);
     expect(document.activeElement).toBe(planEditor);
     expect(focused.filter((el) => el.classList.contains('cm-content') && el !== planEditor)).toEqual([]);
+  });
+
+  it('renames the note and continues in its text when the title is committed while the pane swaps to it', async () => {
+    const { container } = renderAt('/');
+    const releaseCreate = gate('createFile');
+    act(() => createNote(''));
+    const id = usePendingNote.getState().pending!.id;
+    act(() => {
+      updatePendingTitle(id, 'Groceries', false);
+      updatePendingSelection(id, 9, 9);
+    });
+    // Enter in the pending title just as the note opens: the body takes the focus, the blur commits.
+    let committed = false;
+    const unsubscribe = usePendingNote.subscribe((s) => {
+      if (!committed && s.pending?.id === id && s.pending.opening !== null) {
+        committed = true;
+        updatePendingTitle(id, 'Groceries', true);
+      }
+    });
+    onTestFinished(unsubscribe);
+    await act(async () => releaseCreate());
+    await waitFor(() => expect(pathname).toBe('/n/Untitled.md'), { timeout: 5000 });
+    expect(committed).toBe(true);
+    // The note's text takes the focus, not its inline title, and the note is renamed to the title.
+    await waitFor(() => expect(container.querySelector('.note-editor .cm-content')).not.toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(container.querySelector('.note-editor .cm-content')));
+    await waitFor(() => expect(vault.getTree().files.map((f) => f.path)).toEqual(['Groceries.md']));
   });
 });

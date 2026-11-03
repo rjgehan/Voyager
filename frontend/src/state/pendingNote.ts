@@ -1,6 +1,7 @@
 // The optimistic "New note" (DESIGN §6.15): the pending view is shown at once with its title
 // focused, while the POST runs in the background.
 import { create } from 'zustand';
+import { titleOf } from '../features/paths';
 
 export interface PendingNote {
   id: number;
@@ -39,6 +40,11 @@ export interface TitleHandoff {
   title: string;
   selectionStart: number;
   selectionEnd: number;
+  /**
+   * The title was committed (Enter, or a tap on the body) after the note began opening: the inline
+   * title renames the note to it and the writing continues in the note's text.
+   */
+  committed?: boolean;
 }
 
 /** Text typed into a pending note's body, with its selection: it goes into the note once it exists. */
@@ -68,27 +74,43 @@ const bodies = new Map<number, PendingBody>();
  */
 const committedTitles = new Map<number, string>();
 
+/** The title the current pending note started with ("Untitled"). */
+let startTitle = '';
+
 /** A new pending note (or other file) whose whole title is selected, so typing replaces it. */
 export function startPendingNote(id: number, folder: string, title: string, file: { extension: string; label: string } = { extension: 'md', label: 'note' }): void {
+  startTitle = title;
   usePendingNote.setState({
     pending: { id, folder, ...file, title, committed: false, selectionStart: 0, selectionEnd: title.length, opening: null, problem: null },
     handoff: null,
   });
 }
 
+/**
+ * The pending title handed over to the note at `path`. An untouched title keeps the server's free
+ * name (`Untitled 1` when `Untitled` exists), wholly selected, so leaving it renames nothing.
+ */
+function titleHandoff(pending: PendingNote, path: string): TitleHandoff {
+  const free = titleOf(path);
+  if (pending.title === startTitle && free !== pending.title) return { path, title: free, selectionStart: 0, selectionEnd: free.length, committed: pending.committed };
+  return { path, title: pending.title, selectionStart: pending.selectionStart, selectionEnd: pending.selectionEnd, committed: pending.committed };
+}
+
 /** The title typed after the note began opening follows into its hand-over. */
 function followingHandoff(pending: PendingNote, handoff: TitleHandoff | null): TitleHandoff | null {
   if (!handoff || pending.opening !== handoff.path) return handoff;
-  return { path: handoff.path, title: pending.title, selectionStart: pending.selectionStart, selectionEnd: pending.selectionEnd };
+  return titleHandoff(pending, handoff.path);
 }
 
 export function updatePendingTitle(id: number, title: string, committed: boolean): void {
   const { pending, handoff } = usePendingNote.getState();
   if (pending?.id !== id) return;
-  if (committed) committedTitles.set(id, title);
-  else committedTitles.delete(id);
   const next = { ...pending, title, committed };
-  usePendingNote.setState({ pending: next, handoff: followingHandoff(next, handoff) });
+  const following = followingHandoff(next, handoff);
+  // Once the note is opening, its inline title takes a committed title (and renames to it).
+  if (committed && following === handoff) committedTitles.set(id, title);
+  else committedTitles.delete(id);
+  usePendingNote.setState({ pending: next, handoff: following });
 }
 
 export function updatePendingSelection(id: number, selectionStart: number, selectionEnd: number): void {
@@ -107,7 +129,7 @@ export function updatePendingSelection(id: number, selectionStart: number, selec
 export function openPendingNote(id: number, path: string, offered: string | null = null): void {
   const { pending } = usePendingNote.getState();
   if (pending?.id !== id) return;
-  const handoff = offered !== null ? { path, title: offered, selectionStart: 0, selectionEnd: offered.length } : pending.committed ? null : { path, title: pending.title, selectionStart: pending.selectionStart, selectionEnd: pending.selectionEnd };
+  const handoff = offered !== null ? { path, title: offered, selectionStart: 0, selectionEnd: offered.length } : pending.committed ? null : titleHandoff(pending, path);
   usePendingNote.setState({ pending: { ...pending, opening: path, problem: null }, handoff });
 }
 

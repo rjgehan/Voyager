@@ -40,6 +40,18 @@ describe('InlineTitle', () => {
     expect([input.selectionStart, input.selectionEnd]).toEqual([4, 4]);
   });
 
+  it('checks a handed-over title at once, so an invalid one stays in the field with its message', () => {
+    usePendingNote.setState({ handoff: { path: 'Untitled.md', title: 'Q3/Q4 plan', selectionStart: 10, selectionEnd: 10 } });
+    render(<InlineTitle path="Untitled.md" editable />);
+    const input = screen.getByLabelText<HTMLTextAreaElement>('Note title');
+    expect(input.getAttribute('aria-invalid')).toBe('true');
+    expect(screen.getByRole('alert').textContent).toMatch(/Move to/);
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(input.value).toBe('Q3/Q4 plan');
+    expect(document.activeElement).toBe(input);
+    expect(renameEntry).not.toHaveBeenCalled();
+  });
+
   it('moves on to the text on Enter when the name is unchanged', () => {
     const editor = fakeEditor();
     setActiveEditor(editor);
