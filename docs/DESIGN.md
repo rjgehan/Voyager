@@ -3385,7 +3385,7 @@ The target is WCAG 2.2 Level AA. [ACCESSIBILITY.md](ACCESSIBILITY.md) has the st
 - `identity-not-allowed`: "This device's Tailscale login is not allowed to use NotesApp."
 - `settings-read-only`: "Settings were written by a newer version of NotesApp and are read-only here."
 
-Any other error shows the problem's `detail`. 5xx problem errors show a toast with the `incidentId` for log lookup. Transient failures (§6.9) never show an error toast; they show the Offline state. An unexpected render error is caught by an `ErrorBoundary` per view, which offers **Reload view**.
+Any other error shows the problem's `detail`. 5xx problem errors show a toast with the `incidentId` for log lookup. Transient failures (§6.9) never show an error toast; they show the Offline state. An unexpected render error is caught by an `ErrorBoundary` per view, which offers **Reload view**. A sidebar has one boundary per panel (keyed by its id) that also clears when the open note changes (`resetKeys`), and each page and Settings has its own, keyed by route and cleared when the address changes; one shared boundary used to show a crashed panel’s or page’s error in every other panel or page until **Reload view**. Panels and pages resolve their lazy component as they mount (`components/lazyCache.ts`), and a chunk that failed to load (offline without a service worker) is dropped from the cache, so **Reload view** or the next visit loads it again; React.lazy keeps a failed result for good. Views of files (`FileView`) are keyed by file already.
 
 ### 6.21 Spreadsheets (`.sheet`, ROADMAP item 6)
 
