@@ -18,6 +18,7 @@ import { tableEdit } from './facets';
 import { gridOf, type TableGrid } from './grid';
 import { insertTable, moveToCell, refreshTables, tableBlocks, tableCellFormatters, tables, type TableCellFormatter } from './index';
 import { sourceFiles } from '../../../test/sources';
+import { typeText } from '../../../test/noteEditor';
 
 const views: EditorView[] = [];
 
@@ -335,6 +336,33 @@ describe('moving between cells', () => {
     expect(grid(view).activeCell()).toMatchObject({ row: 2, column: 0 });
     type(cellEditor(view), 'e');
     expect(view.state.doc.toString()).toBe('| a | b |\n|---|---|\n| c | d |\n| e |   |\n\nnext');
+  });
+
+  it('typing over the cell Tab selected replaces it, = and $ included (a formula typed the Sheets way)', () => {
+    const doc = '| Item | Qty | Cost |\n| --- | --- | --- |\n| Pen | 3 | 450 |';
+    for (const typed of ['=B2*2', '$5', '*2', '_x', '~x', '`x']) {
+      const view = editor(doc);
+      grid(view).activate(1, 1, 'end');
+      press(cellEditor(view), 'Tab');
+      expect(cellEditor(view).state.selection.main).toMatchObject({ from: 0, to: 3 });
+      typeText(cellEditor(view), typed);
+      expect(cellEditor(view).state.doc.toString()).toBe(typed);
+    }
+    // The phone toolbar's Next cell selects the same way.
+    const view = editor(doc);
+    grid(view).activate(1, 1, 'end');
+    moveToCell(cellEditor(view), 1);
+    typeText(cellEditor(view), '=B2*2');
+    expect(view.state.doc.toString()).toBe('| Item | Qty | Cost |\n| --- | --- | --- |\n| Pen | 3 | =B2*2 |');
+  });
+
+  it('typing a formatting character over part of a cell still wraps it', () => {
+    const view = editor('| a |\n|---|\n| some words |');
+    grid(view).activate(1, 0, 'end');
+    const cell = cellEditor(view);
+    cell.dispatch({ selection: EditorSelection.range(0, 4) });
+    typeText(cell, '*');
+    expect(cell.state.doc.toString()).toBe('*some* words');
   });
 
   it('Enter moves down, adding a row at the end; Shift-Enter moves up', () => {
