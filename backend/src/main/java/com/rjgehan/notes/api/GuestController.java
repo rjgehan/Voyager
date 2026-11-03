@@ -143,7 +143,7 @@ public class GuestController {
 		FileService.Saved saved;
 		try {
 			saved = this.files.saveText(checked, request.content(), request.baseVersion(),
-					Boolean.TRUE.equals(request.flushHistory()), identity, origin);
+					Boolean.TRUE.equals(request.flushHistory()), identity, guestOrigin(origin));
 		}
 		catch (VersionConflictException ex) {
 			// Where the owner moved the note is the guest's to know only inside the share (DESIGN §5.40).
@@ -170,7 +170,7 @@ public class GuestController {
 		this.access.checkEmbeds(grant, checked, content);
 		return this.idempotency.execute(idempotencyKey, http, () -> {
 			WriteResult result = this.files.createText(checked, content,
-					(request.onConflict() != null) ? request.onConflict() : OnConflict.FAIL, identity, origin);
+					(request.onConflict() != null) ? request.onConflict() : OnConflict.FAIL, identity, guestOrigin(origin));
 			return ResponseEntity.created(FileController.location(result.file().path())).body(result);
 		});
 	}
@@ -195,12 +195,24 @@ public class GuestController {
 			throw NotesException.badRequest("clientId must be 8 to 64 letters, digits or dashes");
 		}
 		String last = (lastEventIdHeader != null && !lastEventIdHeader.isBlank()) ? lastEventIdHeader : lastEventId;
-		SseEmitter emitter = this.hub.connect(this.hub.newEmitter(), clientId, last,
+		SseEmitter emitter = this.hub.connect(this.hub.newEmitter(), GUEST_ORIGIN + clientId, last,
 				new GuestEventFilter(this.access, this.shares, grant));
 		return ResponseEntity.ok()
 			.cacheControl(CacheControl.noCache().noTransform())
 			.header("X-Accel-Buffering", "no")
 			.body(emitter);
+	}
+
+
+	/** Every origin a guest writes with, and its stream's client id, start with this. */
+	private static final String GUEST_ORIGIN = "guest:";
+
+	/**
+	 * The origin of a guest's write: its client id in a namespace of its own, so a guest can only ever suppress the
+	 * echo on its own stream, never on an owner's tab (API.md §16).
+	 */
+	private static @Nullable String guestOrigin(@Nullable String origin) {
+		return (origin != null) ? GUEST_ORIGIN + origin : null;
 	}
 
 }
