@@ -61,6 +61,24 @@ class WorkflowsTest {
 		assertThat(list(push.get("paths"))).contains("frontend/**", "docs/guide/**", "docs/images/social-preview.png");
 	}
 
+	@Test
+	void aDocsOnlyPushRunsTheTestsThatReadThoseDocs() throws Exception {
+		// types.test.ts compares API.md §17 with types.ts, ThreatModelDocTest reads SECURITY.md. A push that changes
+		// only one of them skips CI (docs-only pushes must not restart production), so a drift showed only on the next
+		// code push, whose image was then never published.
+		List<Object> ciPaths = list(map(map(workflow("ci.yml").get("on")).get("push")).get("paths"));
+		Map<String, Object> docs = workflow("docs.yml");
+		Map<String, Object> push = map(map(docs.get("on")).get("push"));
+		assertThat(list(push.get("branches"))).containsExactly("main");
+		for (String doc : List.of("docs/API.md", "docs/SECURITY.md")) {
+			assertThat(ciPaths).as("ci.yml still skips " + doc).doesNotContain(doc);
+			assertThat(list(push.get("paths"))).as("docs.yml runs for " + doc).contains(doc);
+		}
+		String text = Files.readString(ROOT.resolve(".github/workflows/docs.yml"));
+		assertThat(text).as("docs.yml publishes nothing").doesNotContain("publish.yml").doesNotContain("packages: write");
+		assertThat(text).contains("vitest run src/api/types.test.ts").contains("-Dtest=ThreatModelDocTest");
+	}
+
 	/** Whether one of the shell words (literal paths or globs with {@code *}) names the file. */
 	private static boolean coveredBy(String words, String file) {
 		for (String word : words.strip().split("\\s+")) {

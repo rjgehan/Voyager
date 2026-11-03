@@ -61,3 +61,16 @@ test('a tag makes a draft release, published only after both packages are attach
   assert.match(runs(publishers[0]), /\.exe\b/);
   assert.match(runs(publishers[0]), /\.dmg\b/);
 });
+
+test('a manual run only builds: it never creates, uploads to or publishes a release, even from a tag', () => {
+  // "Run workflow" from a desktop-v* tag has that tag as github.ref, so the ref alone does not tell a tag push.
+  const tagPush = /github\.event_name == 'push'/;
+  const step = (name) => workflow.jobs.build.steps.find((s) => s.name === name);
+  assert.match(workflow.jobs.release.if, tagPush, 'release');
+  assert.match(step('Take the version from the tag').if, tagPush, 'version from the tag');
+  assert.match(step('Attach to the release').if, tagPush, 'attach');
+  assert.match(workflow.jobs.publish.if, tagPush, 'publish');
+  assert.match(step('List the packages (manual runs)').if, /github\.event_name != 'push'/, 'manual runs list the packages');
+  // Manual runs still build (the release job is skipped for them).
+  assert.match(workflow.jobs.build.if, /needs\.release\.result == 'skipped'/);
+});
