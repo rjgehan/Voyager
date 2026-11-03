@@ -2,6 +2,8 @@ package com.rjgehan.notes.drawings;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import com.rjgehan.notes.index.DocumentIndexer;
 import com.rjgehan.notes.support.TestVault;
@@ -128,6 +130,24 @@ class ExcalidrawDocumentIndexerTest {
 		assertThat(ExcalidrawDocumentIndexer.holdsLink("Read [this](https://example.com)")).isTrue();
 		assertThat(ExcalidrawDocumentIndexer.holdsLink("]] before [[")).isFalse();
 		assertThat(ExcalidrawDocumentIndexer.holdsLink("Plain words")).isFalse();
+	}
+
+	@Test
+	void aTextLineEndingLikeAnEntryIdDoesNotSplitItsEntry() {
+		// The first line ends in " ^" and 8 id characters; only an id the drawing has (or one followed by a blank line,
+		// as between entries) ends an entry, as in the editor (format.ts parseTextEntries).
+		String json = excalidraw("{}", element("Ab12Cd34", "text",
+				"\"text\": \"Call Plumber ^tomorrow\\nand the electrician\", "
+						+ "\"rawText\": \"Call [[Plumber]] ^tomorrow\\nand the electrician\", \"link\": \"[[Plumber]]\""));
+		String file = PLUGIN_HEAD + "## Text Elements\nCall [[Plumber]] ^tomorrow\nand the electrician ^Ab12Cd34\n\n"
+				+ "Stale entry ^gone0001\n\n%%\n## Drawing\n```json\n" + json + "```\n%%\n";
+		MarkdownDrawing drawing = MarkdownDrawing.parse(file);
+		assertThat(drawing).isNotNull();
+		assertThat(drawing.texts(Set.of("Ab12Cd34"))).containsOnly(
+				Map.entry("Ab12Cd34", "Call [[Plumber]] ^tomorrow\nand the electrician"),
+				Map.entry("gone0001", "Stale entry"));
+		// The entry holds the text's link, so the link is covered.
+		assertThat(blocks("A.excalidraw.md", file)).isEmpty();
 	}
 
 	@Test
