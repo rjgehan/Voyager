@@ -4487,7 +4487,7 @@ The **link store** (`store.ts`, one per page: a page shows one vault, §6.44) ho
 
 - **the tree** (`['tree']` in the query cache), which every save updates, this device's own (`applyWriteResult`) and other devices' (the event stream, which does not echo own saves, API.md §16.4): an entry whose version changed is fetched again, a changed or added note refreshes every query, and an added or removed file changes `names`;
 - **documents open on this device**: a note or spreadsheet read from an open session is followed as it is typed (half the throttle after the last key);
-- **workbooks open on this device** (`addLiveSheet`, from `recalc.ts`): every change, edits and recalculations, is a change of `sheet:<path>`.
+- **workbooks open on this device** (`addLiveSheet`, from `recalc.ts`): every change, edits and recalculations, is a change of `sheet:<path>`. A workbook stays linked while its binding is cached (a view that left keeps it for its undo history, §6.21.4), so it keeps following its session meanwhile: another device's save reaches the notes that read it even though no view shows it. When the binding goes, the store keeps the workbook's last model and reads the file again, rather than going back to values read before the workbook opened.
 
 A value fetched again that equals the old one announces nothing. Announcements are throttled to one batch every 400 ms. Each computation records the keys it read (the engine's `context`: HyperFormula's `context` config parameter carries a `LinkContext` with the file's path, its reads and its depth), and only computations that read a changed key run again:
 
