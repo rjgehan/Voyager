@@ -168,7 +168,7 @@ function DrawingEditor({ session, snapshot, props }: { session: DocumentSession;
   return (
     <div className="excalidraw-view">
       <DrawingHeader path={session.path} snapshot={snapshot} />
-      <div className="excalidraw-host">
+      <div className="excalidraw-host" ref={observePaneWidth}>
         <Excalidraw
           key={state.generation}
           initialData={initialData}
@@ -214,6 +214,25 @@ function DrawingEditor({ session, snapshot, props }: { session: DocumentSession;
       </div>
     </div>
   );
+}
+
+/**
+ * Excalidraw sizes its toolbar's buttons by the window's width (below 450 and 379 px), not by its
+ * own: a split pane that narrow in a wide window marks the host (`data-pane`), and
+ * excalidraw.css gives the buttons the same sizes there, so the whole toolbar fits the pane.
+ */
+function observePaneWidth(host: HTMLDivElement | null): (() => void) | undefined {
+  if (!host || typeof ResizeObserver === 'undefined') return undefined;
+  const update = () => {
+    const width = host.clientWidth;
+    if (width > 0 && width <= 379) host.dataset.pane = 'narrower';
+    else if (width > 0 && width <= 450) host.dataset.pane = 'narrow';
+    else delete host.dataset.pane;
+  };
+  const observer = new ResizeObserver(update);
+  observer.observe(host);
+  update();
+  return () => observer.disconnect();
 }
 
 export default function ExcalidrawView(props: FileViewProps) {
