@@ -761,72 +761,63 @@ const LOGO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024
   <defs>
     <clipPath id="tile"><rect width="1024" height="1024" rx="230.40"/></clipPath>
     <linearGradient id="space" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#06051a"/>
-      <stop offset="0.42" stop-color="#110c36"/>
-      <stop offset="0.78" stop-color="#2a1872"/>
+      <stop offset="0" stop-color="#07051d"/>
+      <stop offset="0.42" stop-color="#130d3e"/>
+      <stop offset="0.78" stop-color="#2b1a76"/>
       <stop offset="1" stop-color="#4b2bb5"/>
     </linearGradient>
-    <radialGradient id="glowPurple" cx="1" cy="1" r="0.9">
-      <stop offset="0" stop-color="#8a5cf5" stop-opacity="0.55"/>
-      <stop offset="0.55" stop-color="#8a5cf5" stop-opacity="0.12"/>
+    <radialGradient id="glow" gradientUnits="userSpaceOnUse" cx="512" cy="530" r="500">
+      <stop offset="0" stop-color="#8a5cf5" stop-opacity="0.6"/>
+      <stop offset="0.66" stop-color="#8a5cf5" stop-opacity="0.34"/>
+      <stop offset="0.84" stop-color="#8a5cf5" stop-opacity="0.08"/>
       <stop offset="1" stop-color="#8a5cf5" stop-opacity="0"/>
     </radialGradient>
-    <linearGradient id="beamAcross" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#ffeedd" stop-opacity="0"/>
-      <stop offset="0.15" stop-color="#ffeedd" stop-opacity="0.02"/>
-      <stop offset="0.3" stop-color="#ffefdf" stop-opacity="0.08"/>
-      <stop offset="0.4" stop-color="#fff1e2" stop-opacity="0.16"/>
-      <stop offset="0.46" stop-color="#fff5ea" stop-opacity="0.215"/>
-      <stop offset="0.5" stop-color="#fff6ec" stop-opacity="0.23"/>
-      <stop offset="0.54" stop-color="#fff5ea" stop-opacity="0.215"/>
-      <stop offset="0.6" stop-color="#fff1e2" stop-opacity="0.16"/>
-      <stop offset="0.7" stop-color="#ffefdf" stop-opacity="0.08"/>
-      <stop offset="0.85" stop-color="#ffeedd" stop-opacity="0.02"/>
-      <stop offset="1" stop-color="#ffeedd" stop-opacity="0"/>
+    <linearGradient id="gold" x1="0.12" y1="0.06" x2="0.88" y2="0.96">
+      <stop offset="0" stop-color="#fff2c4"/>
+      <stop offset="0.24" stop-color="#f5d07a"/>
+      <stop offset="0.52" stop-color="#e2a940"/>
+      <stop offset="0.8" stop-color="#b87c22"/>
+      <stop offset="1" stop-color="#8e5c16"/>
     </linearGradient>
-    <linearGradient id="streakAcross" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#e4d8ff" stop-opacity="0"/>
-      <stop offset="0.5" stop-color="#e4d8ff" stop-opacity="0.08"/>
-      <stop offset="1" stop-color="#e4d8ff" stop-opacity="0"/>
-    </linearGradient>
-    <linearGradient id="beamAlong" gradientUnits="userSpaceOnUse" x1="0" y1="-420" x2="0" y2="1500">
-      <stop offset="0" stop-color="#fff" stop-opacity="1"/>
-      <stop offset="0.5" stop-color="#fff" stop-opacity="0.8"/>
-      <stop offset="1" stop-color="#fff" stop-opacity="0.15"/>
-    </linearGradient>
-    <mask id="fade" maskUnits="userSpaceOnUse" x="-1000" y="-1000" width="3000" height="3000">
-      <rect x="-1000" y="-420" width="3000" height="1920" fill="url(#beamAlong)"/>
-    </mask>
-    <radialGradient id="halo">
-      <stop offset="0" stop-color="#cfe9ff" stop-opacity="0.6"/>
-      <stop offset="0.3" stop-color="#a9d6ff" stop-opacity="0.22"/>
-      <stop offset="0.65" stop-color="#9ccfff" stop-opacity="0.06"/>
-      <stop offset="1" stop-color="#9ccfff" stop-opacity="0"/>
+    <radialGradient id="label" cx="0.4" cy="0.36" r="0.75">
+      <stop offset="0" stop-color="#fbe4a2"/>
+      <stop offset="0.6" stop-color="#ecc067"/>
+      <stop offset="1" stop-color="#c98f30"/>
     </radialGradient>
-    <radialGradient id="dot" cx="0.42" cy="0.4" r="0.62">
-      <stop offset="0" stop-color="#ffffff"/>
-      <stop offset="0.45" stop-color="#e6f4ff"/>
-      <stop offset="1" stop-color="#9fd2ff"/>
-    </radialGradient>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="22"/></filter>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="26"/></filter>
+    <clipPath id="disc"><circle cx="512" cy="512" r="330"/></clipPath>
   </defs>
   <g clip-path="url(#tile)">
-
   <rect width="1024" height="1024" fill="url(#space)"/>
-  <rect width="1024" height="1024" fill="url(#glowPurple)"/>
-  <g fill="#e9e4ff">
-    <circle cx="168" cy="214" r="3" opacity="0.45"/>
-    <circle cx="300" cy="610" r="2.2" opacity="0.3"/>
-    <circle cx="214" cy="838" r="2.6" opacity="0.32"/>
-    <circle cx="436" cy="126" r="2" opacity="0.35"/>
-    <circle cx="884" cy="770" r="2.4" opacity="0.28"/>
-    <circle cx="112" cy="470" r="1.8" opacity="0.3"/>
+  <rect width="1024" height="1024" fill="url(#glow)"/>
+  <g fill="#ece6ff">
+    <circle cx="118" cy="132" r="3.2" opacity="0.5"/>
+    <circle cx="214" cy="74" r="2.2" opacity="0.35"/>
+    <circle cx="902" cy="118" r="2.8" opacity="0.45"/>
+    <circle cx="822" cy="196" r="1.8" opacity="0.3"/>
+    <circle cx="86" cy="880" r="2.4" opacity="0.3"/>
+    <circle cx="936" cy="914" r="2" opacity="0.3"/>
   </g>
-  <g transform="rotate(25 628 600)" mask="url(#fade)">
-    <rect x="463" y="-420" width="330" height="1920" fill="url(#beamAcross)"/>
-    <rect x="360" y="-420" width="70" height="1920" fill="url(#streakAcross)"/>
+  <circle cx="512" cy="548" r="330" fill="#05031a" opacity="0.6" filter="url(#shadow)"/>
+  <circle cx="512" cy="512" r="330" fill="url(#gold)"/>
+  <g clip-path="url(#disc)">
+    <g filter="url(#soft)">
+      <path d="M512,512 L123.5,305.4 L305.4,123.5 Z M512,512 L900.5,718.6 L718.6,900.5 Z" fill="#fffbe8" opacity="0.5"/>
+      <path d="M512,512 L718.6,123.5 L893.1,292 Z M512,512 L305.4,900.5 L130.9,732 Z" fill="#5e3608" opacity="0.3"/>
+    </g>
   </g>
-  <circle cx="628" cy="600" r="110" fill="url(#halo)"/>
-  <circle cx="628" cy="600" r="23" fill="url(#dot)"/>
+  <g transform="translate(512 512)" fill="none" stroke="#5c3608" stroke-opacity="0.28" stroke-width="1.4">
+    <circle r="136"/><circle r="139.4"/><circle r="142.8"/><circle r="146.2"/><circle r="149.6"/><circle r="153"/><circle r="156.4"/><circle r="159.8"/><circle r="163.2"/><circle r="166.6"/><circle r="170"/><circle r="173.4"/><circle r="184"/><circle r="187.4"/><circle r="190.8"/><circle r="194.2"/><circle r="197.6"/><circle r="201"/><circle r="204.4"/><circle r="207.8"/><circle r="211.2"/><circle r="214.6"/><circle r="218"/><circle r="221.4"/><circle r="224.8"/><circle r="234"/><circle r="237.4"/><circle r="240.8"/><circle r="244.2"/><circle r="247.6"/><circle r="251"/><circle r="254.4"/><circle r="257.8"/><circle r="261.2"/><circle r="264.6"/><circle r="268"/><circle r="276"/><circle r="279.4"/><circle r="282.8"/><circle r="286.2"/><circle r="289.6"/><circle r="293"/><circle r="296.4"/><circle r="299.8"/><circle r="303.2"/><circle r="306.6"/><circle r="310"/>
+  </g>
+  <circle cx="512" cy="512" r="327" fill="none" stroke="#6a3f0a" stroke-opacity="0.55" stroke-width="5"/>
+  <circle cx="512" cy="512" r="320" fill="none" stroke="#fff4cf" stroke-opacity="0.4" stroke-width="2.5"/>
+  <circle cx="512" cy="512" r="124" fill="url(#label)"/>
+  <circle cx="512" cy="512" r="124" fill="none" stroke="#6a3f0a" stroke-opacity="0.45" stroke-width="3"/>
+  <circle cx="512" cy="512" r="128.5" fill="none" stroke="#fff4cf" stroke-opacity="0.35" stroke-width="2"/>
+  <path d="M540,512 L620,512 M538,522.5 L573.2,536.7 M531.1,532.5 L573.4,577.8 M521.1,538.5 L530.2,564.9 M508.1,539.7 L500.6,593.2 M495.5,534.7 L475.6,562.2 M487.8,526 L428.9,560 M484.3,516.4 L442.9,523 M485.1,504.3 L427.4,487.7 M490.9,493.6 L468.2,473.9 M499.3,487.1 L476.6,442.5 M511,484 L509.8,448 M522.5,486 L546.5,426.7 M532.8,493.3 L567,462.5 M538.3,502.4 L568.4,491.5" fill="none" stroke="#6a3f0a" stroke-opacity="0.62" stroke-width="3.2" stroke-linecap="round"/>
+  <circle cx="512" cy="512" r="17" fill="#160e40"/>
+  <circle cx="512" cy="512" r="17" fill="none" stroke="#6a3f0a" stroke-opacity="0.6" stroke-width="3"/>
 </g>
 </svg>
 `;

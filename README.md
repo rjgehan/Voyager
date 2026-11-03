@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/images/icon.svg" width="112" height="112" alt="Voyager's icon: a pale blue dot in a sunbeam, in deep space">
+<img src="docs/images/icon.svg" width="112" height="112" alt="Voyager's icon: the Golden Record, a gold disc on deep purple">
 
 # Voyager
 
@@ -34,7 +34,7 @@ Voyager is a complete notes app that I built for myself and use every day on an 
 
 Every feature is explained in the user guide, which is built into the app as its **Help** page: [open it in the live demo](https://rjgehan.github.io/notesapp/x/help), or read it here in [docs/guide](docs/guide/index.md).
 
-**Why "Voyager".** The Voyager probes were launched in 1977 and are still sending data home. This app is built to last in the same way: your notes are plain files, and every change is kept. Each probe carries a Golden Record of what matters to us; this is your own, with notes, sheets, drawings and tasks in one place. And it travels with you, on the PC and on the iPhone. The icon is Voyager 1's *pale blue dot*, Earth as a speck in a sunbeam. More in [BRAND.md](BRAND.md). (The app was called NotesApp until November 2026; the repository and the Docker image keep that name.)
+**Why "Voyager".** The Voyager probes were launched in 1977 and are still sending data home. This app is built to last in the same way: your notes are plain files, and every change is kept. Each probe carries a Golden Record of what matters to us; this is your own, with notes, sheets, drawings and tasks in one place. And it travels with you, on the PC and on the iPhone. The icon is that Golden Record. More in [BRAND.md](BRAND.md). (The app was called NotesApp until November 2026; the repository and the Docker image keep that name.)
 
 ## See it in action
 

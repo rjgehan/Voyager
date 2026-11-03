@@ -1,6 +1,6 @@
 # Voyager
 
-<img src="docs/images/icon.svg" width="128" height="128" alt="Voyager's icon: a pale blue dot in a sunbeam">
+<img src="docs/images/icon.svg" width="128" height="128" alt="Voyager's icon: the Golden Record, a gold disc on deep purple">
 
 The app is called **Voyager**. The two Voyager probes left Earth in 1977 and are still sending data
 home, almost fifty years later, from beyond the edge of the solar system. That is what this app is
@@ -71,34 +71,42 @@ around it (the social preview), not for the interface.
 
 <img src="frontend/public/icon-512.png" width="160" alt=""> <img src="frontend/public/favicon.svg" width="48" alt="">
 
-**The pale blue dot.** On 14 February 1990, Voyager 1 turned its camera back towards home and
-photographed Earth from six billion kilometres away: a speck less than a pixel wide, caught in a
-band of scattered sunlight. The icon is that picture, simplified: deep space, one soft diagonal
-sunbeam, and in it, a little right of centre, a small bright pale-blue dot with a gentle glow.
+**The Golden Record.** Each Voyager probe carries a gold-plated copper record: sounds and pictures
+chosen to tell whoever finds it what life on Earth was like in 1977, with the instructions for
+playing it engraved on its cover, among them a map of fourteen pulsars that shows where it came
+from. Voyager is your own record of what matters to you. The icon is that disc, face on: gold on
+deep space, with fine grooves, a smooth label with the pulsar map engraved on it, and the dark
+spindle hole at its centre.
 
 | | |
 | --- | --- |
-| Space | Gradient from top left to bottom right: `#06051a`, `#110c36`, `#2a1872`, `#4b2bb5` |
-| Glow | The accent `#8a5cf5`, rising from the bottom-right corner (55% at the corner, fading out across the middle) |
-| Sunbeam | Warm white `#fff6ec` at 23% in the middle of the beam, fading to nothing at its edges and towards the bottom; 25° from vertical, from the top right |
-| Dot | White `#ffffff` at its centre to pale blue `#9fd2ff` at its edge, in a halo of `#cfe9ff` |
-| Stars | Six, `#e9e4ff` at about 30 to 45%, too faint to survive below about 120 px (on purpose) |
+| Space | Gradient from top left to bottom right: `#07051d`, `#130d3e`, `#2b1a76`, `#4b2bb5` |
+| Glow | The accent `#8a5cf5` behind the disc (60% at the centre, fading out just past its edge), so the gold sits in a purple halo |
+| Disc | 64% of the width, centred; gold from `#fff2c4` at the top left through `#f5d07a`, `#e2a940` and `#b87c22` to `#8e5c16` at the bottom right, with a soft shadow below it |
+| Grooves | Fine rings of `#5c3608` at 28% in four tracks with smooth gaps between them, and a highlighted rim |
+| Sheen | Two soft light wedges (upper left, lower right) and two faint dark ones across them: the sheen of a pressed disc |
+| Label | A lighter gold, 38% of the disc's width, engraved with the pulsar map: fifteen lines from the centre, the long one pointing right |
+| Hole | Deep indigo `#160e40`, the background showing through |
+| Stars | Six, `#ece6ff` at about 30 to 50%, too faint to survive below about 120 px (on purpose) |
 
 Why it looks like this: most notes apps' icons are a page, a pencil, a notebook or a letter on
-a flat colour (the old NotesApp icon was a purple page). A picture of a place is rare, it says
-"built to last" without a word, and the dot is one shape that stays a dot at any size.
+a flat colour (the old NotesApp icon was a purple page). A gold disc on deep purple is rare, it is
+the probes' own object, and it says "a record that lasts" without a word. A gold circle with a dark
+centre stays a record at any size. (The first Voyager icon was Voyager 1's *pale blue dot*, a faint
+dot in a sunbeam; it was replaced in November 2026 by this one.)
 
-**Two drawings.** At 64 px and above the icon is drawn from `voyager.svg`. From 48 px down a dot
-4% of the width would vanish, so `voyager-small.svg` widens and brightens the beam, makes the dot
-bigger (17% of the width, with its halo) and drops the stars. Both have the same space, beam angle
-and dot position, so they read as one icon. The favicon, the tray icon, the clipper's 16 to 48 px
-icons and the small Windows icon sizes are the small drawing.
+**Two drawings.** At 64 px and above the icon is drawn from `voyager.svg`. From 48 px down the
+grooves and the pulsar map turn to mush, so `voyager-small.svg` makes the disc a little bigger
+(78% of the width), turns the grooves into one darker band between a lighter label and a lighter
+rim, makes the hole bigger (13% of the width), keeps one light wedge of sheen and drops the stars.
+Both have the same space, glow, gold and proportions, so they read as one icon. The favicon, the
+tray icon, the clipper's 16 to 48 px icons and the small Windows icon sizes are the small drawing.
 
 **Using it.**
 - On its own tile, never cropped, recoloured, rotated or outlined, and never with text over it.
 - Rounded tile (corner radius 22.5% of the side) in browsers, the README, Windows and macOS; full
   bleed where the platform rounds or masks it (the iPhone's Home Screen, Android's maskable icon).
-  The dot stays well inside a maskable icon's 80% safe zone.
+  The disc stays inside a maskable icon's 80% safe zone.
 - Under 64 px use the small drawing; never shrink the large one to a favicon.
 - Next to the name, the icon goes on the left, as tall as the name's capital letters or a little
   taller (the README, the social preview, the desktop app's first-run page).
@@ -109,7 +117,7 @@ icons and the small Windows icon sizes are the small drawing.
 
 ```sh
 cd e2e && npm ci && cd ..                      # once: the scripts use e2e's Playwright
-node scripts/brand/render-icons.mjs --preview icon-preview.png
+node scripts/brand/render-icons.mjs --preview icon-preview.png   # also a sheet: large, Home Screen, tabs, taskbar
 node scripts/brand/render-images.mjs           # with the demo build served on :5230 (the script says how)
 ```
 
