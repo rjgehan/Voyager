@@ -358,6 +358,22 @@ class TaskServiceTest {
 	}
 
 	@Test
+	void completingAHandEditedRuleWithThePrefixRollsItForward() throws Exception {
+		// API §20.6 accepts the RRULE: prefix; a file edited by hand keeps it, and the task still repeats.
+		Task task = this.fx.create("""
+				{"title": "Bins", "due": "2026-11-02", "recurrence": {"rrule": "FREQ=WEEKLY;BYDAY=MO"}}
+				""");
+		String file = this.fx.read("Tasks/Inbox.tasks");
+		this.fx.write("Tasks/Inbox.tasks", file.replace("\"FREQ=WEEKLY;BYDAY=MO\"", "\"RRULE:FREQ=WEEKLY;BYDAY=MO\""));
+		TaskWriteResult rolled = this.fx.tasks.complete(task.id(), new CompleteTaskRequest(null, "2026-11-02", null),
+				TestVault.ALICE, TaskFixture.CLIENT);
+		assertThat(rolled.rolledForward()).isTrue();
+		assertThat(rolled.task().status()).isEqualTo(TaskStatus.OPEN);
+		assertThat(rolled.task().due()).isEqualTo("2026-11-09");
+		assertThat(rolled.task().recurrence().rrule()).isEqualTo("FREQ=WEEKLY;BYDAY=MO");
+	}
+
+	@Test
 	void completingAHandEditedRuleWithATypoOrAnUnreadableEndClosesTheTask() throws Exception {
 		// Lax evaluation would drop THU and move the task to Tuesday 2026-11-10, or ignore UNTIL and repeat forever.
 		for (String rule : List.of("FREQ=WEEKLY;BYDAY=TU,THU", "FREQ=DAILY;UNTIL=2026-11-03")) {

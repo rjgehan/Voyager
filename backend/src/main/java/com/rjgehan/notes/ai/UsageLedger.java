@@ -25,9 +25,11 @@ import org.springframework.stereotype.Component;
 
 /**
  * The estimated Claude spend per calendar month (in the server's time zone), for the monthly budget of
- * {@code settings.ai} (DESIGN §5.25). It lives in {@code .notesapp/cache/ai-usage.json}: inside the volume, so it
- * survives restarts and is in the backups, but excluded from git (§4.6), so it never becomes history or reaches the
- * mirror. It holds counts only, never a question or note text. Losing it resets this month's count to zero.
+ * {@code settings.ai} (DESIGN §5.25). It lives in {@code .notesapp/ai-usage.json}: inside the volume and outside
+ * {@code .notesapp/cache/} (which backups skip), so it survives restarts and a restore, but excluded from git (§4.6),
+ * so it never becomes history or reaches the mirror. It holds counts only, never a question or note text. Losing it
+ * resets this month's count to zero. Earlier builds kept it in {@code .notesapp/cache/}: that file is read when the
+ * new one does not exist yet, and removed once the new one is written.
  */
 @Component
 @ServerWide
@@ -35,7 +37,10 @@ public class UsageLedger {
 
 	private static final Logger logger = LoggerFactory.getLogger(UsageLedger.class);
 
-	public static final String FILE = ".notesapp/cache/ai-usage.json";
+	public static final String FILE = ".notesapp/ai-usage.json";
+
+	/** Where earlier builds kept the ledger (excluded from backups). */
+	static final String LEGACY_FILE = ".notesapp/cache/ai-usage.json";
 
 	/** Months kept in the file. */
 	private static final int KEEP_MONTHS = 12;
@@ -105,7 +110,7 @@ public class UsageLedger {
 		}
 		this.loaded = true;
 		try {
-			JsonNode root = this.mapper.readTree(new String(this.fs.readBytes(FILE), StandardCharsets.UTF_8));
+			JsonNode root = this.mapper.readTree(new String(readBytes(), StandardCharsets.UTF_8));
 			JsonNode months = root.get("months");
 			if (months != null && months.isObject()) {
 				months.properties().forEach((entry) -> {
@@ -127,6 +132,15 @@ public class UsageLedger {
 		}
 	}
 
+	private byte[] readBytes() throws IOException {
+		try {
+			return this.fs.readBytes(FILE);
+		}
+		catch (NoSuchFileException ex) {
+			return this.fs.readBytes(LEGACY_FILE);
+		}
+	}
+
 	private void save() {
 		ObjectNode root = this.mapper.createObjectNode();
 		root.put("schemaVersion", 1);
@@ -143,6 +157,7 @@ public class UsageLedger {
 		try {
 			Files.createDirectories(this.fs.resolve(FILE).getParent());
 			this.fs.atomicWrite(FILE, (this.mapper.writeValueAsString(root) + "\n").getBytes(StandardCharsets.UTF_8));
+			Files.deleteIfExists(this.fs.resolve(LEGACY_FILE));
 		}
 		catch (IOException | JacksonException ex) {
 			logger.warn("{} could not be written ({}); the AI spend is counted in memory until it can", FILE,

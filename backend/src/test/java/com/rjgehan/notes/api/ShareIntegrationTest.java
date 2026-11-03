@@ -166,6 +166,33 @@ class ShareIntegrationTest {
 	}
 
 	@Test
+	void aMoveOntoAMissingSharesPathNeverShowsTheGuestWhereItCameFrom() throws Exception {
+		create("Family/Bread.md", "- [ ] flour\n");
+		create("Private/Health/Bread draft.md", "private\n");
+		create("Private/Secret/Plan.md", "private\n");
+		create("Family/Box/Note.md", "family\n");
+		String note = share("Family/Bread.md", "read", List.of(MOM), false).get("share").get("id").asString();
+		String folder = share("Family/Box", "read", List.of(MOM), false).get("share").get("id").asString();
+		try (SseRecorder noteStream = SseRecorder.openPath(this.port,
+				"/api/s/" + note + "/events?clientId=mom-client-001", Map.of(LOGIN, MOM));
+				SseRecorder folderStream = SseRecorder.openPath(this.port,
+						"/api/s/" + folder + "/events?clientId=mom-client-002", Map.of(LOGIN, MOM))) {
+			// Both shares go missing, then something private is moved onto their paths.
+			this.api.delete("/api/files?path=" + Api.enc("Family/Bread.md")).ok(200);
+			this.api.delete("/api/folders?path=" + Api.enc("Family/Box")).ok(200);
+			this.api.postJson("/api/move", Map.of("from", "Private/Health/Bread draft.md", "to", "Family/Bread.md"))
+				.ok(200);
+			this.api.postJson("/api/move", Map.of("from", "Private/Secret", "to", "Family/Box")).ok(200);
+			noteStream.awaitEvent("share.changed");
+			folderStream.awaitEvent("share.changed");
+			for (SseRecorder stream : List.of(noteStream, folderStream)) {
+				assertThat(stream.frames().stream().map(SseRecorder.Frame::event)).doesNotContain("entry.moved");
+				assertThat(stream.frames().toString()).doesNotContain("Private/");
+			}
+		}
+	}
+
+	@Test
 	void sharesFollowRenamesAndTheirGuestsSeeLiveChanges() throws Exception {
 		create("Kids/Chores.md", "- [ ] dishes\n");
 		String id = share("Kids/Chores.md", "edit", List.of(MOM), false).get("share").get("id").asString();
