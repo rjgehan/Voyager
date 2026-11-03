@@ -11,6 +11,7 @@ import { changedPaths } from './register';
 import { resetRunnerForTests } from './runner';
 
 const queries: NotesFilter[] = [];
+let truncated = false;
 
 function queried(path: string, extra: Partial<QueriedNote> = {}): QueriedNote {
   const title = path.slice(path.lastIndexOf('/') + 1).replace(/\.md$/, '');
@@ -23,7 +24,7 @@ vi.mock('./api', () => ({
   queryNotes: async (f: NotesFilter): Promise<NotesQueryResponse> => {
     queries.push(f);
     const notes = f.path ? NOTES.filter((n) => n.path === f.path) : NOTES.filter((n) => !f.tag?.length || f.tag.every((t) => n.tags.includes(t)));
-    return { notes, total: notes.length, truncated: false };
+    return truncated ? { notes, total: 2345, truncated: true } : { notes, total: notes.length, truncated: false };
   },
 }));
 
@@ -37,6 +38,7 @@ const evaluate = async () => null;
 
 beforeEach(() => {
   queries.length = 0;
+  truncated = false;
   queryClient.setQueryData(queryKeys.tree(), TREE);
 });
 
@@ -71,6 +73,13 @@ describe('runNoteScript', () => {
     const q = await runNoteScript('Here.md', { kind: 'dataview', source: 'TABLE x GROUP BY y', evaluate });
     expect(q.error).toMatchObject({ line: null });
     expect(q.error!.message).toMatch(/GROUP is not supported/);
+  });
+
+  it('a query that searched only part of the vault says so under its result', async () => {
+    truncated = true;
+    const r = await runNoteScript('Here.md', { kind: 'dataview', source: 'LIST FROM #project', evaluate });
+    expect(r.error).toBeNull();
+    expect(r.markdown).toBe('- [[P/Alpha.md|Alpha]]\n- [[P/Beta.md|Beta]]\n\n*Only the first 2 of 2,345 notes (in path order) were searched: narrow the query with FROM.*');
   });
 
   it('a dataview block is a string to the script, whatever it holds', () => {

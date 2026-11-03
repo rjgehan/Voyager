@@ -1,6 +1,9 @@
 // Conversations with Claude, kept per device in localStorage (ROADMAP item 18, DESIGN §6.31): the
 // server keeps none. Each turn stores what was asked (as sent, so follow-ups can send it back), the
 // answer and the notes that went with it; a follow-up sends the earlier turns as `history`.
+// Tabs and windows of one browser share the stored list: every change is made to what is stored
+// now (another tab's turns, conversations and deletions included), and a tab follows the others'
+// saves through the `storage` event. A turn still streaming in this tab stays as it is here.
 import { create } from 'zustand';
 import type { AiPrompt, AiSource, AiTurn } from '../../api/types';
 import { vaultKey } from '../../state/vault';
@@ -74,10 +77,15 @@ function isTurn(t: unknown): t is StoredTurn {
 }
 
 export function loadStored(): Stored {
+  return readStored() ?? { version: 1, currentId: null, conversations: [] };
+}
+
+/** The stored list, or null when there is none (never saved, cleared, or storage unavailable). */
+function readStored(): Stored | null {
   const empty: Stored = { version: 1, currentId: null, conversations: [] };
   try {
     const raw = localStorage.getItem(vaultKey(CONVERSATIONS_KEY));
-    if (!raw) return empty;
+    if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<Stored>;
     if (parsed.version !== 1 || !Array.isArray(parsed.conversations)) return empty;
     const conversations = parsed.conversations
@@ -100,6 +108,29 @@ export function trimForStorage(conversations: Conversation[]): Conversation[] {
   kept = kept.map((c) => (c.turns.length > MAX_TURNS ? { ...c, turns: c.turns.slice(-MAX_TURNS) } : c));
   while (kept.length > 1 && JSON.stringify(kept).length > MAX_STORED_CHARS) kept = kept.slice(0, -1);
   return kept;
+}
+
+/**
+ * This tab's list brought up to date with what is stored (other tabs' turns, conversations and
+ * deletions): the stored list, with the turns that are streaming in this tab kept as they are here.
+ * Without a stored list (none yet, or storage unavailable) this tab's list stands.
+ */
+function current(local: Conversation[]): Conversation[] {
+  const stored = readStored();
+  if (!stored) return local;
+  const live = local.filter((c) => c.turns.some((t) => t.status === 'streaming'));
+  if (live.length === 0) return stored.conversations;
+  const out = stored.conversations.map((c) => {
+    const mine = live.find((l) => l.id === c.id);
+    if (!mine) return c;
+    const streaming = mine.turns.filter((t) => t.status === 'streaming');
+    const ids = new Set(c.turns.map((t) => t.id));
+    const turns = c.turns.map((t) => streaming.find((s) => s.id === t.id) ?? t);
+    return { ...c, turns: [...turns, ...streaming.filter((t) => !ids.has(t.id))] };
+  });
+  // A conversation streaming here that the stored list lacks stays while it streams.
+  for (const l of live) if (!out.some((c) => c.id === l.id)) out.push(l);
+  return out;
 }
 
 function save(state: { conversations: Conversation[]; currentId: string | null }): Conversation[] {
@@ -136,7 +167,8 @@ export const useConversations = create<ConversationsState>()((set, get) => ({
       costUsd: null,
       at: now,
     };
-    let { conversations, currentId } = get();
+    let conversations = current(get().conversations);
+    let currentId = get().currentId;
     let conversation = conversations.find((c) => c.id === currentId);
     if (!conversation) {
       conversation = { id: newId(), title: titleOf(label), createdAt: now, updatedAt: now, turns: [] };
@@ -150,7 +182,8 @@ export const useConversations = create<ConversationsState>()((set, get) => ({
   },
 
   updateTurn(conversationId, turnId, patch, persist = false) {
-    const conversations = get().conversations.map((c) => {
+    // Streamed text stays in this tab until the turn is saved, on top of what is stored then.
+    const conversations = (persist ? current(get().conversations) : get().conversations).map((c) => {
       if (c.id !== conversationId) return c;
       return {
         ...c,
@@ -163,19 +196,19 @@ export const useConversations = create<ConversationsState>()((set, get) => ({
   },
 
   newConversation() {
-    const { conversations } = get();
+    const conversations = current(get().conversations);
     set({ conversations: save({ conversations, currentId: null }), currentId: null });
   },
 
   select(id) {
-    const { conversations } = get();
+    const conversations = current(get().conversations);
     if (!conversations.some((c) => c.id === id)) return;
     set({ conversations: save({ conversations, currentId: id }), currentId: id });
   },
 
   remove(id) {
-    const { conversations, currentId } = get();
-    const rest = conversations.filter((c) => c.id !== id);
+    const { currentId } = get();
+    const rest = current(get().conversations).filter((c) => c.id !== id);
     const next = currentId === id ? null : currentId;
     set({ conversations: save({ conversations: rest, currentId: next }), currentId: next });
   },
@@ -184,6 +217,16 @@ export const useConversations = create<ConversationsState>()((set, get) => ({
     set({ conversations: save({ conversations: [], currentId: null }), currentId: null });
   },
 }));
+
+/** Another tab saved: this tab shows its list (keeping its own open conversation, while it exists). */
+function followOtherTabs(e: StorageEvent): void {
+  if (e.key !== null && e.key !== vaultKey(CONVERSATIONS_KEY)) return;
+  const { conversations: local, currentId } = useConversations.getState();
+  const conversations = current(local);
+  useConversations.setState({ conversations, currentId: conversations.some((c) => c.id === currentId) ? currentId : null });
+}
+
+if (typeof window !== 'undefined') window.addEventListener('storage', followOtherTabs);
 
 export function currentConversation(state: Pick<ConversationsState, 'conversations' | 'currentId'> = useConversations.getState()): Conversation | null {
   return state.conversations.find((c) => c.id === state.currentId) ?? null;

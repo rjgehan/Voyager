@@ -56,6 +56,25 @@
   }
 }
 
+/* Excalidraw shrinks its toolbar's buttons by the window's width only (its media queries at 450
+   and 379 px); a split pane that narrow in a wide window gets the same sizes, in px (ExcalidrawView
+   marks the host with data-pane). The laser pointer and magic buttons keep their size, as there. */
+.excalidraw-host[data-pane] .excalidraw .App-toolbar-container .ToolIcon__icon {
+  width: 28.8px;
+  height: 28.8px;
+}
+
+.excalidraw-host[data-pane='narrower'] .excalidraw .App-toolbar-container .ToolIcon__icon {
+  width: 24px;
+  height: 24px;
+}
+
+.excalidraw-host[data-pane] .excalidraw .App-toolbar-container .ToolIcon__LaserPointer .ToolIcon__icon,
+.excalidraw-host[data-pane] .excalidraw .App-toolbar-container .ToolIcon__MagicButton .ToolIcon__icon {
+  width: var(--default-button-size);
+  height: var(--default-button-size);
+}
+
 /* "Browse libraries" would send this page's address (the tailnet host and the drawing's path) to
    libraries.excalidraw.com, and the library it offers could not come back here anyway. */
 .excalidraw .library-menu-browse-button {

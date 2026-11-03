@@ -3,6 +3,7 @@
 // display and forces come from the global graph's settings, so they are set up once.
 import { Maximize2, SlidersHorizontal } from 'lucide-react';
 import { useId, useMemo, useState } from 'react';
+import { errorMessage } from '../../api/client';
 import { GraphCanvas } from '../graph/GraphCanvas';
 import { buildView, groupColors } from '../../features/graph/model';
 import { openGraphNode } from '../../features/graph/open';
@@ -23,7 +24,7 @@ function Check({ label, checked, onChange }: { label: string; checked: boolean; 
 }
 
 export default function LocalGraphPanel({ activePath }: { activePath: string | null }) {
-  const { base, loading } = useGraphData();
+  const { base, loading, error } = useGraphData();
   const o = useGraphOptions((s) => s.local);
   const setLocal = useGraphOptions((s) => s.setLocal);
   const global = useGraphOptions((s) => s.global);
@@ -58,6 +59,12 @@ export default function LocalGraphPanel({ activePath }: { activePath: string | n
 
   let body;
   if (!activePath) body = <div className="panel-empty">Open a note to see its local graph.</div>;
+  else if (error && !base)
+    body = (
+      <div className="panel-empty" role="alert">
+        The graph could not be loaded: {errorMessage(error)}
+      </div>
+    );
   else if (loading || !base) body = <div className="panel-empty">Loading…</div>;
   else if (!view || view.nodes.length === 0) body = <div className="panel-empty">This file is not in the graph.</div>;
   else

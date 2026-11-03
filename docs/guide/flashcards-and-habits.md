@@ -26,7 +26,7 @@ Open **Flashcards** (ribbon or drawer). It lists your decks with three counts: n
 2. Read the question, try to remember, then tap the card or **Show answer**.
 3. Say how well you remembered: **Again**, **Hard**, **Good** or **Easy**. Each button shows when the card will come back.
 
-On a computer: `Space` or `Enter` shows the answer (and then answers Good), `1` to `4` answer Again to Easy, `U` undoes, `E` opens the card in its note, `S` skips it, and `Esc` ends the session. The **⋯** menu during a review has **Edit in note**, **Skip for now** and **Reset progress**.
+On a computer: `Space` or `Enter` shows the answer (and then answers Good; on a button you moved to with `Tab`, they press that button instead), `1` to `4` answer Again to Easy, `U` undoes, `E` opens the card in its note, `S` skips it, and `Esc` ends the session. The **⋯** menu during a review has **Edit in note**, **Skip for now** and **Reset progress**.
 
 - **Review flashcards in this note** (palette) studies the open note's cards, without the daily limits.
 - **Statistics** (the chart button on the Flashcards page) shows how many cards you answered, your streak, how much you remember, and what is due in the coming 30 days.

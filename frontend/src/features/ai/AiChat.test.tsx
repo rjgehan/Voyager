@@ -105,6 +105,19 @@ describe('AiChat (ROADMAP item 18)', () => {
     expect(fetchMock.mock.calls.map((c) => c[0])).toEqual(['/api/ai/status']);
   });
 
+  it('when off, says where questions would go for the chosen provider (F8)', async () => {
+    setup(status({ state: 'off', reason: 'Ask and summaries are switched off in Settings' }));
+    const off = (await screen.findByText(/Ask and summaries are off/)).closest('.ai-unavailable')!;
+    expect(off).toHaveTextContent(/through Claude Code with your Claude subscription/);
+    expect(off).not.toHaveTextContent(/Claude API|Anthropic API/);
+  });
+
+  it('when off with the API provider, names the Anthropic API', async () => {
+    setup(status({ state: 'off', reason: 'Ask and summaries are switched off in Settings', provider: 'api', keyFile: 'anthropic-key' }));
+    const off = (await screen.findByText(/Ask and summaries are off/)).closest('.ai-unavailable')!;
+    expect(off).toHaveTextContent('the Anthropic API (billed per token)');
+  });
+
   it('explains a missing key without showing one', async () => {
     setup(status({ state: 'not-configured', reason: 'no Claude Code token: claude-token does not exist', keyPresent: false }));
     expect(await screen.findByText(/The server cannot use Claude Code/)).toBeInTheDocument();

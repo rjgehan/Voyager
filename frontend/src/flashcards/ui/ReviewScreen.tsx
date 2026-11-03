@@ -129,6 +129,8 @@ export function ReviewScreen({ data, scope, onExit }: { data: FlashcardData; sco
       } else if (key === 'u') a.undo();
       else if (!hasCardRef.current) return;
       else if (key === ' ' || key === 'enter') {
+        // A focused button or link keeps its own Enter and Space (Again, End review, the note's name…).
+        if (target?.closest('button, a[href], [role="button"], summary')) return;
         e.preventDefault();
         if (revealedRef.current) a.answer('good');
         else a.reveal();
