@@ -1,8 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { closeOverlayEntry, navigateOverOverlays, openOverlayEntry, resetOverlayHistory } from './overlayHistory';
 
-/** history.go() and back() land asynchronously, with a popstate event. */
-const settle = () => new Promise((r) => setTimeout(r, 20));
+declare const setImmediate: (callback: () => void) => unknown;
+/**
+ * history.go() and back() land asynchronously: jsdom queues a task that queues the one firing
+ * popstate, both with setImmediate. Waiting on that same queue rather than on the clock keeps the
+ * order however loaded the machine is (two hops per traversal; four leave room).
+ */
+const settle = async () => {
+  for (let i = 0; i < 4; i++) await new Promise<void>((r) => setImmediate(r));
+};
 const marker = () => (history.state as Record<string, unknown> | null)?.notesappOverlay;
 
 beforeEach(() => {
@@ -36,6 +43,22 @@ describe('overlay history entries', () => {
     expect(drawer).toHaveBeenCalledTimes(1);
     expect(location.pathname).toBe('/n/Base.md');
     expect(marker()).toBeUndefined();
+  });
+
+  it('waits for the back gesture to land however long the page is busy', async () => {
+    const dialog = vi.fn();
+    openOverlayEntry(dialog);
+    history.back();
+    const landed = settle();
+    // A loaded machine stalls the event loop between jsdom's two traversal tasks.
+    setImmediate(() => {
+      const until = performance.now() + 30;
+      while (performance.now() < until) {
+        /* busy */
+      }
+    });
+    await landed;
+    expect(dialog).toHaveBeenCalledTimes(1);
   });
 
   it('goes back over the entry when the overlay closes from the UI', async () => {
