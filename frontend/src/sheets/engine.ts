@@ -96,6 +96,16 @@ export function engineConfig(): Partial<ConfigParams> {
   };
 }
 
+/**
+ * Names every engine defines, in a .sheet file and in a note's tables alike: formulas use TRUE and
+ * FALSE without brackets, as in Google Sheets and Excel, but the engine only knows the functions
+ * TRUE() and FALSE(). Defining them also keeps the names from user ranges.
+ */
+export const BUILT_IN_NAMES: ReadonlyArray<{ name: string; expression: string }> = [
+  { name: 'TRUE', expression: '=TRUE()' },
+  { name: 'FALSE', expression: '=FALSE()' },
+];
+
 // ---------- patches ----------
 
 interface SheetMeta {
@@ -1329,10 +1339,7 @@ export class Workbook {
     this.spillBlocked.clear();
     this.problemList = [];
     hf.batch(() => {
-      // Formulas use TRUE and FALSE without parentheses, as in Google Sheets and Excel; the engine
-      // only knows the functions TRUE() and FALSE(). This also keeps the names from user ranges.
-      hf.addNamedExpression('TRUE', '=TRUE()');
-      hf.addNamedExpression('FALSE', '=FALSE()');
+      for (const { name, expression } of BUILT_IN_NAMES) hf.addNamedExpression(name, expression);
       for (const sheet of this.model.sheets) this.addEngineSheet(sheet);
       for (const name of Object.keys(this.model.named)) this.syncNamed(name);
     });
