@@ -73,6 +73,19 @@ describe('asking and summarizing', () => {
     await vi.waitFor(() => expect(isStreaming(turnId)).toBe(false));
   });
 
+  it('another tab deleting the conversation stops its answer here', async () => {
+    stubAi();
+    const turnId = askQuestion('What is the budget?', null);
+    await vi.waitFor(() => expect(signal).toBeDefined());
+    const key = 'notesapp:ai:conversations';
+    const newValue = JSON.stringify({ version: 1, currentId: null, conversations: [] });
+    localStorage.setItem(key, newValue);
+    window.dispatchEvent(new StorageEvent('storage', { key, newValue }));
+    await vi.waitFor(() => expect(signal!.aborted).toBe(true));
+    await vi.waitFor(() => expect(isStreaming(turnId)).toBe(false));
+    expect(JSON.parse(localStorage.getItem(key)!).conversations).toEqual([]);
+  });
+
   it('clearing every conversation stops their answers', async () => {
     stubAi();
     const turnId = askQuestion('What is the budget?', null);

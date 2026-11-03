@@ -190,3 +190,49 @@ describe('KanbanBoard: a card edit while the board changes', () => {
     expect(session.getText()).toContain('**Complete**\n- [x] Second and brushes!\n');
   });
 });
+
+// iOS may discard a Home-Screen app it hid without a blur: an open card editor commits on hide.
+describe('KanbanBoard: hiding the page with a card editor open', () => {
+  const editorIn = (el: Element) => EditorView.findFromDOM(el.querySelector<HTMLElement>('.kanban-card-editor .cm-editor')!)!;
+  const hide = () =>
+    act(() => {
+      Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
+      document.dispatchEvent(new Event('visibilitychange'));
+      window.dispatchEvent(new Event('pagehide'));
+    });
+  afterEach(() => {
+    Reflect.deleteProperty(document, 'visibilityState');
+  });
+
+  it('puts a card being added into the note and keeps the add editor open', async () => {
+    const { session } = await setup();
+    fireEvent.click(within(lane('To do')).getByRole('button', { name: /^Add card$/ }));
+    const view = editorIn(lane('To do'));
+    act(() => view.dispatch({ changes: { from: 0, insert: 'buy milk' }, userEvent: 'input.type' }));
+    const flush = vi.spyOn(session, 'flush');
+    hide();
+    expect(session.getText()).toContain('- [ ] buy milk\n');
+    expect(flush).toHaveBeenCalled();
+    expect(lane('To do').querySelector('.kanban-add-editor .kanban-card-editor')).not.toBeNull();
+  });
+
+  it('puts a card being edited into the note and keeps its editor open with the text', async () => {
+    const { session } = await setup();
+    const second = () => [...lane('To do').querySelectorAll<HTMLElement>('[data-board-card]')].find((c) => c.textContent?.includes('Second'))!;
+    fireEvent.click(within(second()).getByText('Second'));
+    const view = editorIn(second());
+    act(() => view.dispatch({ changes: { from: view.state.doc.length, insert: ' and brushes' }, userEvent: 'input.type' }));
+    hide();
+    expect(session.getText()).toContain('- [ ] Second and brushes\n');
+    await act(() => vi.advanceTimersByTimeAsync(50));
+    const card = lane('To do').querySelector<HTMLElement>('.kanban-edit')!;
+    expect(editorIn(card.parentElement!).state.doc.toString()).toBe('Second and brushes');
+    // Ending the edit later adds nothing more.
+    act(() => editorIn(card.parentElement!).dispatch({ changes: { from: editorIn(card.parentElement!).state.doc.length, insert: '!' }, userEvent: 'input.type' }));
+    fireEvent.keyDown(lane('To do').querySelector('.kanban-card-editor .cm-content')!, { key: 'Escape' });
+    const text = session.getText();
+    expect(text).toContain('- [ ] Second and brushes!\n');
+    expect(text).not.toContain('- [ ] Second and brushes\n');
+    expect(text.match(/Second/g)).toHaveLength(1);
+  });
+});

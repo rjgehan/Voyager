@@ -144,6 +144,20 @@ describe('task detail sheet', () => {
     await waitFor(() => expect(patch).toHaveBeenCalledWith('A', { changes: { title: 'Pay the rent' }, base: { title: 'Pay rent' } }, expect.any(String)));
   });
 
+  it('sends a title still being typed when the page is hidden, the field staying focused', async () => {
+    taskStore.upsert([makeTask({ id: 'A', title: 'Pay rent' })]);
+    const patch = update();
+    renderWithApp(<TaskDetail id="A" />);
+    const title = screen.getByRole('textbox', { name: 'Title' });
+    fireEvent.focus(title);
+    fireEvent.change(title, { target: { value: 'Pay the rent' } });
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
+    onTestFinished(() => void Reflect.deleteProperty(document, 'visibilityState'));
+    fireEvent(document, new Event('visibilitychange'));
+    await waitFor(() => expect(patch).toHaveBeenCalledWith('A', { changes: { title: 'Pay the rent' }, base: { title: 'Pay rent' } }, expect.any(String)));
+    expect(title).toHaveValue('Pay the rent');
+  });
+
   it('keeps notes whose save failed in the field, and sends them again on blur', async () => {
     taskStore.upsert([makeTask({ id: 'A', title: 'Plan trip', notes: 'old notes' })]);
     const patch = vi

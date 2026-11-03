@@ -111,17 +111,34 @@ export function TrashPage() {
   const entries = trash.data?.entries ?? [];
   const [emptying, setEmptying] = useState(false);
 
+  // DELETE /api/trash takes no ids, so after each confirmation the list is fetched again: if it
+  // changed meanwhile (an item trashed in another tab, or one Obsidian Sync dropped into .trash/),
+  // the user is asked again with the new count, so nothing is purged they were not warned about.
   const emptyTrash = async () => {
-    const foreign = entries.filter(isForeign).length;
-    const ok = await confirmAction({
-      title: 'Empty the trash?',
-      message:
-        `${entries.length} ${entries.length === 1 ? 'item' : 'items'} will be deleted for good.` +
-        (foreign ? ` ${foreign} of them ${foreign === 1 ? 'was' : 'were'} put there outside Voyager and may not be in history.` : ' Their last versions stay in history.'),
-      confirmLabel: 'Empty trash',
-      danger: true,
-    });
-    if (!ok) return;
+    let shown = entries;
+    for (;;) {
+      const foreign = shown.filter(isForeign).length;
+      const ok = await confirmAction({
+        title: 'Empty the trash?',
+        message:
+          `${shown.length} ${shown.length === 1 ? 'item' : 'items'} will be deleted for good.` +
+          (foreign ? ` ${foreign} of them ${foreign === 1 ? 'was' : 'were'} put there outside Voyager and may not be in history.` : ' Their last versions stay in history.'),
+        confirmLabel: 'Empty trash',
+        danger: true,
+      });
+      if (!ok) return;
+      let latest: TrashEntry[];
+      try {
+        latest = (await queryClient.fetchQuery({ queryKey: queryKeys.trash(), queryFn: () => api.listTrash(), staleTime: 0 })).entries;
+      } catch (e) {
+        toastError(e);
+        return;
+      }
+      const same = latest.length === shown.length && latest.every((e) => shown.some((s) => s.id === e.id));
+      if (same) break;
+      if (latest.length === 0) return;
+      shown = latest;
+    }
     setEmptying(true);
     try {
       const { purged } = await api.emptyTrash();

@@ -21,11 +21,12 @@ import {
   SquareSplitVertical,
   Trash2,
 } from 'lucide-react';
-import { useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import { ContextMenu, type MenuEntry } from '../../components/overlays/ContextMenu';
 import { MarkdownSnippet } from '../../render/MarkdownSnippet';
 import { confirmAction, promptText } from '../../state/dialogs';
 import type { DocumentSession } from '../../sync/DocumentSession';
+import { KEEPALIVE_BUDGET } from '../../sync/documents';
 import { useSessionChangeCount } from '../../sync/useTextDocument';
 import { Board, type BoardColumn, type BoardMove } from '../../tasks/board/Board';
 import { CardEditor } from '../canvas/CardEditor';
@@ -212,6 +213,48 @@ export default function KanbanBoard({ session, readOnly, onShowMarkdown }: Props
     addingNow.current = keepOpen && value !== '' ? { lane: a.lane, seq: a.seq + 1 } : null;
     setAdding(addingNow.current);
   }
+
+  /**
+   * The open editor's text into the note now, its editor staying open: on a hidden page iOS may
+   * discard the app without a blur. Returns whether the note changed.
+   */
+  function checkpoint(): boolean {
+    const before = session.getText();
+    const e = editingNow.current;
+    if (e && draft.current.trim() !== e.original.trim()) {
+      const value = draft.current;
+      const at = editable ? findCard(parseBoard(session.getText()), e.ref, e.original) : null;
+      if (at) write((m) => editCard(m, at, value));
+      const item = at ? boardItems(parseBoard(session.getText()))[at.lane]?.[at.index] : undefined;
+      if (at && item) {
+        // The edit goes on from the saved text (the card's key follows its text).
+        editingNow.current = { key: item.key, ref: at, original: item.card.text };
+        setEditing(editingNow.current);
+      } else finishEdit();
+    }
+    if (addingNow.current && draft.current.trim() !== '') commitAdd(true);
+    return session.getText() !== before;
+  }
+
+  // Registered after the documents' own hide handlers, so this sends what it wrote itself.
+  const checkpointRef = useRef(checkpoint);
+  useLayoutEffect(() => {
+    checkpointRef.current = checkpoint;
+  });
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden' && checkpointRef.current()) void session.flush().catch(() => undefined);
+    };
+    const onPageHide = () => {
+      if (checkpointRef.current()) session.keepaliveSave(KEEPALIVE_BUDGET);
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pagehide', onPageHide);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pagehide', onPageHide);
+    };
+  }, [session]);
 
   const startAdd = (lane: number) => {
     if (!editable) return;

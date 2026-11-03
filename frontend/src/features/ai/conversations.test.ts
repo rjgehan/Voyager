@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CONVERSATIONS_KEY, MAX_CONVERSATIONS, currentConversation, historyOf, loadStored, trimForStorage, useConversations, type Conversation } from './conversations';
 
 beforeEach(() => {
@@ -124,6 +124,36 @@ describe('conversations in two tabs', () => {
     expect(useConversations.getState().conversations.some((c) => c.id === conversationId)).toBe(false);
     useConversations.getState().startTurn({ action: 'ask', question: 'Other' }, 'Other');
     expect(loadStored().conversations.some((c) => c.id === conversationId)).toBe(false);
+  });
+
+  it('a conversation the other tab deletes while it streams here is gone, and stays gone when the answer ends', () => {
+    const store = useConversations.getState();
+    const { conversationId, turnId } = store.startTurn({ action: 'ask', question: 'Q' }, 'Q');
+    store.updateTurn(conversationId, turnId, (t) => ({ answer: t.answer + 'Hel' }));
+    const value = stored();
+    write({ ...value, currentId: null, conversations: value.conversations.filter((c) => c.id !== conversationId) });
+    expect(useConversations.getState().conversations.some((c) => c.id === conversationId)).toBe(false);
+    useConversations.getState().updateTurn(conversationId, turnId, { status: 'done', answer: 'A' }, true);
+    expect(loadStored().conversations.some((c) => c.id === conversationId)).toBe(false);
+  });
+
+  it('the other tab’s Clear all removes a conversation streaming here', () => {
+    const { conversationId, turnId } = useConversations.getState().startTurn({ action: 'ask', question: 'Q' }, 'Q');
+    write({ version: 1, currentId: null, conversations: [] });
+    expect(useConversations.getState().conversations).toEqual([]);
+    useConversations.getState().updateTurn(conversationId, turnId, { status: 'done', answer: 'A' }, true);
+    expect(loadStored().conversations).toEqual([]);
+  });
+
+  it('a conversation whose save never reached storage keeps streaming when the other tab saves', () => {
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('full', 'QuotaExceededError');
+    });
+    const { conversationId, turnId } = useConversations.getState().startTurn({ action: 'ask', question: 'Q' }, 'Q');
+    setItem.mockRestore();
+    write({ version: 1, currentId: null, conversations: [{ id: 'other', title: 'O', createdAt: 1, updatedAt: 1, turns: [] }] });
+    const mine = useConversations.getState().conversations.find((c) => c.id === conversationId);
+    expect(mine?.turns.find((t) => t.id === turnId)?.status).toBe('streaming');
   });
 
   it('a turn still streaming here is not cut off by the other tab’s save', () => {

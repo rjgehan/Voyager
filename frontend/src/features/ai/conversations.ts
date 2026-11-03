@@ -113,6 +113,7 @@ export function trimForStorage(conversations: Conversation[]): Conversation[] {
 /**
  * This tab's list brought up to date with what is stored (other tabs' turns, conversations and
  * deletions): the stored list, with the turns that are streaming in this tab kept as they are here.
+ * A conversation deleted elsewhere is dropped even while it streams here (run.ts then stops it).
  * Without a stored list (none yet, or storage unavailable) this tab's list stands.
  */
 function current(local: Conversation[]): Conversation[] {
@@ -128,16 +129,22 @@ function current(local: Conversation[]): Conversation[] {
     const turns = c.turns.map((t) => streaming.find((s) => s.id === t.id) ?? t);
     return { ...c, turns: [...turns, ...streaming.filter((t) => !ids.has(t.id))] };
   });
-  // A conversation streaming here that the stored list lacks stays while it streams.
-  for (const l of live) if (!out.some((c) => c.id === l.id)) out.push(l);
+  // A conversation streaming here that the stored list lacks stays while it streams, but only if
+  // this tab never got it into storage (quota, private mode, or trimmed away). Once saved, a stored
+  // list without it means another tab deleted it (or cleared all): it goes, so its answer stops.
+  for (const l of live) if (!savedHere.has(l.id) && !out.some((c) => c.id === l.id)) out.push(l);
   return out;
 }
+
+/** Conversations this tab has written to storage at least once. */
+const savedHere = new Set<string>();
 
 function save(state: { conversations: Conversation[]; currentId: string | null }): Conversation[] {
   const conversations = trimForStorage(state.conversations);
   try {
     const stored: Stored = { version: 1, currentId: state.currentId, conversations };
     localStorage.setItem(vaultKey(CONVERSATIONS_KEY), JSON.stringify(stored));
+    for (const c of conversations) savedHere.add(c.id);
   } catch {
     // Private mode or quota: the conversation still works for this page load.
   }
