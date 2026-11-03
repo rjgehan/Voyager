@@ -47,7 +47,8 @@ export function resetKeptDrafts(): void {
 
 /**
  * A text field bound to one task field: a draft while focused, saved on blur, Enter (single
- * line), after a pause in typing (multi-line), and when the field goes away mid-edit.
+ * line), after a pause in typing (multi-line), when the page is hidden, and when the field goes
+ * away mid-edit.
  */
 export function useTextField(task: Task, field: TextFieldName, opts: { multiline?: boolean; disabled?: boolean } = {}) {
   const [draft, setDraftState] = useState<Draft | null>(() => kept.get(keyOf(task, field)) ?? null);
@@ -135,6 +136,26 @@ export function useTextField(task: Task, field: TextFieldName, opts: { multiline
     if (connection === 'live' && draftRef.current?.failed && !focused.current) flush();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connection]);
+
+  // The page hidden mid-edit (iOS may then discard the Home-Screen app without a blur): the text
+  // being typed is sent now, the field keeping its focus and draft.
+  useEffect(() => {
+    const onHide = () => {
+      if (!focused.current || !draftRef.current) return;
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = null;
+      flush();
+    };
+    const onVisibility = () => document.visibilityState === 'hidden' && onHide();
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pagehide', onHide);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pagehide', onHide);
+    };
+    // flush reads refs only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [field]);
 
   const unsaved = draft !== null && (draft.failed || (!isFocused && saved(field, draft.value) !== draft.base));
 
