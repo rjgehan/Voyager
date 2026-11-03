@@ -3344,7 +3344,7 @@ Bookmarks are stored in `.notesapp/bookmarks.json`, in the format of Obsidian's 
 - Every item may have `ctime` (when it was bookmarked, epoch milliseconds, which Obsidian writes) and `title` (a display name; without one, the client shows the target's name, the heading, or the query).
 - Items are **passed through** in Obsidian's shape: a field that does not apply is absent, not `null`, and fields this build does not know are kept, at the item and at the top level of the file.
 - Without the file, the response lists the bookmarks of `.obsidian/bookmarks.json` when Obsidian left one (it is only ever read), or none. `version` is then the blob id of the document NotesApp would write, so a `PUT` with it creates the file.
-- Items in the file that break the rules of §21.2 (a hand edit) are left out of the response and logged, so a client never receives an item it could not send back. A file that is not JSON at all reads as no bookmarks; the next save keeps it beside the new one as `bookmarks.json.bak-<timestamp>`.
+- Items in the file that break the rules of §21.2 (a hand edit) are left out of the response and logged, so a client never receives an item it could not send back. They stay in the file when the server rewrites it (a move, a heading rename); a save, which holds only the items the client had, first keeps the file beside the new one as `bookmarks.json.bak-<timestamp>`. A file that is not JSON at all reads as no bookmarks; the next save keeps it the same way.
 - The file is read on every request, so a hand edit or a pull is seen at once.
 
 ### 21.2 `PUT /api/bookmarks`
