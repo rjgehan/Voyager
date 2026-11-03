@@ -10,9 +10,17 @@ export interface OutlineHeading {
   from: number;
 }
 
-/** Normalizes heading text for target comparison: case-insensitive, whitespace collapsed. */
+/** What a wikilink cannot hold (`[[Note#C# tips]]` would name ` tips`): heading targets read them as spaces. */
+const NOT_IN_WIKILINKS = /[#|^[\]]/g;
+
+/** A heading as a wikilink names it, as in Obsidian: `# | ^ [ ]` become spaces, whitespace collapsed. */
+export function wikilinkHeading(text: string): string {
+  return text.replace(NOT_IN_WIKILINKS, ' ').replace(/\s+/g, ' ').trim();
+}
+
+/** Normalizes heading text for target comparison: case-insensitive, whitespace collapsed, `# | ^ [ ]` as spaces. */
 export function headingKey(text: string): string {
-  return text.replace(/\s+/g, ' ').trim().toLowerCase();
+  return wikilinkHeading(text).toLowerCase();
 }
 
 /**

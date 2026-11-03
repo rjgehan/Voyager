@@ -8,9 +8,11 @@ import type { FileEntry, Settings } from '../api/types';
 import { buildVaultTree } from '../api/vaultTree';
 import { basenameOf, extensionOf, lastSegment } from '../features/paths';
 import { DEFAULT_SETTINGS } from '../features/settings';
+import { findWikiLinks, parseWikiBody } from '../features/syntax';
 import { headingSource, tagSource, wikilinkSource } from './completion';
 import { noteContext, type NoteContext } from './context';
 import { noteExtensions } from './editorSetup';
+import { findHeading } from './headingKeys';
 import { cellLanguage } from './livePreview/table';
 import { tableCellHost } from './livePreview/table/facets';
 
@@ -169,6 +171,31 @@ describe('heading completion', () => {
     const cell = EditorState.create({ doc: '[[#Sec', selection: EditorSelection.cursor(6), extensions: [noteContext.of(context()), tableCellHost.of(note), cellLanguage] });
     const result = (await headingSource(new CompletionContext(cell, 6, false))) as CompletionResult;
     expect(result.options.map((o) => o.label)).toEqual(['Second part']);
+  });
+
+  it('writes a heading with # | [ ] so that the link reaches it, as Obsidian does', async () => {
+    const headings = ['C# tips', 'Q&A | FAQ', '[Draft] plan', 'Note ^ here'];
+    const doc = headings.map((h) => `## ${h}\n\n`).join('');
+    const expected = ['[[#C tips]]', '[[#Q&A FAQ]]', '[[#Draft plan]]', '[[#Note here]]'];
+    for (const [i, heading] of headings.entries()) {
+      const view = makeView(`${doc}[[#`, doc.length + 3);
+      const result = (await complete(headingSource, view))!;
+      pick(view, result, heading);
+      const link = view.state.doc.toString().slice(doc.length);
+      expect(link).toBe(expected[i]);
+      const found = findWikiLinks(link);
+      expect(found).toHaveLength(1);
+      const body = parseWikiBody(link.slice(2, -2));
+      expect(body.display).toBeNull();
+      expect(findHeading(headings.map((text) => ({ text })), body.subpath!)?.text).toBe(heading);
+    }
+    const other: NoteContext = {
+      ...context(),
+      noteMeta: async (p) => ({ ...(await context().noteMeta(p)), headings: [{ level: 2, text: 'Q&A | FAQ', line: 0 }] }),
+    };
+    const view = makeView('[[Projects/Plan#Q', 17, other);
+    pick(view, (await complete(headingSource, view))!, 'Q&A | FAQ');
+    expect(view.state.doc.toString()).toBe('[[Projects/Plan#Q&A FAQ]]');
   });
 
   it('[[Other# uses the note metadata', async () => {

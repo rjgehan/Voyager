@@ -3392,7 +3392,7 @@ The file is committed with the normal batch, like the settings (`Update .notesap
 
 Request `HeadingRenameRequest`: `{"path": "Projects/Plan.md", "from": "Goals", "to": "Aims for 2026", "dryRun": false}`.
 
-The client renames the heading in the note and **saves the note first**; the server then rewrites every link in the vault that resolves to `path` and names `from` in a `#` segment of its subpath, so `[[Plan#Goals]]`, `[[Plan#Goals|our goals]]`, `![[Plan#Goals]]`, `[[Plan#Plan#Goals]]`, `[x](Plan.md#Goals)`, `[x](<Plan.md#Goals>)` and same-note `[[#Goals]]` all follow. Headings compare as heading targets do: case-insensitively, with whitespace collapsed. Only the subpath is rewritten; the target, the display text, the style and the embed mark are kept. In a plain markdown destination the new heading is percent-encoded like a path (`Aims%20for%202026`). Heading bookmarks of the note (§21) follow too.
+The client renames the heading in the note and **saves the note first**; the server then rewrites every link in the vault that resolves to `path` and names `from` in a `#` segment of its subpath, so `[[Plan#Goals]]`, `[[Plan#Goals|our goals]]`, `![[Plan#Goals]]`, `[[Plan#Plan#Goals]]`, `[x](Plan.md#Goals)`, `[x](<Plan.md#Goals>)` and same-note `[[#Goals]]` all follow. Headings compare as heading targets do: case-insensitively, with whitespace collapsed and `#`, `|`, `^`, `[`, `]` read as spaces. Only the subpath is rewritten; the target, the display text, the style and the embed mark are kept. In a plain markdown destination the new heading is percent-encoded like a path (`Aims%20for%202026`). Heading bookmarks of the note (§21) follow too.
 
 `200 HeadingRenameResult`:
 

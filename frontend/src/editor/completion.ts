@@ -14,6 +14,7 @@ import { displayName, folderOf, stripMd } from '../features/paths';
 import { noteContext, type NoteContext } from './context';
 import { inCodeOrComment, inFrontmatter } from './linkAt';
 import { tableCellHost } from './livePreview/table/facets';
+import { wikilinkHeading } from './headingKeys';
 import { headingsFromState } from './outline';
 
 const MAX_OPTIONS = 50;
@@ -142,11 +143,12 @@ export const headingSource: CompletionSource = async (context: CompletionContext
     type: 'heading',
     apply: (view, completion, _from, to) => {
       let insert: string;
+      // A wikilink names a heading with `# | ^ [ ]` as spaces (as Obsidian does); a Markdown link encodes them.
+      const wiki = ctx.settings().files.useWikilinks;
       if (target === '') {
-        const s = ctx.settings().files;
-        insert = s.useWikilinks ? `${embed ? '!' : ''}[[#${h.text}]]` : `[${h.text}](#${encodeMdPath(h.text)})`;
+        insert = wiki ? `${embed ? '!' : ''}[[#${wikilinkHeading(h.text)}]]` : `[${h.text}](#${encodeMdPath(h.text)})`;
       } else {
-        insert = buildInsert(ctx, { path: resolved, alias: null }, embed, h.text, null);
+        insert = buildInsert(ctx, { path: resolved, alias: null }, embed, wiki ? wikilinkHeading(h.text) : h.text, null);
       }
       replaceLink(view, completion, match.from, to, insert);
     },

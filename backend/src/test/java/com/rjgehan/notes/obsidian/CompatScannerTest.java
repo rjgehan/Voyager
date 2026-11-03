@@ -8,6 +8,7 @@ import com.rjgehan.notes.api.dto.CompatIssue;
 import com.rjgehan.notes.api.dto.CompatOccurrence;
 import com.rjgehan.notes.api.dto.SkipReason;
 import com.rjgehan.notes.api.dto.SkippedEntry;
+import com.rjgehan.notes.index.HeadingOcc;
 import com.rjgehan.notes.index.VaultIndex;
 import org.junit.jupiter.api.Test;
 
@@ -59,6 +60,17 @@ class CompatScannerTest {
 			.containsExactly("[[Plan#Missing heading]]");
 		assertThat(issues.get("missing-blocks").occurrences()).extracting(CompatOccurrence::text)
 			.containsExactly("[[Plan#^nope]]");
+	}
+
+	@Test
+	void headingsWithCharactersAWikilinkCannotHoldMatchAsTheClientWritesThem() {
+		// Completion writes the heading "C# tips" as [[Lang#C tips]] (DESIGN §6.4): # | ^ [ ] count as spaces.
+		List<HeadingOcc> headings = List.of(new HeadingOcc(2, "C# tips", 0), new HeadingOcc(2, "Q&A | FAQ", 2),
+				new HeadingOcc(2, "[Draft] plan", 4));
+		assertThat(CompatScanner.hasHeading(headings, "C tips")).isTrue();
+		assertThat(CompatScanner.hasHeading(headings, "q&a  faq")).isTrue();
+		assertThat(CompatScanner.hasHeading(headings, "Draft plan")).isTrue();
+		assertThat(CompatScanner.hasHeading(headings, "Draft")).isFalse();
 	}
 
 	@Test

@@ -404,7 +404,7 @@ public final class CompatScanner {
 		return ((hash < 0) ? subpath : subpath.substring(hash + 1)).strip();
 	}
 
-	/** Heading matching as the client does it (DESIGN §6.4): case-insensitive, whitespace collapsed. */
+	/** Heading matching as the client does it (DESIGN §6.4): case-insensitive, whitespace collapsed, # | ^ [ ] as spaces. */
 	static boolean hasHeading(List<HeadingOcc> headings, String wanted) {
 		String key = normalize(wanted);
 		if (key.isEmpty()) {
@@ -419,7 +419,7 @@ public final class CompatScanner {
 	}
 
 	private static String normalize(String text) {
-		return text.replaceAll("\\s+", " ").strip().toLowerCase(Locale.ROOT);
+		return text.replaceAll("[#|^\\[\\]]", " ").replaceAll("\\s+", " ").strip().toLowerCase(Locale.ROOT);
 	}
 
 	// ---------- files ----------

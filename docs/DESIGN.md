@@ -2274,7 +2274,7 @@ Per-device preferences (theme, spellcheck, autocorrect, remote images, syntax vi
 - **Overlays on touch devices** (drawer, bottom sheet, switcher, palette, dialogs) push a history entry when they open, so Safari's edge swipe or the back button closes them instead of leaving the note.
 - Pages registered by extensions (`registerPage`, §6.8) live under the reserved prefix `/x/`, for example `/x/tasks/today`.
 
-**Heading targets** (`[[Note#Heading]]`, `#H1#H2`, route `#…`): take the last subpath segment (`H1#H2` gives `H2`), compare it case-insensitively with whitespace collapsed against the note's headings in document order, and use the first match. The editor uses the Lezer tree's headings; the reading view stamps each heading with `data-heading` for the same comparison. `^blockid` subpaths open the note at the top in v1.
+**Heading targets** (`[[Note#Heading]]`, `#H1#H2`, route `#…`): take the last subpath segment (`H1#H2` gives `H2`), compare it case-insensitively with whitespace collapsed, and with `#`, `|`, `^`, `[`, `]` read as spaces, against the note's headings in document order, and use the first match. A wikilink cannot hold those characters, so `[[` heading completion writes them as spaces, as Obsidian does (`## C# tips` becomes `[[Lang#C tips]]`, `## Q&A | FAQ` `[[Lang#Q&A FAQ]]`; a Markdown link percent-encodes them instead), and the editor, the reading view, backlinks, heading renames, heading bookmarks and the compatibility report (`CompatScanner`) all match them back. The editor uses the Lezer tree's headings; the reading view stamps each heading with `data-heading` for the same comparison. `^blockid` subpaths open the note at the top in v1.
 
 #### 6.4.1 Search panel (ROADMAP item 22)
 
