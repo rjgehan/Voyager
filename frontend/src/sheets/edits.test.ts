@@ -178,6 +178,12 @@ describe('number formats in fill, copy and paste (6c)', () => {
     expect(typedEdit(s, 1, 0, '5%')).toEqual({ ...edit('B1', { v: 0.05 }), fmt: '0%' });
   });
 
+  it('reads 24 hours or more typed into a Duration column as a number', () => {
+    const s = { ...sheet({}), cols: { B: { fmt: '[h]:mm:ss' } } };
+    expect(typedEdit(s, 1, 1, '25:30')).toEqual(edit('B2', { v: 25.5 / 24 }));
+    expect(typedEdit(s, 0, 1, '25:30')).toEqual({ ...edit('A2', { v: 25.5 / 24 }), fmt: '[h]:mm:ss' });
+  });
+
   it('counts only cells that show something for the extent of values', () => {
     const s = sheet({ A1: { v: 1 }, D9: { fmt: '0%' } });
     expect(usedExtent(s)).toEqual({ rows: 8, cols: 3 });

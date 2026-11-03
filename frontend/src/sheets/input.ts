@@ -26,6 +26,9 @@ const ISO_DATE = /^([0-9]{4})-([0-9]{1,2})-([0-9]{1,2})(?:[ T]([0-9]{1,2}):([0-9
 const US_DATE = /^([0-9]{1,2})\/([0-9]{1,2})\/([0-9]{4}|[0-9]{2})(?: ([0-9]{1,2}):([0-9]{2})(?::([0-9]{2}))?\s*([ap]m?)?)?$/i;
 const TIME = /^([0-9]{1,2}):([0-9]{2})(?::([0-9]{2}))?\s*([ap]m?)?$/i;
 
+/** Elapsed time of 24 hours or more (`25:30`, `100:00:00`), which Google Sheets reads as a duration. */
+const DURATION = /^([0-9]+):([0-9]{2})(?::([0-9]{2}))?$/;
+
 const decimalsOf = (digits: string) => digits.split('.')[1]?.length ?? 0;
 const zeros = (n: number) => (n > 0 ? '.' + '0'.repeat(n) : '');
 /** A quotient or product of a typed decimal, without binary noise (`10.1%` is 0.101, not 0.10099999999999999). */
@@ -83,6 +86,14 @@ function typedNumber(t: string): { v: number; fmt?: string } | null {
     if (serial === null || year < 1900) return null;
     return { v: serial, fmt: h === undefined ? 'm/d/yyyy' : 'm/d/yyyy ' + timeFormat(s !== undefined, ampm !== undefined) };
   }
+  m = DURATION.exec(t);
+  if (m) {
+    const [, h, mi, s] = m;
+    if (Number(h) > 23) {
+      if (Number(mi) > 59 || Number(s ?? 0) > 59) return null;
+      return { v: (Number(h) * 3600 + Number(mi) * 60 + Number(s ?? 0)) / 86400, fmt: '[h]:mm:ss' };
+    }
+  }
   m = TIME.exec(t);
   if (m) {
     const [, h, mi, s, ampm] = m;
@@ -112,7 +123,8 @@ function pad2(n: number): string {
 
 /**
  * A number as the formula bar shows it for editing, in a form typedInput() reads back: dates and
- * times as ISO text (`2026-10-17`, `2026-10-17 14:30`, `14:30:15`), percentages as `12.5%`, other
+ * times as ISO text (`2026-10-17`, `2026-10-17 14:30`, `14:30:15`), durations as elapsed time
+ * (`36:00:00`), percentages as `12.5%`, other
  * numbers as plain digits whatever their format.
  */
 export function numberText(v: number, fmt: string | undefined): string {
@@ -126,6 +138,10 @@ export function numberText(v: number, fmt: string | undefined): string {
       const whole = Math.abs(v - Math.round(v)) < 1 / 86400 / 2;
       return whole && kind !== 'time' ? date : `${date} ${time}`;
     }
+  }
+  if (kind === 'duration' && v >= 0) {
+    const total = Math.round(v * 86400);
+    return `${Math.floor(total / 3600)}:${pad2(Math.floor(total / 60) % 60)}:${pad2(total % 60)}`;
   }
   if (kind === 'percent') {
     const percent = String(clean(v * 100));
