@@ -96,6 +96,7 @@ export function EmbedGrid(props: Props) {
   const table = useRef<HTMLTableElement>(null);
   /** The cell editor: a one-row textarea, so a cell's line breaks survive an edit. */
   const input = useRef<HTMLTextAreaElement>(null);
+  /** The id of the sheet picked in a whole-file embed, so a rename keeps it (a delete falls back to the first). */
   const [sheetChoice, setSheetChoice] = useState<string | null>(null);
   const [chosen, setActive] = useState<At>({ col: 0, row: 0 });
   const [chosenAnchor, setAnchor] = useState<At>({ col: 0, row: 0 });
@@ -113,7 +114,8 @@ export function EmbedGrid(props: Props) {
   const pending = useRef<CellEdit[]>([]);
   const touch = useRef<{ x: number; y: number; moved: boolean } | null>(null);
 
-  const target = model ? resolveTarget(model, sheetChoice ?? subpath) : null;
+  const pickedSheet = model && sheetChoice !== null ? (sheetById(model, sheetChoice) ?? null) : null;
+  const target = model ? (pickedSheet ? { sheet: pickedSheet, range: null } : resolveTarget(model, subpath)) : null;
   const sheet = target?.sheet ?? null;
   const { range, full } = sheet ? shownRange(sheet, target?.range ?? null, editable) : { range: null, full: null };
   // The selection is always in the shown range (it starts at its first cell).
@@ -165,7 +167,7 @@ export function EmbedGrid(props: Props) {
     e?.stopPropagation();
     if (e && (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0)) return;
     e?.preventDefault();
-    openPath(path, sheetChoice ?? subpath ?? null);
+    openPath(path, pickedSheet?.name ?? subpath ?? null);
   };
 
   // ---------- editing ----------
@@ -462,7 +464,7 @@ export function EmbedGrid(props: Props) {
 
   const value = sheet ? cellValue(sheet.cells[toA1(active.col, active.row)]) : null;
   const errorHint = sheet && workbook && isCellError(value) ? workbook.errorMessage(sheet.id, toA1(active.col, active.row)) : null;
-  const charts = sheet && !target?.range && !sheetChoice && !subpath ? Object.entries(sheet.charts).sort(([a], [b]) => compareIds(a, b)) : [];
+  const charts = sheet && !target?.range && !pickedSheet && !subpath ? Object.entries(sheet.charts).sort(([a], [b]) => compareIds(a, b)) : [];
   const sheets = model?.sheets ?? [];
   // Conditional formatting of the shown sheet (DESIGN §6.21.12), worked out once per render.
   const styleAt = sheet ? conditionalStyles(sheet) : null;
@@ -607,7 +609,7 @@ export function EmbedGrid(props: Props) {
           <span>{caption}</span>
         </a>
         {editable && sheets.length > 1 && !subpath && (
-          <select className="sheet-live-sheets" aria-label="Sheet" value={sheet?.id ?? ''} onChange={(e) => setSheetChoice(sheetById(model!, e.target.value)?.name ?? null)}>
+          <select className="sheet-live-sheets" aria-label="Sheet" value={sheet?.id ?? ''} onChange={(e) => setSheetChoice(e.target.value)}>
             {sheets.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}

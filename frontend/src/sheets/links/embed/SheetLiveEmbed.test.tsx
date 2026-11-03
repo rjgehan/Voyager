@@ -162,6 +162,36 @@ describe('a spreadsheet embedded in a note that can be written', () => {
     await waitFor(() => expect(saved(path).A3.v).toBe('Gym'), { timeout: 4000 });
   });
 
+  it('keeps the sheet picked in a whole-file embed through a rename, and falls back to the first when it is deleted', async () => {
+    const path = newFile();
+    const { container } = show(path);
+    await waitFor(() => expect(cell(container, 'B2').textContent).toBe('$1,450.00'));
+    const picker = screen.getByRole('combobox', { name: 'Sheet' }) as HTMLSelectElement;
+    fireEvent.change(picker, { target: { value: 's2' } });
+    await waitFor(() => expect(cell(container, 'A1').textContent).toBe('Q1'));
+    const remote = async (next: typeof BUDGET) => {
+      vault.externalWrite(path, JSON.stringify(next));
+      await act(async () => {
+        await documents.get(path)!.onRemoteChanged({ version: vault.readFile(path).version });
+      });
+    };
+    // Another device renames Summary (its id stays).
+    const renamed = structuredClone(BUDGET);
+    renamed.sheets[1].name = 'Totals';
+    await remote(renamed);
+    await waitFor(() => expect(screen.getByRole('option', { name: 'Totals' })).toBeTruthy());
+    expect(cell(container, 'A1').textContent).toBe('Q1');
+    expect(picker.value).toBe('s2');
+    expect(container.textContent).not.toContain('is not a sheet');
+    // Then deletes it: the embed shows the first sheet.
+    const deleted = structuredClone(BUDGET);
+    deleted.sheets[0].name = 'Budget';
+    deleted.sheets.splice(1, 1);
+    await remote(deleted);
+    await waitFor(() => expect(cell(container, 'A1').textContent).toBe('Item'));
+    expect(container.textContent).not.toContain('is not a sheet');
+  });
+
   it('writes nothing when a cell is opened and left untouched, even after another device changed it', async () => {
     const path = newFile();
     const { container } = show(path);
