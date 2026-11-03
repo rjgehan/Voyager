@@ -9,7 +9,7 @@ import { drawSelection, EditorView, highlightActiveLine, keymap, placeholder } f
 import { runCommand } from '../features/commands';
 import { isCustomized } from '../features/hotkeyPrefs';
 import { isIOS, modKey } from '../features/platform';
-import { headingSource, tagSource, wikilinkSource } from './completion';
+import { headingSource, localTagIndex, tagSource, wikilinkSource } from './completion';
 import { noteContext, type NoteContext } from './context';
 import { followLink, followLinkAtCursor, saveNow, toggleCheckbox } from './editorCommands';
 import { foldHeading, headingFolding, unfoldHeading } from './headingFold';
@@ -148,6 +148,7 @@ const noteCommandKeys: readonly CommandKey[] = [
 const completion = (): Extension => [
   autocompletion({ override: [slashSource, wikilinkSource, headingSource, tagSource], icons: false, tooltipClass: slashMenuClass }),
   slashMenuDocking,
+  localTagIndex,
 ];
 
 /** Mod-f, for vim's benefit only: the search keymap binds it in the editor (findKeymap). */

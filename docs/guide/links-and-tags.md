@@ -10,7 +10,7 @@ Links turn separate notes into a web you can walk through. A link to a note that
 
 The link shows as the note's name. To show other words instead, write them after a `|`: `[[Plan|the plan]]`.
 
-- **A heading of a note**: after the name, type `#` and pick the heading: `[[Plan#Risks]]`. In the same note, start with `[[#`.
+- **A heading of a note**: after the name, type `#` and pick the heading: `[[Plan#Risks]]`. In the same note, start with `[[#`. A link cannot hold `#`, `|`, `^`, `[` or `]`, so a heading such as "C# tips" is written `[[Lang#C tips]]`; it still finds the heading.
 - **One paragraph or list item**: type `[[Plan#^` and pick the block from the list. Voyager gives that block a short id (like `^a1b2c3`) so the link keeps finding it.
 - **A note that does not exist yet**: just type its name. The link shows dimmed until the note exists.
 

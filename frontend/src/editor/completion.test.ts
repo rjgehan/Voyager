@@ -2,14 +2,17 @@ import { CompletionContext, insertBracket, type Completion, type CompletionResul
 import { ensureSyntaxTree } from '@codemirror/language';
 import { EditorSelection, EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
-import { afterEach, describe, expect, it } from 'vitest';
+import { Tree } from '@lezer/common';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { FileEntry, Settings } from '../api/types';
 import { buildVaultTree } from '../api/vaultTree';
 import { basenameOf, extensionOf, lastSegment } from '../features/paths';
 import { DEFAULT_SETTINGS } from '../features/settings';
+import { findWikiLinks, parseWikiBody } from '../features/syntax';
 import { headingSource, tagSource, wikilinkSource } from './completion';
 import { noteContext, type NoteContext } from './context';
 import { noteExtensions } from './editorSetup';
+import { findHeading } from './headingKeys';
 import { cellLanguage } from './livePreview/table';
 import { tableCellHost } from './livePreview/table/facets';
 
@@ -170,6 +173,31 @@ describe('heading completion', () => {
     expect(result.options.map((o) => o.label)).toEqual(['Second part']);
   });
 
+  it('writes a heading with # | [ ] so that the link reaches it, as Obsidian does', async () => {
+    const headings = ['C# tips', 'Q&A | FAQ', '[Draft] plan', 'Note ^ here'];
+    const doc = headings.map((h) => `## ${h}\n\n`).join('');
+    const expected = ['[[#C tips]]', '[[#Q&A FAQ]]', '[[#Draft plan]]', '[[#Note here]]'];
+    for (const [i, heading] of headings.entries()) {
+      const view = makeView(`${doc}[[#`, doc.length + 3);
+      const result = (await complete(headingSource, view))!;
+      pick(view, result, heading);
+      const link = view.state.doc.toString().slice(doc.length);
+      expect(link).toBe(expected[i]);
+      const found = findWikiLinks(link);
+      expect(found).toHaveLength(1);
+      const body = parseWikiBody(link.slice(2, -2));
+      expect(body.display).toBeNull();
+      expect(findHeading(headings.map((text) => ({ text })), body.subpath!)?.text).toBe(heading);
+    }
+    const other: NoteContext = {
+      ...context(),
+      noteMeta: async (p) => ({ ...(await context().noteMeta(p)), headings: [{ level: 2, text: 'Q&A | FAQ', line: 0 }] }),
+    };
+    const view = makeView('[[Projects/Plan#Q', 17, other);
+    pick(view, (await complete(headingSource, view))!, 'Q&A | FAQ');
+    expect(view.state.doc.toString()).toBe('[[Projects/Plan#Q&A FAQ]]');
+  });
+
   it('[[Other# uses the note metadata', async () => {
     const view = makeView('[[Projects/Plan#Mile', 20);
     const result = (await complete(headingSource, view))!;
@@ -223,6 +251,23 @@ describe('block completion (item 20)', () => {
     expect(view.state.doc.toString()).toBe('![[Projects/Plan#^given1]]');
   });
 
+  it('[[#^ in a table cell lists the note’s blocks and gives the note’s block the new id', async () => {
+    const note = makeView('# Plan\n\nAlpha idea ^alpha\n\nBeta idea\n\n| a |\n|---|\n| b |', 0);
+    const cell = new EditorView({
+      state: EditorState.create({ doc: '[[#^', selection: EditorSelection.cursor(4), extensions: [noteContext.of(context()), tableCellHost.of(note), cellLanguage] }),
+    });
+    views.push(cell);
+    const result = (await headingSource(new CompletionContext(cell.state, 4, false))) as CompletionResult;
+    expect(result.options.map((o) => o.label)).toEqual(expect.arrayContaining(['Plan', 'Alpha idea', 'Beta idea']));
+    expect(result.options.find((o) => o.label === 'Alpha idea')?.detail).toBe('^alpha');
+    pick(cell, result, 'Beta idea');
+    const id = /Beta idea \^([a-z0-9]{6})\n/.exec(note.state.doc.toString())?.[1];
+    expect(id).toBeDefined();
+    expect(cell.state.doc.toString()).toBe(`[[#^${id}]]`);
+    const query = (await headingSource(new CompletionContext(EditorState.create({ doc: '[[#^alp', extensions: [noteContext.of(context()), tableCellHost.of(note), cellLanguage] }), 7, false))) as CompletionResult;
+    expect(query.options[0].label).toBe('Alpha idea');
+  });
+
   it('[[#^ adds the id to a block of this note in the same edit', async () => {
     const doc = 'First thought\n\n| a |\n|---|\n\nSee [[#^';
     const view = makeView(doc, doc.length);
@@ -243,6 +288,36 @@ describe('tag completion', () => {
     expect(result.options.map((o) => o.label)).toEqual(expect.arrayContaining(['project', 'project/alpha']));
     pick(view, result, 'project/alpha');
     expect(view.state.doc.toString()).toBe('#local here\n\nnew #project/alpha ');
+  });
+
+  it('reads a long note’s tags once, not on every key after # (only the lines edited since)', async () => {
+    const filler = Array.from({ length: 20000 }, (_, i) => (i % 1000 === 0 ? `Line ${i} #topic${i}` : `Line ${i} with *some* text`)).join('\n');
+    const doc = `${filler}\n\nnew #t`;
+    const view = makeView(doc, doc.length);
+    const iterate = vi.spyOn(Tree.prototype, 'iterate');
+    try {
+      const first = (await complete(tagSource, view))!;
+      expect(first.options.map((o) => o.label)).toEqual(expect.arrayContaining(['topic1000']));
+      const spans: number[] = [];
+      for (const ch of ['o', 'p']) {
+        const pos = view.state.selection.main.head;
+        view.dispatch({ changes: { from: pos, insert: ch }, selection: { anchor: pos + 1 } });
+        iterate.mockClear();
+        const result = (await complete(tagSource, view))!;
+        expect(result.options.map((o) => o.label)).toContain('topic1000');
+        // The tag being typed is not offered as its own completion.
+        expect(result.options.map((o) => o.label)).not.toContain(view.state.sliceDoc(doc.length - 1, view.state.doc.length));
+        spans.push(...iterate.mock.calls.map(([spec]) => (spec.to ?? Infinity) - (spec.from ?? 0)));
+      }
+      expect(spans.length).toBeGreaterThan(0);
+      for (const span of spans) expect(span).toBeLessThan(100);
+      // A tag typed elsewhere meanwhile is offered.
+      view.dispatch({ changes: { from: 0, insert: '#topfresh ' } });
+      view.dispatch({ selection: { anchor: view.state.doc.length } });
+      expect((await complete(tagSource, view))!.options.map((o) => o.label)).toContain('topfresh');
+    } finally {
+      iterate.mockRestore();
+    }
   });
 
   it('does not complete a tag after a word character', async () => {

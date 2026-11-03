@@ -373,9 +373,12 @@ public class BookmarkService {
 		}
 	}
 
-	/** Heading text as heading targets compare it: case-insensitive, whitespace collapsed (DESIGN §6.4). */
+	/**
+	 * Heading text as heading targets compare it: case-insensitive, whitespace collapsed, and {@code # | ^ [ ]} (which a
+	 * wikilink cannot hold, so completion writes them as spaces, as Obsidian does) read as spaces (DESIGN §6.4).
+	 */
 	public static String headingKey(String text) {
-		return text.replaceAll("(?U)\\s+", " ").trim().toLowerCase(Locale.ROOT);
+		return text.replaceAll("[#|^\\[\\]]", " ").replaceAll("(?U)\\s+", " ").trim().toLowerCase(Locale.ROOT);
 	}
 
 	private void rekey(BookmarkCodec.PathRewrite rewrite, String what, Identity identity) {

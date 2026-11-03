@@ -4,6 +4,7 @@
 // them on every keystroke and the list re-ranks as the query grows.
 import { pickedCompletion, startCompletion, type Completion, type CompletionContext, type CompletionResult, type CompletionSource } from '@codemirror/autocomplete';
 import { syntaxTree } from '@codemirror/language';
+import { StateField, type EditorState } from '@codemirror/state';
 import type { EditorView } from '@codemirror/view';
 import type { FileEntry } from '../api/types';
 import { blockIdsIn, newBlockId, noteLines, pickableBlocks, planBlockId, scanBlocks, type NoteBlock } from '../features/blocks';
@@ -13,6 +14,7 @@ import { displayName, folderOf, stripMd } from '../features/paths';
 import { noteContext, type NoteContext } from './context';
 import { inCodeOrComment, inFrontmatter } from './linkAt';
 import { tableCellHost } from './livePreview/table/facets';
+import { wikilinkHeading } from './headingKeys';
 import { headingsFromState } from './outline';
 
 const MAX_OPTIONS = 50;
@@ -141,11 +143,12 @@ export const headingSource: CompletionSource = async (context: CompletionContext
     type: 'heading',
     apply: (view, completion, _from, to) => {
       let insert: string;
+      // A wikilink names a heading with `# | ^ [ ]` as spaces (as Obsidian does); a Markdown link encodes them.
+      const wiki = ctx.settings().files.useWikilinks;
       if (target === '') {
-        const s = ctx.settings().files;
-        insert = s.useWikilinks ? `${embed ? '!' : ''}[[#${h.text}]]` : `[${h.text}](#${encodeMdPath(h.text)})`;
+        insert = wiki ? `${embed ? '!' : ''}[[#${wikilinkHeading(h.text)}]]` : `[${h.text}](#${encodeMdPath(h.text)})`;
       } else {
-        insert = buildInsert(ctx, { path: resolved, alias: null }, embed, h.text, null);
+        insert = buildInsert(ctx, { path: resolved, alias: null }, embed, wiki ? wikilinkHeading(h.text) : h.text, null);
       }
       replaceLink(view, completion, match.from, to, insert);
     },
@@ -186,10 +189,12 @@ interface BlockQuery {
 async function blockCompletion(context: CompletionContext, ctx: NoteContext, q: BlockQuery): Promise<CompletionResult | null> {
   const source = ctx.path();
   const same = q.resolved === source;
+  // In a table cell, this note is the cell's host (the cell's own document is one cell).
+  const host = context.state.facet(tableCellHost);
   let text: string;
   if (same) {
     if (!source.toLowerCase().endsWith('.md')) return null;
-    text = context.state.doc.toString();
+    text = (host?.state ?? context.state).doc.toString();
   } else {
     if (!q.resolved.toLowerCase().endsWith('.md') || !ctx.blocks) return null;
     try {
@@ -199,7 +204,8 @@ async function blockCompletion(context: CompletionContext, ctx: NoteContext, q: 
     }
     if (context.aborted) return null;
   }
-  const cursorLine = context.state.doc.lineAt(context.pos).number - 1;
+  // Not the block the cursor is in (a cell's line numbers are not the note's: none is left out there).
+  const cursorLine = host ? -1 : context.state.doc.lineAt(context.pos).number - 1;
   const blocks = pickableBlocks(scanBlocks(text)).filter((b) => !same || cursorLine < b.start || cursorLine > b.end);
   const ranked =
     q.query.trim() === ''
@@ -212,7 +218,7 @@ async function blockCompletion(context: CompletionContext, ctx: NoteContext, q: 
     apply: (view, completion, _from, to) => {
       const insertFor = (id: string) => (same ? sameNoteLink(ctx, q.embed, '^' + id, null) : buildInsert(ctx, { path: q.resolved, alias: null }, q.embed, '^' + id, null));
       if (b.id) return replaceLink(view, completion, q.linkFrom, to, insertFor(b.id));
-      if (same) return linkToNewBlockHere(view, completion, q.linkFrom, to, b, text, insertFor);
+      if (same) return linkToNewBlockHere(view, completion, q.linkFrom, to, b, text, insertFor, host);
       const provisional = newBlockId(blockIdsIn(text));
       replaceLink(view, completion, q.linkFrom, to, insertFor(provisional));
       void ctx.blocks!.ensureBlockId(q.resolved, text, b, provisional).then(
@@ -233,15 +239,31 @@ function sameNoteLink(ctx: NoteContext, embed: boolean, subpath: string, display
   return `${embed ? '!' : ''}[${display ?? (embed ? '' : subpath)}](#${encodeMdPath(subpath)})`;
 }
 
-/** Adds the id to a block of this note and the link to it, as one edit (one undo step). */
-function linkToNewBlockHere(view: EditorView, completion: Completion, linkFrom: number, to: number, block: NoteBlock, text: string, insertFor: (id: string) => string): void {
-  const current = view.state.doc.toString();
+/**
+ * Adds the id to a block of this note and the link to it, as one edit (one undo step). In a table
+ * cell (`host` is the note's editor) the id goes into the note and the link into the cell (two steps).
+ */
+function linkToNewBlockHere(
+  view: EditorView,
+  completion: Completion,
+  linkFrom: number,
+  to: number,
+  block: NoteBlock,
+  text: string,
+  insertFor: (id: string) => string,
+  host: EditorView | null = null,
+): void {
+  const current = (host ?? view).state.doc.toString();
   const lineText = noteLines(text)[block.anchor] ?? '';
   const id = newBlockId(blockIdsIn(current));
   const plan = planBlockId(current, { line: block.anchor, lineText, placement: block.placement }, id);
   if (plan.kind === 'missing') return;
   const insert = insertFor(plan.id);
   if (plan.kind === 'existing') return replaceLink(view, completion, linkFrom, to, insert);
+  if (host) {
+    host.dispatch({ changes: { from: plan.from, insert: plan.insert }, userEvent: 'input.complete' });
+    return replaceLink(view, completion, linkFrom, to, insert);
+  }
   const end = view.state.sliceDoc(to, to + 2) === ']]' ? to + 2 : to;
   const shift = plan.from <= linkFrom ? plan.insert.length : 0;
   view.dispatch({
@@ -270,6 +292,77 @@ function renameInsertedId(view: EditorView, near: number, provisional: string, i
   }
 }
 
+interface LocalTag {
+  from: number;
+  to: number;
+  name: string;
+}
+
+/**
+ * The note's own tags with their places, for `#` completion: walked once, then kept up to date
+ * through edits (only the lines an edit touched are read again), so a keystroke after `#` in a
+ * 5 MB note does not walk the whole syntax tree. Filled when completion first asks.
+ */
+interface LocalTags {
+  tags: LocalTag[] | null;
+  /** Ranges edited since the tags were read, to read again. */
+  dirty: Array<{ from: number; to: number }>;
+}
+
+/** Text that can turn whole stretches of the note into code or a comment: the tags are read again. */
+const BLOCK_MARKS = /```|~~~|%%|<!--|-->|\$\$/;
+
+export const localTagIndex = StateField.define<LocalTags>({
+  create: () => ({ tags: null, dirty: [] }),
+  update(value, tr) {
+    if (!tr.docChanged) return value;
+    if (value.tags === null) return { tags: null, dirty: [] };
+    let reread = false;
+    const dirty = value.dirty.map((r) => ({ from: tr.changes.mapPos(r.from, -1), to: tr.changes.mapPos(r.to, 1) }));
+    tr.changes.iterChanges((fromA, toA, fromB, toB, inserted) => {
+      if (BLOCK_MARKS.test(inserted.toString()) || BLOCK_MARKS.test(tr.startState.sliceDoc(fromA, toA))) reread = true;
+      dirty.push({ from: fromB, to: toB });
+    });
+    if (reread) return ({ tags: null, dirty: [] });
+    const tags: LocalTag[] = [];
+    for (const t of value.tags) {
+      if (!tr.changes.touchesRange(t.from, t.to)) tags.push({ from: tr.changes.mapPos(t.from, 1), to: tr.changes.mapPos(t.to, -1), name: t.name });
+    }
+    return { tags, dirty };
+  },
+});
+
+function walkTags(state: EditorState, from?: number, to?: number): LocalTag[] {
+  const out: LocalTag[] = [];
+  syntaxTree(state).iterate({
+    from,
+    to,
+    enter(node) {
+      if (node.name === 'Hashtag' && (from === undefined || (node.from >= from && node.to <= to!))) out.push({ from: node.from, to: node.to, name: state.sliceDoc(node.from + 1, node.to) });
+    },
+  });
+  return out;
+}
+
+/** The note's tags (see `localTagIndex`; without it, or while the note is still being parsed, one walk). */
+function localTags(state: EditorState): readonly LocalTag[] {
+  const index = state.field(localTagIndex, false);
+  if (!index || syntaxTree(state).length < state.doc.length) return walkTags(state);
+  if (index.tags === null) {
+    index.tags = walkTags(state);
+    index.dirty = [];
+  } else if (index.dirty.length > 0) {
+    for (const r of index.dirty) {
+      const from = state.doc.lineAt(Math.min(r.from, state.doc.length)).from;
+      const to = state.doc.lineAt(Math.min(r.to, state.doc.length)).to;
+      index.tags = index.tags.filter((t) => t.to < from || t.from > to);
+      index.tags.push(...walkTags(state, from, to));
+    }
+    index.dirty = [];
+  }
+  return index.tags;
+}
+
 export const tagSource: CompletionSource = async (context: CompletionContext): Promise<CompletionResult | null> => {
   const ctx = context.state.facet(noteContext);
   if (!ctx) return null;
@@ -277,11 +370,8 @@ export const tagSource: CompletionSource = async (context: CompletionContext): P
   if (!match || inCodeOrComment(context.state, context.pos) || inFrontmatter(context.state, context.pos)) return null;
   const query = match.text.slice(1);
   const local = new Set<string>();
-  syntaxTree(context.state).iterate({
-    enter(node) {
-      if (node.name === 'Hashtag' && (node.to < match.from || node.from > context.pos)) local.add(context.state.sliceDoc(node.from + 1, node.to));
-    },
-  });
+  // Not the tag being typed.
+  for (const t of localTags(context.state)) if (t.to < match.from || t.from > context.pos) local.add(t.name);
   let vault: string[] = [];
   try {
     vault = await ctx.vaultTags();

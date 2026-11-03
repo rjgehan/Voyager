@@ -99,9 +99,15 @@ function inSkipped(state: EditorState, pos: number): boolean {
 /** The lists (by first line) of the items on lines `from`..`to` and the lines around them. */
 function runsNear(doc: Text, from: number, to: number): Map<number, Item[]> {
   const runs = new Map<number, Item[]>();
+  // Each list is walked once: the lines of its items are skipped afterwards (a long list would
+  // otherwise be rescanned from every one of its lines, freezing Select all + Delete or a paste).
+  const covered = new Set<number>();
   for (let n = Math.max(1, from - 1); n <= Math.min(doc.lines, to + 1); n++) {
+    if (covered.has(n)) continue;
     const run = listRun(doc, n);
-    if (run && run.length > 0 && !runs.has(run[0].line)) runs.set(run[0].line, run);
+    if (!run || run.length === 0) continue;
+    for (const item of run) covered.add(item.line);
+    if (!runs.has(run[0].line)) runs.set(run[0].line, run);
   }
   return runs;
 }

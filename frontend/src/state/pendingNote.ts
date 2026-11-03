@@ -17,7 +17,7 @@ export interface PendingNote {
   selectionEnd: number;
   /**
    * The path the note is opening at: the route is switching to it. The pending view stays (and
-   * keeps taking keys, which follow into `handoff`) until the pane shows that route, so the pane's
+   * keeps taking keys: the title's follow into `handoff`, the body's into the note) until the pane shows that route, so the pane's
    * previous route (the start page, the previous note) never renders in between.
    */
   opening: string | null;
@@ -142,8 +142,38 @@ export function whenRetryAsked(id: number): Promise<boolean> {
   });
 }
 
+/**
+ * Where the body of a pending note that is opening goes: once its writing went into the note, the
+ * pending view stays until the pane shows the note, and what is typed into it meanwhile follows.
+ */
+const bodyFollowers = new Map<number, (body: PendingBody) => boolean>();
+
+/**
+ * Body text typed into pending note `id` from now on goes to `follow` (which returns false when it
+ * cannot take it: the text is then kept as before), until the pending view goes. Returns a stop.
+ */
+export function followPendingBody(id: number, follow: (body: PendingBody) => boolean): () => void {
+  bodyFollowers.set(id, follow);
+  let unsubscribe = () => {};
+  const stop = () => {
+    unsubscribe();
+    if (bodyFollowers.get(id) === follow) bodyFollowers.delete(id);
+  };
+  if (usePendingNote.getState().pending?.id !== id) {
+    stop();
+    return stop;
+  }
+  unsubscribe = usePendingNote.subscribe((s) => {
+    if (s.pending?.id !== id) stop();
+  });
+  return stop;
+}
+
 /** The body of pending note `id` as typed so far (an empty body is no body). */
 export function setPendingBody(id: number, body: PendingBody): void {
+  const follow = bodyFollowers.get(id);
+  if (follow?.(body)) return;
+  if (follow) bodyFollowers.delete(id);
   if (body.text === '') bodies.delete(id);
   else bodies.set(id, body);
 }

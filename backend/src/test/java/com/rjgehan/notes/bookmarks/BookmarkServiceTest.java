@@ -468,6 +468,13 @@ class BookmarkServiceTest {
 	}
 
 	@Test
+	void headingKeysReadTheCharactersAWikilinkCannotHoldAsSpaces() {
+		assertThat(BookmarkService.headingKey("C# tips")).isEqualTo(BookmarkService.headingKey("C tips"));
+		assertThat(BookmarkService.headingKey("Q&A | FAQ")).isEqualTo("q&a faq");
+		assertThat(BookmarkService.headingKey("[Draft] plan ^x")).isEqualTo("draft plan x");
+	}
+
+	@Test
 	void aHeadingRenameKeepsTheBookmarksTheAppLeavesOut() throws Exception {
 		start();
 		write("Plan.md", "# Plan\n");
