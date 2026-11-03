@@ -3660,6 +3660,8 @@ Numbers round half up on their 15 significant digits, as spreadsheets show them 
 |---|---|---|
 | Import CSV or Excel | Toolbar, palette (sheet open) | A file picker (`.csv`, `.tsv`, `.txt`, `.xlsx`, `.xlsm`, `.xls`, `.ods`), then a dialog: into new sheets of this spreadsheet (one undo step) or a new spreadsheet file next to it; for CSV the separator (detected) and "Convert text to numbers, dates and formulas" (on: typed input with formats; off: every field is text) |
 | Import spreadsheet from CSV or Excel… | Palette, anywhere | The same, always into a new `.sheet` file in the new-note folder, with the defaults |
+
+A new file is named after the imported one, cleaned as the server cleans attachment names (§4.4, API.md §9.3) so it passes the new-name rules (API.md §1.3): characters a name cannot hold and `%%` become `-`, spaces collapse, leading and trailing dots and spaces go, a Windows device name gets a `_`, and `Imported` stands in for a name with nothing left (`Invoice #12.csv` becomes `Invoice -12.sheet`, `.notes.csv` `notes.sheet`); a taken name gets ` 1`, ` 2`…
 | Download sheet as CSV | Toolbar menu, palette | The current sheet's used range from A1, values as they show, RFC 4180 (comma, CRLF, quotes doubled), UTF-8 without a BOM; `Budget.csv`, or `Budget - Summary.csv` for a workbook of several sheets |
 | Download as Excel (.xlsx) | Toolbar menu, palette | The whole workbook |
 
