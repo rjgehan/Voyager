@@ -31,7 +31,11 @@ export function formatGeneral(n: number): string {
   // Ten significant digits, or as many as the whole part has, so toPrecision never switches to
   // an exponent between 1e-6 and 1e15.
   const precision = Math.min(15, Math.max(10, Math.floor(Math.log10(abs)) + 1));
-  return trimMantissa(rounded.toPrecision(precision));
+  const text = rounded.toPrecision(precision);
+  // Rounding can carry into the next power of ten (9999999999.5 to ten digits), and then
+  // toPrecision answers in exponent form: that value is a whole number below 1e15.
+  if (text.includes('e')) return String(Number(text));
+  return trimMantissa(text);
 }
 
 // ---------- dates as serial numbers ----------

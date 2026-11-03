@@ -28,6 +28,15 @@ describe('formatGeneral (Automatic)', () => {
     expect(formatGeneral(0)).toBe('0');
     expect(formatGeneral(Infinity)).toBe('#NUM!');
   });
+
+  it('shows a fraction that rounds up to the next power of ten as a whole number', () => {
+    expect(formatGeneral(9999999999.4)).toBe('9999999999');
+    expect(formatGeneral(9999999999.5)).toBe('10000000000');
+    expect(formatGeneral(-9999999999.5)).toBe('-10000000000');
+    expect(formatGeneral(99999999999.5)).toBe('100000000000');
+    expect(formatGeneral(999999999999.6)).toBe('1000000000000');
+    expect(formatGeneral(99999999999999.7)).toBe('100000000000000');
+  });
 });
 
 describe('dates as serial numbers', () => {
