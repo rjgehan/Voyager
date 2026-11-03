@@ -26,11 +26,11 @@ test('product name, installer, shortcut and disk image say Voyager', () => {
 test('the identity an update over NotesApp needs is unchanged', () => {
   // The installer's registry keys and the taskbar's app id come from appId (electron-builder.yml).
   assert.equal(yaml('appId'), 'com.rjgehan.notesapp.desktop');
-  assert.match(fs.readFileSync(path.join(root, 'src', 'main.js'), 'utf8'), /const APP_ID = 'com\.rjgehan\.notesapp\.desktop';/);
+  assert.equal(require('../src/appId').appUserModelId(true), 'com.rjgehan.notesapp.desktop');
   assert.equal(pkg.name, 'notesapp-desktop');
   // Removing or reinstalling the app keeps its settings and offline data.
   assert.equal(yaml('deleteAppDataOnUninstall'), 'false');
-  assert.equal(pkg.version, '1.1.0');
+  assert.equal(pkg.version, '1.1.1');
 });
 
 test('the icons it names are there, with the small sizes Windows uses', () => {

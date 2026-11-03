@@ -35,8 +35,8 @@ const { restoreBounds, snapshot, captureBounds } = require('./windowState');
 const { windowTitle, isConnectionState } = require('./title');
 const { useUserData } = require('./userData');
 const { decideUnload, UNLOAD_PROMPT } = require('./unload');
+const { appUserModelId, removeStrayShortcuts } = require('./appId');
 
-const APP_ID = 'com.rjgehan.notesapp.desktop';
 const PAGES_DIR = path.join(__dirname, 'pages');
 const PAGES_URL = pathToFileURL(PAGES_DIR).href + '/';
 const PRELOAD = path.join(__dirname, 'preload.js');
@@ -694,7 +694,12 @@ useUserData(app);
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
-  app.setAppUserModelId(APP_ID);
+  // The taskbar button takes its icon from the Start-menu shortcut with this id (appId.js): a
+  // shortcut a development run left under the installed app's id goes first, then the id is set.
+  if (process.platform === 'win32' && app.isPackaged) {
+    removeStrayShortcuts({ execPath: process.execPath, readShortcutLink: (file) => shell.readShortcutLink(file) });
+  }
+  app.setAppUserModelId(appUserModelId(app.isPackaged));
   app.on('second-instance', () => showMain());
 
   app.whenReady().then(() => {

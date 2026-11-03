@@ -61,6 +61,7 @@ The desktop app was called **NotesApp** until version 1.1.0 (ROADMAP item 45). I
 - **Your settings and offline copy stay.** A computer that ran NotesApp keeps using its folder (`%APPDATA%\NotesApp`, `~/Library/Application Support/NotesApp`): Voyager opens straight onto your server, with the same shortcut, window position, offline notes and unsent captures. A computer that never had NotesApp uses a `Voyager` folder.
 - **Launch at login** is registered again for the new program the first time Voyager starts. On a Mac, remove a leftover *NotesApp* entry from System Settings › General › Login Items if it is still listed.
 - **A taskbar pin** made for NotesApp points at the removed `NotesApp.exe`: unpin it and pin Voyager.
+- **The taskbar shows Electron's atom instead of the disc** on a computer where the app was also run from source (`npm start` before 1.1.1): that run left a Start-menu shortcut, `Electron.lnk`, under the installed app's id, and Windows took the taskbar icon from it. Voyager 1.1.1 and later delete that shortcut when they start; the disc appears from the next start (Windows takes a few seconds to notice the change). Development runs now use an id of their own (`com.rjgehan.notesapp.desktop.dev`).
 - **Update the server and the desktop app together.** NotesApp 1.0 checks that the server's manifest names *NotesApp*, so once the server says *Voyager*, the automatic retry on its offline page stops succeeding (the **Retry** button still works) and its Settings… page refuses the address. Voyager accepts a server of either name.
 
 ## First launch
@@ -103,7 +104,7 @@ cd desktop
 npm ci
 npm test                 # unit tests (node --test)
 node ../scripts/brand/render-icons.mjs   # the icons, after changing the drawings (BRAND.md)
-npm start                # run from source
+npm start                # run from source (its own taskbar id, so it never takes over the installed app's button)
 npm run dist:win         # Windows: dist/Voyager-Setup-<version>.exe (on Windows)
 npm run dist:mac         # macOS: dist/Voyager-<version>-mac.dmg (on a Mac)
 npm run dist:dir         # an unpacked app in dist/, quickest for a try-out
