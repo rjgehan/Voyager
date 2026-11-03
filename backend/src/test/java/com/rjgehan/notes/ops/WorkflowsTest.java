@@ -32,6 +32,35 @@ class WorkflowsTest {
 		assertThat(runs(condition, "schedule", "refs/heads/main")).as(condition).isFalse();
 	}
 
+	@Test
+	void ciValidatesEveryCasaOsComposeAndItsPins() throws Exception {
+		String script = (String) step("ci.yml", "deploy-scripts", "CasaOS composes").get("run");
+		// for f in <files>; do docker compose -f "$f" config --quiet; done
+		Matcher validated = Pattern.compile("for f in ([^;]+); do docker compose").matcher(script);
+		assertThat(validated.find()).as(script).isTrue();
+		// for image in $(sed -n '<program>' <files>); do ... grep ... deploy/docker-compose.yml
+		Matcher pinned = Pattern.compile("\\$\\(sed -n '[^']*' ([^)]+)\\)").matcher(script);
+		assertThat(pinned.find()).as(script).isTrue();
+		List<String> files;
+		try (var listing = Files.list(ROOT.resolve("deploy"))) {
+			files = listing.map(f -> "deploy/" + f.getFileName()).filter(f -> f.matches("deploy/casaos-.*\\.yml")).sorted().toList();
+		}
+		assertThat(files).contains("deploy/casaos-compose.yml", "deploy/casaos-compose-sidecar.yml");
+		for (String file : files) {
+			assertThat(coveredBy(validated.group(1), file)).as("CI validates " + file).isTrue();
+			assertThat(coveredBy(pinned.group(1), file)).as("CI checks the image pins of " + file).isTrue();
+		}
+	}
+
+	/** Whether one of the shell words (literal paths or globs with {@code *}) names the file. */
+	private static boolean coveredBy(String words, String file) {
+		for (String word : words.strip().split("\\s+")) {
+			String regex = Pattern.quote(word).replace("*", "\\E[^/]*\\Q");
+			if (file.matches(regex)) return true;
+		}
+		return false;
+	}
+
 	/**
 	 * Whether a job's {@code if:} lets it run for an event on a ref. Only what the workflows use is understood:
 	 * {@code ||}, {@code &&} and {@code ==} / {@code !=} between {@code github.event_name} or {@code github.ref} and a
@@ -65,6 +94,14 @@ class WorkflowsTest {
 
 	static Map<String, Object> job(String workflow, String name) throws Exception {
 		return map(map(workflow(workflow).get("jobs")).get(name));
+	}
+
+	static Map<String, Object> step(String workflow, String job, String namePrefix) throws Exception {
+		for (Object step : list(job(workflow, job).get("steps"))) {
+			Object name = map(step).get("name");
+			if (name instanceof String n && n.startsWith(namePrefix)) return map(step);
+		}
+		throw new AssertionError("No step \"" + namePrefix + "...\" in " + workflow + " job " + job);
 	}
 
 	@SuppressWarnings("unchecked")

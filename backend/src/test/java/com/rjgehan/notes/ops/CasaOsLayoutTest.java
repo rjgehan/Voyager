@@ -44,7 +44,7 @@ class CasaOsLayoutTest {
 	@Test
 	void noCasaOsAppPublishesAPort() throws Exception {
 		for (String file : List.of("deploy/casaos-compose.yml", "deploy/casaos-whisper-compose.yml",
-				"deploy/casaos-backup-compose.yml")) {
+				"deploy/casaos-backup-compose.yml", "deploy/casaos-compose-sidecar.yml")) {
 			Map<String, Object> services = map(compose(read(file)).get("services"));
 			services.forEach((name, service) -> assertThat(map(service)).as(file + " " + name).doesNotContainKey("ports"));
 		}
