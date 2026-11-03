@@ -78,9 +78,9 @@ export { functionCatalog } from './functions';
 
 /**
  * Counts this app's changes to the engine that alter results (its configuration, the functions it
- * replaces): 1 is TEXT with Google Sheets' format codes.
+ * replaces): 1 is TEXT with Google Sheets' format codes, 2 text comparison that keeps accents apart.
  */
-export const ENGINE_REVISION = 1;
+export const ENGINE_REVISION = 2;
 
 /** The engine identity written to `engine`. A config change that alters results must change ENGINE_REVISION. */
 export const ENGINE_ID = `hyperformula@${HyperFormula.version}+${ENGINE_REVISION}`;
@@ -93,6 +93,7 @@ const UNDO_LIMIT = 200;
  * HyperFormula settings. The engine runs under its GPL-3.0 licence (`gpl-v3`; without it every
  * function returns #LIC!). The defaults already match Google Sheets where it matters: 1899-12-30
  * as day 0 without the 1900 leap-year bug, case-insensitive text comparison, wildcards in criteria.
+ * Text comparison keeps accents apart, as Google Sheets does (="é"="e" is FALSE; COUNTIF, UNIQUE).
  */
 export function engineConfig(): Partial<ConfigParams> {
   return {
@@ -101,6 +102,7 @@ export function engineConfig(): Partial<ConfigParams> {
     maxRows: MAX_ROWS,
     maxColumns: MAX_COLUMNS,
     dateFormats: ['YYYY-MM-DD', 'MM/DD/YYYY', 'MM/DD/YY'],
+    accentSensitive: true,
   };
 }
 

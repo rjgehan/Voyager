@@ -4,7 +4,7 @@
 export const NEW_SHEET_TEXT = `{
   "type": "notesapp-sheet",
   "version": 1,
-  "engine": "hyperformula@3.5.0+1",
+  "engine": "hyperformula@3.5.0+2",
   "sheets": [
     {
       "id": "s1",

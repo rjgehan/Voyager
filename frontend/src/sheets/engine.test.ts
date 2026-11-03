@@ -68,6 +68,26 @@ describe('functions with Google Sheets’ meaning', () => {
   });
 });
 
+describe('text comparison', () => {
+  it('keeps accents apart, as Google Sheets does, and ignores case', () => {
+    const wb = workbook([
+      {
+        name: 'S',
+        cells: {
+          A1: { v: 'é' },
+          A2: { v: 'e' },
+          B1: { f: '=A1=A2' },
+          B2: { f: '=COUNTIF(A1:A2,"e")' },
+          B3: { f: '=ROWS(UNIQUE(A1:A2))' },
+          B4: { f: '="E"="e"' },
+          B5: { f: '=COUNTIF(A1:A2,"café")' },
+        },
+      },
+    ]);
+    expect([value(wb, 'B1'), value(wb, 'B2'), value(wb, 'B3'), value(wb, 'B4'), value(wb, 'B5')]).toEqual([false, 1, 2, true, 0]);
+  });
+});
+
 describe('engine identity', () => {
   it('is the pinned HyperFormula, which new files name', () => {
     expect(ENGINE_ID).toBe(`hyperformula@${HyperFormula.version}+${ENGINE_REVISION}`);
