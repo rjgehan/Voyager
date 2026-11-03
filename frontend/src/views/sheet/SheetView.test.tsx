@@ -24,6 +24,19 @@ import { SHEET_COMMANDS } from './register';
 import SheetView from './SheetView';
 import { clearSheetBindings } from './useSheetDocument';
 
+// The data region around a cell, counted: it is worked out only when something asks for it.
+const regions = vi.hoisted(() => ({ calls: 0 }));
+vi.mock('../../sheets/filter', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../sheets/filter')>();
+  return {
+    ...actual,
+    dataRegion: (...args: Parameters<typeof actual.dataRegion>) => {
+      regions.calls++;
+      return actual.dataRegion(...args);
+    },
+  };
+});
+
 vi.mock('@glideapps/glide-data-grid', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@glideapps/glide-data-grid')>();
   const { FakeDataEditor } = await import('../../test/fakeGrid');
@@ -881,6 +894,21 @@ describe('sorting and filters (DESIGN §6.21.11)', () => {
     expect([cells.A2, cells.A3, cells.B2, cells.C3.f]).toEqual([{ v: 'Food' }, { v: 'Rent' }, { v: 487.5 }, '=B3/Total']);
     fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
     expect(screen.getByTestId('cell-A0')).toHaveTextContent('Rent');
+  });
+
+  it('works out the data around the cell only for the Sort and filter menu, not on every move or edit', async () => {
+    await openGrid();
+    select(0, 0);
+    regions.calls = 0;
+    select(1, 0);
+    select(1, 1);
+    fireEvent.focus(formulaInput());
+    fireEvent.change(formulaInput(), { target: { value: '500' } });
+    fireEvent.keyDown(formulaInput(), { key: 'Enter' });
+    expect(regions.calls).toBe(0);
+    fireEvent.click(screen.getByRole('button', { name: 'Sort and filter' }));
+    expect(screen.getByRole('menuitem', { name: /^Sort range \S+ by column B, A → Z/})).toBeInTheDocument();
+    expect(regions.calls).toBeGreaterThan(0);
   });
 
   it('filters by values from a column’s button, shows the rows left, and edits the right row', async () => {

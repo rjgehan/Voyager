@@ -715,11 +715,14 @@ ${JSON.stringify(sheet.filter ?? null)}`;
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the filter's text says when it changed
   }, [filterKey]);
 
-  const sortRangeLabel = (() => {
-    let range = dataRange();
-    if (single && looksLikeHeader(sheet, range)) range = { ...range, row: range.row + 1, height: Math.max(1, range.height - 1) };
-    return rangeText(range);
-  })();
+  // Worked out only while the Sort and filter menu is open: the data around a cell costs a walk over every cell.
+  const sortRangeLabel = sortMenu
+    ? (() => {
+        let range = dataRange();
+        if (single && looksLikeHeader(sheet, range)) range = { ...range, row: range.row + 1, height: Math.max(1, range.height - 1) };
+        return rangeText(range);
+      })()
+    : '';
   const sortItems: MenuEntry[] = [
     { id: 'filter', label: filter ? 'Remove filter' : 'Create a filter', run: toggleFilter },
     ...(filter && fRange ? [{ id: 'filterColumn', label: `Filter column ${columnLetters(Math.max(fRange.col, Math.min(fRange.col + fRange.width - 1, activeAt.col)))}…`, run: () => openColumnFilter(sortMenu ? { x: sortMenu.x, y: sortMenu.y - 4, width: 0, height: 0 } : undefined) }] : []),
