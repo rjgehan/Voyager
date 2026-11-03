@@ -46,8 +46,9 @@ export function aiErrorText(e: unknown): string {
 
 function run(request: AiRequest, prompt: AiPrompt, label: string): string {
   const store = useConversations.getState();
-  const history = historyOf(currentConversation());
   const { conversationId, turnId } = store.startTurn(prompt, label);
+  // Read after the turn started: the conversation then holds what other tabs stored in it too.
+  const history = historyOf(currentConversation(), turnId);
   const body = { ...request.body, history } as typeof request.body;
   const controller = new AbortController();
   controllers.set(turnId, controller);
