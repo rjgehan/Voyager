@@ -7,7 +7,13 @@ import { compareA1, compareColumns, normalizeA1, normalizeColumnKey, normalizeRo
 import { numberText, typedInput } from './input';
 
 export const SHEET_TYPE = 'notesapp-sheet';
-export const SHEET_VERSION = 1;
+/**
+ * The newest format version this NotesApp reads and writes. Version 2 adds filters, conditional
+ * formatting and data validation (DESIGN §6.21.1); a file is written as version 1 while it uses
+ * none of them, so a NotesApp from before version 2 still edits it, and refuses (shows read-only)
+ * one that does, rather than editing it without moving those ranges with inserted rows.
+ */
+export const SHEET_VERSION = 2;
 /**
  * The engine whose results new files carry. engine.test.ts checks it against the running
  * HyperFormula, so an engine upgrade cannot slip in without updating it.
@@ -57,7 +63,8 @@ export interface Frozen {
   cols: number;
 }
 
-export const CHART_TYPES = ['bar', 'line', 'pie'] as const;
+/** `bar` is vertical (Google Sheets' column chart), `hbar` horizontal (its bar chart). */
+export const CHART_TYPES = ['bar', 'hbar', 'line', 'area', 'pie', 'scatter'] as const;
 export type ChartType = (typeof CHART_TYPES)[number];
 
 /** A chart of a range of its sheet (DESIGN §6.21.9). */
@@ -70,6 +77,107 @@ export interface ChartProps {
   headers?: boolean;
   /** The range's first column labels the categories (the slices of a pie). */
   labels?: boolean;
+  /** Bars, columns and areas of the series stacked on each other. */
+  stacked?: boolean;
+  /** A pie with a hole (a doughnut). */
+  donut?: boolean;
+  /** Where the legend goes: `none` hides it. */
+  legend?: LegendPosition;
+  /** Axis titles of bar, line, area and scatter charts. */
+  xTitle?: string;
+  yTitle?: string;
+  extra?: Extra;
+}
+
+export const LEGEND_POSITIONS = ['top', 'bottom', 'none'] as const;
+export type LegendPosition = (typeof LEGEND_POSITIONS)[number];
+
+/** The conditions of filters and conditional formatting, as Google Sheets offers them. */
+export const CONDITION_KINDS = [
+  'empty',
+  'notEmpty',
+  'contains',
+  'notContains',
+  'startsWith',
+  'endsWith',
+  'textIs',
+  'gt',
+  'gte',
+  'lt',
+  'lte',
+  'eq',
+  'neq',
+  'between',
+  'notBetween',
+] as const;
+export type ConditionKind = (typeof CONDITION_KINDS)[number];
+
+/** A condition on a cell's value; `value` and `value2` are typed input (`10`, `5%`, `2026-10-17`, text). */
+export interface Condition {
+  when?: ConditionKind;
+  value?: string;
+  value2?: string;
+}
+
+/** A colour scale: from the range's smallest number to its largest, through its median with `mid`. */
+export interface ColorScale {
+  min: string;
+  mid?: string;
+  max: string;
+}
+
+/**
+ * A conditional format rule of a range (DESIGN §6.21.12): a condition with a style, or a colour
+ * scale. Rules apply in id order (the order they were made); the first that applies styles a cell.
+ */
+export interface ConditionalRule extends Condition {
+  range?: string;
+  /** Fill and text colours, `#rrggbb`. */
+  bg?: string;
+  color?: string;
+  bold?: boolean;
+  italic?: boolean;
+  scale?: ColorScale;
+  extra?: Extra;
+}
+
+export const VALIDATION_TYPES = ['list', 'range', 'checkbox'] as const;
+export type ValidationType = (typeof VALIDATION_TYPES)[number];
+
+/** Data validation of a range (DESIGN §6.21.13): a dropdown of values or of a range's values, or checkboxes. */
+export interface Validation {
+  range?: string;
+  type?: ValidationType;
+  /** The dropdown's items (`list`). */
+  values?: string[];
+  /** The range whose values are the dropdown's items (`range`), such as `Lists!A1:A9`. */
+  source?: string;
+  /** Other input is refused, rather than marked as invalid. */
+  strict?: boolean;
+  extra?: Extra;
+}
+
+/** One column of a filter: values it hides (as they show; `""` hides blanks) and a condition. */
+export interface FilterColumn extends Condition {
+  hide?: string[];
+  extra?: Extra;
+}
+
+/** The view sort of a filter: a column (letters) and its direction. */
+export interface FilterSort {
+  col: string;
+  desc?: boolean;
+}
+
+/**
+ * The sheet's filter (DESIGN §6.21.11): a range whose first row holds the filter buttons, the
+ * conditions of its columns (keyed by column letters), and a sort of the rows as they show. The
+ * filter and its sort hide and order rows in the view only; the cells stay where they are.
+ */
+export interface SheetFilter {
+  range?: string;
+  sort?: FilterSort;
+  cols: Record<string, FilterColumn>;
   extra?: Extra;
 }
 
@@ -86,6 +194,12 @@ export interface Sheet {
   frozen: Frozen;
   /** Keyed by chart id; shown in id order. Written only when there are any. */
   charts: Record<string, ChartProps>;
+  /** The filter (version 2); written only when set. */
+  filter?: SheetFilter;
+  /** Conditional format rules keyed by id (version 2); written only when there are any. */
+  conditional?: Record<string, ConditionalRule>;
+  /** Data validation keyed by id (version 2); written only when there is any. */
+  validation?: Record<string, Validation>;
   /**
    * Changes with every insertion or deletion of rows or columns, which moves cells: a merge whose
    * other side changed anything then shows the banner (DESIGN §6.21.3). Written only when set.
@@ -96,7 +210,8 @@ export interface Sheet {
 
 export interface SheetFile {
   type: typeof SHEET_TYPE;
-  version: typeof SHEET_VERSION;
+  /** The version the file was read with; a file is written with the lowest version it needs (`fileVersion`). */
+  version: number;
   /** The engine (`name@version`) that computed the `c` values; `''` when no single engine run did. */
   engine: string;
   sheets: Sheet[];
@@ -109,11 +224,16 @@ export interface SheetFile {
 export type ParseResult = { ok: true; file: SheetFile; repairs: string[] } | { ok: false; error: string; newer?: boolean };
 
 const FILE_KEYS = ['type', 'version', 'engine', 'sheets', 'named'];
-const SHEET_KEYS = ['id', 'name', 'cells', 'cols', 'rows', 'frozen', 'charts', 'structure'];
+const SHEET_KEYS = ['id', 'name', 'cells', 'cols', 'rows', 'frozen', 'charts', 'filter', 'conditional', 'validation', 'structure'];
 const CELL_KEYS = ['v', 'f', 'c', 'fmt'];
 const COLUMN_KEYS = ['w', 'fmt', 'bold'];
 const ROW_KEYS = ['h', 'fmt', 'bold'];
-const CHART_KEYS = ['type', 'range', 'title', 'headers', 'labels'];
+const CHART_KEYS = ['type', 'range', 'title', 'headers', 'labels', 'stacked', 'donut', 'legend', 'xTitle', 'yTitle'];
+const CONDITION_KEYS = ['when', 'value', 'value2'];
+const RULE_KEYS = ['range', ...CONDITION_KEYS, 'bg', 'color', 'bold', 'italic', 'scale'];
+const VALIDATION_KEYS = ['range', 'type', 'values', 'source', 'strict'];
+const FILTER_KEYS = ['range', 'sort', 'cols'];
+const FILTER_COLUMN_KEYS = ['hide', ...CONDITION_KEYS];
 
 class Refusal extends Error {
   /** A later NotesApp wrote the file. */
@@ -129,17 +249,25 @@ const isCellValue = (x: unknown): x is CellValue => typeof x === 'string' || typ
 const isCachedValue = (x: unknown): x is CachedValue =>
   x === null || isCellValue(x) || (isObject(x) && Object.keys(x).length === 1 && typeof x.e === 'string');
 const isSize = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x) && x > 0;
+/** A colour as conditional formatting stores it: `#rrggbb`. */
+export const isColor = (x: unknown): x is string => typeof x === 'string' && /^#[0-9a-fA-F]{6}$/.test(x);
 const quote = (s: string) => JSON.stringify(s);
 
 // ---------- new files and names ----------
 
 /** A new workbook with one empty sheet. */
 export function newSheetFile(engine = SHEET_ENGINE): SheetFile {
-  return { type: SHEET_TYPE, version: SHEET_VERSION, engine, sheets: [emptySheet('s1', 'Sheet1')], named: {} };
+  return { type: SHEET_TYPE, version: 1, engine, sheets: [emptySheet('s1', 'Sheet1')], named: {} };
 }
 
 export function emptySheet(id: string, name: string): Sheet {
   return { id, name, cells: {}, cols: {}, rows: {}, frozen: { rows: 0, cols: 0 }, charts: {} };
+}
+
+/** The lowest format version that holds everything in `file`: 2 with a filter, conditional formatting or data validation. */
+export function fileVersion(file: Pick<SheetFile, 'sheets'>): 1 | 2 {
+  const v2 = file.sheets.some((s) => s.filter !== undefined || Object.keys(s.conditional ?? {}).length > 0 || Object.keys(s.validation ?? {}).length > 0);
+  return v2 ? 2 : 1;
 }
 
 /** A new random value for a sheet's `structure`. */
@@ -166,11 +294,16 @@ export function newSheetId(file: Pick<SheetFile, 'sheets'>): string {
  * order they show in), and a random tail, so charts made on two devices never collide.
  */
 export function newChartId(sheet: Pick<Sheet, 'charts'>, now = Date.now()): string {
-  const stamp = 'c' + now.toString(36).padStart(9, '0');
+  return newItemId('c', sheet.charts, now);
+}
+
+/** An id for a new item of a keyed collection (`r` rules, `v` validation), made like a chart's. */
+export function newItemId(prefix: string, taken: Readonly<Record<string, unknown>> | undefined, now = Date.now()): string {
+  const stamp = prefix + now.toString(36).padStart(9, '0');
   for (;;) {
     const bytes = crypto.getRandomValues(new Uint8Array(3));
     const id = stamp + Array.from(bytes, (b) => (b % 36).toString(36)).join('');
-    if (!(id in sheet.charts)) return id;
+    if (!taken || !Object.hasOwn(taken, id)) return id;
   }
 }
 
@@ -427,13 +560,147 @@ function parseChart(raw: Json, where: string, repairs: string[]): ChartProps {
     if (typeof value === 'string') chart[key] = value;
     else keep(key, value);
   }
-  for (const key of ['headers', 'labels'] as const) {
+  for (const key of ['headers', 'labels', 'stacked', 'donut'] as const) {
     if (!(key in raw)) continue;
     const value = raw[key];
     if (typeof value === 'boolean') chart[key] = value;
     else keep(key, value);
   }
+  for (const key of ['xTitle', 'yTitle'] as const) {
+    if (!(key in raw)) continue;
+    const value = raw[key];
+    if (typeof value === 'string') chart[key] = value;
+    else keep(key, value);
+  }
+  if ('legend' in raw) {
+    const legend = LEGEND_POSITIONS.find((p) => p === raw.legend);
+    if (legend) chart.legend = legend;
+    else keep('legend', raw.legend);
+  }
   return chart;
+}
+
+/** Reads `when`, `value` and `value2` into `target`, keeping unusable values aside. */
+function parseCondition(raw: Record<string, Json>, target: Condition, keep: (key: string, value: Json) => void): void {
+  if ('when' in raw) {
+    const when = CONDITION_KINDS.find((k) => k === raw.when);
+    if (when) target.when = when;
+    else keep('when', raw.when);
+  }
+  for (const key of ['value', 'value2'] as const) {
+    if (!(key in raw)) continue;
+    const value = raw[key];
+    if (typeof value === 'string') target[key] = value;
+    else keep(key, value);
+  }
+}
+
+/** A keeper of unusable values for an item with `extra`, noting each as a repair. */
+function keeper(target: { extra?: Extra }, where: string, repairs: string[]) {
+  return (key: string, value: Json) => {
+    addExtra(target, key, value);
+    repairs.push(`${where}: ${quote(key)} has an unusable value; it is kept unchanged.`);
+  };
+}
+
+function parseRule(raw: Json, where: string, repairs: string[]): ConditionalRule {
+  if (!isObject(raw)) throw new Refusal(`${where} is not an object.`);
+  const rule: ConditionalRule = {};
+  const extra = extraOf(raw, RULE_KEYS);
+  if (extra) rule.extra = extra;
+  const keep = keeper(rule, where, repairs);
+  if ('range' in raw) {
+    if (typeof raw.range === 'string') rule.range = raw.range;
+    else keep('range', raw.range);
+  }
+  parseCondition(raw, rule, keep);
+  for (const key of ['bg', 'color'] as const) {
+    if (!(key in raw)) continue;
+    if (isColor(raw[key])) rule[key] = raw[key];
+    else keep(key, raw[key]);
+  }
+  for (const key of ['bold', 'italic'] as const) {
+    if (!(key in raw)) continue;
+    const value = raw[key];
+    if (typeof value === 'boolean') rule[key] = value;
+    else keep(key, value);
+  }
+  if ('scale' in raw) {
+    const scale = raw.scale;
+    const ok = isObject(scale) && isColor(scale.min) && isColor(scale.max) && (scale.mid === undefined || isColor(scale.mid)) && Object.keys(scale).every((k) => k === 'min' || k === 'mid' || k === 'max');
+    if (ok) rule.scale = { min: scale.min as string, ...(scale.mid !== undefined ? { mid: scale.mid as string } : {}), max: scale.max as string };
+    else keep('scale', scale);
+  }
+  return rule;
+}
+
+function parseValidation(raw: Json, where: string, repairs: string[]): Validation {
+  if (!isObject(raw)) throw new Refusal(`${where} is not an object.`);
+  const v: Validation = {};
+  const extra = extraOf(raw, VALIDATION_KEYS);
+  if (extra) v.extra = extra;
+  const keep = keeper(v, where, repairs);
+  for (const key of ['range', 'source'] as const) {
+    if (!(key in raw)) continue;
+    const value = raw[key];
+    if (typeof value === 'string') v[key] = value;
+    else keep(key, value);
+  }
+  if ('type' in raw) {
+    const type = VALIDATION_TYPES.find((t) => t === raw.type);
+    if (type) v.type = type;
+    else keep('type', raw.type);
+  }
+  if ('values' in raw) {
+    const values = raw.values;
+    if (Array.isArray(values) && values.every((x) => typeof x === 'string')) v.values = values as string[];
+    else keep('values', values);
+  }
+  if ('strict' in raw) {
+    if (typeof raw.strict === 'boolean') v.strict = raw.strict;
+    else keep('strict', raw.strict);
+  }
+  return v;
+}
+
+function parseFilterColumn(raw: Json, where: string, repairs: string[]): FilterColumn {
+  if (!isObject(raw)) throw new Refusal(`${where} is not an object.`);
+  const column: FilterColumn = {};
+  const extra = extraOf(raw, FILTER_COLUMN_KEYS);
+  if (extra) column.extra = extra;
+  const keep = keeper(column, where, repairs);
+  if ('hide' in raw) {
+    const hide = raw.hide;
+    if (Array.isArray(hide) && hide.every((x) => typeof x === 'string')) column.hide = hide as string[];
+    else keep('hide', hide);
+  }
+  parseCondition(raw, column, keep);
+  return column;
+}
+
+/** A sheet's filter; anything unusable in it is kept aside, so a filter is never refused. */
+function parseFilter(raw: Json, where: string, repairs: string[]): SheetFilter | null {
+  if (!isObject(raw)) return null;
+  const filter: SheetFilter = { cols: {} };
+  const extra = extraOf(raw, FILTER_KEYS);
+  if (extra) filter.extra = extra;
+  const keep = keeper(filter, `${where} filter`, repairs);
+  if ('range' in raw) {
+    if (typeof raw.range === 'string') filter.range = raw.range;
+    else keep('range', raw.range);
+  }
+  if ('sort' in raw) {
+    const sort = raw.sort;
+    const col = isObject(sort) && typeof sort.col === 'string' ? normalizeColumnKey(sort.col) : null;
+    if (isObject(sort) && col !== null && (sort.desc === undefined || typeof sort.desc === 'boolean') && Object.keys(sort).every((k) => k === 'col' || k === 'desc')) {
+      filter.sort = sort.desc === undefined ? { col } : { col, desc: sort.desc as boolean };
+    } else keep('sort', sort);
+  }
+  if ('cols' in raw) {
+    if (isObject(raw.cols)) filter.cols = parseKeyed(raw.cols, `${where} filter columns`, normalizeColumnKey, (v, w) => parseFilterColumn(v, w, repairs), repairs);
+    else keep('cols', raw.cols);
+  }
+  return filter;
 }
 
 function parseFrozen(raw: Json | undefined, where: string, repairs: string[]): Frozen {
@@ -483,6 +750,29 @@ function parseSheetEntry(raw: Json, index: number, repairs: string[]): Sheet {
   else if (raw.structure !== undefined) {
     addExtra(sheet, 'structure', raw.structure);
     repairs.push(`${label}: "structure" is not text; it is kept unchanged.`);
+  }
+  // Version 2: like charts, a collection that is not an object is kept aside (and not used).
+  for (const [key, parse] of [
+    ['conditional', parseRule],
+    ['validation', parseValidation],
+  ] as const) {
+    const value = raw[key];
+    if (value === undefined) continue;
+    if (isObject(value)) {
+      const items = parseKeyed(value, `${label} ${key}`, (k) => k, (v, w) => parse(v, w, repairs), repairs);
+      if (Object.keys(items).length > 0) (sheet as unknown as Record<string, unknown>)[key] = items;
+    } else {
+      addExtra(sheet, key, value);
+      repairs.push(`${label}: ${quote(key)} is not an object; it is kept unchanged but not used.`);
+    }
+  }
+  if (raw.filter !== undefined) {
+    const filter = parseFilter(raw.filter, label, repairs);
+    if (filter) sheet.filter = filter;
+    else {
+      addExtra(sheet, 'filter', raw.filter);
+      repairs.push(`${label}: "filter" is not an object; it is kept unchanged but not used.`);
+    }
   }
   return sheet;
 }
@@ -553,10 +843,10 @@ export function parseSheet(text: string): ParseResult {
     checkKeys(body);
     if (!isObject(raw)) throw new Refusal('This is not a NotesApp sheet: the file is not a JSON object.');
     if (raw.type !== SHEET_TYPE) throw new Refusal(`This is not a NotesApp sheet: "type" is ${JSON.stringify(raw.type ?? null)}, not "${SHEET_TYPE}".`);
-    if (raw.version === undefined) repairs.push(`The format version was missing; it is ${SHEET_VERSION}.`);
+    if (raw.version === undefined) repairs.push('The format version was missing; it is 1.');
     else if (typeof raw.version === 'number' && Number.isInteger(raw.version) && raw.version > SHEET_VERSION) {
       throw new Refusal(`This sheet was saved by a newer NotesApp (format version ${raw.version}); update NotesApp to edit it.`, true);
-    } else if (raw.version !== SHEET_VERSION) throw new Refusal(`Unknown format version ${JSON.stringify(raw.version)}.`);
+    } else if (raw.version !== 1 && raw.version !== 2) throw new Refusal(`Unknown format version ${JSON.stringify(raw.version)}.`);
     let engine = '';
     if (typeof raw.engine === 'string') engine = raw.engine;
     else repairs.push('The engine that computed the cached values is unknown; they will be recalculated.');
@@ -567,7 +857,7 @@ export function parseSheet(text: string): ParseResult {
       sheets.push(emptySheet('s1', 'Sheet1'));
     }
     repairSheetIdentity(sheets, repairs);
-    const file: SheetFile = { type: SHEET_TYPE, version: SHEET_VERSION, engine, sheets, named: parseNamed(raw.named, repairs) };
+    const file: SheetFile = { type: SHEET_TYPE, version: typeof raw.version === 'number' ? raw.version : 1, engine, sheets, named: parseNamed(raw.named, repairs) };
     const extra = extraOf(raw, FILE_KEYS);
     if (extra) file.extra = extra;
     return { ok: true, file, repairs };
@@ -622,10 +912,58 @@ const chartLine = (p: ChartProps) =>
         ['title', p.title],
         ['headers', p.headers],
         ['labels', p.labels],
+        ['stacked', p.stacked],
+        ['donut', p.donut],
+        ['legend', p.legend],
+        ['xTitle', p.xTitle],
+        ['yTitle', p.yTitle],
       ],
       p.extra,
     ),
   );
+const conditionEntries = (c: Condition): Array<[string, Json | undefined]> => [
+  ['when', c.when],
+  ['value', c.value],
+  ['value2', c.value2],
+];
+const ruleLine = (r: ConditionalRule) =>
+  inlineEntries(
+    ordered(
+      [['range', r.range], ...conditionEntries(r), ['bg', r.bg], ['color', r.color], ['bold', r.bold], ['italic', r.italic], ['scale', r.scale ? { min: r.scale.min, ...(r.scale.mid ? { mid: r.scale.mid } : {}), max: r.scale.max } : undefined]],
+      r.extra,
+    ),
+  );
+const validationLine = (v: Validation) =>
+  inlineEntries(
+    ordered(
+      [
+        ['range', v.range],
+        ['type', v.type],
+        ['values', v.values],
+        ['source', v.source],
+        ['strict', v.strict],
+      ],
+      v.extra,
+    ),
+  );
+/** A filter on one line: its range, sort and columns (in column order, each with its keys in order). */
+function filterLine(f: SheetFilter): string {
+  const cols = Object.entries(f.cols).sort(([a], [b]) => compareColumns(a, b));
+  // Unusable columns kept aside are written back while no column is set.
+  const colsJson: Json | undefined =
+    cols.length === 0 && f.extra?.cols !== undefined ? undefined : Object.fromEntries(cols.map(([k, c]) => [k, Object.fromEntries(ordered([['hide', c.hide], ...conditionEntries(c)], c.extra))]));
+  const sort: Json | undefined = f.sort ? (f.sort.desc === undefined ? { col: f.sort.col } : { col: f.sort.col, desc: f.sort.desc }) : undefined;
+  return inlineEntries(
+    ordered(
+      [
+        ['range', f.range],
+        ['sort', sort],
+        ['cols', colsJson],
+      ],
+      f.extra,
+    ),
+  );
+}
 
 /** Plain code-unit order: chart ids, sorted the same way on every device. */
 export const compareIds = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
@@ -655,6 +993,17 @@ function sheetBlock(sheet: Sheet): string {
   // Only when there are any, so files without charts keep the layout of earlier versions.
   if (charts.length > 0) lines.push(`${i}"charts": ${keyedBlock(charts, i, chartLine)}`);
   else if (sheet.extra?.charts !== undefined) lines.push(`${i}"charts": ${block(sheet.extra.charts, i)}`);
+  // Version 2: each only when set, so other files keep their layout.
+  if (sheet.filter !== undefined) lines.push(`${i}"filter": ${filterLine(sheet.filter)}`);
+  else if (sheet.extra?.filter !== undefined) lines.push(`${i}"filter": ${block(sheet.extra.filter, i)}`);
+  for (const [key, line] of [
+    ['conditional', ruleLine],
+    ['validation', validationLine],
+  ] as const) {
+    const items = Object.entries((sheet[key] ?? {}) as Record<string, ConditionalRule & Validation>).sort(([a], [b]) => compareIds(a, b));
+    if (items.length > 0) lines.push(`${i}${quote(key)}: ${keyedBlock(items, i, line)}`);
+    else if (sheet.extra?.[key] !== undefined) lines.push(`${i}${quote(key)}: ${block(sheet.extra[key], i)}`);
+  }
   if (sheet.structure !== undefined) lines.push(`${i}"structure": ${quote(sheet.structure)}`);
   else if (sheet.extra?.structure !== undefined) lines.push(`${i}"structure": ${block(sheet.extra.structure, i)}`);
   for (const [k, v] of Object.entries(sheet.extra ?? {})) if (!SHEET_KEYS.includes(k)) lines.push(`${i}${quote(k)}: ${block(v, i)}`);
@@ -666,7 +1015,7 @@ export function serializeSheet(file: SheetFile): string {
   const named = Object.entries(file.named).sort(([a], [b]) => caseless(a, b));
   const lines = [
     `  "type": ${quote(SHEET_TYPE)}`,
-    `  "version": ${SHEET_VERSION}`,
+    `  "version": ${fileVersion(file)}`,
     `  "engine": ${quote(file.engine)}`,
     `  "sheets": [\n${file.sheets.map(sheetBlock).join(',\n')}\n  ]`,
     `  "named": ${keyedBlock(named, '  ', quote)}`,

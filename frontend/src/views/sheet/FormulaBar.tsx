@@ -115,6 +115,7 @@ export const FormulaBar = forwardRef<FormulaBarHandle, Props>(function FormulaBa
         spellCheck={false}
         autoCapitalize="characters"
         autoCorrect="off"
+        autoComplete="off"
         enterKeyHint="go"
         onFocus={(e) => e.currentTarget.select()}
         onChange={(e) => {
@@ -147,6 +148,7 @@ export const FormulaBar = forwardRef<FormulaBarHandle, Props>(function FormulaBa
         spellCheck={false}
         autoCapitalize="off"
         autoCorrect="off"
+        autoComplete="off"
         enterKeyHint={touch ? 'next' : 'done'}
         onFocus={() => {
           if (!draftRef.current && editable) begin({ ...active, sheet }, text);

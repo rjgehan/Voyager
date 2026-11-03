@@ -1,14 +1,14 @@
 // Dialogs of the spreadsheet view (DESIGN §6.21.5, §6.21.8–6.21.10): named ranges, column width
 // (the way to resize a column on a phone, where the header's edge is too small to drag), number
 // formats, charts and imports.
-import { ChartColumn, ChartLine, ChartPie, Trash } from 'lucide-react';
+import { ChartArea, ChartBar, ChartColumn, ChartLine, ChartPie, ChartScatter, Donut, Trash } from 'lucide-react';
 import { useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { Modal } from '../../components/overlays/Modal';
 import { columnLetters } from '../../sheets/a1';
 import type { Separator } from '../../sheets/csv';
 import { formatShown } from '../../sheets/display';
 import type { Workbook } from '../../sheets/engine';
-import { sameName, type CachedValue, type ChartProps, type ChartType, type Sheet } from '../../sheets/format';
+import { sameName, type CachedValue, type ChartProps, type Sheet } from '../../sheets/format';
 import { FORMAT_PRESETS, isGeneral } from '../../sheets/numfmt';
 import { parseRangeText, rangeText } from '../../sheets/refs';
 import { DEFAULT_COLUMN_WIDTH, MAX_COLUMN_WIDTH, MIN_COLUMN_WIDTH } from './gridModel';
@@ -353,18 +353,31 @@ interface ChartDialogProps {
   initial: ChartProps;
   /** Editing a chart that exists (Save) or inserting one (Insert). */
   editing: boolean;
+  /** The selection's range, offered by "Use B2:C9". */
+  selection?: string;
   onSave(props: ChartProps): void;
   onClose(): void;
 }
 
-const CHART_KINDS: Array<{ type: ChartType; label: string; icon: ReactNode }> = [
-  { type: 'bar', label: 'Bar', icon: <ChartColumn size={16} aria-hidden /> },
-  { type: 'line', label: 'Line', icon: <ChartLine size={16} aria-hidden /> },
-  { type: 'pie', label: 'Pie', icon: <ChartPie size={16} aria-hidden /> },
+/** The chart types as Google Sheets' chart editor offers them; a doughnut is a pie with a hole. */
+const CHART_KINDS: Array<{ id: string; label: string; props: Pick<ChartProps, 'type' | 'donut'>; icon: ReactNode }> = [
+  { id: 'column', label: 'Column', props: { type: 'bar' }, icon: <ChartColumn size={16} aria-hidden /> },
+  { id: 'bar', label: 'Bar', props: { type: 'hbar' }, icon: <ChartBar size={16} aria-hidden /> },
+  { id: 'line', label: 'Line', props: { type: 'line' }, icon: <ChartLine size={16} aria-hidden /> },
+  { id: 'area', label: 'Area', props: { type: 'area' }, icon: <ChartArea size={16} aria-hidden /> },
+  { id: 'pie', label: 'Pie', props: { type: 'pie' }, icon: <ChartPie size={16} aria-hidden /> },
+  { id: 'doughnut', label: 'Doughnut', props: { type: 'pie', donut: true }, icon: <Donut size={16} aria-hidden /> },
+  { id: 'scatter', label: 'Scatter', props: { type: 'scatter' }, icon: <ChartScatter size={16} aria-hidden /> },
 ];
 
-/** Inserting or editing a chart: its kind, range, title and headers, with a live preview. */
-export function ChartDialog({ sheet, initial, editing, onSave, onClose }: ChartDialogProps) {
+const kindOf = (c: ChartProps) => (c.type === 'pie' ? (c.donut ? 'doughnut' : 'pie') : (CHART_KINDS.find((k) => k.props.type === (c.type ?? 'bar'))?.id ?? 'column'));
+
+/**
+ * The chart editor (DESIGN §6.21.9): Google Sheets' chart types, the data range (or the selection),
+ * whether the first row and column name the series and categories, stacking, the title, axis titles
+ * and where the legend goes, with a live preview.
+ */
+export function ChartDialog({ sheet, initial, editing, selection, onSave, onClose }: ChartDialogProps) {
   const [draft, setDraft] = useState<ChartProps>(initial);
   const parsed = draft.range ? parseRangeText(draft.range) : null;
   const rangeError =
@@ -378,53 +391,105 @@ export function ChartDialog({ sheet, initial, editing, onSave, onClose }: ChartD
   const set = (patch: Partial<ChartProps>) => setDraft((d) => ({ ...d, ...patch }));
   const first = parsed?.range;
   const type = draft.type ?? 'bar';
+  const kind = kindOf(draft);
+  const axes = type !== 'pie';
+  const stackable = type === 'bar' || type === 'hbar' || type === 'area';
   return (
-    <Modal label={editing ? 'Edit chart' : 'Insert chart'} onClose={onClose} className="sheet-chart-dialog">
+    <Modal label={editing ? 'Edit chart' : 'Insert chart'} onClose={onClose} variant="sheet" className="sheet-chart-dialog">
       <form
         className="dialog"
         onSubmit={(e) => {
           e.preventDefault();
           if (rangeError !== null || !parsed) return;
           const props: ChartProps = { ...draft, type, range: rangeText(parsed.range) };
-          if (!props.title?.trim()) delete props.title;
+          // Options that do not apply, or are off, are not written.
+          for (const key of ['title', 'xTitle', 'yTitle'] as const) if (!props[key]?.trim()) delete props[key];
+          if (!props.stacked || !stackable) delete props.stacked;
+          if (!props.donut || type !== 'pie') delete props.donut;
+          if (!props.legend || props.legend === 'top') delete props.legend;
+          if (!axes) {
+            delete props.xTitle;
+            delete props.yTitle;
+          }
           onSave(props);
         }}
       >
         <h2 className="dialog-title">{editing ? 'Edit chart' : 'Insert chart'}</h2>
-        <div className="sheet-chart-kinds" role="radiogroup" aria-label="Chart type">
+        <div className="sheet-chart-kinds is-gallery" role="radiogroup" aria-label="Chart type">
           {CHART_KINDS.map((k) => (
-            <button key={k.type} type="button" role="radio" aria-checked={type === k.type} className="sheet-chart-kind" onClick={() => set({ type: k.type })}>
+            <button key={k.id} type="button" role="radio" aria-checked={kind === k.id} className="sheet-chart-kind" onClick={() => set({ type: k.props.type, donut: k.props.donut })}>
               {k.icon}
               {k.label}
             </button>
           ))}
         </div>
-        <label className="field">
-          <span className="field-label">Range</span>
-          <input
-            className="text-input sheet-format-input"
-            value={draft.range ?? ''}
-            aria-invalid={rangeError !== null}
-            spellCheck={false}
-            autoCapitalize="off"
-            autoCorrect="off"
-            onChange={(e) => set({ range: e.target.value })}
-          />
-        </label>
-        {rangeError && <p className="field-error">{rangeError}</p>}
-        <label className="field">
-          <span className="field-label">Title</span>
-          <input className="text-input" value={draft.title ?? ''} onChange={(e) => set({ title: e.target.value })} />
-        </label>
-        <label className="checkbox-field">
-          <input type="checkbox" checked={draft.headers === true} onChange={(e) => set({ headers: e.target.checked })} />
-          Row {first ? first.row + 1 : 1} names the series
-        </label>
-        <label className="checkbox-field">
-          <input type="checkbox" checked={draft.labels === true} onChange={(e) => set({ labels: e.target.checked })} />
-          Column {first ? columnLetters(first.col) : 'A'} labels the {type === 'pie' ? 'slices' : 'categories'}
-        </label>
-        <div className="sheet-chart-preview">{rangeError === null && <SheetChart sheet={sheet} chart={{ ...draft, type }} height={150} />}</div>
+        <div className="sheet-chart-columns">
+          <div className="sheet-chart-options">
+            <label className="field">
+              <span className="field-label">Data range</span>
+              <span className="sheet-chart-range">
+                <input
+                  className="text-input sheet-format-input"
+                  value={draft.range ?? ''}
+                  aria-invalid={rangeError !== null}
+                  spellCheck={false}
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                  onChange={(e) => set({ range: e.target.value })}
+                />
+                {selection && selection !== draft.range && (
+                  <button type="button" className="button button-small" onClick={() => set({ range: selection })}>
+                    Use {selection}
+                  </button>
+                )}
+              </span>
+            </label>
+            {rangeError && <p className="field-error">{rangeError}</p>}
+            <label className="field">
+              <span className="field-label">Chart title</span>
+              <input className="text-input" value={draft.title ?? ''} onChange={(e) => set({ title: e.target.value })} />
+            </label>
+            <label className="checkbox-field">
+              <input type="checkbox" checked={draft.headers === true} onChange={(e) => set({ headers: e.target.checked })} />
+              Use row {first ? first.row + 1 : 1} as headers (series names)
+            </label>
+            {type === 'scatter' ? (
+              <p className="dialog-message muted">Column {first ? columnLetters(first.col) : 'A'} holds the X values; each other column is a series.</p>
+            ) : (
+              <label className="checkbox-field">
+                <input type="checkbox" checked={draft.labels === true} onChange={(e) => set({ labels: e.target.checked })} />
+                Use column {first ? columnLetters(first.col) : 'A'} as labels ({type === 'pie' ? 'slices' : 'categories'})
+              </label>
+            )}
+            {stackable && (
+              <label className="checkbox-field">
+                <input type="checkbox" checked={draft.stacked === true} onChange={(e) => set({ stacked: e.target.checked })} />
+                Stacked
+              </label>
+            )}
+            <label className="field">
+              <span className="field-label">Legend</span>
+              <select className="text-input" value={draft.legend ?? 'top'} onChange={(e) => set({ legend: e.target.value as ChartProps['legend'] })}>
+                <option value="top">Top</option>
+                <option value="bottom">Bottom</option>
+                <option value="none">None</option>
+              </select>
+            </label>
+            {axes && (
+              <>
+                <label className="field">
+                  <span className="field-label">Horizontal axis title</span>
+                  <input className="text-input" value={draft.xTitle ?? ''} onChange={(e) => set({ xTitle: e.target.value })} />
+                </label>
+                <label className="field">
+                  <span className="field-label">Vertical axis title</span>
+                  <input className="text-input" value={draft.yTitle ?? ''} onChange={(e) => set({ yTitle: e.target.value })} />
+                </label>
+              </>
+            )}
+          </div>
+          <div className="sheet-chart-preview">{rangeError === null && <SheetChart sheet={sheet} chart={{ ...draft, type }} height={180} />}</div>
+        </div>
         <div className="dialog-actions">
           <button type="button" className="button" onClick={onClose}>
             Cancel

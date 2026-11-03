@@ -29,6 +29,18 @@ export interface SheetActions {
   importFile(): void;
   exportCsv(): void;
   exportXlsx(): void;
+  sortRangeAsc(): void;
+  sortRangeDesc(): void;
+  sortSheetAsc(): void;
+  sortSheetDesc(): void;
+  toggleFilter(): void;
+  openConditionalFormatting(): void;
+  insertCheckboxes(): void;
+  insertDropdown(): void;
+  openDataValidation(): void;
+  openFind(): void;
+  openReplace(): void;
+  createPivotTable(): void;
 }
 
 let active: SheetActions | null = null;

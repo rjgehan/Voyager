@@ -105,7 +105,18 @@ describe('SheetEmbed', () => {
     expect(table.querySelector('tr')?.className).toBe('is-bold');
     expect(table.querySelectorAll('col')[1].style.width).toBe('110px');
     // A whole sheet shows its charts.
-    expect(view.container.querySelector('figure.sheet-chart')?.getAttribute('aria-label')).toBe('Bar chart: Costs');
+    expect(view.container.querySelector('figure.sheet-chart')?.getAttribute('aria-label')).toBe('Column chart: Costs');
+  });
+
+  it('shows conditional formatting as the grid does (format version 2)', async () => {
+    const sheets = [{ ...BUDGET.sheets[0], conditional: { r1: { range: 'B2:B4', when: 'gt', value: '1000', bg: '#b7e1cd', bold: true } } }, BUDGET.sheets[1]];
+    show(create({ ...BUDGET, version: 2, sheets }));
+    const table = await screen.findByRole('table');
+    const cells = [...table.querySelectorAll('td')];
+    const rent = cells.find((td) => td.textContent === '$1,450.00')!;
+    expect(rent.style.background).toBe('rgb(183, 225, 205)');
+    expect(rent.style.fontWeight).toBe('700');
+    expect(cells.find((td) => td.textContent === '$487.50')!.getAttribute('style')).toBeNull();
   });
 
   it('shows a named sheet, a range and a named range', async () => {

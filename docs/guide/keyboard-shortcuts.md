@@ -70,7 +70,16 @@ These work even while you are typing in a note.
 | `Ctrl+B` | Bold rows (or columns) |
 | `Ctrl+D`, `Ctrl+R` | Fill down, fill right |
 | `Ctrl+C`, `Ctrl+X`, `Ctrl+V` | Copy, cut (to move), paste |
+| `Ctrl+Shift+V` | Paste values only |
 | `Ctrl+Z`, `Ctrl+Shift+Z` or `Ctrl+Y` | Undo, redo |
+| `Ctrl+A` | Select everything |
+| `Ctrl+Space`, `Shift+Space` | Select the whole columns, the whole rows |
+| `Ctrl+Arrow`, `Ctrl+Shift+Arrow` | Jump to the end of the data, select up to it |
+| `Ctrl+;`, `Ctrl+Shift+;` | Today's date, the time |
+| `F4` (in a formula) | Switch the cell name at the cursor between `$A$1`, `A$1`, `$A1` and `A1` |
+| `Space` | Tick or untick the selected checkboxes |
+| `Alt+Down` | Open a cell's drop-down list |
+| `Ctrl+F`, `Ctrl+H` | Find, find and replace |
 
 ## Tabs and panes
 

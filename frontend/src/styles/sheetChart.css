@@ -109,6 +109,22 @@
   stroke-width: 2;
 }
 
+/* An area: a light fill under its line. */
+.sheet-chart-area {
+  fill-opacity: 0.22;
+  stroke: none;
+}
+
+/* A doughnut's hole when it has one slice. */
+.sheet-chart-hole {
+  fill: var(--chart-surface);
+}
+
+.sheet-chart-axis-title {
+  fill: var(--text-muted);
+  font-size: 11px;
+}
+
 /* The surface gap between slices. */
 .sheet-chart-slice {
   stroke: var(--chart-surface);

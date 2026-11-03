@@ -13,6 +13,10 @@ import {
   gridLayout,
   MAX_COLUMN_WIDTH,
   MIN_COLUMN_WIDTH,
+  displayRange,
+  rowView,
+  sheetRange,
+  sheetRows,
   toGridSelection,
 } from './gridModel';
 
@@ -126,5 +130,38 @@ describe('selections', () => {
     const inside = cellSelection(3, 3);
     expect(clampSelection(inside, l)).toBe(inside);
     expect(clampSelection(cellSelection(40, 5000), l)).toEqual(cellSelection(25, 999));
+  });
+});
+
+describe('a filter view of the rows', () => {
+  const cells = { A1: { v: 'Item' }, A2: { v: 'b' }, A3: { v: 'x' }, A4: { v: 'a' }, A5: { v: 'x' }, A6: { v: 'c' }, A9: { v: 'below' } };
+
+  it('maps the grid rows to the sheet rows that show, sorted, and back', () => {
+    const s = sheet({ cells, filter: { range: 'A1:A6', sort: { col: 'A' }, cols: { A: { hide: ['x'] } } } });
+    const v = rowView(s, 0);
+    expect(v.active).toBe(true);
+    expect(v.hidden).toBe(2);
+    expect([0, 1, 2, 3, 4, 5, 6].map(v.sheetRow)).toEqual([0, 3, 1, 5, 6, 7, 8]);
+    expect([0, 1, 2, 3, 4, 5, 8].map(v.displayRow)).toEqual([0, 2, null, 1, null, 3, 6]);
+    // The grid shows two rows fewer.
+    expect(gridLayout(s, opts).rows).toBe(1000 - 2);
+    expect(sheetRows(v, { col: 0, row: 1, width: 1, height: 3 })).toEqual([3, 1, 5]);
+    expect(sheetRange(v, { col: 0, row: 1, width: 2, height: 3 })).toEqual({ col: 0, row: 1, width: 2, height: 5 });
+    expect(displayRange(v, { col: 0, row: 8, width: 1, height: 1 })).toEqual({ col: 0, row: 6, width: 1, height: 1 });
+    expect(displayRange(v, { col: 0, row: 1, width: 1, height: 2 })).toBeNull();
+    // A filter that hides and sorts nothing changes nothing.
+    expect(rowView(sheet({ cells, filter: { range: 'A1:A6', cols: {} } }), 0).active).toBe(false);
+  });
+});
+
+describe('conditional formatting in the grid', () => {
+  it('sets the fill, the text colour and the font from a rule, never over an error’s colour', () => {
+    const s = sheet({ cells: { A1: { v: 5 }, A2: { f: '=1/0', c: { e: '#DIV/0!' } } }, rows: { '1': { bold: true } } });
+    const colors = { error: 'red', red: 'red', green: 'green', blue: 'blue' };
+    const styleAt = () => ({ bg: '#b7e1cd', color: '#0d652d', italic: true });
+    const cell = gridCell(s, 0, 0, { overlay: true, readonly: false, colors, styleAt, fontSize: 13 });
+    expect('themeOverride' in cell && cell.themeOverride).toEqual({ bgCell: '#b7e1cd', textDark: '#0d652d', baseFontStyle: 'italic 700 13px' });
+    const error = gridCell(s, 0, 1, { overlay: true, readonly: false, colors, styleAt, fontSize: 13 });
+    expect('themeOverride' in error && error.themeOverride).toEqual({ textDark: 'red', bgCell: '#b7e1cd', baseFontStyle: 'italic 13px' });
   });
 });

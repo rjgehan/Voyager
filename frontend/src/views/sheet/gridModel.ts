@@ -7,6 +7,9 @@ import { CompactSelection, GridCellKind, type GridCell, type GridColumn, type Gr
 import { columnLetters, MAX_COLUMNS, MAX_ROWS, toA1 } from '../../sheets/a1';
 import { effectiveFormat, shownCell, type ShownCell } from '../../sheets/display';
 import { usedExtent } from '../../sheets/edits';
+import type { CellStyle } from '../../sheets/conditional';
+import type { ValidationLook } from '../../sheets/validation';
+import { filterView } from '../../sheets/filter';
 import { cellText, type Sheet } from '../../sheets/format';
 import type { CellRange } from '../../sheets/refs';
 
@@ -33,10 +36,69 @@ export interface SheetSelection {
   range: CellRange;
 }
 
+/**
+ * The rows the grid shows, as sheet rows (DESIGN §6.21.11): the same, unless the sheet's filter
+ * hides rows of its range or sorts them. Selections are in the grid's (display) rows; edits go to
+ * the sheet rows these map them to.
+ */
+export interface RowView {
+  /** The filter hides or orders rows: display rows are not sheet rows. */
+  active: boolean;
+  /** Rows the filter hides. */
+  hidden: number;
+  sheetRow(displayRow: number): number;
+  /** The display row of a sheet row, or null when the filter hides it. */
+  displayRow(sheetRow: number): number | null;
+}
+
+export const IDENTITY_VIEW: RowView = { active: false, hidden: 0, sheetRow: (r) => r, displayRow: (r) => r };
+
+/** The row view of a sheet's filter, with frozen rows (before `firstRow`) left as they are. */
+export function rowView(sheet: Sheet, firstRow: number): RowView {
+  const view = filterView(sheet, firstRow);
+  if (!view) return IDENTITY_VIEW;
+  const { start, end, rows } = view;
+  const hidden = end - start + 1 - rows.length;
+  const index = new Map(rows.map((r, i) => [r, i]));
+  return {
+    active: true,
+    hidden,
+    sheetRow: (d) => (d < start ? d : d < start + rows.length ? rows[d - start] : d + hidden),
+    displayRow: (r) => {
+      if (r < start) return r;
+      if (r > end) return r - hidden;
+      const i = index.get(r);
+      return i === undefined ? null : start + i;
+    },
+  };
+}
+
+/** The sheet rows of display rows `range.row` to the end of `range`, in display order. */
+export function sheetRows(view: RowView, range: CellRange): number[] {
+  return Array.from({ length: range.height }, (_, i) => view.sheetRow(range.row + i));
+}
+
+/** The smallest sheet range that holds a display range (the range itself without a view). */
+export function sheetRange(view: RowView, range: CellRange): CellRange {
+  if (!view.active) return range;
+  const rows = sheetRows(view, range);
+  const top = Math.min(...rows);
+  return { ...range, row: top, height: Math.max(...rows) - top + 1 };
+}
+
+/** A sheet range as the grid shows it, or null when its rows do not show together in order. */
+export function displayRange(view: RowView, range: CellRange): CellRange | null {
+  if (!view.active) return range;
+  const first = view.displayRow(range.row);
+  if (first === null) return null;
+  for (let i = 1; i < range.height; i++) if (view.displayRow(range.row + i) !== first + i) return null;
+  return { ...range, row: first };
+}
+
 export interface GridLayout {
   /** Height of the column letters; frozen rows are drawn below them. */
   headerBand: number;
-  /** Rows and columns the grid shows, frozen ones included (sheet coordinates). */
+  /** Rows (display rows: rows a filter hides are left out) and columns the grid shows, frozen ones included. */
   rows: number;
   cols: number;
   /** Frozen rows drawn in the header, possibly fewer than the file asks for when they would not fit. */
@@ -45,6 +107,8 @@ export interface GridLayout {
   frozenHeight: number;
   rowHeight(sheetRow: number): number;
   columnWidth(col: number): number;
+  /** Display rows to sheet rows and back. */
+  view: RowView;
 }
 
 export interface LayoutOptions {
@@ -55,6 +119,11 @@ export interface LayoutOptions {
   minCols: number;
   /** Frozen rows beyond this height stay in the grid (a phone in landscape). */
   maxFrozenHeight: number;
+  /**
+   * The rows a filter shows, as computed when the filter last changed (`rowView`): as in Google
+   * Sheets, an edit does not hide or move its row until the filter is applied again.
+   */
+  view?: (frozenRows: number) => RowView;
 }
 
 export function gridLayout(sheet: Sheet, opts: LayoutOptions): GridLayout {
@@ -74,7 +143,18 @@ export function gridLayout(sheet: Sheet, opts: LayoutOptions): GridLayout {
     frozenHeight = next;
     frozenRows++;
   }
-  return { headerBand: opts.headerBand ?? HEADER_BAND, rows, cols, frozenRows, frozenCols: Math.min(sheet.frozen.cols, cols - 1), frozenHeight, rowHeight, columnWidth };
+  const view = opts.view ? opts.view(frozenRows) : rowView(sheet, frozenRows);
+  return {
+    headerBand: opts.headerBand ?? HEADER_BAND,
+    rows: Math.max(frozenRows + 1, rows - view.hidden),
+    cols,
+    frozenRows,
+    frozenCols: Math.min(sheet.frozen.cols, cols - 1),
+    frozenHeight,
+    rowHeight,
+    columnWidth,
+    view,
+  };
 }
 
 /** The frozen row at `y` pixels below the column letters, or null below the frozen rows. */
@@ -118,6 +198,18 @@ export interface CellOptions {
   overlay: boolean;
   readonly: boolean;
   colors: CellColors;
+  /** Conditional formatting of a cell (DESIGN §6.21.12), and what it needs to set a font. */
+  styleAt?: ((col: number, row: number) => CellStyle | undefined) | null;
+  fontSize?: number;
+  /** Data validation of a cell (DESIGN §6.21.13): checkboxes show as Glide's checkboxes. */
+  looks?: ((col: number, row: number) => ValidationLook | undefined) | null;
+}
+
+/** The font of a cell in bold or italic (its row's or column's bold included). */
+export function cellFont(sheet: Sheet, col: number, row: number, style: CellStyle | undefined, fontSize: number): string | undefined {
+  const bold = style?.bold === true || sheet.rows[String(row + 1)]?.bold === true || sheet.cols[columnLetters(col)]?.bold === true;
+  if (!style?.bold && !style?.italic) return undefined;
+  return `${style.italic ? 'italic ' : ''}${bold ? '700 ' : ''}${fontSize}px`;
 }
 
 /**
@@ -127,7 +219,28 @@ export interface CellOptions {
 export function gridCell(sheet: Sheet, col: number, row: number, opts: CellOptions): GridCell {
   const cell = sheet.cells[toA1(col, row)];
   const shown = shownCell(sheet, col, row);
-  const themeOverride: Partial<Theme> | undefined = shown.color ? { textDark: opts.colors[shown.color] } : undefined;
+  const style = opts.styleAt?.(col, row);
+  const look = opts.looks?.(col, row);
+  if (look?.kind === 'checkbox' && !look.invalid) {
+    // A checkbox cell: ticked for TRUE; the view toggles it on a click (Glide's own toggle is not used).
+    return {
+      kind: GridCellKind.Boolean,
+      data: look.checked === true,
+      allowOverlay: false,
+      readonly: opts.readonly,
+      contentAlign: 'center',
+      ...(style?.bg ? { themeOverride: { bgCell: style.bg } } : {}),
+    };
+  }
+  let themeOverride: Partial<Theme> | undefined = shown.color ? { textDark: opts.colors[shown.color] } : undefined;
+  if (style) {
+    // A rule's colours win over a number format's, never over an error's.
+    themeOverride = { ...themeOverride };
+    if (style.bg) themeOverride.bgCell = style.bg;
+    if (style.color && shown.color !== 'error') themeOverride.textDark = style.color;
+    const font = cellFont(sheet, col, row, style, opts.fontSize ?? 13);
+    if (font) themeOverride.baseFontStyle = font;
+  }
   return {
     kind: GridCellKind.Text,
     data: cellText(cell, effectiveFormat(sheet, col, row)),

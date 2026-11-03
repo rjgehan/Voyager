@@ -44,6 +44,21 @@ describe('fill', () => {
     expect(fillEdits(t, { col: 2, row: 0, width: 2, height: 1 }, { col: 2, row: 0, width: 4, height: 1 })).toEqual([edit('E1', { v: 15 }), edit('F1', { v: 20 })]);
   });
 
+  it('continues text ending in numbers, and with the fill handle steps a single date or "Item 1"', () => {
+    const s = sheet({ A1: { v: 'Item 1' }, A2: { v: 'Item 3' }, B1: { v: 46296, fmt: 'yyyy-mm-dd' }, C1: { v: 'Week 09' }, D1: { v: 5 }, E1: { v: '007' } });
+    // Two cells step by their difference, wherever the fill starts.
+    expect(fillEdits(s, { col: 0, row: 0, width: 1, height: 2 }, { col: 0, row: 0, width: 1, height: 4 })).toEqual([edit('A3', { v: 'Item 5' }), edit('A4', { v: 'Item 7' })]);
+    const one = (col: number, handle: boolean) => fillEdits(s, { col, row: 0, width: 1, height: 1 }, { col, row: 0, width: 1, height: 3 }, { handle });
+    // The handle steps a date by a day (keeping its format) and text by one (keeping its zeros).
+    expect(one(1, true)).toEqual([edit('B2', { v: 46297 }), edit('B3', { v: 46298 })].map((e) => ({ ...e, fmt: 'yyyy-mm-dd' })));
+    expect(one(2, true)).toEqual([edit('C2', { v: 'Week 10' }), edit('C3', { v: 'Week 11' })]);
+    // A plain number, or digits alone, is copied; and Fill down (no handle) copies dates and text.
+    expect(one(3, true)).toEqual([edit('D2', { v: 5 }), edit('D3', { v: 5 })]);
+    expect(one(4, true)).toEqual([edit('E2', { v: '007' }), edit('E3', { v: '007' })]);
+    expect(one(1, false).map((e) => e.content)).toEqual([{ v: 46296 }, { v: 46296 }]);
+    expect(fillDownEdits(s, { col: 2, row: 0, width: 1, height: 3 }).map((e) => e.content)).toEqual([{ v: 'Week 09' }, { v: 'Week 09' }]);
+  });
+
   it('clears targets of empty source cells and skips cells that already match', () => {
     const s = sheet({ A1: { v: 5 }, A2: { v: 'old' }, A3: { v: 5 } });
     expect(fillEdits(s, { col: 0, row: 0, width: 1, height: 1 }, { col: 0, row: 0, width: 1, height: 3 })).toEqual([edit('A2', { v: 5 })]);
@@ -197,5 +212,39 @@ describe('a cut', () => {
     expect(clipStillHolds(s, clip)).toBe(true);
     expect(clipStillHolds(sheet({ A1: { v: 1, fmt: '0.0' }, B1: { f: '=A1+1' } }), clip)).toBe(false);
     expect(clipStillHolds(sheet({ A1: { v: 1 }, B1: { f: '=A1' } }), clip)).toBe(false);
+  });
+});
+
+describe('ranges of a filter view', () => {
+  // The grid shows sheet rows 3, 1, 5 (a sorted, filtered view) as its rows 1 to 3.
+  const rows = [0, 3, 1, 5];
+  const rowAt = (r: number) => rows[r] ?? r + 10;
+  const s = sheet({ A2: { v: 'b' }, B2: { f: '=A2', c: 'b' }, A4: { v: 'a' }, B4: { v: 1 }, A6: { v: 'c' } });
+
+  it('fills, clears, copies and pastes the sheet rows the grid shows, shifting formulas by their real rows', () => {
+    // Fill down from the grid's row 2 (sheet row 2) into its row 3 (sheet row 6).
+    expect(fillDownEdits(s, { col: 1, row: 2, width: 1, height: 2 }, rowAt)).toEqual([edit('B6', { f: '=A6' })]);
+    expect(clearEdits(s, { col: 0, row: 1, width: 1, height: 2 }, rowAt)).toEqual([edit('A2', null), edit('A4', null)]);
+    const clip = copyRange(s, { col: 0, row: 1, width: 2, height: 2 }, rowAt);
+    expect(clip.text).toBe('a' + String.fromCharCode(9) + '1' + String.fromCharCode(10) + 'b' + String.fromCharCode(9) + 'b');
+    expect(clip.rows).toEqual([3, 1]);
+    // Pasted at the grid's row 3 (sheet row 6) and below (sheet row 14).
+    const { edits } = pasteEdits(s, { col: 2, row: 3, width: 1, height: 1 }, clip.text, clip, { rowAt });
+    expect(edits).toEqual([edit('C6', { v: 'a' }), edit('D6', { v: 1 }), edit('C15', { v: 'b' }), edit('D15', { f: '=C15' })]);
+    // Values only: the values as they are.
+    const values = pasteEdits(s, { col: 2, row: 3, width: 1, height: 1 }, clip.text, clip, { rowAt, values: clip.values }).edits;
+    expect(values).toEqual([edit('C6', { v: 'a' }), edit('D6', { v: 1 }), edit('C15', { v: 'b' }), edit('D15', { v: 'b' })]);
+    // Rows a view picked out are copied, never moved by a cut.
+    expect(clipStillHolds(s, clip)).toBe(false);
+  });
+});
+
+describe('formulas typed with Smart Punctuation', () => {
+  it('reads curly quotes in a typed or pasted formula as straight ones, and leaves text and plain-text cells alone', () => {
+    const s = sheet({ B1: { fmt: '@' } });
+    expect(typedEdit(s, 0, 0, '=IF(A2>0,“yes”,“no”)').content).toEqual({ f: '=IF(A2>0,"yes","no")' });
+    expect(typedEdit(s, 0, 1, '“quoted”').content).toEqual({ v: '“quoted”' });
+    expect(typedEdit(s, 1, 0, '=“kept”').content).toEqual({ v: '=“kept”' });
+    expect(pasteEdits(s, { col: 2, row: 0, width: 1, height: 1 }, '=LEN(“ab”)', null).edits).toEqual([edit('C1', { f: '=LEN("ab")' })]);
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chartData, guessChartOptions, MAX_SERIES, niceTicks, pieSlices, tickLabel, type ChartData } from './charts';
+import { chartData, guessChartOptions, MAX_SERIES, niceTicks, pieSlices, tickLabel, valueExtent, type ChartData } from './charts';
 import { emptySheet, type Sheet, type SheetCell } from './format';
 
 function sheet(cells: Record<string, SheetCell>): Sheet {
@@ -108,5 +108,37 @@ describe('axis ticks', () => {
     expect(tickLabel(-1000, false)).toBe('-1K');
     expect(tickLabel(0.25, true)).toBe('25%');
     expect(tickLabel(12, false)).toBe('12');
+  });
+});
+
+describe('stacking and scatter charts', () => {
+  const sheet: Sheet = {
+    ...emptySheet('s1', 'S'),
+    cells: { A1: { v: 'x' }, B1: { v: 'a' }, C1: { v: 'b' }, A2: { v: 1 }, B2: { v: 3 }, C2: { v: -2 }, A3: { v: 'n/a' }, B3: { v: 5 }, C3: { v: 4 } },
+  };
+  it('extends the value axis to the stacks’ sums', () => {
+    const r = chartData(sheet, { type: 'bar', range: 'A1:C3', headers: true, labels: true });
+    if (!r.ok) throw new Error(r.message);
+    expect(valueExtent(r.data, false)).toEqual([-2, 5]);
+    expect(valueExtent(r.data, true)).toEqual([-2, 9]);
+  });
+
+  it('reads a scatter chart’s first column as its X values, labels or not', () => {
+    const r = chartData(sheet, { type: 'scatter', range: 'A1:C3', headers: true });
+    if (!r.ok) throw new Error(r.message);
+    expect(r.data.xValues).toEqual([1, null]);
+    expect(r.data.series.map((s) => s.name)).toEqual(['a', 'b']);
+  });
+});
+
+describe('pies of a range with text before the numbers', () => {
+  it('take the first series that has positive values', () => {
+    const s: Sheet = { ...emptySheet('s1', 'S'), cells: { A1: { v: 'Item' }, B1: { v: 'Kind' }, C1: { v: 'Cost' }, A2: { v: 'Rent' }, B2: { v: 'Home' }, C2: { v: 3 }, A3: { v: 'Food' }, B3: { v: 'Living' }, C3: { v: 1 } } };
+    const r = chartData(s, { type: 'pie', range: 'A1:C3', headers: true, labels: true });
+    if (!r.ok) throw new Error(r.message);
+    expect(pieSlices(r.data).map((x) => [x.label, x.share])).toEqual([
+      ['Rent', 0.75],
+      ['Food', 0.25],
+    ]);
   });
 });

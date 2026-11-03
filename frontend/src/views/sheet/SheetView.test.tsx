@@ -354,7 +354,7 @@ describe('the spreadsheet view', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Bold rows' }));
     expect((await saved(path)).sheets[0].rows['3']).toEqual({ bold: true });
     fireEvent.click(screen.getByRole('button', { name: 'Freeze rows or columns' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Freeze columns A–B' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: '2 columns' }));
     expect((await saved(path)).sheets[0].frozen).toEqual({ rows: 1, cols: 2 });
     expect(gridProps().freezeColumns).toBe(2);
     fireEvent.change(nameBox(), { target: { value: 'total' } });
@@ -487,6 +487,27 @@ describe('the spreadsheet view', () => {
     await waitFor(() => expect(screen.getByText('Did you mean SUM(…)?')).toBeTruthy());
   });
 
+  it('gives the grid the keys when the spreadsheet opens with the focus nowhere (a new file)', async () => {
+    (document.activeElement as HTMLElement | null)?.blur();
+    await openGrid();
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId('grid')));
+  });
+
+  it('selects everything with Mod-A, the frozen rows included', async () => {
+    await openGrid();
+    select(1, 1);
+    const e = { key: 'a', ctrlKey: true, metaKey: false, shiftKey: false, altKey: false, cancel: vi.fn(), preventDefault: vi.fn(), stopPropagation: vi.fn(), bounds: undefined, keyCode: 65, rawEvent: undefined, location: undefined };
+    act(() => gridProps().onKeyDown!(e));
+    expect(e.cancel).toHaveBeenCalled();
+    expect(nameBox().value).toBe('A1:Z1000');
+    screen.getByTestId('grid').focus();
+    const data = new Map<string, string>();
+    const copy = new Event('copy', { cancelable: true }) as ClipboardEvent;
+    Object.defineProperty(copy, 'clipboardData', { value: { setData: (t: string, v: string) => data.set(t, v), getData: () => '' } });
+    act(() => void window.dispatchEvent(copy));
+    expect(data.get('text/plain')?.split('\n')[0]).toBe('Item\tCost\t');
+  });
+
   it('moves on from the title to the grid with Enter, renamed or not', async () => {
     await openGrid();
     const title = screen.getByLabelText('Spreadsheet title');
@@ -591,7 +612,7 @@ describe('the spreadsheet view', () => {
   });
 
   it('shows a file a newer NotesApp wrote read-only, without inviting a fix', async () => {
-    const text = '{"type": "notesapp-sheet", "version": 2, "sheets": []}';
+    const text = '{"type": "notesapp-sheet", "version": 3, "sheets": []}';
     const path = await open(text);
     expect(await screen.findByText(/read-only here/, {}, { timeout: 5000 })).toBeInTheDocument();
     expect(screen.getByText(/saved by a newer NotesApp/)).toBeInTheDocument();
@@ -737,23 +758,33 @@ describe('number formats, charts, import and export (6b, 6c)', () => {
     fireEvent.keyDown(nameBox(), { key: 'Enter' });
     fireEvent.click(button('Insert chart'));
     const dialog = screen.getByRole('dialog');
-    expect((within(dialog).getByLabelText('Range') as HTMLInputElement).value).toBe('A1:B3');
-    expect(within(dialog).getByLabelText('Row 1 names the series')).toBeChecked();
-    expect(within(dialog).getByLabelText('Column A labels the categories')).toBeChecked();
-    fireEvent.change(within(dialog).getByLabelText('Title'), { target: { value: 'Costs' } });
-    expect(within(dialog).getByRole('figure')).toHaveAttribute('aria-label', 'Bar chart: Costs');
+    expect((within(dialog).getByLabelText('Data range') as HTMLInputElement).value).toBe('A1:B3');
+    expect(within(dialog).getByLabelText('Use row 1 as headers (series names)')).toBeChecked();
+    expect(within(dialog).getByLabelText('Use column A as labels (categories)')).toBeChecked();
+    fireEvent.change(within(dialog).getByLabelText('Chart title'), { target: { value: 'Costs' } });
+    expect(within(dialog).getByRole('figure')).toHaveAttribute('aria-label', 'Column chart: Costs');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Insert' }));
     let charts = (await saved(path)).sheets[0].charts;
     const [id] = Object.keys(charts);
     expect(charts[id]).toEqual({ type: 'bar', range: 'A1:B3', title: 'Costs', headers: true, labels: true });
     const pane = screen.getByRole('region', { name: 'Charts' });
-    expect(within(pane).getByRole('figure')).toHaveAttribute('aria-label', 'Bar chart: Costs');
+    expect(within(pane).getByRole('figure')).toHaveAttribute('aria-label', 'Column chart: Costs');
 
     fireEvent.click(within(pane).getByRole('button', { name: 'Edit chart Costs' }));
-    fireEvent.click(within(screen.getByRole('dialog')).getByRole('radio', { name: 'Pie' }));
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('radio', { name: 'Doughnut' }));
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Save' }));
     charts = (await saved(path)).sheets[0].charts;
-    expect(charts[id].type).toBe('pie');
+    expect([charts[id].type, charts[id].donut]).toEqual(['pie', true]);
+    // The chart editor's options: Google Sheets' bar chart, stacked, the legend below, axis titles.
+    fireEvent.click(within(pane).getByRole('button', { name: 'Edit chart Costs' }));
+    const editor = screen.getByRole('dialog');
+    fireEvent.click(within(editor).getByRole('radio', { name: 'Bar' }));
+    fireEvent.click(within(editor).getByLabelText('Stacked'));
+    fireEvent.change(within(editor).getByLabelText('Legend'), { target: { value: 'bottom' } });
+    fireEvent.change(within(editor).getByLabelText('Horizontal axis title'), { target: { value: 'Dollars' } });
+    fireEvent.click(within(editor).getByRole('button', { name: 'Save' }));
+    charts = (await saved(path)).sheets[0].charts;
+    expect(charts[id]).toEqual({ type: 'hbar', range: 'A1:B3', title: 'Costs', headers: true, labels: true, stacked: true, legend: 'bottom', xTitle: 'Dollars' });
 
     fireEvent.click(within(pane).getByRole('button', { name: 'Delete chart Costs' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
@@ -767,7 +798,7 @@ describe('number formats, charts, import and export (6b, 6c)', () => {
     await openGrid();
     fireEvent.click(button('Insert chart'));
     const dialog = screen.getByRole('dialog');
-    fireEvent.change(within(dialog).getByLabelText('Range'), { target: { value: 'Notes!A1:A3' } });
+    fireEvent.change(within(dialog).getByLabelText('Data range'), { target: { value: 'Notes!A1:A3' } });
     expect(within(dialog).getByText('A chart shows a range of its own sheet.')).toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: 'Insert' })).toBeDisabled();
   });
@@ -833,5 +864,371 @@ describe('number formats, charts, import and export (6b, 6c)', () => {
   it('opens with the range a link names selected', async () => {
     await openGrid(BUDGET, `#${encodeURIComponent('Budget!B2:C3')}`);
     expect(nameBox().value).toBe('B2:C3');
+  });
+});
+
+describe('sorting and filters (DESIGN §6.21.11)', () => {
+  const header = (col: number, x: number, y: number) =>
+    ({ localEventX: x, localEventY: y, bounds: { x: col * 100, y: 0, width: 100, height: 50 }, isTouch: false, isDoubleClick: false, preventDefault: vi.fn() }) as never;
+
+  it('sorts a range by the active column from the toolbar, moving cells and shifting formulas', async () => {
+    const path = await openGrid();
+    select(0, 0); // A2: the data around it, below its header row
+    fireEvent.click(screen.getByRole('button', { name: 'Sort and filter' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Sort range A2:C3 by column A, A → Z' }));
+    expect(screen.getByTestId('cell-A0')).toHaveTextContent('Food');
+    const cells = (await saved(path)).sheets[0].cells;
+    expect([cells.A2, cells.A3, cells.B2, cells.C3.f]).toEqual([{ v: 'Food' }, { v: 'Rent' }, { v: 487.5 }, '=B3/Total']);
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(screen.getByTestId('cell-A0')).toHaveTextContent('Rent');
+  });
+
+  it('filters by values from a column’s button, shows the rows left, and edits the right row', async () => {
+    const path = await openGrid();
+    fireEvent.click(screen.getByRole('button', { name: 'Create a filter' }));
+    expect((await saved(path)).sheets[0].filter).toEqual({ range: 'A1:C3', cols: {} });
+    // Row 1 is frozen: its filter buttons are drawn in the header; a press on one opens the menu.
+    act(() => gridProps().onHeaderClicked!(0, header(0, 95, 26 + 10)));
+    const menu = await screen.findByRole('dialog', { name: 'Filter column A' });
+    fireEvent.click(within(menu).getByRole('checkbox', { name: /Rent/ }));
+    fireEvent.click(within(menu).getByRole('button', { name: 'OK' }));
+    expect(screen.queryByRole('dialog', { name: 'Filter column A' })).toBeNull();
+    // Grid row 0 is now sheet row 3 (Food); the total below the range follows.
+    expect(screen.getByTestId('cell-A0')).toHaveTextContent('Food');
+    expect(screen.getByTestId('cell-B2')).toHaveTextContent('1937.5');
+    expect((await saved(path)).sheets[0].filter).toEqual({ range: 'A1:C3', cols: { A: { hide: ['Rent'] } } });
+    act(() => gridProps().onCellEdited!([1, 0], { kind: 'text', data: '500', displayData: '', allowOverlay: true } as never));
+    expect((await saved(path)).sheets[0].cells.B3).toEqual({ v: 500 });
+    // The row numbers are the sheet's.
+    expect(gridProps().renderers).toBeDefined();
+    // Removing the filter shows every row again.
+    fireEvent.click(screen.getByRole('button', { name: 'Remove filter' }));
+    expect(screen.getByTestId('cell-A0')).toHaveTextContent('Rent');
+  });
+
+  it('sorts the view from a column’s menu without moving any cell', async () => {
+    const path = await openGrid();
+    fireEvent.click(screen.getByRole('button', { name: 'Create a filter' }));
+    select(1, 0);
+    fireEvent.click(screen.getByRole('button', { name: 'Sort and filter' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Filter column B…' }));
+    const menu = await screen.findByRole('dialog', { name: 'Filter column B' });
+    fireEvent.click(within(menu).getByRole('button', { name: /Sort A → Z/ }));
+    expect(screen.getByTestId('cell-A0')).toHaveTextContent('Food');
+    expect(screen.getByTestId('cell-A1')).toHaveTextContent('Rent');
+    const file = await saved(path);
+    expect(file.sheets[0].cells.A2).toEqual({ v: 'Rent' });
+    expect(file.sheets[0].filter?.sort).toEqual({ col: 'B' });
+    expect(vault.readFile(path).content).toContain('"version": 2');
+  });
+});
+
+describe('freezing (DESIGN §6.21.15)', () => {
+  it('offers Google Sheets’ freeze choices with the current one ticked, and freezes by dragging a bar', async () => {
+    const path = await openGrid();
+    select(2, 3); // C5
+    fireEvent.click(screen.getByRole('button', { name: 'Freeze rows or columns' }));
+    const items = screen.getAllByRole('menuitem').map((m) => m.textContent);
+    expect(items).toEqual(['No rows', '1 row', '2 rows', 'Up to row 5', 'No columns', '1 column', '2 columns', 'Up to column C']);
+    expect(screen.getByRole('menuitem', { name: '1 row' }).querySelector('svg')).not.toBeNull();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Up to row 5' }));
+    expect((await saved(path)).sheets[0].frozen).toEqual({ rows: 5, cols: 0 });
+    fireEvent.click(screen.getByRole('button', { name: 'Freeze rows or columns' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'No rows' }));
+    expect((await saved(path)).sheets[0].frozen).toEqual({ rows: 0, cols: 0 });
+    // The bar beside the column letters: dragged past the middle of column B, B is frozen too.
+    const bar = screen.getByRole('separator', { name: 'Drag to freeze columns' });
+    fakeGrid.mouseArgs = () => ({ kind: 'header', location: [1, -1], localEventX: 80, localEventY: 10, bounds: { x: 136, y: 0, width: 100, height: 26 } }) as never;
+    bar.setPointerCapture = () => {};
+    fireEvent.pointerDown(bar, { pointerId: 1, button: 0, pointerType: 'mouse', clientX: 36, clientY: 10 });
+    fireEvent.pointerMove(bar, { pointerId: 1, pointerType: 'mouse', clientX: 216, clientY: 10 });
+    fireEvent.pointerUp(bar, { pointerId: 1, pointerType: 'mouse', clientX: 216, clientY: 10 });
+    fakeGrid.mouseArgs = undefined;
+    expect((await saved(path)).sheets[0].frozen).toEqual({ rows: 0, cols: 2 });
+  });
+});
+
+describe('conditional formatting (DESIGN §6.21.12)', () => {
+  it('adds a rule in the dialog, colours the cells that meet it, and deletes it', async () => {
+    const path = await openGrid();
+    select(1, 0, 1, 4); // B2:B5
+    fireEvent.click(screen.getByRole('button', { name: 'Conditional formatting' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Conditional format rules' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add a rule' }));
+    expect(within(dialog).getByRole('textbox', { name: 'Apply to range' })).toHaveValue('B2:B5');
+    fireEvent.change(within(dialog).getByRole('combobox', { name: 'Format cells if…' }), { target: { value: 'gt' } });
+    // A condition needs its value.
+    expect(within(dialog).getByRole('button', { name: 'Done' })).toBeDisabled();
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Value' }), { target: { value: '1000' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Done' }));
+    const rules = (await saved(path)).sheets[0].conditional!;
+    expect(Object.values(rules)).toEqual([{ range: 'B2:B5', when: 'gt', value: '1000', bg: '#b7e1cd', color: '#0d652d' }]);
+    // B2 (1450) is coloured, B3 (487.5) is not.
+    const b2 = gridProps().getCellContent([1, 0]);
+    const b3 = gridProps().getCellContent([1, 1]);
+    expect('themeOverride' in b2 && b2.themeOverride?.bgCell).toBe('#b7e1cd');
+    expect('themeOverride' in b3 ? b3.themeOverride : undefined).toBeUndefined();
+    fireEvent.click(within(dialog).getByRole('button', { name: /Delete rule: Greater than 1000/ }));
+    expect((await saved(path)).sheets[0].conditional).toBeUndefined();
+    expect(vault.readFile(path).content).toContain('"version": 1');
+  });
+});
+
+describe('checkboxes and dropdowns (DESIGN §6.21.13)', () => {
+  const click = (col: number, gridRow: number, x: number, touch = false) => {
+    const e = { localEventX: x, localEventY: 12, bounds: { x: col * 100, y: 50 + gridRow * 24, width: 100, height: 24 }, isTouch: touch, preventDefault: vi.fn() };
+    act(() => gridProps().onCellClicked!([col, gridRow], e as never));
+    return e;
+  };
+
+  it('inserts checkboxes that a click on the box or a tap anywhere ticks, and Space ticks the selection', async () => {
+    const path = await openGrid();
+    select(3, 0, 1, 3); // D2:D4
+    fireEvent.click(screen.getByRole('button', { name: 'Checkboxes and dropdowns' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Insert checkboxes' }));
+    expect(Object.values((await saved(path)).sheets[0].validation!)).toEqual([{ range: 'D2:D4', type: 'checkbox' }]);
+    expect(gridProps().getCellContent([3, 0])).toMatchObject({ kind: 'boolean', data: false });
+    // A click beside the box only selects; on the box it ticks.
+    expect(click(3, 0, 10).preventDefault).not.toHaveBeenCalled();
+    expect(click(3, 0, 50).preventDefault).toHaveBeenCalled();
+    expect((await saved(path)).sheets[0].cells.D2).toEqual({ v: true });
+    click(3, 0, 10, true);
+    expect((await saved(path)).sheets[0].cells.D2).toEqual({ v: false });
+    select(3, 0, 1, 3);
+    const e = { key: ' ', ctrlKey: false, metaKey: false, shiftKey: false, altKey: false, cancel: vi.fn(), preventDefault: vi.fn(), stopPropagation: vi.fn(), bounds: undefined, keyCode: 32, rawEvent: undefined, location: undefined };
+    act(() => gridProps().onKeyDown!(e));
+    expect(e.cancel).toHaveBeenCalled();
+    const cells = (await saved(path)).sheets[0].cells;
+    expect([cells.D2, cells.D3, cells.D4]).toEqual([{ v: true }, { v: true }, { v: true }]);
+  });
+
+  it('adds a dropdown whose list writes the cell, marks other values, and refuses them when strict', async () => {
+    const path = await openGrid();
+    select(0, 0, 1, 2); // A2:A3
+    fireEvent.click(screen.getByRole('button', { name: 'Checkboxes and dropdowns' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Insert dropdown…' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Data validation rules' });
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Item 1' }), { target: { value: 'Rent' } });
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Item 2' }), { target: { value: 'Gas' } });
+    fireEvent.click(within(dialog).getByRole('radio', { name: 'Reject the input' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Done' }));
+    expect(screen.queryByRole('dialog', { name: 'Data validation rules' })).toBeNull();
+    expect(Object.values((await saved(path)).sheets[0].validation!)).toEqual([{ range: 'A2:A3', type: 'list', values: ['Rent', 'Gas'], strict: true }]);
+    // The chevron's end of the cell opens the list.
+    expect(click(0, 1, 95).preventDefault).toHaveBeenCalled();
+    const list = await screen.findByRole('listbox', { name: 'Values for A3' });
+    fireEvent.click(within(list).getByRole('option', { name: 'Gas' }));
+    expect((await saved(path)).sheets[0].cells.A3).toEqual({ v: 'Gas' });
+    // Typed input that is not an item is refused.
+    select(0, 0);
+    fireEvent.focus(formulaInput());
+    fireEvent.change(formulaInput(), { target: { value: 'Water' } });
+    fireEvent.keyDown(formulaInput(), { key: 'Enter' });
+    expect(await screen.findByText(/“Water” is not one of the values A2 takes/)).toBeInTheDocument();
+    expect((await saved(path)).sheets[0].cells.A2).toEqual({ v: 'Rent' });
+  });
+});
+
+describe('formulas typed on an iPhone (Smart Punctuation)', () => {
+  it('straightens curly quotes as a formula is typed in the formula bar, and switches autocorrect off in Glide’s editor', async () => {
+    const path = await openGrid();
+    select(3, 0); // D2
+    const input = formulaInput();
+    act(() => input.focus());
+    expect(input).toHaveAttribute('autocomplete', 'off');
+    fireEvent.input(input, { target: { value: '=IF(B2>1000,“big”,“small”)' } });
+    expect(input.value).toBe('=IF(B2>1000,"big","small")');
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect((await saved(path)).sheets[0].cells.D2).toEqual({ f: '=IF(B2>1000,"big","small")', c: 'big' });
+    // Glide's editor, portaled into the view, is not ours: it gets the attributes when it takes the focus.
+    const portal = document.querySelector('.sheet-portal')!;
+    const editor = document.createElement('textarea');
+    portal.appendChild(editor);
+    act(() => editor.focus());
+    expect([editor.getAttribute('autocorrect'), editor.getAttribute('autocapitalize'), editor.getAttribute('autocomplete'), editor.spellcheck]).toEqual(['off', 'off', 'off', false]);
+    editor.value = '=“x”';
+    fireEvent.input(editor);
+    expect(editor.value).toBe('="x"');
+    editor.remove();
+  });
+});
+
+describe('find and replace (DESIGN §6.21.14)', () => {
+  const key = (k: string) => {
+    const e = { key: k, ctrlKey: true, metaKey: false, shiftKey: false, altKey: false, cancel: vi.fn(), preventDefault: vi.fn(), stopPropagation: vi.fn(), bounds: undefined, keyCode: 0, rawEvent: undefined, location: undefined };
+    act(() => gridProps().onKeyDown!(e));
+    return e;
+  };
+
+  it('finds with Mod-F, goes from match to match, and replaces all as one undo step', async () => {
+    const path = await openGrid();
+    expect(key('f').cancel).toHaveBeenCalled();
+    const panel = screen.getByRole('search', { name: 'Find and replace' });
+    const find = within(panel).getByRole('searchbox', { name: 'Find' });
+    expect(document.activeElement).toBe(find);
+    fireEvent.change(find, { target: { value: 'o' } });
+    expect(within(panel).getByText('2 found')).toBeInTheDocument();
+    fireEvent.keyDown(find, { key: 'Enter' });
+    // A1 is the active cell; the matches are Cost (B1) and Food (A3), row by row.
+    expect(nameBox().value).toBe('B1');
+    expect(within(panel).getByText('1 of 2')).toBeInTheDocument();
+    fireEvent.keyDown(find, { key: 'Enter' });
+    expect(nameBox().value).toBe('A3');
+    fireEvent.keyDown(find, { key: 'Enter', shiftKey: true });
+    expect(nameBox().value).toBe('B1');
+    fireEvent.click(within(panel).getByRole('button', { name: 'Replace…' }));
+    fireEvent.change(within(panel).getByRole('textbox', { name: 'Replace with' }), { target: { value: '0' } });
+    fireEvent.click(within(panel).getByRole('button', { name: 'Replace all' }));
+    const cells = (await saved(path)).sheets[0].cells;
+    expect([cells.B1.v, cells.A3.v]).toEqual(['C0st', 'F00d']);
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    expect((await saved(path)).sheets[0].cells.A3.v).toBe('Food');
+    fireEvent.keyDown(find, { key: 'Escape' });
+    expect(screen.queryByRole('search')).toBeNull();
+  });
+
+  it('opens with Replace on Mod-H and finds on all sheets', async () => {
+    await openGrid();
+    key('h');
+    const panel = screen.getByRole('search', { name: 'Find and replace' });
+    expect(within(panel).getByRole('textbox', { name: 'Replace with' })).toBeInTheDocument();
+    fireEvent.click(within(panel).getByRole('checkbox', { name: 'All sheets' }));
+    fireEvent.change(within(panel).getByRole('searchbox', { name: 'Find' }), { target: { value: 'n' } });
+    // Rent (Budget!A2) and n (Notes!A1).
+    fireEvent.click(within(panel).getByRole('button', { name: 'Next match' }));
+    fireEvent.click(within(panel).getByRole('button', { name: 'Next match' }));
+    expect(screen.getByRole('tab', { name: 'Notes' })).toHaveAttribute('aria-selected', 'true');
+  });
+});
+
+describe('Google Sheets keyboard shortcuts (DESIGN §6.21.16)', () => {
+  const key = (k: string, mods: { ctrl?: boolean; shift?: boolean; alt?: boolean } = {}) => {
+    const e = { key: k, ctrlKey: mods.ctrl ?? false, metaKey: false, shiftKey: mods.shift ?? false, altKey: mods.alt ?? false, cancel: vi.fn(), preventDefault: vi.fn(), stopPropagation: vi.fn(), bounds: undefined, keyCode: 0, rawEvent: undefined, location: undefined };
+    act(() => gridProps().onKeyDown!(e));
+    return e;
+  };
+
+  it('jumps to the edge of the data with Mod-Arrow and extends to it with Mod-Shift-Arrow', async () => {
+    await openGrid();
+    select(1, 0); // B2: B2 and B3 hold numbers, B4 is empty, B5 the total
+    key('ArrowDown', { ctrl: true });
+    expect(nameBox().value).toBe('B3');
+    key('ArrowDown', { ctrl: true });
+    expect(nameBox().value).toBe('B5');
+    key('ArrowUp', { ctrl: true, shift: true });
+    expect(nameBox().value).toBe('B3:B5');
+    select(0, 0);
+    key('ArrowRight', { ctrl: true });
+    expect(nameBox().value).toBe('C2');
+  });
+
+  it('selects columns with Ctrl-Space and rows with Shift-Space, and types the date with Mod-;', async () => {
+    const path = await openGrid();
+    select(1, 1, 2, 1); // B3:C3
+    key(' ', { ctrl: true });
+    expect(nameBox().value).toBe('B1:C1000');
+    select(1, 1);
+    key(' ', { shift: true });
+    expect(nameBox().value).toBe('A3:Z3');
+    select(3, 0); // D2
+    key(';', { ctrl: true });
+    const d2 = (await saved(path)).sheets[0].cells.D2;
+    expect(d2.fmt).toBe('yyyy-mm-dd');
+    expect(typeof d2.v).toBe('number');
+  });
+
+  it('pastes values only with Mod-Shift-V, cycles $ with F4 and types the time while editing', async () => {
+    const path = await openGrid();
+    select(2, 0); // C2: =B2/Total
+    screen.getByTestId('grid').focus();
+    const data = new Map<string, string>();
+    const clipboardData = { setData: (t: string, v: string) => data.set(t, v), getData: (t: string) => data.get(t) ?? '' };
+    const fire = (type: 'copy' | 'paste') => {
+      const e = new Event(type, { cancelable: true }) as ClipboardEvent;
+      Object.defineProperty(e, 'clipboardData', { value: clipboardData });
+      act(() => void window.dispatchEvent(e));
+    };
+    fire('copy');
+    select(4, 0); // E2
+    screen.getByTestId('grid').focus();
+    fireEvent.keyDown(screen.getByTestId('grid'), { key: 'V', ctrlKey: true, shiftKey: true });
+    fire('paste');
+    const e2 = (await saved(path)).sheets[0].cells.E2;
+    expect(e2.f).toBeUndefined();
+    expect(e2.v).toBeCloseTo(0.748, 3);
+    // F4 in the formula bar.
+    const input = formulaInput();
+    act(() => input.focus());
+    fireEvent.change(input, { target: { value: '=B2*2' } });
+    input.setSelectionRange(3, 3);
+    fireEvent.keyDown(input, { key: 'F4' });
+    expect(input.value).toBe('=$B$2*2');
+    fireEvent.keyDown(input, { key: 'F4' });
+    expect(input.value).toBe('=B$2*2');
+    // Mod-Shift-; types the time at the caret.
+    fireEvent.change(input, { target: { value: '' } });
+    fireEvent.keyDown(input, { key: ':', code: 'Semicolon', ctrlKey: true, shiftKey: true });
+    expect(input.value).toMatch(/^\d\d:\d\d:\d\d$/);
+  });
+});
+
+describe('pivot tables (DESIGN §6.21.17)', () => {
+  it('makes a pivot table of the data on a new sheet as one undo step', async () => {
+    const path = await openGrid();
+    select(0, 0); // A2: the data around it is A1:C3
+    fireEvent.click(screen.getByRole('button', { name: 'Sort and filter' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Create pivot table…' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Create pivot table' });
+    expect(within(dialog).getByRole('textbox', { name: 'Data range (with its header row)' })).toHaveValue('A1:C3');
+    expect(within(dialog).getByRole('combobox', { name: 'Values' })).toHaveDisplayValue('Cost');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create' }));
+    expect(screen.getByRole('tab', { name: 'Pivot table 1' })).toHaveAttribute('aria-selected', 'true');
+    const pivot = (await saved(path)).sheets[2];
+    expect(pivot.cells.A1).toEqual({ v: 'Item' });
+    expect(pivot.cells.B1).toEqual({ v: 'SUM of Cost' });
+    expect([pivot.cells.A2.v, pivot.cells.B2.c, pivot.cells.A3.v, pivot.cells.B3.c, pivot.cells.B4.c]).toEqual(['Food', 487.5, 'Rent', 1450, 1937.5]);
+    expect(pivot.rows['1']).toEqual({ bold: true });
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    expect((await saved(path)).sheets.map((s) => s.name)).toEqual(['Budget', 'Notes']);
+  });
+});
+
+describe('accessibility of the spreadsheet view', () => {
+  it('names the grid and says the selected cell in words, live', async () => {
+    await openGrid();
+    const grid = screen.getByRole('group', { name: 'Spreadsheet grid, sheet Budget' });
+    const summary = document.getElementById(grid.getAttribute('aria-describedby')!)!;
+    expect(summary).toHaveAttribute('aria-live', 'polite');
+    expect(summary).toHaveTextContent('A1, Item');
+    select(1, 3); // B5
+    expect(summary).toHaveTextContent('B5, formula =SUM(B2:B4), 1937.5');
+    select(0, 0, 2, 2);
+    expect(summary).toHaveTextContent('A2:B3 selected');
+  });
+
+  it('keeps the tablist to tabs, with the sheet’s actions beside it', async () => {
+    await openGrid();
+    const tablist = screen.getByRole('tablist', { name: 'Sheets' });
+    expect(within(tablist).queryAllByRole('button')).toEqual([]);
+    const actions = screen.getByRole('button', { name: 'Actions for sheet Budget' });
+    expect(tablist.contains(actions)).toBe(false);
+    fireEvent.click(actions);
+    expect(screen.getByRole('menuitem', { name: 'Rename' })).toBeInTheDocument();
+  });
+
+  it('gives the toolbar one Tab stop, moved along it with the arrow keys', async () => {
+    await openGrid();
+    const toolbar = screen.getByRole('toolbar', { name: 'Spreadsheet' });
+    const stops = () => within(toolbar).getAllByRole('button').filter((b) => b.tabIndex === 0);
+    expect(stops()).toHaveLength(1);
+    const first = stops()[0];
+    act(() => first.focus());
+    fireEvent.keyDown(first, { key: 'ArrowRight' });
+    expect(document.activeElement).not.toBe(first);
+    expect(stops()).toEqual([document.activeElement]);
+    fireEvent.keyDown(document.activeElement!, { key: 'End' });
+    expect(document.activeElement).toBe(within(toolbar).getAllByRole('button').filter((b) => !(b as HTMLButtonElement).disabled).at(-1));
+    fireEvent.keyDown(document.activeElement!, { key: 'Home' });
+    expect(document.activeElement).toBe(first);
   });
 });

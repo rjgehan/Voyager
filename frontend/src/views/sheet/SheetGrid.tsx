@@ -3,9 +3,13 @@
 // below the letters), column resizing, the fill handle, and keys for undo, fill and bold rows.
 // Clipboard events are the editor's (SheetEditor), so they work on frozen cells too.
 import {
+  AllCellRenderers,
   DataEditor,
   GridCellKind,
+  markerCellRenderer,
+  type DataEditorProps,
   type DataEditorRef,
+  type DrawCellCallback,
   type DrawHeaderCallback,
   type GridCell,
   type CellClickedEventArgs,
@@ -16,11 +20,14 @@ import {
   type Rectangle,
 } from '@glideapps/glide-data-grid';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
-import { columnLetters } from '../../sheets/a1';
-import { shownCell } from '../../sheets/display';
-import type { Sheet } from '../../sheets/format';
-import type { CellRange } from '../../sheets/refs';
 import { isApple } from '../../features/platform';
+import { columnLetters, toA1 } from '../../sheets/a1';
+import { conditionalStyles } from '../../sheets/conditional';
+import { shownCell } from '../../sheets/display';
+import { cellValue, type Sheet } from '../../sheets/format';
+import { dataEdge } from '../../sheets/keys';
+import type { CellRange } from '../../sheets/refs';
+import type { ValidationLook } from '../../sheets/validation';
 import {
   frozenRowAt,
   frozenRowTop,
@@ -34,6 +41,8 @@ import {
   type GridLayout,
   type SheetSelection,
 } from './gridModel';
+import { nowText } from './formulaKeys';
+import { FreezeHandles } from './FreezeHandles';
 import type { SheetTheme } from './theme';
 
 export interface SheetGridHandlers {
@@ -56,11 +65,136 @@ export interface SheetGridHandlers {
   onContextMenu(x: number, y: number): void;
   /** The grid scrolled close to its last row or column. */
   onGrow(rows: number, cols: number): void;
+  /** A press on a filter button (of column `col`), at a rectangle on the screen. */
+  onFilterButton(col: number, rect: ScreenRect): void;
+  /** A freeze bar was dragged: freeze `count` rows or columns. */
+  onFreeze(axis: 'rows' | 'cols', count: number): void;
+  /** A press on a checkbox cell's box (a tap anywhere in it on touch devices), sheet coordinates. */
+  onToggleCheckbox(at: CellAt): void;
+  /** Space on a checkbox: toggle the selection's checkboxes. */
+  onToggleSelection(): void;
+  /** Opens a dropdown cell's list (sheet coordinates), under a rectangle on the screen. */
+  onDropdown(at: CellAt, rect: ScreenRect): void;
+  /** Mod-F (find) and Mod-H (find and replace). */
+  onFind(replace: boolean): void;
+  /** Mod-; and Mod-Shift-; in the grid: the date or the time into the active cell (sheet coordinates). */
+  onInsertNow(at: CellAt, text: string): void;
+}
+
+export interface ScreenRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** The sheet's filter as the grid draws it: buttons on its first row, highlighted on filtered or sorted columns. */
+export interface GridFilter {
+  /** The sheet row of the buttons and the columns they are on. */
+  row: number;
+  col: number;
+  width: number;
+  /** Columns whose button shows that they filter or sort. */
+  on: ReadonlySet<number>;
+}
+
+/** The size of a filter button, and how much of the cell's right end takes its press. */
+const buttonSize = (touch: boolean) => (touch ? 24 : 16);
+const buttonHit = (touch: boolean) => (touch ? 40 : 24);
+
+/** Whether a press (cell-local) is on a checkbox, drawn in the middle of its cell: a 24 px square. */
+function onBox(x: number, y: number, bounds: { width: number; height: number }): boolean {
+  return Math.abs(x - bounds.width / 2) <= 12 && Math.abs(y - bounds.height / 2) <= 12;
+}
+
+/**
+ * What validation adds to a cell: a chevron at the right of a dropdown, a red corner on an invalid
+ * value (as Google Sheets marks one), and, in the frozen rows (drawn by hand), a checkbox.
+ */
+function drawValidation(
+  ctx: CanvasRenderingContext2D,
+  rect: ScreenRect,
+  look: ValidationLook,
+  touch: boolean,
+  colors: { text: string; error: string },
+  frozen?: { accent: string; onAccent: string; text: string },
+): void {
+  ctx.save();
+  if (look.kind === 'dropdown') {
+    const size = touch ? 8 : 6;
+    const x = rect.x + rect.width - size - 8;
+    const y = rect.y + rect.height / 2 - size / 4;
+    ctx.fillStyle = colors.text;
+    ctx.beginPath();
+    ctx.moveTo(x, y - size / 4);
+    ctx.lineTo(x + size, y - size / 4);
+    ctx.lineTo(x + size / 2, y + size / 2);
+    ctx.closePath();
+    ctx.fill();
+  } else if (frozen && !look.invalid) {
+    const size = touch ? 18 : 14;
+    const x = rect.x + (rect.width - size) / 2;
+    const y = rect.y + (rect.height - size) / 2;
+    ctx.beginPath();
+    ctx.roundRect(x, y, size, size, 3);
+    if (look.checked) {
+      ctx.fillStyle = frozen.accent;
+      ctx.fill();
+      ctx.strokeStyle = frozen.onAccent;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(x + size * 0.25, y + size * 0.52);
+      ctx.lineTo(x + size * 0.43, y + size * 0.7);
+      ctx.lineTo(x + size * 0.76, y + size * 0.32);
+      ctx.stroke();
+    } else {
+      ctx.strokeStyle = frozen.text;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+  }
+  if (look.invalid) {
+    const s = 8;
+    ctx.fillStyle = colors.error;
+    ctx.beginPath();
+    ctx.moveTo(rect.x + rect.width - s, rect.y);
+    ctx.lineTo(rect.x + rect.width, rect.y);
+    ctx.lineTo(rect.x + rect.width, rect.y + s);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+/** A filter button: three lines narrowing downwards, on an accent square when its column filters or sorts. */
+function drawFilterButton(ctx: CanvasRenderingContext2D, rect: ScreenRect, on: boolean, touch: boolean, colors: { accent: string; onAccent: string; text: string }): void {
+  const size = buttonSize(touch);
+  const x = rect.x + rect.width - size - 4;
+  const y = rect.y + (rect.height - size) / 2;
+  ctx.save();
+  if (on) {
+    ctx.fillStyle = colors.accent;
+    ctx.beginPath();
+    ctx.roundRect(x, y, size, size, 3);
+    ctx.fill();
+  }
+  ctx.fillStyle = on ? colors.onAccent : colors.text;
+  const lines = [0.75, 0.5, 0.25];
+  const gap = size / 4;
+  lines.forEach((w, i) => {
+    const lw = size * w;
+    ctx.fillRect(x + (size - lw) / 2, y + gap * (i + 1) - 1, lw, touch ? 2 : 1.5);
+  });
+  ctx.restore();
 }
 
 interface Props {
   sheet: Sheet;
   layout: GridLayout;
+  /** How validation shows each cell (sheet coordinates): checkboxes, dropdowns, invalid values. */
+  looks: ((col: number, row: number) => ValidationLook | undefined) | null;
+  /** The sheet's filter, whose buttons the grid draws, or null. */
+  filter: GridFilter | null;
   /** Changes with every workbook change, so the grid redraws. */
   version: number;
   selection: SheetSelection;
@@ -86,7 +220,7 @@ const KEYBINDINGS = { copy: false, cut: false, paste: false, downFill: false, ri
 
 const MOVES: Record<string, [number, number]> = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
 
-export function SheetGrid({ sheet, layout, version, selection, marked, picked, editable, touch, theme, handlers, gridRef, portalRef }: Props) {
+export function SheetGrid({ sheet, layout, looks, filter, version, selection, marked, picked, editable, touch, theme, handlers, gridRef, portalRef }: Props) {
   const wrapper = useRef<HTMLDivElement>(null);
   /** The last press began on the frozen rows: Glide must not turn it into a column selection. */
   const frozenPress = useRef(false);
@@ -167,12 +301,53 @@ export function SheetGrid({ sheet, layout, version, selection, marked, picked, e
     return regions.length > 0 ? regions : undefined;
   }, [marked, picked, f, theme]);
 
-  const cellOptions = useMemo(() => ({ overlay: editable && !touch, readonly: !editable, colors: theme.colors }), [editable, touch, theme.colors]);
-  const getCellContent = useCallback(([col, row]: Item): GridCell => gridCell(model.sheet, col, row + f, cellOptions), [model, f, cellOptions]);
+  // Conditional formatting, worked out again with every change of the sheet.
+  const styleAt = useMemo(() => conditionalStyles(model.sheet), [model]);
+  const cellOptions = useMemo(
+    () => ({ overlay: editable && !touch, readonly: !editable, colors: theme.colors, styleAt, fontSize: theme.fontSize, looks }),
+    [editable, touch, theme.colors, styleAt, theme.fontSize, looks],
+  );
+  // Grid rows are display rows: the sheet's rows below the frozen ones, as a filter shows them.
+  const view = layout.view;
+  // The row numbers' width, set rather than measured, so the freeze bars know where the cells start.
+  const markerWidth = Math.max(touch ? 44 : 36, 12 + 8 * String(view.sheetRow(layout.rows - 1) + 1).length);
+  let frozenWidth = 0;
+  for (let c = 0; c < layout.frozenCols; c++) frozenWidth += sizing.get(c) ?? layout.columnWidth(c);
+  const getCellContent = useCallback(([col, row]: Item): GridCell => gridCell(model.sheet, col, view.sheetRow(row + f), cellOptions), [model, f, cellOptions, view]);
 
-  const rowHeight = useCallback((row: number) => layout.rowHeight(row + f), [layout, f]);
+  const rowHeight = useCallback((row: number) => layout.rowHeight(view.sheetRow(row + f)), [layout, f, view]);
   const boldFont = `700 ${theme.fontSize}px`;
-  const getRowThemeOverride = useCallback((row: number) => (model.sheet.rows[String(row + f + 1)]?.bold ? { baseFontStyle: boldFont } : undefined), [model, f, boldFont]);
+  const getRowThemeOverride = useCallback(
+    (row: number) => (model.sheet.rows[String(view.sheetRow(row + f) + 1)]?.bold ? { baseFontStyle: boldFont } : undefined),
+    [model, f, boldFont, view],
+  );
+  // While a filter hides or sorts rows, the row numbers are the sheet's (Glide numbers its rows in order).
+  const renderers = useMemo<DataEditorProps['renderers']>(() => {
+    if (!view.active) return undefined;
+    const marker = {
+      ...markerCellRenderer,
+      draw: (args: Parameters<typeof markerCellRenderer.draw>[0], cell: Parameters<typeof markerCellRenderer.draw>[1]) =>
+        markerCellRenderer.draw({ ...args, cell: { ...args.cell, row: view.sheetRow(args.cell.row - 1) + 1 } }, cell),
+    };
+    return AllCellRenderers.map((r) => (r === markerCellRenderer ? marker : r)) as DataEditorProps['renderers'];
+  }, [view]);
+
+  const buttonColors = useMemo(
+    () => ({ accent: theme.grid.accentColor ?? '#8a5cf5', onAccent: theme.grid.accentFg ?? '#ffffff', text: theme.grid.textMedium ?? '#a3a3a3' }),
+    [theme],
+  );
+  /** Whether a sheet cell holds a filter button. */
+  const isFilterButton = useCallback((col: number, sheetRow: number) => filter !== null && sheetRow === filter.row && col >= filter.col && col < filter.col + filter.width, [filter]);
+  const drawCell = useCallback<DrawCellCallback>(
+    (args, drawContent) => {
+      drawContent();
+      const row = view.sheetRow(args.row + f);
+      if (isFilterButton(args.col, row)) drawFilterButton(args.ctx, args.rect, filter?.on.has(args.col) === true, touch, buttonColors);
+      const look = looks?.(args.col, row);
+      if (look) drawValidation(args.ctx, args.rect, look, touch, { text: buttonColors.text, error: theme.colors.error });
+    },
+    [view, f, isFilterButton, filter, touch, buttonColors, looks, theme.colors.error],
+  );
 
   // ---------- frozen rows, drawn in the header ----------
 
@@ -213,28 +388,32 @@ export function SheetGrid({ sheet, layout, version, selection, marked, picked, e
       for (let r = 0; r < f; r++) {
         const y = bandTop + frozenRowTop(layout, r);
         const h = layout.rowHeight(r);
-        ctx.fillStyle = g.bgCell ?? '#1e1e1e';
+        const { text, align, color } = shownCell(sheet, col, r);
+        const style = styleAt?.(col, r);
+        ctx.fillStyle = style?.bg ?? g.bgCell ?? '#1e1e1e';
         ctx.fillRect(rect.x, y, rect.width, h);
         const single = selection.range.width === 1 && selection.range.height === 1;
         if (!single && inRange(col, r, selection.range)) {
           ctx.fillStyle = g.accentLight ?? 'rgba(138, 92, 245, 0.16)';
           ctx.fillRect(rect.x, y, rect.width, h);
         }
-        const { text, align, color } = shownCell(sheet, col, r);
         if (text !== '') {
           ctx.save();
           ctx.beginPath();
           ctx.rect(rect.x, y, rect.width, h);
           ctx.clip();
-          const bold = columnBold || sheet.rows[String(r + 1)]?.bold === true;
-          ctx.font = `${bold ? '700 ' : ''}${theme.fontSize}px ${fontFamily}`;
-          ctx.fillStyle = color ? theme.colors[color] : (g.textDark ?? '#dadada');
+          const bold = columnBold || sheet.rows[String(r + 1)]?.bold === true || style?.bold === true;
+          ctx.font = `${style?.italic ? 'italic ' : ''}${bold ? '700 ' : ''}${theme.fontSize}px ${fontFamily}`;
+          ctx.fillStyle = color === 'error' ? theme.colors.error : (style?.color ?? (color ? theme.colors[color] : (g.textDark ?? '#dadada')));
           const pad = g.cellHorizontalPadding ?? 6;
           ctx.textAlign = align;
           const x = align === 'left' ? rect.x + pad : align === 'right' ? rect.x + rect.width - pad : rect.x + rect.width / 2;
           ctx.fillText(text, x, y + h / 2);
           ctx.restore();
         }
+        if (isFilterButton(col, r)) drawFilterButton(ctx, { x: rect.x, y, width: rect.width, height: h }, filter?.on.has(col) === true, touch, buttonColors);
+        const look = looks?.(col, r);
+        if (look) drawValidation(ctx, { x: rect.x, y, width: rect.width, height: h }, look, touch, { text: buttonColors.text, error: theme.colors.error }, buttonColors);
         // Grid lines: below each frozen row, and on the right of the column.
         ctx.fillStyle = g.borderColor ?? '#363636';
         ctx.fillRect(rect.x, y + h - 1, rect.width, 1);
@@ -245,9 +424,14 @@ export function SheetGrid({ sheet, layout, version, selection, marked, picked, e
           ctx.strokeRect(rect.x + 1, y + 1, rect.width - 2, h - 2);
         }
       }
+      // The freeze bar's line under the frozen rows, as Google Sheets draws it.
+      if (f > 0) {
+        ctx.fillStyle = g.headerBottomBorderColor ?? '#474747';
+        ctx.fillRect(rect.x, bandTop + layout.frozenHeight - 3, rect.width, 3);
+      }
       ctx.restore();
     },
-    [theme, fontFamily, f, layout, selection, frozenActive, model, band],
+    [theme, fontFamily, f, layout, selection, frozenActive, model, band, isFilterButton, filter, touch, buttonColors, styleAt, looks],
   );
 
   // ---------- selection ----------
@@ -270,6 +454,24 @@ export function SheetGrid({ sheet, layout, version, selection, marked, picked, e
       const row = frozenRowAt(layout, e.localEventY - band);
       if (row === null) return;
       e.preventDefault();
+      // The frozen cell's rectangle on the screen (the header's bounds span the letters and frozen rows).
+      const cellRect = () => ({ x: e.bounds.x, y: e.bounds.y + band + frozenRowTop(layout, row), width: e.bounds.width, height: layout.rowHeight(row) });
+      const width = e.bounds?.width ?? 0;
+      if (isFilterButton(col, row) && e.localEventX >= width - buttonHit(touch)) {
+        handlers.onFilterButton(col, cellRect());
+        return;
+      }
+      const look = looks?.(col, row);
+      if (editable && look?.kind === 'checkbox' && !look.invalid && (e.isTouch || onBox(e.localEventX, e.localEventY - band - frozenRowTop(layout, row), { width, height: layout.rowHeight(row) }))) {
+        handlers.onSelect({ active: { col, row }, range: { col, row, width: 1, height: 1 } });
+        handlers.onToggleCheckbox({ col, row });
+        return;
+      }
+      if (editable && look?.kind === 'dropdown' && e.localEventX >= width - buttonHit(e.isTouch)) {
+        handlers.onSelect({ active: { col, row }, range: { col, row, width: 1, height: 1 } });
+        handlers.onDropdown({ col, row }, cellRect());
+        return;
+      }
       const last = lastFrozenClick.current;
       const now = Date.now();
       const again = last !== null && last.col === col && last.row === row && now - last.at < 600;
@@ -277,15 +479,47 @@ export function SheetGrid({ sheet, layout, version, selection, marked, picked, e
       handlers.onSelect({ active: { col, row }, range: { col, row, width: 1, height: 1 } });
       if ((again || e.isDoubleClick === true || (e.isTouch && selection.active.col === col && selection.active.row === row)) && editable) requestEdit({ col, row });
     },
-    [layout, handlers, selection, editable, requestEdit, band],
+    [layout, handlers, selection, editable, requestEdit, band, isFilterButton, touch, looks],
+  );
+
+  // A press on a filter button opens its menu instead of selecting or editing (Glide asks first).
+  const onCellClicked = useCallback(
+    ([col, row]: Item, e: CellClickedEventArgs) => {
+      const sheetRow = view.sheetRow(row + f);
+      if (isFilterButton(col, sheetRow) && e.localEventX >= e.bounds.width - buttonHit(touch)) {
+        e.preventDefault();
+        handlers.onFilterButton(col, e.bounds);
+        return;
+      }
+      const look = looks?.(col, sheetRow);
+      if (!look || !editable) return;
+      if (look.kind === 'checkbox' && !look.invalid && (e.isTouch || onBox(e.localEventX, e.localEventY, e.bounds))) {
+        e.preventDefault();
+        handlers.onToggleCheckbox({ col, row: sheetRow });
+      } else if (look.kind === 'dropdown' && e.localEventX >= e.bounds.width - buttonHit(e.isTouch)) {
+        e.preventDefault();
+        handlers.onDropdown({ col, row: sheetRow }, e.bounds);
+      }
+    },
+    [isFilterButton, view, f, touch, handlers, looks, editable],
   );
 
   const onCellActivated = useCallback(
     ([col, row]: Item) => {
+      // A second tap on a dropdown opens its list, as in Google Sheets on a phone.
+      const look = looks?.(col, view.sheetRow(row + f));
+      if (editable && touch && look?.kind === 'dropdown') {
+        const bounds = gridRef.current?.getBounds(col, row);
+        if (bounds) {
+          handlers.onDropdown({ col, row: view.sheetRow(row + f) }, bounds);
+          return;
+        }
+      }
+      if (look?.kind === 'checkbox' && !look.invalid) return;
       // Desktop cells open Glide's editor themselves; touch devices edit in the formula bar.
       if (editable && touch) requestEdit({ col, row: row + f });
     },
-    [editable, touch, requestEdit, f],
+    [editable, touch, requestEdit, f, looks, view, gridRef, handlers],
   );
 
   const onCellEdited = useCallback(
@@ -363,6 +597,66 @@ export function SheetGrid({ sheet, layout, version, selection, marked, picked, e
         handlers.onEscape();
         return;
       }
+      // Google Sheets' selection keys (DESIGN §6.21.16): Mod-Arrow jumps to the edge of the data,
+      // Mod-Shift-Arrow extends the selection there; Ctrl-Space selects columns, Shift-Space rows.
+      const arrow = MOVES[e.key];
+      if (mod && !e.altKey && arrow) {
+        take();
+        const [dx, dy] = arrow;
+        const { active } = selection;
+        const r = selection.range;
+        const sheetNow = model.sheet;
+        const filled = (col: number, row: number) => {
+          const v = cellValue(sheetNow.cells[toA1(col, view.sheetRow(row))]);
+          return v !== null && v !== '';
+        };
+        // Extending moves the selection's far edge, the one away from the active cell.
+        const from = e.shiftKey
+          ? { col: dx === 0 ? active.col : active.col === r.col ? r.col + r.width - 1 : r.col, row: dy === 0 ? active.row : active.row === r.row ? r.row + r.height - 1 : r.row }
+          : active;
+        const to =
+          dy !== 0
+            ? { col: from.col, row: dataEdge(from.row, dy as 1 | -1, layout.rows - 1, (i) => filled(from.col, i)) }
+            : { col: dataEdge(from.col, dx as 1 | -1, layout.cols - 1, (i) => filled(i, from.row)), row: from.row };
+        if (!e.shiftKey) handlers.onSelect({ active: to, range: { ...to, width: 1, height: 1 } });
+        else if (dy !== 0) handlers.onSelect({ active, range: { col: r.col, width: r.width, row: Math.min(active.row, to.row), height: Math.abs(to.row - active.row) + 1 } });
+        else handlers.onSelect({ active, range: { row: r.row, height: r.height, col: Math.min(active.col, to.col), width: Math.abs(to.col - active.col) + 1 } });
+        return;
+      }
+      if (e.key === ' ' && (e.ctrlKey || e.shiftKey) && !e.altKey && !e.metaKey) {
+        take();
+        const r = selection.range;
+        const columns = e.ctrlKey;
+        const rows = e.shiftKey;
+        handlers.onSelect({
+          active: selection.active,
+          range: {
+            col: rows ? 0 : r.col,
+            width: rows ? layout.cols : r.width,
+            row: columns ? 0 : r.row,
+            height: columns ? layout.rows : r.height,
+          },
+        });
+        return;
+      }
+      if (mod && editable && (e.key === ';' || e.key === ':')) {
+        take();
+        const { col, row } = selection.active;
+        handlers.onInsertNow({ col, row: view.sheetRow(row) }, nowText(e.shiftKey, e.altKey));
+        return;
+      }
+      if (mod && !e.altKey && !e.shiftKey && (key === 'f' || key === 'h')) {
+        take();
+        e.stopPropagation();
+        handlers.onFind(key === 'h');
+        return;
+      }
+      if (mod && !e.altKey && key === 'a') {
+        // Everything, the frozen rows included (Glide's own select-all stops at its first row).
+        take();
+        handlers.onSelect({ active: selection.active, range: { col: 0, row: 0, width: layout.cols, height: layout.rows } });
+        return;
+      }
       if (mod && !e.altKey) {
         const command =
           key === 'z' && !e.shiftKey
@@ -385,6 +679,18 @@ export function SheetGrid({ sheet, layout, version, selection, marked, picked, e
         return;
       }
       const { col, row } = selection.active;
+      const look = looks?.(col, view.sheetRow(row));
+      if (editable && look?.kind === 'checkbox' && !look.invalid && e.key === ' ' && !e.shiftKey && !mod) {
+        take();
+        handlers.onToggleSelection();
+        return;
+      }
+      if (editable && look?.kind === 'dropdown' && e.key === 'ArrowDown' && e.altKey) {
+        take();
+        const bounds = row >= f ? gridRef.current?.getBounds(col, row - f) : undefined;
+        handlers.onDropdown({ col, row: view.sheetRow(row) }, bounds ?? { x: 0, y: 0, width: 100, height: 0 });
+        return;
+      }
       // Up from the first grid row moves into the frozen rows.
       if (!frozenActive && f > 0 && e.key === 'ArrowUp' && !e.shiftKey && row === f) {
         take();
@@ -412,7 +718,7 @@ export function SheetGrid({ sheet, layout, version, selection, marked, picked, e
         handlers.onEdit({ col, row }, e.key);
       }
     },
-    [handlers, editable, selection, frozenActive, f, touch, layout.cols],
+    [handlers, editable, selection, frozenActive, f, touch, layout.cols, layout.rows, looks, view, gridRef, model],
   );
 
   // ---------- columns and size ----------
@@ -476,10 +782,13 @@ export function SheetGrid({ sheet, layout, version, selection, marked, picked, e
         getCellContent={getCellContent}
         rowHeight={rowHeight}
         headerHeight={headerHeight}
-        rowMarkers={{ kind: 'clickable-number', startIndex: f + 1, headerDisabled: true }}
+        rowMarkers={{ kind: 'clickable-number', startIndex: f + 1, headerDisabled: true, width: markerWidth }}
         freezeColumns={layout.frozenCols}
         getRowThemeOverride={getRowThemeOverride}
         drawHeader={drawHeader}
+        drawCell={drawCell}
+        renderers={renderers}
+        onCellClicked={onCellClicked}
         theme={theme.grid}
         gridSelection={gridSelection}
         highlightRegions={highlightRegions}
@@ -512,6 +821,9 @@ export function SheetGrid({ sheet, layout, version, selection, marked, picked, e
         overscrollX={40}
         overscrollY={40}
       />
+      {editable && (
+        <FreezeHandles layout={layout} markerWidth={markerWidth} frozenWidth={frozenWidth} touch={touch} gridRef={gridRef} wrapper={wrapper} onFreeze={(axis, n) => handlers.onFreeze(axis, n)} />
+      )}
     </div>
   );
 }

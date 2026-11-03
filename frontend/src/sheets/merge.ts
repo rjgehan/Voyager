@@ -15,6 +15,7 @@ import {
   type Sheet,
   type SheetCell,
   type SheetFile,
+  type SheetFilter,
 } from './format';
 import { renameSheetsInFormula } from './refs';
 
@@ -75,6 +76,9 @@ const sheetContent = (s: Sheet) => ({
   rows: s.rows,
   frozen: s.frozen,
   charts: s.charts,
+  filter: s.filter,
+  conditional: s.conditional ?? {},
+  validation: s.validation ?? {},
   structure: s.structure ?? '',
   extra: s.extra ?? {},
 });
@@ -105,6 +109,28 @@ function mergeCells(base: Record<string, SheetCell>, mine: Record<string, SheetC
   return out;
 }
 
+/**
+ * A filter merges per part: its range, its sort and each column's conditions, so a value hidden on
+ * one device and a sort chosen on the other are both kept. A filter removed on one side and
+ * changed on the other conflicts.
+ */
+function mergeFilter(base: SheetFilter | undefined, mine: SheetFilter | undefined, theirs: SheetFilter | undefined): SheetFilter | undefined | Conflict {
+  const whole = merge3(base, mine, theirs);
+  if (whole !== CONFLICT) return whole;
+  if (!mine || !theirs) return CONFLICT;
+  const b = base ?? { cols: {} };
+  const range = merge3(b.range, mine.range, theirs.range);
+  const sort = merge3(b.sort, mine.sort, theirs.sort);
+  const cols = mergeKeyed(b.cols, mine.cols, theirs.cols);
+  const extra = mergeKeyed(b.extra ?? {}, mine.extra ?? {}, theirs.extra ?? {});
+  if (range === CONFLICT || sort === CONFLICT || cols === CONFLICT || extra === CONFLICT) return CONFLICT;
+  const filter: SheetFilter = { cols };
+  if (range !== undefined) filter.range = range;
+  if (sort !== undefined) filter.sort = sort;
+  if (Object.keys(extra).length > 0) filter.extra = extra as Record<string, Json>;
+  return filter;
+}
+
 function mergeSheet(base: Sheet, mine: Sheet, theirs: Sheet): Sheet | Conflict {
   const [b, m, t] = [base, mine, theirs].map(sheetContent);
   const name = merge3(b.name, m.name, t.name);
@@ -114,11 +140,30 @@ function mergeSheet(base: Sheet, mine: Sheet, theirs: Sheet): Sheet | Conflict {
   const cols = mergeKeyed(b.cols, m.cols, t.cols);
   const rows = mergeKeyed(b.rows, m.rows, t.rows);
   const charts = mergeKeyed(b.charts, m.charts, t.charts);
+  // Conditional formatting and validation merge per rule, like charts; the filter per part.
+  const conditional = mergeKeyed(b.conditional, m.conditional, t.conditional);
+  const validation = mergeKeyed(b.validation, m.validation, t.validation);
+  const filter = mergeFilter(b.filter, m.filter, t.filter);
   const extra = mergeKeyed(b.extra, m.extra, t.extra);
-  if (name === CONFLICT || frozen === CONFLICT || structure === CONFLICT || cells === CONFLICT || cols === CONFLICT || rows === CONFLICT || charts === CONFLICT || extra === CONFLICT) {
+  if (
+    name === CONFLICT ||
+    frozen === CONFLICT ||
+    structure === CONFLICT ||
+    cells === CONFLICT ||
+    cols === CONFLICT ||
+    rows === CONFLICT ||
+    charts === CONFLICT ||
+    conditional === CONFLICT ||
+    validation === CONFLICT ||
+    filter === CONFLICT ||
+    extra === CONFLICT
+  ) {
     return CONFLICT;
   }
   const sheet: Sheet = { id: mine.id, name: name ?? mine.name, cells, cols, rows, frozen: frozen ?? mine.frozen, charts };
+  if (filter !== undefined) sheet.filter = filter;
+  if (Object.keys(conditional).length > 0) sheet.conditional = conditional;
+  if (Object.keys(validation).length > 0) sheet.validation = validation;
   if (structure) sheet.structure = structure;
   if (Object.keys(extra).length > 0) sheet.extra = extra as Record<string, Json>;
   return sheet;
@@ -208,10 +253,19 @@ function followRenames(file: SheetFile, renames: Array<[string, string]>): Sheet
   if (renames.length === 0) return file;
   return {
     ...file,
-    sheets: file.sheets.map((s) => ({
-      ...s,
-      cells: Object.fromEntries(Object.entries(s.cells).map(([ref, c]) => [ref, c.f !== undefined ? { ...c, f: renameSheetsInFormula(c.f, renames) } : c])),
-    })),
+    sheets: file.sheets.map((s) => {
+      const sheet: Sheet = {
+        ...s,
+        cells: Object.fromEntries(Object.entries(s.cells).map(([ref, c]) => [ref, c.f !== undefined ? { ...c, f: renameSheetsInFormula(c.f, renames) } : c])),
+      };
+      // Dropdowns from a range follow the sheet as formulas do.
+      if (s.validation) {
+        sheet.validation = Object.fromEntries(
+          Object.entries(s.validation).map(([k, v]) => [k, v.source !== undefined ? { ...v, source: renameSheetsInFormula('=' + v.source, renames).slice(1) } : v]),
+        );
+      }
+      return sheet;
+    }),
     named: Object.fromEntries(Object.entries(file.named).map(([n, e]) => [n, renameSheetsInFormula('=' + e, renames).slice(1)])),
   };
 }

@@ -55,7 +55,8 @@
 
 .sheet-toolbar .icon-button[aria-pressed='true'] {
   background: var(--background-modifier-active-hover);
-  color: var(--interactive-accent);
+  /* The accent as a text colour that reads at 4.5:1 (fix/a11y's token; the accent until it lands). */
+  color: var(--text-accent, var(--interactive-accent));
 }
 
 .sheet-toolbar-sep {
@@ -141,6 +142,72 @@
   inset: 0;
   /* Touch scrolling belongs to the grid, never to the page. */
   overscroll-behavior: contain;
+}
+
+/* The freeze bars of the grid's corner (DESIGN §6.21.15): thin grey bars, wider to press. */
+.sheet-freeze-handle {
+  position: absolute;
+  z-index: 3;
+  touch-action: none;
+}
+
+.sheet-freeze-handle.is-rows {
+  cursor: row-resize;
+}
+
+.sheet-freeze-handle.is-cols {
+  cursor: col-resize;
+}
+
+.sheet-freeze-handle::after {
+  position: absolute;
+  border-radius: 2px;
+  background: var(--text-faint);
+  content: '';
+}
+
+.sheet-freeze-handle.is-rows::after {
+  top: calc(50% - 2px);
+  right: 2px;
+  left: 2px;
+  height: 4px;
+}
+
+.sheet-freeze-handle.is-cols::after {
+  top: 2px;
+  bottom: 2px;
+  left: calc(50% - 2px);
+  width: 4px;
+}
+
+.sheet-freeze-handle:hover::after {
+  background: var(--interactive-accent);
+}
+
+.sheet-freeze-line {
+  position: absolute;
+  z-index: 3;
+  background: var(--interactive-accent);
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.sheet-freeze-line.is-rows {
+  right: 0;
+  left: 0;
+  height: 4px;
+}
+
+.sheet-freeze-line.is-cols {
+  top: 0;
+  bottom: 0;
+  width: 4px;
+}
+
+/* A menu item without a tick, aligned with those that have one. */
+.sheet-menu-blank {
+  display: inline-block;
+  width: 14px;
 }
 
 /* Glide's cell editor is portaled here, above the workspace. */
@@ -372,7 +439,7 @@
 
 .sheet-format-option[aria-pressed='true'] {
   background: var(--background-modifier-active-hover);
-  color: var(--interactive-accent);
+  color: var(--text-accent, var(--interactive-accent));
 }
 
 .sheet-format-sample {
@@ -422,6 +489,43 @@
   cursor: pointer;
 }
 
+.sheet-chart-kinds.is-gallery {
+  flex-wrap: wrap;
+}
+
+.sheet-chart-kinds.is-gallery .sheet-chart-kind {
+  flex: 1 1 88px;
+}
+
+.sheet-chart-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.sheet-chart-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sheet-chart-range {
+  display: flex;
+  gap: 6px;
+}
+
+.sheet-chart-range .text-input {
+  flex: 1;
+  min-width: 0;
+}
+
+@media (max-width: 640px) {
+  .sheet-chart-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .sheet-chart-kind[aria-checked='true'] {
   border-color: var(--interactive-accent);
   background: var(--background-modifier-active-hover);
@@ -450,6 +554,337 @@
 
 .sheet-import-targets legend {
   margin-bottom: 6px;
+}
+
+/* ---------- panels under a cell: filter menus, dropdown lists ---------- */
+
+.sheet-popover {
+  position: fixed;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  width: min(300px, calc(100vw - 16px));
+  max-height: min(520px, calc(var(--vvh, 100dvh) - 16px));
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  background: var(--background-primary);
+  box-shadow: var(--shadow-l);
+  overflow: auto;
+}
+
+.sheet-filter-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+}
+
+.sheet-popover-dialog .sheet-filter-form {
+  padding: 16px;
+}
+
+.sheet-filter-title {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+
+.sheet-filter-sorts {
+  display: flex;
+  gap: 6px;
+}
+
+.sheet-filter-sort {
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 32px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  background: none;
+  color: var(--text-normal);
+  font: inherit;
+  font-size: var(--font-ui-small);
+  cursor: pointer;
+}
+
+.sheet-filter-sort[aria-pressed='true'] {
+  border-color: var(--interactive-accent);
+  background: var(--background-modifier-active-hover);
+}
+
+.sheet-filter-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.sheet-filter-bulk {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--font-ui-small);
+}
+
+.sheet-filter-bulk .muted {
+  margin-left: auto;
+}
+
+.sheet-filter-values {
+  max-height: 220px;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.sheet-popover-dialog .sheet-filter-values {
+  max-height: none;
+}
+
+.sheet-filter-value {
+  min-height: 28px;
+  padding: 0 4px;
+  color: var(--text-normal);
+}
+
+.sheet-filter-value-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- find and replace (DESIGN §6.21.14) ---------- */
+
+.sheet-find {
+  position: absolute;
+  top: 6px;
+  right: 16px;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: min(420px, calc(100% - 32px));
+  padding: 8px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  background: var(--background-primary);
+  box-shadow: var(--shadow-l);
+}
+
+.sheet-find-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sheet-find-row .text-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.sheet-find-count {
+  flex: none;
+  font-size: var(--font-ui-small);
+  white-space: nowrap;
+}
+
+.sheet-find-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  font-size: var(--font-ui-small);
+}
+
+/* ---------- dropdown lists and validation (DESIGN §6.21.13) ---------- */
+
+.sheet-dropdown {
+  width: min(240px, calc(100vw - 16px));
+}
+
+.sheet-dropdown-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px;
+}
+
+.sheet-popover-dialog .sheet-dropdown-body {
+  padding: 16px;
+}
+
+.sheet-dropdown-items {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sheet-dropdown-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-height: 30px;
+  padding: 4px 10px;
+  border: none;
+  border-radius: var(--radius-s);
+  background: none;
+  color: var(--text-normal);
+  font: inherit;
+  font-size: var(--font-ui-small);
+  text-align: left;
+  cursor: pointer;
+}
+
+.sheet-dropdown-item:hover,
+.sheet-dropdown-item:focus-visible,
+.sheet-dropdown-item[aria-selected='true'] {
+  background: var(--background-modifier-hover);
+}
+
+.sheet-dropdown-empty {
+  margin: 6px;
+}
+
+.sheet-dv-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sheet-dv-item .text-input {
+  flex: 1;
+}
+
+/* ---------- conditional formatting (DESIGN §6.21.12) ---------- */
+
+.sheet-cf-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.sheet-cf-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sheet-cf-open {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 40px;
+  padding: 4px 8px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  background: none;
+  color: var(--text-normal);
+  font: inherit;
+  font-size: var(--font-ui-small);
+  text-align: left;
+  cursor: pointer;
+}
+
+.sheet-cf-open:hover {
+  background: var(--background-modifier-hover);
+}
+
+.sheet-cf-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.sheet-cf-text > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sheet-cf-preview {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 22px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  font-size: var(--font-ui-small);
+}
+
+.sheet-cf-editor,
+.sheet-cf-style {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sheet-cf-style {
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.sheet-cf-presets,
+.sheet-cf-custom {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.sheet-cf-preset {
+  padding: 3px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-s);
+  background: none;
+  cursor: pointer;
+}
+
+.sheet-cf-preset[aria-pressed='true'] {
+  border-color: var(--interactive-accent);
+}
+
+.sheet-cf-color {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+
+.sheet-cf-color input,
+.sheet-cf-custom input[type='color'] {
+  width: 32px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  background: none;
+}
+
+.sheet-cf-sample {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
 }
 
 /* ---------- touch and phones ---------- */
@@ -495,6 +930,71 @@
 
   .sheet-format-input {
     font-size: 16px;
+  }
+
+  .sheet-filter-sort,
+  .sheet-filter-value,
+  .sheet-filter-bulk .button,
+  .sheet-popover .dialog-actions .button,
+  .sheet-popover-dialog .dialog-actions .button {
+    min-height: 44px;
+  }
+
+  .sheet-filter-value input {
+    width: 22px;
+    height: 22px;
+  }
+
+  .sheet-filter-form .text-input,
+  .sheet-cf-editor .text-input {
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  .sheet-cf-open,
+  .sheet-cf-item .icon-button,
+  .sheet-cf-custom .icon-button,
+  .sheet-cf-preset {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .sheet-cf-color input,
+  .sheet-cf-custom input[type='color'] {
+    width: 44px;
+    height: 44px;
+  }
+
+  .sheet-dropdown-item,
+  .sheet-dv-item .icon-button {
+    min-width: 44px;
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  .sheet-dv-item .text-input,
+  .sheet-dropdown-body .text-input,
+  .sheet-find .text-input {
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  .sheet-find .icon-button,
+  .sheet-find .button,
+  .sheet-find-options .checkbox-field {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {
+  /* On a phone the find panel spans the grid's top. */
+  .sheet-find {
+    top: 0;
+    right: 0;
+    left: 0;
+    width: auto;
+    border-radius: 0;
   }
 }
 

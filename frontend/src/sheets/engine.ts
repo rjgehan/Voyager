@@ -22,12 +22,14 @@ import {
   type SimpleCellAddress,
 } from 'hyperformula';
 import { columnIndex, columnLetters, MAX_COLUMNS, MAX_ROWS, parseA1, toA1 } from './a1';
+import { sortRows } from './sort';
 import { effectiveFormat } from './display';
 import {
   emptySheet,
   isCellError,
   isEmptyCell,
   newChartId,
+  newItemId,
   newSheetId,
   newStructureId,
   own,
@@ -40,6 +42,7 @@ import {
   type CachedValue,
   type ChartProps,
   type ColumnProps,
+  type ConditionalRule,
   type Extra,
   type Frozen,
   type Json,
@@ -47,6 +50,8 @@ import {
   type Sheet,
   type SheetCell,
   type SheetFile,
+  type SheetFilter,
+  type Validation,
 } from './format';
 import { friendlyError } from './functions';
 import { formatKind, isGeneral } from './numfmt';
@@ -56,7 +61,9 @@ import {
   moveReferences,
   parseRangeText,
   rangeText,
+  renameSheetInFormula,
   restructureReferences,
+  shiftFormula,
   type CellMove,
   type CellRange,
   type FormulaRef,
@@ -94,8 +101,28 @@ export function engineConfig(): Partial<ConfigParams> {
 interface SheetMeta {
   name: string;
   frozen: Frozen;
+  filter?: SheetFilter;
   structure?: string;
   extra?: Extra;
+}
+
+/** The keyed collections of a sheet that patches change item by item. */
+export type ItemKind = 'chart' | 'conditional' | 'validation';
+type Item = ChartProps | ConditionalRule | Validation;
+const ITEM_KINDS: readonly ItemKind[] = ['chart', 'conditional', 'validation'];
+const ITEM_PREFIX: Record<ItemKind, string> = { chart: 'c', conditional: 'r', validation: 'v' };
+
+/** A sheet's collection of `kind`, created when asked to (`conditional` and `validation` are optional). */
+function itemsOf(sheet: Sheet, kind: ItemKind, create = false): Record<string, Item> {
+  if (kind === 'chart') return sheet.charts;
+  if (!sheet[kind] && create) sheet[kind] = {};
+  return (sheet[kind] ?? {}) as Record<string, Item>;
+}
+
+/** A sort key of `sortRange`: a column index and its direction. */
+export interface SortKey {
+  col: number;
+  desc?: boolean;
 }
 
 /** One slot's value before and after; undefined means absent. Cells carry content only, never `c`. */
@@ -105,7 +132,7 @@ type Change =
   | { kind: 'cell'; id: string; ref: string; before?: SheetCell; after?: SheetCell }
   | { kind: 'col'; id: string; key: string; before?: ColumnProps; after?: ColumnProps }
   | { kind: 'row'; id: string; key: string; before?: RowProps; after?: RowProps }
-  | { kind: 'chart'; id: string; key: string; before?: ChartProps; after?: ChartProps }
+  | { kind: ItemKind; id: string; key: string; before?: Item; after?: Item }
   | { kind: 'named'; name: string; before?: string; after?: string }
   | { kind: 'extra'; key: string; before?: Json; after?: Json };
 
@@ -122,6 +149,8 @@ function slotKey(c: Change): string {
     case 'col':
     case 'row':
     case 'chart':
+    case 'conditional':
+    case 'validation':
       return `${c.kind}:${c.id}:${c.key}`;
     case 'named':
       return `named:${c.name}`;
@@ -151,12 +180,13 @@ function content(cell: SheetCell | undefined): SheetCell | undefined {
 
 function meta(s: Sheet): SheetMeta {
   const m: SheetMeta = { name: s.name, frozen: { ...s.frozen } };
+  if (s.filter !== undefined) m.filter = s.filter;
   if (s.structure !== undefined) m.structure = s.structure;
   if (s.extra) m.extra = s.extra;
   return m;
 }
 
-function diffKeyed<T>(kind: 'col' | 'row' | 'chart', id: string, a: Record<string, T>, b: Record<string, T>, out: Patch): void {
+function diffKeyed<T>(kind: 'col' | 'row' | ItemKind, id: string, a: Record<string, T>, b: Record<string, T>, out: Patch): void {
   for (const key of new Set([...Object.keys(a), ...Object.keys(b)])) {
     const before = own(a, key);
     const after = own(b, key);
@@ -182,7 +212,7 @@ function diff(a: SheetFile, b: SheetFile): Patch {
     }
     diffKeyed('col', id, sa?.cols ?? {}, sb?.cols ?? {}, out);
     diffKeyed('row', id, sa?.rows ?? {}, sb?.rows ?? {}, out);
-    diffKeyed('chart', id, sa?.charts ?? {}, sb?.charts ?? {}, out);
+    for (const kind of ITEM_KINDS) diffKeyed(kind, id, sa ? itemsOf(sa, kind) : {}, sb ? itemsOf(sb, kind) : {}, out);
   }
   const oa = a.sheets.map((s) => s.id);
   const ob = b.sheets.map((s) => s.id);
@@ -198,6 +228,37 @@ function diff(a: SheetFile, b: SheetFile): Patch {
     if (!same(before, after)) out.push({ kind: 'extra', key, before, after });
   }
   return out;
+}
+
+/**
+ * A filter after rows or columns were inserted or deleted: its range follows as a formula's would
+ * (null when all its cells are deleted), and its columns' conditions and sort move with their
+ * columns (those of deleted columns go).
+ */
+function restructuredFilter(filter: SheetFilter, home: string, change: LineChange): SheetFilter | null {
+  const next: SheetFilter = { ...filter };
+  if (filter.range !== undefined && parseRangeText(filter.range)) {
+    const range = restructureReferences('=' + filter.range, home, change).slice(1);
+    if (!parseRangeText(range)) return null;
+    next.range = range;
+  }
+  if (change.axis === 'cols') {
+    const moved = (letters: string) => {
+      const i = movedLine(columnIndex(letters), change);
+      return i === null ? null : columnLetters(i);
+    };
+    next.cols = {};
+    for (const [k, v] of Object.entries(filter.cols)) {
+      const to = moved(k);
+      if (to !== null) next.cols[to] = v;
+    }
+    if (filter.sort) {
+      const col = moved(filter.sort.col);
+      if (col === null) delete next.sort;
+      else next.sort = { ...filter.sort, col };
+    }
+  }
+  return next;
 }
 
 // ---------- values ----------
@@ -487,6 +548,65 @@ export class Workbook {
     if (!same(before, after)) this.record([{ kind: 'chart', id: sheetId, key, before, after }]);
   }
 
+  /** Adds a conditional format rule or data validation to a sheet and returns its id. */
+  addItem(kind: 'conditional' | 'validation', sheetId: string, props: ConditionalRule | Validation): string {
+    const sheet = this.requireSheet(sheetId);
+    const key = newItemId(ITEM_PREFIX[kind], itemsOf(sheet, kind));
+    this.record([{ kind, id: sheetId, key, after: { ...props } }]);
+    return key;
+  }
+
+  /** Changes (or, with null, removes) a chart, a conditional format rule or a data validation. */
+  setItem(kind: ItemKind, sheetId: string, key: string, props: Item | null): void {
+    const sheet = this.requireSheet(sheetId);
+    const after = props ? { ...props } : undefined;
+    const before = own(itemsOf(sheet, kind), key);
+    if (!same(before, after)) this.record([{ kind, id: sheetId, key, before, after }]);
+  }
+
+  /** Sets (or, with null, removes) the sheet's filter: its range, its columns' conditions and its sort. */
+  setFilter(sheetId: string, filter: SheetFilter | null): void {
+    const sheet = this.requireSheet(sheetId);
+    const next = meta(sheet);
+    if (filter) next.filter = filter;
+    else delete next.filter;
+    if (!same(meta(sheet), next)) this.record([{ kind: 'sheet', id: sheetId, before: meta(sheet), after: next }]);
+  }
+
+  /**
+   * Sorts the rows of `range` by `keys` (Sort range, as in Google Sheets): the cells move with their
+   * formats, and formulas in them shift as if copied to their new rows (`=C3*2` moved to row 5 is
+   * `=C5*2`), as in Excel and Google Sheets; references elsewhere stay where they point. Values an
+   * array formula spilled are sorted as values. The sheet's `structure` changes, because a merge
+   * cannot follow cells that moved. One undo step.
+   */
+  sortRange(sheetId: string, range: CellRange, keys: SortKey[]): void {
+    const sheet = this.requireSheet(sheetId);
+    if (keys.length === 0 || range.height < 2) return;
+    const rows = Array.from({ length: range.height }, (_, i) => range.row + i);
+    const order = sortRows(sheet, rows, keys);
+    if (order.every((r, i) => r === rows[i])) return;
+    const patch: Patch = [];
+    order.forEach((from, i) => {
+      const to = rows[i];
+      if (from === to) return;
+      for (let col = range.col; col < range.col + range.width; col++) {
+        const source = sheet.cells[toA1(col, from)];
+        let moved = content(source);
+        // A value an array formula spilled here moves as the value it shows.
+        if (source && source.v === undefined && source.f === undefined && source.c !== undefined && source.c !== null) {
+          moved = { ...moved, v: isCellError(source.c) ? source.c.e : source.c };
+        }
+        if (moved?.f !== undefined) moved = { ...moved, f: shiftFormula(moved.f, to - from, 0) };
+        const ref = toA1(col, to);
+        const before = content(sheet.cells[ref]);
+        if (!same(before, moved)) patch.push({ kind: 'cell', id: sheetId, ref, before, after: moved });
+      }
+    });
+    patch.push({ kind: 'sheet', id: sheetId, before: meta(sheet), after: { ...meta(sheet), structure: newStructureId() } });
+    this.record(patch);
+  }
+
   /** Adds a sheet after the last one and returns its id. */
   addSheet(name = nextSheetName(this.model)): string {
     const problem = sheetNameProblem(name, this.model);
@@ -505,7 +625,17 @@ export class Workbook {
     const sheet = this.requireSheet(id);
     const problem = sheetNameProblem(name, this.model, id);
     if (problem) throw new Error(problem);
-    if (sheet.name !== name) this.record([{ kind: 'sheet', id, before: meta(sheet), after: { ...meta(sheet), name } }]);
+    if (sheet.name === name) return;
+    const patch: Patch = [{ kind: 'sheet', id, before: meta(sheet), after: { ...meta(sheet), name } }];
+    // Dropdowns from a range of the sheet follow it, as formulas do (the engine renames those).
+    for (const s of this.model.sheets) {
+      for (const [key, v] of Object.entries(itemsOf(s, 'validation') as Record<string, Validation>)) {
+        if (v.source === undefined) continue;
+        const source = renameSheetInFormula('=' + v.source, sheet.name, name).slice(1);
+        if (source !== v.source) patch.push({ kind: 'validation', id: s.id, key, before: v, after: { ...v, source } });
+      }
+    }
+    this.record(patch);
   }
 
   /** Removes a sheet with everything in it (undoable); formulas that referred to it show #REF!. */
@@ -520,7 +650,7 @@ export class Workbook {
     }
     for (const [key, before] of Object.entries(sheet.cols)) patch.push({ kind: 'col', id, key, before });
     for (const [key, before] of Object.entries(sheet.rows)) patch.push({ kind: 'row', id, key, before });
-    for (const [key, before] of Object.entries(sheet.charts)) patch.push({ kind: 'chart', id, key, before });
+    for (const kind of ITEM_KINDS) for (const [key, before] of Object.entries(itemsOf(sheet, kind))) patch.push({ kind, id, key, before });
     patch.push({ kind: 'sheet', id, before: meta(sheet) }, { kind: 'order', before: order, after: order.filter((x) => x !== id) });
     this.record(patch);
   }
@@ -636,12 +766,34 @@ export class Workbook {
       if (next !== expression) patch.push({ kind: 'named', name, before: expression, after: next });
     }
     if (src.id === dest.id) {
-      for (const [key, chart] of Object.entries(src.charts)) {
-        const range = chart.range === undefined ? null : parseRangeText(chart.range);
-        if (!range || range.sheet !== null) continue;
+      // Charts, conditional formatting and validation of a range that moved within its sheet follow it.
+      const movedRange = (text: string | undefined): string | null => {
+        const range = text === undefined ? null : parseRangeText(text);
+        if (!range || range.sheet !== null) return null;
         const c = range.range;
-        if (!inSource(c.col, c.row) || !inSource(c.col + c.width - 1, c.row + c.height - 1)) continue;
-        patch.push({ kind: 'chart', id: src.id, key, before: chart, after: { ...chart, range: rangeText({ ...c, col: c.col + move.dCol, row: c.row + move.dRow }) } });
+        if (!inSource(c.col, c.row) || !inSource(c.col + c.width - 1, c.row + c.height - 1)) return null;
+        return rangeText({ ...c, col: c.col + move.dCol, row: c.row + move.dRow });
+      };
+      for (const kind of ITEM_KINDS) {
+        for (const [key, item] of Object.entries(itemsOf(src, kind))) {
+          const range = movedRange(item.range);
+          if (range !== null) patch.push({ kind, id: src.id, key, before: item, after: { ...item, range } });
+        }
+      }
+      const filterRange = movedRange(src.filter?.range);
+      if (src.filter && filterRange !== null) {
+        const shiftColumn = (letters: string) => columnLetters(columnIndex(letters) + move.dCol);
+        const filter: SheetFilter = { ...src.filter, range: filterRange, cols: Object.fromEntries(Object.entries(src.filter.cols).map(([k, v]) => [shiftColumn(k), v])) };
+        if (src.filter.sort) filter.sort = { ...src.filter.sort, col: shiftColumn(src.filter.sort.col) };
+        patch.push({ kind: 'sheet', id: src.id, before: meta(src), after: { ...meta(src), filter } });
+      }
+    }
+    // Dropdowns from a range that moved follow it, as formulas do.
+    for (const s of this.model.sheets) {
+      for (const [key, v] of Object.entries(itemsOf(s, 'validation') as Record<string, Validation>)) {
+        if (v.source === undefined) continue;
+        const source = moveReferences('=' + v.source, { from: s.name, to: s.name }, move).slice(1);
+        if (source !== v.source) patch.push({ kind: 'validation', id: s.id, key, before: v, after: { ...v, source } });
       }
     }
     this.record(patch);
@@ -743,10 +895,28 @@ export class Workbook {
       if (!same(before, next)) patch.push({ kind, id: sheet.id, key, before, after: next } as Change);
     }
 
-    for (const [key, chart] of Object.entries(sheet.charts)) {
-      if (chart.range === undefined || !parseRangeText(chart.range)) continue;
-      const range = restructureReferences('=' + chart.range, sheet.name, change).slice(1);
-      if (range !== chart.range) patch.push({ kind: 'chart', id: sheet.id, key, before: chart, after: { ...chart, range } });
+    // Ranges of charts, conditional formatting and validation follow (rules and validation whose
+    // cells are all deleted go; a chart keeps its #REF! range, as a formula would).
+    for (const kind of ITEM_KINDS) {
+      for (const [key, item] of Object.entries(itemsOf(sheet, kind))) {
+        if (item.range === undefined || !parseRangeText(item.range)) continue;
+        const range = restructureReferences('=' + item.range, sheet.name, change).slice(1);
+        if (range === item.range) continue;
+        const gone = kind !== 'chart' && !parseRangeText(range);
+        patch.push({ kind, id: sheet.id, key, before: item, after: gone ? undefined : { ...item, range } });
+      }
+    }
+    // Dropdowns from a range of this sheet, on any sheet, follow it as formulas do.
+    for (const s of this.model.sheets) {
+      for (const [key, v] of Object.entries(itemsOf(s, 'validation') as Record<string, Validation>)) {
+        if (v.source === undefined) continue;
+        const source = restructureReferences('=' + v.source, s.name, change).slice(1);
+        if (source === v.source) continue;
+        const own = patch.find((c) => c.kind === 'validation' && c.id === s.id && c.key === key) as { after?: Validation } | undefined;
+        if (own) {
+          if (own.after) own.after = { ...own.after, source };
+        } else patch.push({ kind: 'validation', id: s.id, key, before: v, after: { ...v, source } });
+      }
     }
     for (const [name, expression] of Object.entries(this.model.named)) {
       const next = restructureReferences('=' + expression, null, change).slice(1);
@@ -758,7 +928,14 @@ export class Workbook {
     const n = axis === 'rows' ? 'rows' : 'cols';
     if (remove) frozen[n] -= Math.max(0, Math.min(frozen[n], at + count) - at);
     else if (at < frozen[n]) frozen[n] = Math.min(1000, frozen[n] + count);
-    patch.push({ kind: 'sheet', id: sheet.id, before: meta(sheet), after: { ...meta(sheet), frozen, structure: newStructureId() } });
+    const nextMeta: SheetMeta = { ...meta(sheet), frozen, structure: newStructureId() };
+    // The filter's range grows and shrinks like a formula's; its columns move with them.
+    if (sheet.filter) {
+      const filter = restructuredFilter(sheet.filter, sheet.name, change);
+      if (filter) nextMeta.filter = filter;
+      else delete nextMeta.filter;
+    }
+    patch.push({ kind: 'sheet', id: sheet.id, before: meta(sheet), after: nextMeta });
     this.record(patch);
   }
 
@@ -930,6 +1107,8 @@ export class Workbook {
       if (!sheetById(this.model, c.id)) this.model.sheets.push(sheet);
       sheet.name = c.after.name;
       sheet.frozen = { ...c.after.frozen };
+      if (c.after.filter !== undefined) sheet.filter = c.after.filter;
+      else delete sheet.filter;
       if (c.after.structure !== undefined) sheet.structure = c.after.structure;
       else delete sheet.structure;
       if (c.after.extra) sheet.extra = c.after.extra;
@@ -966,12 +1145,16 @@ export class Workbook {
         }
         case 'col':
         case 'row':
-        case 'chart': {
+        case 'chart':
+        case 'conditional':
+        case 'validation': {
           const sheet = sheetById(this.model, c.id);
           if (!sheet) break;
-          const map: Record<string, ColumnProps | RowProps | ChartProps> = c.kind === 'col' ? sheet.cols : c.kind === 'row' ? sheet.rows : sheet.charts;
+          const map: Record<string, ColumnProps | RowProps | Item> = c.kind === 'col' ? sheet.cols : c.kind === 'row' ? sheet.rows : itemsOf(sheet, c.kind, c.after !== undefined);
           if (c.after) map[c.key] = c.after;
           else delete map[c.key];
+          // Optional collections go away with their last item, as a file without them reads.
+          if ((c.kind === 'conditional' || c.kind === 'validation') && sheet[c.kind] && Object.keys(sheet[c.kind] as object).length === 0) delete sheet[c.kind];
           change.layout = true;
           break;
         }

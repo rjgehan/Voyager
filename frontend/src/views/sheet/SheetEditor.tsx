@@ -3,15 +3,21 @@
 // session dirty (useSheetDocument), so autosave, drafts, conflicts and history work as for notes.
 import type { DataEditorRef } from '@glideapps/glide-data-grid';
 import {
+  ArrowDownAZ,
   ArrowDownToLine,
   ArrowRightToLine,
   BetweenHorizontalStart,
   Bold,
+  Check,
   ChartColumn,
   DecimalsArrowLeft,
   DecimalsArrowRight,
   Download,
+  Funnel,
   Hash,
+  ListChecks,
+  PaintBucket,
+  Search,
   Import,
   MoveHorizontal,
   Redo2,
@@ -19,7 +25,7 @@ import {
   Tag,
   Undo2,
 } from 'lucide-react';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from 'react';
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from 'react';
 import { useLocation } from 'react-router';
 import { SaveStatus } from '../../components/SaveStatus';
 import { useBreakpoint } from '../../components/layout/useBreakpoint';
@@ -28,18 +34,36 @@ import { pickFiles } from '../../features/attachments';
 import { toastError } from '../../features/errors';
 import { wantsNoteFocus } from '../../features/focus';
 import { folderOf } from '../../features/paths';
-import { keyLabel } from '../../features/platform';
+import { isApple, keyLabel } from '../../features/platform';
 import { columnLetters, parseA1, toA1 } from '../../sheets/a1';
 import { setActiveSheet, type SheetActions } from '../../sheets/activeSheet';
 import { guessChartOptions } from '../../sheets/charts';
+import { pivotTable, type PivotOptions } from '../../sheets/pivot';
+import { columnFiltered, dataRegion, filterRange, looksLikeHeader } from '../../sheets/filter';
 import type { Separator } from '../../sheets/csv';
-import { effectiveFormat } from '../../sheets/display';
-import { clearEdits, clipStillHolds, copyRange, fillDownEdits, fillEdits, fillRightEdits, pasteEdits, typedEdit, type SheetClip } from '../../sheets/edits';
+import { effectiveFormat, formatShown, shownCell } from '../../sheets/display';
+import { clearEdits, clipStillHolds, copyRange, fillDownEdits, fillEdits, fillRightEdits, pasteEdits, typedEdit, usedExtent, type SheetClip } from '../../sheets/edits';
 import type { CellEdit, FormatEdit, Workbook } from '../../sheets/engine';
-import { cellText, cellValue, isCellError, sameName, sheetById, sheetByName, sheetNameProblem, type ChartProps, type Sheet } from '../../sheets/format';
+import {
+  cellText,
+  cellValue,
+  isCellError,
+  sameName,
+  sheetById,
+  sheetByName,
+  sheetNameProblem,
+  type ChartProps,
+  type FilterColumn,
+  type Sheet,
+  type SheetFilter,
+  type ValidationType,
+} from '../../sheets/format';
+import { dropdownItems, isValid, validationLooks, validations } from '../../sheets/validation';
 import { changeDecimals, isGeneral } from '../../sheets/numfmt';
 import { absoluteRangeText, parseRangeText, rangeText, type CellRange } from '../../sheets/refs';
+import { typedInput } from '../../sheets/input';
 import { resolveTarget, usedRange } from '../../sheets/target';
+import { parseTsv } from '../../sheets/tsv';
 import type { ImportedBook } from '../../sheets/xlsx';
 import { confirmAction, promptText } from '../../state/dialogs';
 import { toast } from '../../state/toasts';
@@ -47,7 +71,13 @@ import type { SessionSnapshot } from '../../sync/DocumentSession';
 import { InlineTitle } from '../markdown/InlineTitle';
 import { ChartsPane } from './ChartsPane';
 import { FormulaBar, type EditTarget, type FormulaBarHandle, type Move } from './FormulaBar';
-import { cellSelection, clampSelection, gridLayout, HEADER_BAND, TOUCH_HEADER_BAND, type CellAt, type SheetSelection } from './gridModel';
+import { cellSelection, clampSelection, displayRange, gridLayout, HEADER_BAND, rowView, sheetRange, sheetRows, TOUCH_HEADER_BAND, type CellAt, type SheetSelection } from './gridModel';
+import { ConditionalDialog } from './ConditionalDialog';
+import { DropdownList } from './DropdownList';
+import { ValidationDialog } from './ValidationDialog';
+import { FilterMenu } from './FilterMenu';
+import { PivotDialog } from './PivotDialog';
+import { FindPanel } from './FindPanel';
 import {
   addToWorkbook,
   baseName,
@@ -65,7 +95,10 @@ import {
 import { ChartDialog, ColumnWidthDialog, ImportDialog, NamedRangesDialog, NumberFormatDialog, type ImportChoice } from './SheetDialogs';
 import { useFormulaAssist } from './formulaAssist';
 import { useReferencePicking } from './referencePicking';
-import { SheetGrid, type SheetGridHandlers } from './SheetGrid';
+import { useStraightQuotes } from './straightQuotes';
+import { useRovingToolbar } from './rovingToolbar';
+import { useFormulaKeys } from './formulaKeys';
+import { SheetGrid, type GridFilter, type ScreenRect, type SheetGridHandlers } from './SheetGrid';
 import { SheetTabs } from './SheetTabs';
 import { useCoarsePointer, useSheetTheme } from './theme';
 
@@ -82,6 +115,9 @@ const remembered = new Map<string, { sheetId: string; selections: ReadonlyMap<st
 /** The last copy (or cut) made in any spreadsheet, so a paste in this app brings formulas, or moves the cut cells. */
 let lastClip: SheetClip | null = null;
 
+/** Until when a paste is Mod-Shift-V's: values only. */
+let pasteValuesUntil = 0;
+
 /** Escape drops a pending cut: a later paste copies. */
 function dropPendingCut(): void {
   if (lastClip?.cut) lastClip = { ...lastClip, cut: undefined };
@@ -93,7 +129,9 @@ const BOLD_LIMIT = 5000;
 const FORMAT_LIMIT = 10000;
 
 type Dialog =
-  | { kind: 'named' | 'width' | 'format' }
+  | { kind: 'named' | 'width' | 'format' | 'conditional' }
+  | { kind: 'validation'; start?: ValidationType }
+  | { kind: 'pivot'; range: CellRange }
   | { kind: 'chart'; id: string | null; initial: ChartProps }
   | { kind: 'import'; file: File; type: ImportKind; separator: Separator; text?: string; book?: ImportedBook };
 
@@ -162,6 +200,14 @@ export function SheetEditor({ path, snapshot, workbook, version }: Props) {
   const [freezeMenu, setFreezeMenu] = useState<{ x: number; y: number } | null>(null);
   const [exportMenu, setExportMenu] = useState<{ x: number; y: number } | null>(null);
   const [linesMenu, setLinesMenu] = useState<{ x: number; y: number } | null>(null);
+  const [sortMenu, setSortMenu] = useState<{ x: number; y: number } | null>(null);
+  /** The filter menu of a column, open under its button. */
+  const [filterMenu, setFilterMenu] = useState<{ col: number; anchor: ScreenRect } | null>(null);
+  /** A dropdown cell's list (sheet coordinates), open under the cell. */
+  const [dropdown, setDropdown] = useState<{ at: CellAt; anchor: ScreenRect } | null>(null);
+  const [validationMenu, setValidationMenu] = useState<{ x: number; y: number } | null>(null);
+  /** The find panel, with Replace open or not; `key` reopens it (and focuses it) on Mod-F again. */
+  const [find, setFind] = useState<{ replace: boolean; key: number } | null>(null);
   /** The cut waiting to be pasted, shown with a dashed outline while it is still the last copy. */
   const [cutMark, setCutMark] = useState<SheetClip | null>(null);
   /** The range a formula being typed points at. */
@@ -174,12 +220,24 @@ export function SheetEditor({ path, snapshot, workbook, version }: Props) {
   const portalRef = useRef<HTMLDivElement | null>(null);
   const gridBox = useRef<HTMLDivElement>(null);
   const bar = useRef<FormulaBarHandle>(null);
+  const toolbar = useRef<HTMLDivElement>(null);
+  // One Tab stop for the toolbar; the arrow keys move along it.
+  const roving = useRovingToolbar(toolbar);
+  const summaryId = useId();
   const editable = snapshot.loaded && snapshot.status !== 'readonly' && snapshot.status !== 'loading' && !snapshot.lossy;
 
   // The workbook's model is mutable; `version` changes with each change.
   const model = useMemo(() => ({ file: workbook.file, version }), [workbook, version]);
   const sheet: Sheet = sheetById(model.file, sheetId) ?? model.file.sheets[0];
   const grown = growth.get(sheet.id);
+  // The rows a filter shows are worked out when the filter (or the sheet's rows) changes, not with
+  // every edit: as in Google Sheets, a row does not vanish or move while it is being typed in.
+  const viewKey = `${sheet.id}
+${sheet.structure ?? ''}
+${sheet.frozen.rows}
+${JSON.stringify(sheet.filter ?? null)}`;
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- the key says when the filter changed
+  const filterRows = useMemo(() => rowView(sheet, sheet.frozen.rows), [viewKey]);
   const layout = useMemo(
     () =>
       gridLayout(sheetById(model.file, sheetId) ?? model.file.sheets[0], {
@@ -189,14 +247,24 @@ export function SheetEditor({ path, snapshot, workbook, version }: Props) {
         minCols: grown?.cols ?? 0,
         // Frozen rows take at most half the grid (a phone in landscape).
         maxFrozenHeight: gridHeight / 2,
+        view: () => filterRows,
       }),
-    [model, sheetId, touch, grown, gridHeight],
+    [model, sheetId, touch, grown, gridHeight, filterRows],
   );
+  const view = layout.view;
+  /** The display rows of a range as sheet rows, for edits (undefined without a filter view). */
+  const rowAt = view.active ? view.sheetRow : undefined;
   const selection = clampSelection(selections.get(sheet.id) ?? cellSelection(0, 0), layout);
-  const activeRef = toA1(selection.active.col, selection.active.row);
+  /** The active cell in the sheet (the selection is in the grid's rows). */
+  const activeAt: CellAt = { col: selection.active.col, row: view.sheetRow(selection.active.row) };
+  const activeRef = toA1(activeAt.col, activeAt.row);
   const activeCell = sheet.cells[activeRef];
   const activeValue = cellValue(activeCell);
-  const activeFormat = effectiveFormat(sheet, selection.active.col, selection.active.row);
+  const activeFormat = effectiveFormat(sheet, activeAt.col, activeAt.row);
+  /** The selection's range in the sheet (the smallest that holds its rows, with a filter view). */
+  const selectedRange = sheetRange(view, selection.range);
+  // How data validation shows cells (checkboxes, dropdowns, invalid values), with every change.
+  const looks = useMemo(() => validationLooks(model.file, sheetById(model.file, sheetId) ?? model.file.sheets[0]), [model, sheetId]);
   const single = selection.range.width === 1 && selection.range.height === 1;
   const wholeColumns = selection.range.row === 0 && selection.range.height >= layout.rows;
   const wholeRows = !wholeColumns && selection.range.col === 0 && selection.range.width >= layout.cols;
@@ -205,6 +273,10 @@ export function SheetEditor({ path, snapshot, workbook, version }: Props) {
   useReferencePicking({ gridBox, gridRef, portalRef, barInput: () => bar.current?.editingInput() ?? null, layout: () => layout, onPick: setPicked });
   // Typing `=SU` suggests functions; inside a call, its signature shows.
   useFormulaAssist({ portalRef, barInput: () => bar.current?.editingInput() ?? null });
+  // iOS Smart Punctuation's curly quotes become straight while a formula is typed.
+  useStraightQuotes({ portalRef, barInput: () => bar.current?.editingInput() ?? null });
+  // F4 cycles a reference's $ signs; Mod-; and Mod-Shift-; type the date and the time.
+  useFormulaKeys({ portalRef, barInput: () => bar.current?.editingInput() ?? null });
 
   useEffect(() => {
     remembered.set(path, { sheetId: sheet.id, selections, chartsOpen });
@@ -244,21 +316,40 @@ export function SheetEditor({ path, snapshot, workbook, version }: Props) {
   /** The text the formula bar edits for a cell: its formula, or its value as typed (dates as dates). */
   const editText = (s: Sheet, at: CellAt) => cellText(s.cells[toA1(at.col, at.row)], effectiveFormat(s, at.col, at.row));
 
+  /** A grid cell (display row) as a sheet cell. */
+  const toSheet = (at: CellAt): CellAt => ({ col: at.col, row: view.sheetRow(at.row) });
+
+  /** Edits a grid cell in the formula bar; the bar's target is the sheet cell. */
   const edit = (at: CellAt, initial?: string) => {
-    bar.current?.edit({ ...at, sheet: sheet.id }, editText(sheet, at), initial);
+    const target = toSheet(at);
+    bar.current?.edit({ ...target, sheet: sheet.id }, editText(sheet, target), initial);
   };
 
   const commit = (target: EditTarget, text: string, move: Move) => {
     const s = sheetById(workbook.file, target.sheet);
     if (!s) return;
     // Typed input brings the format it implies (`10%`, `=TODAY()`) into a cell without one.
-    if (text !== editText(s, target)) run(() => workbook.setCells([typedEdit(s, target.col, target.row, text)], { implyFormats: true }));
+    if (text !== editText(s, target)) {
+      const typed = typedEdit(s, target.col, target.row, text);
+      // A strict validation refuses other input, as Google Sheets' "Reject the input".
+      const rule = validations(s)?.(target.col, target.row)?.validation;
+      const value = typed.content?.v;
+      if (rule?.strict && value !== undefined && !isValid(workbook.file, s, rule, value, formatShown(value, typed.fmt ?? effectiveFormat(s, target.col, target.row)).text)) {
+        toast(`“${text}” is not one of the values ${toA1(target.col, target.row)} takes.`, { kind: 'error' });
+        if (!touch) focusGrid();
+        return;
+      }
+      run(() => workbook.setCells([typed], { implyFormats: true }));
+    }
     if (move === 'none' || s.id !== sheet.id) return;
-    const next = step(target, move);
+    // Moves go along the grid's rows (with a filter view, the rows it shows).
+    const next = step({ col: target.col, row: view.displayRow(target.row) ?? selection.active.row }, move);
     select(cellSelection(next.col, next.row));
     // On a phone the keyboard stays up for the next cell; elsewhere the grid takes the keys again.
-    if (touch && editable) bar.current?.edit({ ...next, sheet: s.id }, editText(s, next));
-    else focusGrid();
+    if (touch && editable) {
+      const at = toSheet(next);
+      bar.current?.edit({ ...at, sheet: s.id }, editText(s, at));
+    } else focusGrid();
   };
 
   const undo = () => {
@@ -267,8 +358,8 @@ export function SheetEditor({ path, snapshot, workbook, version }: Props) {
   const redo = () => {
     workbook.redo();
   };
-  const fillDown = () => setCells(fillDownEdits(sheet, selection.range));
-  const fillRight = () => setCells(fillRightEdits(sheet, selection.range));
+  const fillDown = () => setCells(fillDownEdits(sheet, selection.range, rowAt));
+  const fillRight = () => setCells(fillRightEdits(sheet, selection.range, rowAt));
 
   /** Bold rows; with whole columns selected, bold columns. */
   const toggleBold = () => {
@@ -286,7 +377,7 @@ export function SheetEditor({ path, snapshot, workbook, version }: Props) {
           }
           return;
         }
-        const keys = Array.from({ length: Math.min(r.height, BOLD_LIMIT) }, (_, i) => String(r.row + i + 1));
+        const keys = Array.from({ length: Math.min(r.height, BOLD_LIMIT) }, (_, i) => String(view.sheetRow(r.row + i) + 1));
         const all = keys.every((k) => sheet.rows[k]?.bold === true);
         for (const k of keys) {
           const props = { ...sheet.rows[k] };
@@ -303,14 +394,31 @@ export function SheetEditor({ path, snapshot, workbook, version }: Props) {
   // ---------- inserting and deleting rows and columns ----------
 
   /** The selected rows (the active cell's row when whole columns are selected), and columns likewise. */
-  const rowSpan = wholeColumns ? { at: selection.active.row, count: 1 } : { at: selection.range.row, count: selection.range.height };
+  const rowSpan = wholeColumns ? { at: activeAt.row, count: 1 } : { at: selectedRange.row, count: selection.range.height };
   const colSpan = wholeRows ? { at: selection.active.col, count: 1 } : { at: selection.range.col, count: selection.range.width };
   const plural = (n: number, one: string, many: string) => (n === 1 ? `1 ${one}` : `${n} ${many}`);
-  const rowsLabel = rowSpan.count === 1 ? `row ${rowSpan.at + 1}` : `rows ${rowSpan.at + 1}–${rowSpan.at + rowSpan.count}`;
+  const rowsLabel =
+    rowSpan.count === 1 ? `row ${rowSpan.at + 1}` : view.active && !wholeColumns ? `${rowSpan.count} rows` : `rows ${rowSpan.at + 1}–${rowSpan.at + rowSpan.count}`;
   const colsLabel = colSpan.count === 1 ? `column ${columnLetters(colSpan.at)}` : `columns ${columnLetters(colSpan.at)}–${columnLetters(colSpan.at + colSpan.count - 1)}`;
-  const insertRows = (below: boolean) => run(() => workbook.insertRows(sheet.id, rowSpan.at + (below ? rowSpan.count : 0), rowSpan.count));
+  // With a filter view, rows are inserted above the first selected row's sheet row or below the last's.
+  const insertRows = (below: boolean) =>
+    run(() => {
+      if (!view.active || wholeColumns) workbook.insertRows(sheet.id, rowSpan.at + (below ? rowSpan.count : 0), rowSpan.count);
+      else workbook.insertRows(sheet.id, below ? view.sheetRow(selection.range.row + selection.range.height - 1) + 1 : view.sheetRow(selection.range.row), rowSpan.count);
+    });
   const insertColumns = (right: boolean) => run(() => workbook.insertColumns(sheet.id, colSpan.at + (right ? colSpan.count : 0), colSpan.count));
-  const deleteRows = () => run(() => workbook.deleteRows(sheet.id, rowSpan.at, rowSpan.count));
+  const deleteRows = () =>
+    run(() => {
+      if (!view.active || wholeColumns) {
+        workbook.deleteRows(sheet.id, rowSpan.at, rowSpan.count);
+        return;
+      }
+      // The selected rows as the filter shows them: deleted from the bottom up, as one step.
+      const rows = [...new Set(sheetRows(view, selection.range))].sort((a, b) => b - a);
+      workbook.transact(() => {
+        for (const r of rows) workbook.deleteRows(sheet.id, r, 1);
+      });
+    });
   const deleteColumns = () => run(() => workbook.deleteColumns(sheet.id, colSpan.at, colSpan.count));
   const lineItems: MenuEntry[] = [
     { id: 'rowsAbove', label: `Insert ${plural(rowSpan.count, 'row', 'rows')} above`, run: () => insertRows(false) },
@@ -342,8 +450,8 @@ export function SheetEditor({ path, snapshot, workbook, version }: Props) {
   const selectionLabel = (() => {
     const r = selection.range;
     if (wholeColumns) return r.width === 1 ? `column ${columnLetters(r.col)}` : `columns ${columnLetters(r.col)}–${columnLetters(r.col + r.width - 1)}`;
-    if (wholeRows) return r.height === 1 ? `row ${r.row + 1}` : `rows ${r.row + 1}–${r.row + r.height}`;
-    return single ? activeRef : rangeText(r);
+    if (wholeRows) return r.height === 1 ? `row ${activeAt.row + 1}` : `rows ${selectedRange.row + 1}–${selectedRange.row + selectedRange.height}`;
+    return single ? activeRef : rangeText(selectedRange);
   })();
 
   /**
@@ -353,16 +461,18 @@ export function SheetEditor({ path, snapshot, workbook, version }: Props) {
    */
   const applyFormat = (fmt: string | undefined) => {
     const r = selection.range;
+    const rows = view.active ? new Set(sheetRows(view, r)) : null;
     const inRange = (ref: string) => {
       const at = parseA1(ref);
-      return at !== null && at.col >= r.col && at.col < r.col + r.width && at.row >= r.row && at.row < r.row + r.height;
+      if (at === null || at.col < r.col || at.col >= r.col + r.width) return false;
+      return rows ? rows.has(at.row) : at.row >= r.row && at.row < r.row + r.height;
     };
     run(() =>
       workbook.transact(() => {
         if (wholeColumns || wholeRows) {
           const keys = wholeColumns
             ? Array.from({ length: Math.min(r.width, 1000) }, (_, i) => columnLetters(r.col + i))
-            : Array.from({ length: Math.min(r.height, BOLD_LIMIT) }, (_, i) => String(r.row + i + 1));
+            : Array.from({ length: Math.min(r.height, BOLD_LIMIT) }, (_, i) => String(view.sheetRow(r.row + i) + 1));
           for (const key of keys) {
             const props = { ...(wholeColumns ? sheet.cols[key] : sheet.rows[key]) };
             if (fmt === undefined) delete props.fmt;
@@ -378,7 +488,8 @@ export function SheetEditor({ path, snapshot, workbook, version }: Props) {
         }
         if (r.width * r.height > FORMAT_LIMIT) throw new Error(`Select whole columns or rows to format more than ${FORMAT_LIMIT.toLocaleString('en-US')} cells.`);
         const edits: FormatEdit[] = [];
-        for (let row = r.row; row < r.row + r.height; row++) {
+        for (let d = r.row; d < r.row + r.height; d++) {
+          const row = view.sheetRow(d);
           for (let col = r.col; col < r.col + r.width; col++) {
             const ref = toA1(col, row);
             const inherited = sheet.rows[String(row + 1)]?.fmt ?? sheet.cols[columnLetters(col)]?.fmt;
@@ -401,7 +512,7 @@ export function SheetEditor({ path, snapshot, workbook, version }: Props) {
 
   const insertChart = () => {
     // A single cell charts the sheet's data; a selection charts itself.
-    const range = single ? (usedRange(sheet) ?? selection.range) : selection.range;
+    const range = single ? (usedRange(sheet) ?? selectedRange) : selectedRange;
     setDialog({ kind: 'chart', id: null, initial: { type: 'bar', range: rangeText(range), ...guessChartOptions(sheet, range) } });
   };
 
@@ -425,6 +536,196 @@ export function SheetEditor({ path, snapshot, workbook, version }: Props) {
     });
     if (ok) run(() => workbook.setChart(sheet.id, id, null));
   };
+
+  // ---------- the selection in words, for screen readers ----------
+
+  const selectionSummary = (() => {
+    if (!single) return `${rangeText(selectedRange)} selected`;
+    const shown = shownCell(sheet, activeAt.col, activeAt.row).text;
+    const formula = activeCell?.f;
+    const look = looks?.(activeAt.col, activeAt.row);
+    const value = look?.kind === 'checkbox' && !look.invalid ? (look.checked ? 'checked' : 'not checked') : shown === '' ? 'empty' : shown;
+    return `${activeRef}${formula ? `, formula ${formula}` : ''}, ${value}${look?.invalid ? ', invalid' : ''}`;
+  })();
+
+  // ---------- find and replace ----------
+
+  const openFind = (replace: boolean) => setFind((f) => ({ replace: replace && editable, key: (f?.key ?? 0) + 1 }));
+
+  /** Shows a match: its sheet, with the cell selected (the grid scrolls to it); the panel keeps the keys. */
+  const goToMatch = (m: { sheet: string; col: number; row: number }) => {
+    const dest = sheetById(workbook.file, m.sheet);
+    if (dest) showRange(dest, { col: m.col, row: m.row, width: 1, height: 1 });
+  };
+
+  // ---------- data validation: checkboxes and dropdowns ----------
+
+  /** Ticks or unticks a checkbox cell (sheet coordinates). */
+  const toggleCheckbox = (at: CellAt) => {
+    if (!editable) return;
+    const v = cellValue(sheet.cells[toA1(at.col, at.row)]);
+    setCells([{ sheet: sheet.id, ref: toA1(at.col, at.row), content: { v: v !== true } }]);
+  };
+
+  /** Space: the selection's checkboxes all ticked, or all unticked when they all were (one undo step). */
+  const toggleSelectionCheckboxes = () => {
+    if (!editable || !looks) return;
+    const r = selection.range;
+    const cells: CellAt[] = [];
+    for (let d = r.row; d < r.row + Math.min(r.height, 10000); d++) {
+      const row = view.sheetRow(d);
+      for (let col = r.col; col < r.col + r.width; col++) {
+        const look = looks(col, row);
+        if (look?.kind === 'checkbox' && !look.invalid) cells.push({ col, row });
+      }
+    }
+    const tick = !cells.every((c) => cellValue(sheet.cells[toA1(c.col, c.row)]) === true);
+    setCells(cells.map((c) => ({ sheet: sheet.id, ref: toA1(c.col, c.row), content: { v: tick } })));
+  };
+
+  /** Inserts checkboxes on the selection (Google Sheets' Insert > Checkbox): a checkbox validation. */
+  const insertCheckboxes = () => run(() => workbook.addItem('validation', sheet.id, { range: rangeText(selectedRange), type: 'checkbox' }));
+
+  const dropdownRule = dropdown ? validations(sheet)?.(dropdown.at.col, dropdown.at.row)?.validation : undefined;
+  const pickDropdown = (item: string) => {
+    if (!dropdown) return;
+    const { at } = dropdown;
+    setDropdown(null);
+    run(() => workbook.setCells([typedEdit(sheet, at.col, at.row, item)], { implyFormats: true }));
+    focusGrid();
+  };
+
+  const validationItems: MenuEntry[] = [
+    { id: 'checkbox', label: 'Insert checkboxes', run: insertCheckboxes },
+    { id: 'dropdown', label: 'Insert dropdown…', run: () => setDialog({ kind: 'validation', start: 'list' }) },
+    'separator',
+    { id: 'rules', label: 'Data validation rules…', run: () => setDialog({ kind: 'validation' }) },
+  ];
+
+  // ---------- pivot tables ----------
+
+  /** Makes a pivot table of the data on a new sheet (`Pivot table 1`), one undo step, and opens it. */
+  const createPivot = (opts: PivotOptions) => {
+    setDialog(null);
+    const table = pivotTable(sheet, opts);
+    let name = '';
+    for (let n = 1; name === ''; n++) if (!sheetNameProblem(`Pivot table ${n}`, workbook.file)) name = `Pivot table ${n}`;
+    let id = '';
+    run(() =>
+      workbook.transact(() => {
+        id = workbook.addSheet(name);
+        workbook.setCells(Object.entries(table.cells).map(([ref, c]) => ({ sheet: id, ref, content: c.f !== undefined ? { f: c.f } : c.v !== undefined ? { v: c.v } : null, fmt: c.fmt ?? null })));
+        for (const row of table.boldRows) workbook.setRow(id, String(row + 1), { bold: true });
+        workbook.setColumn(id, 'A', { w: 160 });
+      }),
+    );
+    if (id) setSheetId(id);
+  };
+
+  // ---------- sorting and filters ----------
+
+  const filter = sheet.filter;
+  const fRange = filterRange(filter);
+  const activeLetters = columnLetters(activeAt.col);
+
+  /** What a sort or a new filter takes: the selection, or the data around a single cell (as in Google Sheets). */
+  const dataRange = (): CellRange => (single ? dataRegion(sheet, activeAt.col, activeAt.row) : selectedRange);
+
+  /** Sort range: the selected rows (or the data around the cell, below its header) by the active column. */
+  const sortRangeBy = (desc: boolean) => {
+    let range = dataRange();
+    if (single && looksLikeHeader(sheet, range)) range = { ...range, row: range.row + 1, height: range.height - 1 };
+    if (range.height < 2) {
+      toast('Select the rows to sort, or a cell in a table of data.');
+      return;
+    }
+    run(() => workbook.sortRange(sheet.id, range, [{ col: activeAt.col, desc }]));
+  };
+
+  /** Sort sheet: every used row below the frozen ones, by the active column. */
+  const sortSheetBy = (desc: boolean) => {
+    const used = usedExtent(sheet);
+    const top = sheet.frozen.rows;
+    if (used.rows < top + 1) {
+      toast('There are no rows below the frozen ones to sort.');
+      return;
+    }
+    run(() => workbook.sortRange(sheet.id, { col: 0, row: top, width: used.cols + 1, height: used.rows - top + 1 }, [{ col: activeAt.col, desc }]));
+  };
+
+  /** Creates a filter on the data (its first row holds the buttons), or removes the sheet's. */
+  const toggleFilter = () => {
+    setFilterMenu(null);
+    if (filter) {
+      run(() => workbook.setFilter(sheet.id, null));
+      return;
+    }
+    run(() => workbook.setFilter(sheet.id, { range: rangeText(dataRange()), cols: {} }));
+  };
+
+  const setFilterColumn = (col: number, column: FilterColumn | null) => {
+    if (!filter) return;
+    const cols = { ...filter.cols };
+    const key = columnLetters(col);
+    if (column) cols[key] = column;
+    else delete cols[key];
+    run(() => workbook.setFilter(sheet.id, { ...filter, cols }));
+  };
+
+  const sortFilter = (col: number, desc: boolean) => {
+    if (!filter) return;
+    const next: SheetFilter = { ...filter, sort: desc ? { col: columnLetters(col), desc: true } : { col: columnLetters(col) } };
+    run(() => workbook.setFilter(sheet.id, next));
+  };
+
+  const clearFilterConditions = () => {
+    if (!filter) return;
+    const next: SheetFilter = { cols: {} };
+    if (filter.range !== undefined) next.range = filter.range;
+    if (filter.extra) next.extra = filter.extra;
+    run(() => workbook.setFilter(sheet.id, next));
+  };
+
+  /** Opens the filter menu of the active column, under its button (from the toolbar or the palette). */
+  const openColumnFilter = (fallback?: ScreenRect) => {
+    if (!filter || !fRange) return;
+    const col = Math.max(fRange.col, Math.min(fRange.col + fRange.width - 1, activeAt.col));
+    const shown = view.displayRow(fRange.row);
+    const bounds = shown !== null && shown >= layout.frozenRows ? gridRef.current?.getBounds(col, shown - layout.frozenRows) : undefined;
+    const box = gridBox.current?.getBoundingClientRect();
+    setFilterMenu({ col, anchor: bounds ?? fallback ?? { x: box?.left ?? 0, y: box?.top ?? 0, width: 100, height: 0 } });
+  };
+
+  const filterOn = filter !== undefined && (filter.sort !== undefined || Object.values(filter.cols).some(columnFiltered));
+  const filterKey = JSON.stringify(filter ?? null);
+  const gridFilter = useMemo<GridFilter | null>(() => {
+    if (!filter || !fRange) return null;
+    const on = new Set<number>();
+    for (let col = fRange.col; col < fRange.col + fRange.width; col++) {
+      const letters = columnLetters(col);
+      if (columnFiltered(filter.cols[letters]) || filter.sort?.col === letters) on.add(col);
+    }
+    return { row: fRange.row, col: fRange.col, width: fRange.width, on };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the filter's text says when it changed
+  }, [filterKey]);
+
+  const sortRangeLabel = (() => {
+    let range = dataRange();
+    if (single && looksLikeHeader(sheet, range)) range = { ...range, row: range.row + 1, height: Math.max(1, range.height - 1) };
+    return rangeText(range);
+  })();
+  const sortItems: MenuEntry[] = [
+    { id: 'filter', label: filter ? 'Remove filter' : 'Create a filter', run: toggleFilter },
+    ...(filter && fRange ? [{ id: 'filterColumn', label: `Filter column ${columnLetters(Math.max(fRange.col, Math.min(fRange.col + fRange.width - 1, activeAt.col)))}…`, run: () => openColumnFilter(sortMenu ? { x: sortMenu.x, y: sortMenu.y - 4, width: 0, height: 0 } : undefined) }] : []),
+    ...(filterOn ? [{ id: 'clearFilter', label: 'Clear the filter’s conditions and sort', run: clearFilterConditions }] : []),
+    'separator',
+    { id: 'rangeAsc', label: `Sort range ${sortRangeLabel} by column ${activeLetters}, A → Z`, run: () => sortRangeBy(false) },
+    { id: 'rangeDesc', label: `Sort range ${sortRangeLabel} by column ${activeLetters}, Z → A`, run: () => sortRangeBy(true) },
+    { id: 'sheetAsc', label: `Sort sheet by column ${activeLetters}, A → Z`, run: () => sortSheetBy(false) },
+    { id: 'sheetDesc', label: `Sort sheet by column ${activeLetters}, Z → A`, run: () => sortSheetBy(true) },
+    'separator',
+    { id: 'pivot', label: 'Create pivot table…', run: () => setDialog({ kind: 'pivot', range: dataRange() }) },
+  ];
 
   // ---------- import and export ----------
 
@@ -528,9 +829,20 @@ export function SheetEditor({ path, snapshot, workbook, version }: Props) {
     return true;
   };
 
-  /** Opens sheet `dest` with `r` selected. */
-  const showRange = (dest: Sheet, r: CellRange) => {
+  /** Opens sheet `dest` with `r` (sheet rows) selected. */
+  const showRange = (dest: Sheet, sheetR: CellRange) => {
     setSheetId(dest.id);
+    // On this sheet, a filter view may show the rows elsewhere, or hide them.
+    let r = sheetR;
+    if (dest.id === sheet.id && view.active) {
+      const shown = displayRange(view, sheetR);
+      if (shown) r = shown;
+      else {
+        const first = view.displayRow(sheetR.row);
+        r = { ...sheetR, row: first ?? Math.max(0, view.displayRow(sheetR.row + sheetR.height) ?? sheetR.row), height: 1 };
+        if (first === null) toast(`Row ${sheetR.row + 1} is hidden by the filter.`);
+      }
+    }
     select({ active: { col: r.col, row: r.row }, range: r }, dest.id);
     // The selection may lie beyond the rows the grid has shown so far.
     setGrowth((m) => {
@@ -556,17 +868,17 @@ export function SheetEditor({ path, snapshot, workbook, version }: Props) {
 
   // ---------- the clipboard (frozen cells included, so not Glide's) ----------
 
-  const latest = useRef({ path, workbook, sheet, selection, editable, setCells, select });
+  const latest = useRef({ path, workbook, sheet, selection, editable, setCells, select, view });
   useLayoutEffect(() => {
-    latest.current = { path, workbook, sheet, selection, editable, setCells, select };
+    latest.current = { path, workbook, sheet, selection, editable, setCells, select, view };
   });
 
   useEffect(() => {
     const focused = () => !!gridBox.current?.contains(document.activeElement) && !bar.current?.isEditing();
     const copy = (e: ClipboardEvent, cut: boolean) => {
       if (!focused() || !e.clipboardData) return;
-      const { path: source, sheet: s, selection: sel, editable: canEdit } = latest.current;
-      const clip = copyRange(s, sel.range);
+      const { path: source, sheet: s, selection: sel, editable: canEdit, view: v } = latest.current;
+      const clip = copyRange(s, sel.range, v.active ? v.sheetRow : undefined);
       e.clipboardData.setData('text/plain', clip.text);
       e.preventDefault();
       // A cut moves the cells when it is pasted in this spreadsheet, as in Google Sheets and Excel;
@@ -578,16 +890,20 @@ export function SheetEditor({ path, snapshot, workbook, version }: Props) {
     const onCut = (e: ClipboardEvent) => copy(e, true);
     const onPaste = (e: ClipboardEvent) => {
       if (!focused() || !e.clipboardData) return;
-      const { path: here, workbook: wb, sheet: s, selection: sel, editable: canEdit, setCells: apply, select: choose } = latest.current;
+      const { path: here, workbook: wb, sheet: s, selection: sel, editable: canEdit, setCells: apply, select: choose, view: v } = latest.current;
       e.preventDefault();
       if (!canEdit) return;
       const text = e.clipboardData.getData('text/plain');
+      // Mod-Shift-V: the values only, without formulas or formats (Google Sheets' Paste values only).
+      const valuesOnly = Date.now() < pasteValuesUntil;
+      pasteValuesUntil = 0;
       const clip = lastClip;
-      if (clip?.cut && clip.text === text) {
+      if (clip?.cut && clip.text === text && !valuesOnly) {
         setCutMark(null);
         const from = clip.cut.source === here ? sheetById(wb.file, clip.cut.sheet) : undefined;
         if (from && clipStillHolds(from, clip)) {
-          const range: CellRange = { ...clip.range, col: sel.range.col, row: sel.range.row };
+          // The cells go to the sheet row the grid shows first (with a filter view, it may differ).
+          const range: CellRange = { ...clip.range, col: sel.range.col, row: v.sheetRow(sel.range.row) };
           try {
             wb.moveCells({ sheet: from.id, range: clip.range }, { sheet: s.id, col: range.col, row: range.row });
           } catch (err) {
@@ -597,21 +913,36 @@ export function SheetEditor({ path, snapshot, workbook, version }: Props) {
           // Pasting again copies the moved cells from their new place.
           const moved = sheetById(wb.file, s.id);
           lastClip = moved ? { ...copyRange(moved, range), text: clip.text } : null;
-          choose({ active: { col: range.col, row: range.row }, range });
+          const shown = displayRange(v, range) ?? { ...range, row: sel.range.row, height: 1 };
+          choose({ active: { col: shown.col, row: shown.row }, range: shown });
           return;
         }
         // The cut cells changed meanwhile (or are in another spreadsheet): an ordinary paste.
         lastClip = { ...clip, cut: undefined };
       }
-      const { edits, range } = pasteEdits(s, sel.range, text, lastClip);
+      const own = lastClip !== null && lastClip.text === text;
+      // Values only: this app's copy as its values; other text as typed, without the formats it implies.
+      const values = valuesOnly
+        ? own && lastClip?.values
+          ? lastClip.values
+          : parseTsv(text).map((line) => line.map((field) => typedInput(field).content?.v ?? (field === '' ? null : field)))
+        : undefined;
+      const { edits, range } = pasteEdits(s, sel.range, text, lastClip, { rowAt: v.active ? v.sheetRow : undefined, values });
       // Text from elsewhere is typed input: its formulas imply formats as typed ones do.
-      apply(edits, { implyFormats: lastClip?.text !== text });
+      apply(edits, { implyFormats: !own && !valuesOnly });
       choose({ active: { col: range.col, row: range.row }, range });
     };
+    // Mod-Shift-V is a paste event like any other: the key says to paste values only.
+    const onKey = (e: KeyboardEvent) => {
+      const mod = isApple ? e.metaKey : e.ctrlKey;
+      if (mod && e.shiftKey && !e.altKey && e.key.toLowerCase() === 'v' && focused()) pasteValuesUntil = Date.now() + 1000;
+    };
+    window.addEventListener('keydown', onKey, true);
     window.addEventListener('copy', onCopy);
     window.addEventListener('cut', onCut);
     window.addEventListener('paste', onPaste);
     return () => {
+      window.removeEventListener('keydown', onKey, true);
       window.removeEventListener('copy', onCopy);
       window.removeEventListener('cut', onCut);
       window.removeEventListener('paste', onPaste);
@@ -629,8 +960,8 @@ export function SheetEditor({ path, snapshot, workbook, version }: Props) {
       fillDown,
       fillRight,
       toggleBoldRows: toggleBold,
-      freezeRows: () => setFrozen(selection.active.row + 1, sheet.frozen.cols),
-      freezeColumns: () => setFrozen(sheet.frozen.rows, selection.active.col + 1),
+      freezeRows: () => setFrozen(activeAt.row + 1, sheet.frozen.cols),
+      freezeColumns: () => setFrozen(sheet.frozen.rows, activeAt.col + 1),
       unfreeze: () => setFrozen(0, 0),
       addSheet,
       insertRowsAbove: () => insertRows(false),
@@ -648,6 +979,18 @@ export function SheetEditor({ path, snapshot, workbook, version }: Props) {
       importFile: () => void startImport(),
       exportCsv: () => exportCsv(path, workbook.file, sheet),
       exportXlsx: () => void exportXlsx(path, workbook.file).catch((e: unknown) => toastError(e, 'Could not export the workbook')),
+      sortRangeAsc: () => sortRangeBy(false),
+      sortRangeDesc: () => sortRangeBy(true),
+      sortSheetAsc: () => sortSheetBy(false),
+      sortSheetDesc: () => sortSheetBy(true),
+      toggleFilter,
+      openConditionalFormatting: () => setDialog({ kind: 'conditional' }),
+      insertCheckboxes,
+      insertDropdown: () => setDialog({ kind: 'validation', start: 'list' }),
+      openDataValidation: () => setDialog({ kind: 'validation' }),
+      openFind: () => openFind(false),
+      openReplace: () => openFind(true),
+      createPivotTable: () => setDialog({ kind: 'pivot', range: dataRange() }),
     };
   });
   useEffect(() => {
@@ -679,20 +1022,55 @@ export function SheetEditor({ path, snapshot, workbook, version }: Props) {
       importFile: call('importFile'),
       exportCsv: call('exportCsv'),
       exportXlsx: call('exportXlsx'),
+      sortRangeAsc: call('sortRangeAsc'),
+      sortRangeDesc: call('sortRangeDesc'),
+      sortSheetAsc: call('sortSheetAsc'),
+      sortSheetDesc: call('sortSheetDesc'),
+      toggleFilter: call('toggleFilter'),
+      openConditionalFormatting: call('openConditionalFormatting'),
+      insertCheckboxes: call('insertCheckboxes'),
+      insertDropdown: call('insertDropdown'),
+      openDataValidation: call('openDataValidation'),
+      openFind: call('openFind'),
+      openReplace: call('openReplace'),
+      createPivotTable: call('createPivotTable'),
     });
   }, [path]);
 
-  // A keyboard navigation (or Enter in a new spreadsheet's title) lands in the grid.
+  // A keyboard navigation (or Enter in a new spreadsheet's title) lands in the grid. So does an
+  // opening that leaves the focus nowhere during its first moments (the new file's title it was
+  // named in goes away, and the view it replaced may take and drop the focus meanwhile), so that
+  // typing goes into A1 as in Google Sheets. Glide draws its canvas only once it has measured
+  // itself, so the focus is tried again for a while.
   useEffect(() => {
-    if (wantsNoteFocus()) gridRef.current?.focus();
+    const requested = wantsNoteFocus();
+    if (touch && !requested) return;
+    const nowhere = () => document.activeElement === null || document.activeElement === document.body;
+    let timer = 0;
+    let tries = 0;
+    const attempt = () => {
+      if (nowhere()) gridRef.current?.focus();
+      if (++tries < 30) timer = window.setTimeout(attempt, 50);
+    };
+    if (requested) gridRef.current?.focus();
+    attempt();
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per opened file
   }, [path]);
 
   const handlers: SheetGridHandlers = {
     onSelect: (sel) => select(sel),
     onEdit: edit,
-    onCommit: (at, text) => commit({ ...at, sheet: sheet.id }, text, 'none'),
-    onClear: (range) => setCells(clearEdits(sheet, range)),
-    onFill: (source, dest) => setCells(fillEdits(sheet, source, dest)),
+    onCommit: (at, text) => commit({ ...toSheet(at), sheet: sheet.id }, text, 'none'),
+    onClear: (range) => setCells(clearEdits(sheet, range, rowAt)),
+    onFill: (source, dest) => setCells(fillEdits(sheet, source, dest, { handle: true, rowAt })),
+    onFilterButton: (col, rect) => setFilterMenu({ col, anchor: rect }),
+    onFreeze: (axis, count) => setFrozen(axis === 'rows' ? count : sheet.frozen.rows, axis === 'cols' ? count : sheet.frozen.cols),
+    onToggleCheckbox: toggleCheckbox,
+    onToggleSelection: toggleSelectionCheckboxes,
+    onDropdown: (at, rect) => setDropdown({ at, anchor: rect }),
+    onFind: (replace) => openFind(replace),
+    onInsertNow: (at, text) => setCells([typedEdit(sheet, at.col, at.row, text)], { implyFormats: true }),
     onUndo: undo,
     onRedo: redo,
     onEscape: () => {
@@ -719,12 +1097,22 @@ export function SheetEditor({ path, snapshot, workbook, version }: Props) {
   const widthColumns: number[] = Array.from({ length: Math.min(selection.range.width, 200) }, (_, i) => selection.range.col + i);
   const widthLabel = widthColumns.length === 1 ? columnLetters(widthColumns[0]) : `${columnLetters(widthColumns[0])}–${columnLetters(widthColumns[widthColumns.length - 1])}`;
   const boldOn = wholeColumns ? sheet.cols[columnLetters(selection.range.col)]?.bold === true : sheet.rows[String(selection.range.row + 1)]?.bold === true;
+  // Google Sheets' View > Freeze: none, 1, 2, or up to the active cell's row or column; the current one ticked.
+  const tick = (on: boolean) => (on ? <Check size={14} aria-hidden /> : <span className="sheet-menu-blank" aria-hidden />);
+  const upToRow = activeAt.row + 1;
+  const upToCol = activeAt.col + 1;
+  const rowChoice = (n: number, label: string): MenuEntry => ({ id: `rows${n}`, label, icon: tick(sheet.frozen.rows === n), run: () => setFrozen(n, sheet.frozen.cols) });
+  const colChoice = (n: number, label: string): MenuEntry => ({ id: `cols${n}`, label, icon: tick(sheet.frozen.cols === n), run: () => setFrozen(sheet.frozen.rows, n) });
   const freezeItems: MenuEntry[] = [
-    { id: 'rows', label: `Freeze rows 1–${selection.active.row + 1}`, run: () => setFrozen(selection.active.row + 1, sheet.frozen.cols) },
-    { id: 'cols', label: `Freeze columns A–${columnLetters(selection.active.col)}`, run: () => setFrozen(sheet.frozen.rows, selection.active.col + 1) },
+    rowChoice(0, 'No rows'),
+    rowChoice(1, '1 row'),
+    rowChoice(2, '2 rows'),
+    ...(upToRow > 2 ? [rowChoice(upToRow, `Up to row ${upToRow}`)] : []),
     'separator',
-    { id: 'unrows', label: 'Unfreeze rows', disabled: sheet.frozen.rows === 0, run: () => setFrozen(0, sheet.frozen.cols) },
-    { id: 'uncols', label: 'Unfreeze columns', disabled: sheet.frozen.cols === 0, run: () => setFrozen(sheet.frozen.rows, 0) },
+    colChoice(0, 'No columns'),
+    colChoice(1, '1 column'),
+    colChoice(2, '2 columns'),
+    ...(upToCol > 2 ? [colChoice(upToCol, `Up to column ${columnLetters(activeAt.col)}`)] : []),
   ];
   /** A toolbar action, after which the grid takes the keys again. */
   const tool = (action: 'undo' | 'redo' | 'bold' | 'down' | 'right') => {
@@ -738,7 +1126,7 @@ export function SheetEditor({ path, snapshot, workbook, version }: Props) {
         <InlineTitle key={path} path={path} editable={editable} label="Spreadsheet title" onEnter={() => gridRef.current?.focus()} />
         {!phone && <SaveStatus snapshot={snapshot} />}
       </header>
-      <div className="sheet-toolbar" role="toolbar" aria-label="Spreadsheet">
+      <div ref={toolbar} className="sheet-toolbar" role="toolbar" aria-label="Spreadsheet" onKeyDown={roving.onKeyDown} onFocus={roving.onFocus}>
         <ToolButton title="Undo" hotkey="Mod-z" disabled={!editable || !workbook.canUndo()} onClick={() => tool('undo')}>
           <Undo2 size={16} />
         </ToolButton>
@@ -791,6 +1179,37 @@ export function SheetEditor({ path, snapshot, workbook, version }: Props) {
           <Hash size={16} />
         </ToolButton>
         <span className="sheet-toolbar-sep" aria-hidden />
+        <ToolButton
+          title="Sort and filter"
+          disabled={!editable}
+          onClick={(e) => {
+            const r = e.currentTarget.getBoundingClientRect();
+            setSortMenu({ x: r.left, y: r.bottom + 4 });
+          }}
+        >
+          <ArrowDownAZ size={16} />
+        </ToolButton>
+        <ToolButton title={filter ? 'Remove filter' : 'Create a filter'} disabled={!editable} pressed={filter !== undefined} onClick={toggleFilter}>
+          <Funnel size={16} />
+        </ToolButton>
+        <ToolButton title="Conditional formatting" pressed={Object.keys(sheet.conditional ?? {}).length > 0} onClick={() => setDialog({ kind: 'conditional' })}>
+          <PaintBucket size={16} />
+        </ToolButton>
+        <ToolButton
+          title="Checkboxes and dropdowns"
+          pressed={Object.keys(sheet.validation ?? {}).length > 0}
+          onClick={(e) => {
+            const r = e.currentTarget.getBoundingClientRect();
+            if (editable) setValidationMenu({ x: r.left, y: r.bottom + 4 });
+            else setDialog({ kind: 'validation' });
+          }}
+        >
+          <ListChecks size={16} />
+        </ToolButton>
+        <ToolButton title="Find and replace" hotkey="Mod-f" pressed={find !== null} onClick={() => (find ? setFind(null) : openFind(false))}>
+          <Search size={16} />
+        </ToolButton>
+        <span className="sheet-toolbar-sep" aria-hidden />
         <ToolButton title="Insert chart" disabled={!editable} onClick={insertChart}>
           <ChartColumn size={16} />
         </ToolButton>
@@ -813,8 +1232,8 @@ export function SheetEditor({ path, snapshot, workbook, version }: Props) {
       </div>
       <FormulaBar
         ref={bar}
-        label={single ? activeRef : rangeText(selection.range)}
-        active={selection.active}
+        label={single ? activeRef : rangeText(selectedRange)}
+        active={activeAt}
         sheet={sheet.id}
         text={cellText(activeCell, activeFormat)}
         editable={editable}
@@ -824,21 +1243,43 @@ export function SheetEditor({ path, snapshot, workbook, version }: Props) {
         onCancel={focusGrid}
         onGoTo={goTo}
       />
-      <div ref={gridBox} className="sheet-grid-box">
+      {/* Glide draws on a canvas: the grid is named, and the selection is said in words (DESIGN §6.21.5). */}
+      <p id={summaryId} className="visually-hidden" aria-live="polite">
+        {selectionSummary}
+      </p>
+      <div ref={gridBox} className="sheet-grid-box" role="group" aria-label={`Spreadsheet grid, sheet ${sheet.name}`} aria-describedby={summaryId}>
         <SheetGrid
           sheet={sheet}
           layout={layout}
+          looks={looks}
+          filter={gridFilter}
           version={version}
           selection={selection}
           editable={editable}
           touch={touch}
           theme={theme}
           handlers={handlers}
-          picked={picked}
-          marked={cutMark !== null && cutMark === lastClip && cutMark.cut?.sheet === sheet.id && cutMark.cut.source === path ? cutMark.range : null}
+          picked={picked && displayRange(view, picked)}
+          marked={cutMark !== null && cutMark === lastClip && cutMark.cut?.sheet === sheet.id && cutMark.cut.source === path ? displayRange(view, cutMark.range) : null}
           gridRef={gridRef}
           portalRef={portalRef}
         />
+        {find && (
+          <FindPanel
+            key={find.key}
+            workbook={workbook}
+            version={version}
+            sheetId={sheet.id}
+            active={{ sheet: sheet.id, ...activeAt }}
+            editable={editable}
+            replace={find.replace}
+            onGo={goToMatch}
+            onClose={() => {
+              setFind(null);
+              focusGrid();
+            }}
+          />
+        )}
       </div>
       <ChartsPane
         sheet={sheet}
@@ -865,17 +1306,59 @@ export function SheetEditor({ path, snapshot, workbook, version }: Props) {
       {freezeMenu && <ContextMenu x={freezeMenu.x} y={freezeMenu.y} label="Freeze" items={freezeItems} onClose={() => setFreezeMenu(null)} />}
       {exportMenu && <ContextMenu x={exportMenu.x} y={exportMenu.y} label="Download" items={exportItems} onClose={() => setExportMenu(null)} />}
       {linesMenu && <ContextMenu x={linesMenu.x} y={linesMenu.y} label="Rows and columns" items={lineItems} onClose={() => setLinesMenu(null)} />}
+      {sortMenu && <ContextMenu x={sortMenu.x} y={sortMenu.y} label="Sort and filter" items={sortItems} onClose={() => setSortMenu(null)} />}
+      {filterMenu && filter && (
+        <FilterMenu
+          key={`${filterMenu.col}`}
+          sheet={sheet}
+          filter={filter}
+          col={filterMenu.col}
+          anchor={filterMenu.anchor}
+          phone={phone}
+          editable={editable}
+          onApply={(column) => {
+            setFilterMenu(null);
+            setFilterColumn(filterMenu.col, column);
+            focusGrid();
+          }}
+          onSort={(desc) => {
+            setFilterMenu(null);
+            sortFilter(filterMenu.col, desc);
+            focusGrid();
+          }}
+          onClose={() => setFilterMenu(null)}
+        />
+      )}
       {dialog?.kind === 'named' && (
         <NamedRangesDialog
           workbook={workbook}
           editable={editable}
-          selectionRef={absoluteRangeText(sheet.name, selection.range)}
+          selectionRef={absoluteRangeText(sheet.name, selectedRange)}
           onGoTo={(name) => {
             setDialog(null);
             goTo(name);
           }}
           onClose={() => setDialog(null)}
         />
+      )}
+      {validationMenu && <ContextMenu x={validationMenu.x} y={validationMenu.y} label="Checkboxes and dropdowns" items={validationItems} onClose={() => setValidationMenu(null)} />}
+      {dropdown && dropdownRule && (
+        <DropdownList
+          items={dropdownItems(workbook.file, sheet, dropdownRule)}
+          current={shownCell(sheet, dropdown.at.col, dropdown.at.row).text}
+          cell={toA1(dropdown.at.col, dropdown.at.row)}
+          anchor={dropdown.anchor}
+          phone={phone}
+          onPick={pickDropdown}
+          onClose={() => setDropdown(null)}
+        />
+      )}
+      {dialog?.kind === 'pivot' && <PivotDialog sheet={sheet} initial={dialog.range} onCreate={createPivot} onClose={() => setDialog(null)} />}
+      {dialog?.kind === 'validation' && (
+        <ValidationDialog workbook={workbook} sheet={sheet} selection={rangeText(selectedRange)} editable={editable} start={dialog.start} onClose={() => setDialog(null)} />
+      )}
+      {dialog?.kind === 'conditional' && (
+        <ConditionalDialog workbook={workbook} sheet={sheet} selection={rangeText(selectedRange)} editable={editable} onClose={() => setDialog(null)} />
       )}
       {dialog?.kind === 'width' && (
         <ColumnWidthDialog
@@ -902,7 +1385,14 @@ export function SheetEditor({ path, snapshot, workbook, version }: Props) {
         />
       )}
       {dialog?.kind === 'chart' && (
-        <ChartDialog sheet={sheet} initial={dialog.initial} editing={dialog.id !== null} onSave={(props) => saveChart(dialog.id, props)} onClose={() => setDialog(null)} />
+        <ChartDialog
+          sheet={sheet}
+          initial={dialog.initial}
+          editing={dialog.id !== null}
+          selection={single ? undefined : rangeText(selectedRange)}
+          onSave={(props) => saveChart(dialog.id, props)}
+          onClose={() => setDialog(null)}
+        />
       )}
       {dialog?.kind === 'import' && (
         <ImportDialog
