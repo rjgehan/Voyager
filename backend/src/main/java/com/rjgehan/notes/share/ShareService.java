@@ -1,6 +1,7 @@
 package com.rjgehan.notes.share;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.text.Normalizer;
 import java.time.Clock;
 import java.time.Duration;
@@ -413,7 +414,7 @@ public class ShareService {
 				}
 			}
 		}
-		for (LinkOcc occ : MarkdownScanner.scan(newText, false, false).links()) {
+		for (LinkOcc occ : linksAsIndexed(newText)) {
 			if (!occ.embed() || existing.contains(occ.target())) {
 				continue;
 			}
@@ -424,6 +425,21 @@ public class ShareService {
 			throw new NotesException(ErrorCode.OUTSIDE_SHARE,
 					"A shared note can only embed files that are shared with it", Map.of("path", notePath));
 		}
+	}
+
+	/**
+	 * The links of a guest's text as the index will read them once it is written: the text is stored as UTF-8 (a lone
+	 * surrogate becomes "?"), after the note's own BOM when it has one, and the index strips one leading BOM. So a text
+	 * starting with U+FEFF is read both with and without it; otherwise a BOM could hide a frontmatter value's embed
+	 * from the check, or a frontmatter could hide a body embed.
+	 */
+	private static List<LinkOcc> linksAsIndexed(String newText) {
+		String written = new String(newText.getBytes(StandardCharsets.UTF_8), StandardCharsets.UTF_8);
+		List<LinkOcc> links = new ArrayList<>(MarkdownScanner.scan(written, false, false).links());
+		if (written.startsWith("\uFEFF")) {
+			links.addAll(MarkdownScanner.scan(written.substring(1), true, false).links());
+		}
+		return links;
 	}
 
 	/** True when the share's note or folder exists. */

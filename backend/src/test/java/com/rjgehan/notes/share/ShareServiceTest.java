@@ -26,6 +26,7 @@ import com.rjgehan.notes.api.error.NotesException;
 import com.rjgehan.notes.events.SharesChangedEvent;
 import com.rjgehan.notes.identity.Identity;
 import com.rjgehan.notes.support.TestVault;
+import com.rjgehan.notes.vault.TextCodec;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -355,6 +356,36 @@ class ShareServiceTest {
 		this.vault.clock.advance(Duration.ofHours(2));
 		assertThat(code(() -> shares().checkGuestEmbeds(share, pie, "# Pie\n![[photo.png]]\n")))
 			.isEqualTo(ErrorCode.OUTSIDE_SHARE);
+	}
+
+	@Test
+	void aLeadingBomDoesNotHideAFrontmatterEmbedFromTheCheck() throws IOException {
+		start();
+		image("Attachments/secret.png");
+		note("Family/Recipes/Pie.md", "# Pie\n");
+		Share share = shares().byId(share("Family/Recipes", ShareMode.EDIT, List.of("a@b"), false).share().id());
+		// The index strips one leading BOM, then reads the frontmatter and every embed in its values; the check sees
+		// the same text, whether the guest saves the note or creates one.
+		for (String value : List.of("\"%%![[secret.png]]%%\"", "\"`![[secret.png]]`\"", "\"!\\x5B[secret.png]]\"")) {
+			String text = "\uFEFF---\ncover: " + value + "\n---\n# Pie\n";
+			for (String path : List.of("Family/Recipes/Pie.md", "Family/Recipes/New.md")) {
+				assertThat(code(() -> shares().checkGuestEmbeds(share, path, text))).as(path + " " + value)
+					.isEqualTo(ErrorCode.OUTSIDE_SHARE);
+			}
+		}
+		// A note that already starts with a BOM keeps it and gets the guest's text after it, so the index then reads
+		// the guest's own BOM as text: the frontmatter is body, and a YAML comment there is a heading with an embed.
+		Path bom = this.dir.resolve("Family/Recipes/Bom.md");
+		Files.write(bom, TextCodec.encode("# Bom\n", true));
+		this.vault.reconciler.reconcile(this.vault.path("Family/Recipes/Bom.md"));
+		assertThat(code(() -> shares().checkGuestEmbeds(share, "Family/Recipes/Bom.md",
+				"\uFEFF---\n# ![[secret.png]]\ntitle: x\n---\n# Bom\n")))
+			.isEqualTo(ErrorCode.OUTSIDE_SHARE);
+		// A lone surrogate is written as "?", which YAML accepts: the check reads the text as written.
+		assertThat(code(() -> shares().checkGuestEmbeds(share, "Family/Recipes/Pie.md",
+				"---\ncover: \"`![[secret.png]]`\"\nnote: \"\uD800\"\n---\n# Pie\n")))
+			.isEqualTo(ErrorCode.OUTSIDE_SHARE);
+		assertThat(shares().embeddedMedia(share)).isEmpty();
 	}
 
 	@Test
