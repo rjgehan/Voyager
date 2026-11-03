@@ -880,6 +880,37 @@ describe('number formats, charts, import and export (6b, 6c)', () => {
   });
 });
 
+describe('editing while another device edits', () => {
+  it('writes nothing from an untouched formula bar, even after another device changed the cell', async () => {
+    const path = await openGrid();
+    select(1, 0); // B2, 1450
+    fireEvent.focus(formulaInput()); // just reading it
+    const next = structuredClone(BUDGET);
+    next.sheets[0].cells.B2 = { v: 2000 };
+    vault.externalWrite(path, JSON.stringify(next));
+    await act(async () => {
+      await session(path).onRemoteChanged({ version: vault.readFile(path).version });
+    });
+    expect(screen.getByTestId('cell-B0')).toHaveTextContent('2000');
+    // The untouched bar follows the cell.
+    expect(formulaInput().value).toBe('2000');
+    fireEvent.blur(formulaInput());
+    expect(session(path).currentStatus).toBe('clean');
+    expect((await saved(path)).sheets[0].cells.B2).toEqual({ v: 2000 });
+    // Enter moves on without writing.
+    fireEvent.focus(formulaInput());
+    fireEvent.keyDown(formulaInput(), { key: 'Enter' });
+    expect(nameBox().value).toBe('B3');
+    expect(session(path).currentStatus).toBe('clean');
+    // A typed change is written.
+    fireEvent.focus(formulaInput());
+    fireEvent.change(formulaInput(), { target: { value: '7' } });
+    fireEvent.blur(formulaInput());
+    expect((await saved(path)).sheets[0].cells.B3).toEqual({ v: 7 });
+  });
+
+});
+
 describe('sorting and filters (DESIGN §6.21.11)', () => {
   const header = (col: number, x: number, y: number) =>
     ({ localEventX: x, localEventY: y, bounds: { x: col * 100, y: 0, width: 100, height: 50 }, isTouch: false, isDoubleClick: false, preventDefault: vi.fn() }) as never;

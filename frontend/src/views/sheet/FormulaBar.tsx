@@ -1,9 +1,11 @@
 // The formula bar (DESIGN §6.21.5): the name box (the selection's reference; type a cell, a range or
 // a named range to go there) and the active cell's formula or value. Enter commits and moves
-// down, Tab right (Shift the other way), Esc reverts; leaving the field commits. On a phone this
-// is where cells are edited, at a 16 px font so iOS does not zoom.
+// down, Tab right (Shift the other way), Esc reverts; leaving the field commits. Only a changed
+// draft is written: a draft left untouched (the field focused to read it) writes nothing, and
+// follows its cell when another device changes it. On a phone this is where cells are edited, at a
+// 16 px font so iOS does not zoom.
 import { SquareFunction } from 'lucide-react';
-import { forwardRef, useImperativeHandle, useRef, useState, type KeyboardEvent } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type KeyboardEvent } from 'react';
 import type { CellAt } from './gridModel';
 
 export type Move = 'down' | 'up' | 'right' | 'left' | 'none';
@@ -31,7 +33,8 @@ interface Props {
   touch: boolean;
   /** The engine's explanation of an error result in the active cell. */
   error: string | null;
-  onCommit(target: EditTarget, text: string, move: Move): void;
+  /** The edit ended: `changed` when the text differs from what the edit started from (only then is it written). */
+  onCommit(target: EditTarget, text: string, move: Move, changed: boolean): void;
   /** Editing ended without a commit (Esc): the grid takes the focus back. */
   onCancel(): void;
   /** What was typed into the name box; false when it names nothing. */
@@ -40,21 +43,28 @@ interface Props {
 
 export const FormulaBar = forwardRef<FormulaBarHandle, Props>(function FormulaBar({ label, active, sheet, text, editable, touch, error, onCommit, onCancel, onGoTo }, ref) {
   const input = useRef<HTMLInputElement>(null);
-  const [draft, setDraft] = useState<{ target: EditTarget; value: string } | null>(null);
+  /** The edit: its cell, its text, and the cell's text when it started. */
+  const [draft, setDraft] = useState<{ target: EditTarget; value: string; start: string } | null>(null);
   // Kept in step by begin() and commit(): handlers read it before React re-renders.
   const draftRef = useRef(draft);
   const [nameDraft, setNameDraft] = useState<string | null>(null);
   const [nameInvalid, setNameInvalid] = useState(false);
 
-  const begin = (target: EditTarget, value: string) => {
-    const next = { target, value };
+  const begin = (target: EditTarget, value: string, start: string) => {
+    const next = { target, value, start };
     draftRef.current = next;
     setDraft(next);
   };
 
+  // An untouched draft follows its cell when it changes underneath (another device's edit).
+  useEffect(() => {
+    const d = draftRef.current;
+    if (d && d.value === d.start && d.start !== text && d.target.col === active.col && d.target.row === active.row && d.target.sheet === sheet) begin(d.target, text, text);
+  }, [text, active.col, active.row, sheet]);
+
   useImperativeHandle(ref, () => ({
     edit(target, current, initial) {
-      begin(target, initial ?? current);
+      begin(target, initial ?? current, current);
       const el = input.current;
       if (!el) return;
       // Synchronously, inside the gesture: iOS opens the keyboard only then.
@@ -71,7 +81,9 @@ export const FormulaBar = forwardRef<FormulaBarHandle, Props>(function FormulaBa
     const d = draftRef.current;
     draftRef.current = null;
     setDraft(null);
-    if (d && (d.value !== text || move !== 'none' || d.target.col !== active.col || d.target.row !== active.row || d.target.sheet !== sheet)) onCommit(d.target, d.value, move);
+    if (!d) return;
+    const changed = d.value !== d.start;
+    if (changed || move !== 'none') onCommit(d.target, d.value, move, changed);
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
@@ -151,12 +163,12 @@ export const FormulaBar = forwardRef<FormulaBarHandle, Props>(function FormulaBa
         autoComplete="off"
         enterKeyHint={touch ? 'next' : 'done'}
         onFocus={() => {
-          if (!draftRef.current && editable) begin({ ...active, sheet }, text);
+          if (!draftRef.current && editable) begin({ ...active, sheet }, text, text);
         }}
         onChange={(e) => {
           const d = draftRef.current;
-          if (d) begin(d.target, e.target.value);
-          else begin({ ...active, sheet }, e.target.value);
+          if (d) begin(d.target, e.target.value, d.start);
+          else begin({ ...active, sheet }, e.target.value, text);
         }}
         onKeyDown={onKeyDown}
         onBlur={() => commit('none')}

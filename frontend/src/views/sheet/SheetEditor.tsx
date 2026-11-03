@@ -331,11 +331,12 @@ ${JSON.stringify(sheet.filter ?? null)}`;
     bar.current?.edit({ ...target, sheet: sheet.id }, editText(sheet, target), initial);
   };
 
-  const commit = (target: EditTarget, text: string, move: Move) => {
+  /** Ends an edit: writes `text` when it was `changed` from where the edit started and differs from the cell now, then moves. */
+  const commit = (target: EditTarget, text: string, move: Move, changed = true) => {
     const s = sheetById(workbook.file, target.sheet);
     if (!s) return;
     // Typed input brings the format it implies (`10%`, `=TODAY()`) into a cell without one.
-    if (text !== editText(s, target)) {
+    if (changed && text !== editText(s, target)) {
       const typed = typedEdit(s, target.col, target.row, text);
       // A strict validation refuses other input, as Google Sheets' "Reject the input".
       const rule = validations(s)?.(target.col, target.row)?.validation;

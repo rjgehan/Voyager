@@ -90,6 +90,8 @@ export function EmbedGrid(props: Props) {
   const [editing, setEditingState] = useState<Editing | null>(null);
   /** The edit under way, as the handlers of this very event see it (a blur follows a hide at once). */
   const editingNow = useRef<Editing | null>(null);
+  /** The text the cell editor opened with (null when a typed key replaced it). */
+  const editStart = useRef<string | null>(null);
   const setEditing = (e: Editing | null) => {
     editingNow.current = e;
     setEditingState(e);
@@ -144,6 +146,8 @@ export function EmbedGrid(props: Props) {
     el.style.minWidth = `${Math.max(td.offsetWidth, 120)}px`;
     el.style.height = `${td.offsetHeight}px`;
     el.value = initial ?? editText(sheet, at);
+    // What the editor showed of the cell: only a change from it is written.
+    editStart.current = initial === undefined ? el.value : null;
     el.hidden = false;
     el.focus({ preventScroll: true });
     const end = el.value.length;
@@ -174,15 +178,20 @@ export function EmbedGrid(props: Props) {
     if (el) el.hidden = true;
   };
 
-  /** Writes the editor's text into the cell it edits, if it changed. */
+  /**
+   * Writes the editor's text into the cell it edits, if it changed from what the editor started
+   * with (a typed first key always counts): opening a cell and leaving it writes nothing, even when
+   * another device changed the cell meanwhile.
+   */
   const commit = (move: 'down' | 'up' | 'right' | 'left' | 'none') => {
     const el = input.current;
     const at = editingNow.current;
     if (!at || !el || !model) return;
     const s = sheetById(model, at.sheet);
     const text = el.value;
+    const changed = text !== editStart.current;
     stopEdit();
-    if (s && text !== editText(s, at)) apply([typedEdit(s, at.col, at.row, text)]);
+    if (s && changed && text !== editText(s, at)) apply([typedEdit(s, at.col, at.row, text)]);
     if (move !== 'none') moveTo(step(at, move), false);
     if (!coarse()) table.current?.focus({ preventScroll: true });
   };

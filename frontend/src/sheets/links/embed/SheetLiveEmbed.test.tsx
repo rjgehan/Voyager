@@ -139,6 +139,39 @@ describe('a spreadsheet embedded in a note that can be written', () => {
     expect(saved(path).B4.c).toBe(1950);
   });
 
+  it('writes nothing when a cell is opened and left untouched, even after another device changed it', async () => {
+    const path = newFile();
+    const { container } = show(path);
+    await waitFor(() => expect(cell(container, 'B3').textContent).toBe('300'));
+    // Just looking at B3's contents.
+    fireEvent.doubleClick(cell(container, 'B3'));
+    const input = screen.getByRole('textbox', { name: 'Cell' }) as HTMLInputElement;
+    expect(input.value).toBe('300');
+    // Another device sets B3 to 999 meanwhile.
+    const next = structuredClone(BUDGET);
+    next.sheets[0].cells.B3 = { v: 999 };
+    (next.sheets[0].cells as Record<string, unknown>).B4 = { f: '=SUM(B2:B3)', c: 2449 };
+    vault.externalWrite(path, JSON.stringify(next));
+    await act(async () => {
+      await documents.get(path)!.onRemoteChanged({ version: vault.readFile(path).version });
+    });
+    await waitFor(() => expect(cell(container, 'B3').textContent).toBe('999'));
+    fireEvent.blur(input);
+    // A real edit elsewhere, so the session saves.
+    fireEvent.doubleClick(cell(container, 'A3'));
+    fireEvent.change(input, { target: { value: 'Groceries' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() => expect(saved(path).A3.v).toBe('Groceries'), { timeout: 4000 });
+    expect(saved(path).B3.v).toBe(999);
+    // Enter on an untouched cell moves on and writes nothing either.
+    fireEvent.doubleClick(cell(container, 'B2'));
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(cell(container, 'B3').classList.contains('is-active')).toBe(true);
+    const undo = screen.getByRole('button', { name: 'Undo' }) as HTMLButtonElement;
+    fireEvent.click(undo);
+    await waitFor(() => expect(cell(container, 'A3').textContent).toBe('Food'));
+  });
+
   it('types over a selected cell, cancels with Escape, and undoes from the toolbar', async () => {
     const path = newFile();
     const { container } = show(path);
