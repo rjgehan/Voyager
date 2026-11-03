@@ -70,7 +70,8 @@ describe('createNote for files without an inline title (a new drawing, DESIGN §
     updatePendingTitle(id, 'Architecture', true);
     await vi.waitFor(() => expect(routes).toEqual(['/n/Architecture.excalidraw']));
     expect(vault.getTree().files.map((f) => f.path)).toEqual(['Architecture.excalidraw']);
-    expect(usePendingNote.getState()).toMatchObject({ pending: null, handoff: null });
+    // The pending view stays until the pane shows the drawing (the navigation then clears it).
+    expect(usePendingNote.getState()).toMatchObject({ pending: { id, opening: 'Architecture.excalidraw' }, handoff: null });
   });
 
   it('keeps the free name when the title is committed untouched', async () => {
@@ -98,6 +99,11 @@ describe('createNote for files without an inline title (a new drawing, DESIGN §
     // The inline title is editable and the editor mounts in the same commit as the swap.
     expect(editableAtSwap).toEqual([true]);
     expect(usePendingNote.getState().handoff).toEqual({ path: 'Untitled.md', title: 'Shopping', selectionStart: 8, selectionEnd: 8 });
+    // Until the pane shows the note, the pending view stays and what is typed follows into the hand-over.
+    expect(usePendingNote.getState().pending).toMatchObject({ id, opening: 'Untitled.md' });
+    updatePendingTitle(id, 'Shopping list', false);
+    updatePendingSelection(id, 13, 13);
+    expect(usePendingNote.getState().handoff).toEqual({ path: 'Untitled.md', title: 'Shopping list', selectionStart: 13, selectionEnd: 13 });
   });
 });
 
@@ -128,7 +134,7 @@ describe('writing typed into a new note before it exists (DESIGN §6.15)', () =>
     const session = sessionOf('Groceries.md');
     expect(session.getText()).toBe('milk\neggs');
     expect(session.editorState.selection.main.head).toBe(9);
-    expect(usePendingNote.getState().pending).toBeNull();
+    expect(usePendingNote.getState().pending).toMatchObject({ id, opening: 'Groceries.md' });
     expect(hasPendingBody(id)).toBe(false);
     await session.flush();
     expect(vault.readFile('Groceries.md').content).toBe('milk\neggs');

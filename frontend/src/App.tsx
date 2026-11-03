@@ -1,11 +1,11 @@
 // The application shell and its workspace of panes and tabs (DESIGN §6.4, §6.40).
-import { lazy, Suspense, useEffect, useRef } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { CapturePage } from './components/capture/CapturePage';
 import { AppShell } from './components/layout/AppShell';
 import { setNavigator } from './features/navigation';
 import { navigateOverOverlays } from './features/overlayHistory';
-import { clearPendingNote } from './state/pendingNote';
+import { usePendingNoteGuard } from './features/pendingNoteGuard';
 import { RouteSync } from './workspace/RouteSync';
 import { WorkspaceLayout } from './workspace/WorkspaceLayout';
 
@@ -22,18 +22,6 @@ function NavigationBridge() {
     setNavigator((to, opts) => navigateOverOverlays(() => void navigate(to, opts)));
   }, [navigate]);
   return null;
-}
-
-/** Navigating elsewhere while a new note is being created leaves that note where it is. */
-function usePendingNoteGuard(): void {
-  const location = useLocation();
-  const seen = useRef(location.key);
-  useEffect(() => {
-    if (seen.current !== location.key) {
-      seen.current = location.key;
-      clearPendingNote();
-    }
-  }, [location.key]);
 }
 
 export default function App() {

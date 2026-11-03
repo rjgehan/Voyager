@@ -3,11 +3,12 @@
 // the caches from its own response (DESIGN §6.3 "Own mutations").
 import { isProblem } from '../api/client';
 import { api } from '../api/endpoints';
-import { currentSettings, currentTree } from '../api/hooks';
+import { currentSettings, currentTree, treeQuery } from '../api/hooks';
 import { queryClient } from '../api/queryClient';
-import type { FailedUpdate, FileEntry, MoveResult, Settings } from '../api/types';
+import { queryKeys } from '../api/queryKeys';
+import type { FailedUpdate, FileEntry, MoveResult, Settings, WriteResult } from '../api/types';
 import { newIdempotencyKey } from '../state/clientId';
-import { clearPendingNote, hasPendingBody, startPendingNote, takePendingBody, usePendingNote, type PendingNote } from '../state/pendingNote';
+import { clearPendingNote, hasPendingBody, openPendingNote, startPendingNote, takePendingBody, usePendingNote, type PendingNote } from '../state/pendingNote';
 import { toast } from '../state/toasts';
 import { useUi } from '../state/ui';
 import { applyFolderResult, applyMoveResult, applyRestoreResult, applyTrashEntry } from '../sync/applyEvents';
@@ -121,16 +122,28 @@ async function openWhenReady(path: string, id: number, note: boolean): Promise<v
     const { pending } = usePendingNote.getState();
     if (pending?.id !== id) return;
     // A title still being typed continues in the inline title; after a committed one the writing
-    // continues in the note's text.
-    usePendingNote.setState({
-      pending: null,
-      handoff: pending.committed ? null : { path, title: pending.title, selectionStart: pending.selectionStart, selectionEnd: pending.selectionEnd },
-    });
+    // continues in the note's text. The navigation then clears the pending view (App's guard).
+    openPendingNote(id, path);
     if (pending.committed) requestNoteFocus();
     openPath(path, null, { newNote: true });
   } finally {
     if (session) documents.release(session, BODY_HOLDER);
   }
+}
+
+/**
+ * The tree with the created file in it. Before the first tree (a cold start) the create's own patch
+ * found nothing to patch: the startup tree is awaited (the pending view keeps taking keys) and the
+ * create applied to it, so the note's view finds its entry when it opens.
+ */
+async function treeWith(result: WriteResult, content: string): Promise<void> {
+  if (queryClient.getQueryData(queryKeys.tree())) return;
+  try {
+    await queryClient.fetchQuery(treeQuery);
+  } catch {
+    return;
+  }
+  applyWriteResult(queryClient, result, content);
 }
 
 /** The pending note `id` once its title is committed, or null when another view replaced it. */
@@ -179,6 +192,7 @@ export function createNote(folder: string, initialContent: string | Promise<stri
       const content = render ? render(initialTitle).text : (loaded as string);
       const result = await api.createFile({ path: joinPath(folder, `${initialTitle}.${extension}`), content, onConflict: 'rename' }, { idempotencyKey: key });
       applyWriteResult(queryClient, result, content);
+      await treeWith(result, content);
       created = result.file;
     } catch (e) {
       clearPendingNote(id);

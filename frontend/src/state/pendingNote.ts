@@ -15,6 +15,12 @@ export interface PendingNote {
   /** The title field's selection, carried over to the real note's title. */
   selectionStart: number;
   selectionEnd: number;
+  /**
+   * The path the note is opening at: the route is switching to it. The pending view stays (and
+   * keeps taking keys, which follow into `handoff`) until the pane shows that route, so the pane's
+   * previous route (the start page, the previous note) never renders in between.
+   */
+  opening: string | null;
 }
 
 export interface TitleHandoff {
@@ -48,21 +54,43 @@ const bodies = new Map<number, PendingBody>();
 /** A new pending note (or other file) whose whole title is selected, so typing replaces it. */
 export function startPendingNote(id: number, folder: string, title: string, file: { extension: string; label: string } = { extension: 'md', label: 'note' }): void {
   usePendingNote.setState({
-    pending: { id, folder, ...file, title, committed: false, selectionStart: 0, selectionEnd: title.length },
+    pending: { id, folder, ...file, title, committed: false, selectionStart: 0, selectionEnd: title.length, opening: null },
     handoff: null,
   });
 }
 
+/** The title typed after the note began opening follows into its hand-over. */
+function followingHandoff(pending: PendingNote, handoff: TitleHandoff | null): TitleHandoff | null {
+  if (!handoff || pending.opening !== handoff.path) return handoff;
+  return { path: handoff.path, title: pending.title, selectionStart: pending.selectionStart, selectionEnd: pending.selectionEnd };
+}
+
 export function updatePendingTitle(id: number, title: string, committed: boolean): void {
-  const { pending } = usePendingNote.getState();
-  if (pending?.id === id) usePendingNote.setState({ pending: { ...pending, title, committed } });
+  const { pending, handoff } = usePendingNote.getState();
+  if (pending?.id !== id) return;
+  const next = { ...pending, title, committed };
+  usePendingNote.setState({ pending: next, handoff: followingHandoff(next, handoff) });
 }
 
 export function updatePendingSelection(id: number, selectionStart: number, selectionEnd: number): void {
-  const { pending } = usePendingNote.getState();
+  const { pending, handoff } = usePendingNote.getState();
   if (pending?.id === id && (pending.selectionStart !== selectionStart || pending.selectionEnd !== selectionEnd)) {
-    usePendingNote.setState({ pending: { ...pending, selectionStart, selectionEnd } });
+    const next = { ...pending, selectionStart, selectionEnd };
+    usePendingNote.setState({ pending: next, handoff: followingHandoff(next, handoff) });
   }
+}
+
+/**
+ * Pending note `id` opens at `path`: a title still being typed goes to the note's inline title
+ * (`handoff`), and the pending view stays until the pane shows the note.
+ */
+export function openPendingNote(id: number, path: string): void {
+  const { pending } = usePendingNote.getState();
+  if (pending?.id !== id) return;
+  usePendingNote.setState({
+    pending: { ...pending, opening: path },
+    handoff: pending.committed ? null : { path, title: pending.title, selectionStart: pending.selectionStart, selectionEnd: pending.selectionEnd },
+  });
 }
 
 /** The body of pending note `id` as typed so far (an empty body is no body). */
