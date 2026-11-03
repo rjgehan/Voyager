@@ -9,6 +9,7 @@ import '../../styles/sheetChart.css';
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { CHART_NAMES, chartData, niceTicks, pieSlices, tickLabel, valueExtent, type ChartData } from '../../sheets/charts';
 import type { ChartProps, Sheet } from '../../sheets/format';
+import { formatNumberWith } from '../../sheets/numfmt';
 
 interface Props {
   sheet: Sheet;
@@ -258,7 +259,8 @@ function ScatterChart({ data, chart, width, height }: { data: ChartData; chart: 
   const xs = (data.xValues ?? []).filter((v): v is number => v !== null);
   const [lo, hi] = valueExtent(data, false);
   const yTicks = niceTicks(lo, hi);
-  const xTicks = niceTicks(Math.min(...xs), Math.max(...xs), Math.max(2, Math.floor(width / 90)));
+  const xTicks = niceTicks(Math.min(...xs), Math.max(...xs), Math.max(2, Math.floor(width / (data.xFormat ? 110 : 90))), false);
+  const xLabel = (t: number) => (data.xFormat ? formatNumberWith(t, data.xFormat).text : tickLabel(t, false));
   const yLabels = yTicks.map((t) => tickLabel(t, data.percent));
   const m = { top: 8, right: 12, bottom: 22 + room.below, left: Math.max(...yLabels.map((l) => l.length)) * LABEL_CHAR + 10 + room.left };
   const plotW = Math.max(10, width - m.left - m.right);
@@ -289,7 +291,7 @@ function ScatterChart({ data, chart, width, height }: { data: ChartData; chart: 
       ))}
       {xTicks.map((t) => (
         <text key={`x${t}`} x={x(t)} y={height - 6 - room.below} className="sheet-chart-tick" textAnchor="middle">
-          {tickLabel(t, false)}
+          {xLabel(t)}
         </text>
       ))}
       {marks}
