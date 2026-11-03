@@ -49,6 +49,13 @@ interface Props {
   engineFailed: string | null;
   /** The workbook is needed (a cell was touched). */
   onWant(): void;
+  /**
+   * Saves edits the workbook never took, without the engine: its chunk did not load, or the embed
+   * goes away before it arrives. False when they could not be kept.
+   */
+  keep(edits: CellEdit[]): boolean;
+  /** Loads the engine again after it failed. */
+  onRetry(): void;
 }
 
 interface At {
@@ -114,17 +121,43 @@ export function EmbedGrid(props: Props) {
   const anchor = inside(chosen) && inside(chosenAnchor) ? chosenAnchor : active;
   const selection = spanOf(active, anchor);
 
-  // Typed before the workbook loaded: applied now, as one undo step.
+  /** Typed edits that could not be kept (the file cannot be read either). */
+  const [lost, setLost] = useState(false);
+  const keep = useRef(props.keep);
   useEffect(() => {
-    if (!workbook || pending.current.length === 0) return;
-    const edits = pending.current;
-    pending.current = [];
-    try {
-      workbook.setCells(edits, { implyFormats: true });
-    } catch (e) {
-      console.error('[links] an embed edit failed', e);
+    keep.current = props.keep;
+  });
+  const failed = props.engineFailed !== null || props.problem !== null;
+
+  // Typed before the workbook loaded: applied now, as one undo step. When the engine fails
+  // instead, they are saved without it, so a typed value is never dropped.
+  useEffect(() => {
+    if (pending.current.length === 0) return;
+    if (workbook) {
+      const edits = pending.current;
+      pending.current = [];
+      try {
+        workbook.setCells(edits, { implyFormats: true });
+      } catch (e) {
+        console.error('[links] an embed edit failed', e);
+      }
+    } else if (failed) {
+      const edits = pending.current;
+      pending.current = [];
+      if (!keep.current(edits)) setLost(true);
     }
-  }, [workbook]);
+  }, [workbook, failed]);
+
+  // Leaving before the engine arrived (the note scrolled the embed away): the edits are saved now.
+  useEffect(
+    () => () => {
+      if (pending.current.length === 0) return;
+      const edits = pending.current;
+      pending.current = [];
+      keep.current(edits);
+    },
+    [],
+  );
 
   const open = (e?: MouseEvent) => {
     e?.stopPropagation();
@@ -601,7 +634,19 @@ export function EmbedGrid(props: Props) {
           {errorHint && <span className="sheet-live-error">{errorHint}</span>}
         </div>
       )}
-      {props.engineFailed && <p className="sheet-embed-note">The spreadsheet engine could not be loaded, so this grid is read-only for now.</p>}
+      {props.engineFailed && (
+        <p className="sheet-embed-note">
+          The spreadsheet engine could not be loaded, so this grid is read-only for now.{' '}
+          <button type="button" className="link-button" onClick={props.onRetry}>
+            Try again
+          </button>
+        </p>
+      )}
+      {lost && (
+        <p className="sheet-embed-note sheet-live-error" role="alert">
+          The change you typed could not be saved. Open the spreadsheet to make it there.
+        </p>
+      )}
       {body}
       {range && full && (full.height > range.height || full.width > range.width) && (
         <p className="sheet-embed-note">

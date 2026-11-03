@@ -6,7 +6,7 @@
 import { MAX_COLUMNS, MAX_ROWS, parseA1, toA1 } from './a1';
 import { effectiveFormat, shownCell } from './display';
 import type { CellEdit } from './engine';
-import { cellValue, isCellError, type CellValue, type Sheet, type SheetCell } from './format';
+import { cellValue, isCellError, type CellValue, type Sheet, type SheetCell, type SheetFile } from './format';
 import { typedInput } from './input';
 import { straightenFormula } from './smartQuotes';
 import { formatKind, isDateKind, isGeneral } from './numfmt';
@@ -337,4 +337,32 @@ export function pasteEdits(
     }
   }
   return { edits: changed(sheet, edits), range };
+}
+
+/**
+ * `edits` written into `file` without the formula engine, as the workbook's setCells writes them
+ * (formatting and unknown keys stay with a cell, what it held is replaced). Formulas keep their
+ * cached values until an engine calculates the file again: its `engine` is cleared, so the next
+ * workbook opened from it rewrites them (DESIGN §6.47.5). For edits typed into an embed whose
+ * engine chunk did not arrive.
+ */
+export function withEditsWithoutEngine(file: SheetFile, edits: ReadonlyArray<CellEdit>): SheetFile {
+  const sheets = file.sheets.map((sheet) => {
+    const mine = edits.filter((e) => e.sheet === sheet.id && parseA1(e.ref) !== null);
+    if (mine.length === 0) return sheet;
+    const cells = { ...sheet.cells };
+    for (const { ref, content, fmt } of mine) {
+      const before = cells[ref];
+      const after: SheetCell = {};
+      if (content?.f !== undefined) after.f = content.f;
+      else if (content?.v !== undefined) after.v = content.v;
+      const format = fmt === undefined ? before?.fmt : (fmt ?? undefined);
+      if (format !== undefined) after.fmt = format;
+      if (before?.extra) after.extra = before.extra;
+      if (Object.keys(after).length === 0) delete cells[ref];
+      else cells[ref] = after;
+    }
+    return { ...sheet, cells };
+  });
+  return { ...file, engine: '', sheets };
 }

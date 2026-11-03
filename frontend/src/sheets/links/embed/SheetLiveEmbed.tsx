@@ -20,7 +20,9 @@ import { SheetChart } from '../../../views/sheet/SheetChart';
 import SheetEmbed from '../../../views/sheet/SheetEmbed';
 import { sheetBinding, type SheetDocument } from '../../../views/sheet/useSheetDocument';
 import type { EmbedProps } from '../../../views/registry';
-import { parseSheet, type SheetFile } from '../../format';
+import { withEditsWithoutEngine } from '../../edits';
+import type { CellEdit } from '../../engine';
+import { parseSheet, serializeSheet, type SheetFile } from '../../format';
 import { chartName, embedCaption, findChart, readsNotes } from '../embedTarget';
 import { EmbedGrid } from './EmbedGrid';
 
@@ -85,6 +87,16 @@ function LiveEmbed(props: EmbedProps) {
       problem={problem}
       engineFailed={doc?.kind === 'failed' ? doc.message : null}
       onWant={() => setWanted(true)}
+      keep={(edits: CellEdit[]) => {
+        // Into the session's text, so they are saved (and the workbook, once it opens, has them).
+        if (!session.isEditable()) return false;
+        const current = parseSheet(session.getText());
+        if (!current.ok) return false;
+        const text = serializeSheet(withEditsWithoutEngine(current.file, edits));
+        session.markDirty(() => text);
+        return true;
+      }}
+      onRetry={binding.retry}
     />
   );
 }
