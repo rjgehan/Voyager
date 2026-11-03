@@ -46,4 +46,4 @@ x-casaos:
     en_us: Transcription of Voyager voice notes
   description:
     en_us: A local Whisper speech-to-text service for Voyager's voice notes. It listens on the host's loopback only. Set NOTES_TRANSCRIPTION_URL to http://127.0.0.1:18097 in Voyager's settings after installing (docs/CASAOS.md).
-  icon: https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/obsidian.png
+  icon: https://raw.githubusercontent.com/rjgehan/notesapp/main/frontend/public/icon-192.png

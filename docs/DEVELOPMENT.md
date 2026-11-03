@@ -1,6 +1,6 @@
-# Developing NotesApp
+# Developing Voyager
 
-How to run, test and change NotesApp locally, how the repository is laid out, and how a change reaches the server. The design is in [DESIGN.md](DESIGN.md) and the API contract in [API.md](API.md).
+How to run, test and change Voyager locally, how the repository is laid out, and how a change reaches the server. The design is in [DESIGN.md](DESIGN.md) and the API contract in [API.md](API.md).
 
 ## Repository layout
 
@@ -16,7 +16,7 @@ How to run, test and change NotesApp locally, how the repository is laid out, an
 | `Dockerfile` | Three stages: frontend build, backend build (JDK 21), JDK 25 runtime with an AOT cache |
 | `docs/` | Design, API contract, deployment runbooks, roadmap, feature list, screenshots (`images/`) |
 | `perf/` | The load-test kit: a large generated vault, and measurements of the production jar and of the app in a browser ([PERFORMANCE.md](PERFORMANCE.md)) |
-| `scripts/` | `third-party-notices.mjs`, which regenerates `THIRD_PARTY_NOTICES.md` |
+| `scripts/` | `third-party-notices.mjs`, which regenerates `THIRD_PARTY_NOTICES.md`; `brand/`, the icon's drawings and the scripts that render every icon and the images with the name ([BRAND.md](../BRAND.md)) |
 
 ## Local development (Windows)
 
@@ -72,3 +72,4 @@ Rolling back, pausing updates, backups and everything else on the server side ar
 - App CSS uses no `rem` (a test checks it): the root keeps the browser's 16 px for Excalidraw.
 - Vault data stays plain files (or `.notesapp/…`); secrets live only under `/data/secrets`, never in the repository.
 - New dependencies need a licence compatible with GPL-3.0 and an exact version; after changing them, run `node scripts/third-party-notices.mjs` from the repository root.
+- The product is **Voyager** in everything people read ([BRAND.md](../BRAND.md)); identifiers keep the old name `notesapp` (the image, the repository, `NOTES_*`, `.notesapp/`, storage keys, cache names, the desktop app's id). Icons come from `scripts/brand/` (`node scripts/brand/render-icons.mjs`), never edited as PNGs.

@@ -1,9 +1,11 @@
-# NotesApp Roadmap
+# Voyager Roadmap
+
+The app was called **NotesApp** until 2026-11-03 (item 45). The entries before item 45 keep the name they were written with.
 
 | | |
 |---|---|
 | Date | 2026-10-17 |
-| Status | **Everything approved, 2026-10-17** ("build all of the features"): items 1–41, built on the `build/roadmap` branch in waves and merged to `main` once verified. **Item 42** (notes ↔ sheets linking) and **item 43** (sharing with family) approved 2026-11-02. |
+| Status | **Everything approved, 2026-10-17** ("build all of the features"): items 1–41, built on the `build/roadmap` branch in waves and merged to `main` once verified. **Item 42** (notes ↔ sheets linking) and **item 43** (sharing with family) approved 2026-11-02. **Item 45** (the name Voyager and its icon) approved 2026-11-03. |
 | Decisions (2026-10-17) | **Server:** homeserver, as designed. **Formula engine** (items 6 and 39): GPL-3.0 with HyperFormula; the repository becomes GPL-3.0. **Reminder delivery** (item 9): undecided, so every route is built and each one is switched on in Settings. **Public publishing** (item 26): built switched off; nothing is exposed until you enable it. **No iOS app**; the phone uses the web app. **Desktop app** (item 41): Electron, because rgpc has no Rust toolchain. |
 | Build order | Wave 1: 10, 6, 4, 5, then 1, 2, 23 and 38. Wave 2: 3, 39, 40 (with 17), 13, 12, 7, 19, 8, 22. Wave 3: everything else except 37 and 41. Wave 4: 37 and 41, then end-to-end verification. |
 
@@ -93,6 +95,7 @@ DESIGN.md has the details.
 | 42 | **Notes ↔ sheets linking: editable sheet embeds, sheets reading notes, notes reading sheets** *(new, approved 2026-11-02; built 2026-11-02, `feat/notes-sheets`)* | H | M | 6, 39, 10, 40 |
 | 43 | **Share a note with family** *(new, approved 2026-11-02; built 2026-11-02, `feat/family-share`)* | M | M | 37 for multiple vaults |
 | 44 | Security audit follow-ups *(proposed 2026-11-02, not approved; a. built 2026-11-02)* | M | M | |
+| 45 | **Voyager: the app's new name and icon** *(renamed from NotesApp, 2026-11-03; built on `feat/voyager`)* | M | S | 41 for the desktop app |
 
 ---
 
@@ -1297,6 +1300,23 @@ The audit of 2026-11-02 (docs/SECURITY.md) fixed what could be fixed in small st
 - **c. PDF text extraction in a child process** with its own small heap (R4, F3), so a crafted PDF costs nothing instead of one restart. **S**.
 - **d. Scripts in notes default to *Ask before running*** (R3), at least for notes that arrived from elsewhere (an import, a clip, a file created outside the app). **S**.
 - **e. Web Push connections pinned to the checked address** (R5, DNS rebinding), with a socket factory that refuses non-public peers at connect time. **S**, low value: only an admitted caller can subscribe.
+
+### 45. Voyager: the app's new name and icon (renamed from NotesApp, 2026-11-03)
+
+**One line:** the app is called **Voyager**, with a new icon, the *pale blue dot*; nothing the server, the vault or an installed app relies on changes.
+
+| Value | Effort | Depends on |
+|---|---|---|
+| M | S | 41 (the desktop app's update) |
+
+**Why the name** (approved by the user on 2026-11-03; [BRAND.md](../BRAND.md) has the whole story): Voyager is built to last, like the probes that have been sending data home since 1977, which is what plain files and full version history are for; it is your own Golden Record, with notes, sheets, drawings and tasks in one place; and it goes with you, on the PC and the iPhone. The icon is Voyager 1's photograph of Earth as a tiny dot in a sunbeam.
+
+**Status:** built on branch `feat/voyager` (not merged yet).
+- **Renamed:** every name people read: the tab title, the installed app's name and the Home Screen label, the top bar, Settings, Help and the user guide, the welcome notes (server, mock and demo), messages and refusals, app alerts and their ntfy titles, the backup alerts, the share and offline pages, the demo build's meta tags and social preview, the clipper's name and menus, the CasaOS titles and icons, the documentation. The desktop app is Voyager 1.1.0 (`Voyager-Setup-1.1.0.exe`).
+- **Kept, so nothing breaks:** Java packages, the Maven artifactId, npm package names, the image `ghcr.io/rjgehan/notesapp` (Watchtower), `NOTES_*` variables and settings keys, the vault's `.notesapp/` folder, API paths, `notesapp:*` storage keys and `notesapp-*` cache names (offline data), file `type`s and message types, the repository, the desktop app's id `com.rjgehan.notesapp.desktop` (so Voyager's installer replaces NotesApp in place), the desktop user-data folder of a computer that had NotesApp, and the git committer identity `NotesApp <notesapp@notes>` (it authors the app's commits in the history).
+- **The icon:** deep space from dark indigo into the app's purple, a soft diagonal sunbeam, and a small pale-blue dot with a gentle glow in it, off-centre; a simplified drawing (wider beam, bigger dot) for 16 to 48 px. `scripts/brand/` holds both drawings and the scripts that render every icon (web app, Home Screen, desktop, clipper) and the images with the name, with headless Edge and no new dependency.
+- **Desktop upgrade:** DESIGN §6.39 and DESKTOP.md *Updating from NotesApp*: one app in Settings › Apps afterwards, settings and offline data kept, launch at login registered again.
+- **By hand:** an iPhone Home Screen app added before the rename keeps the old name and icon until it is removed and added again (Phone tips in the guide); the desktop app is installed once from the new installer; the repository's social preview image is uploaded in GitHub's settings.
 
 ---
 

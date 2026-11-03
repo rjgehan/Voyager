@@ -1,6 +1,6 @@
-# NotesApp features
+# Voyager features
 
-Everything NotesApp does, in one list. The [README](../README.md) has the highlights with screenshots, and the [live demo](https://rjgehan.github.io/notesapp/) lets you try most of it in the browser. How each feature works is in [DESIGN.md](DESIGN.md); what was built when is in [ROADMAP.md](ROADMAP.md).
+Everything Voyager does, in one list. The [README](../README.md) has the highlights with screenshots, and the [live demo](https://rjgehan.github.io/notesapp/) lets you try most of it in the browser. How each feature works is in [DESIGN.md](DESIGN.md); what was built when is in [ROADMAP.md](ROADMAP.md).
 
 - **Obsidian-compatible vault.** Plain `.md` files in any folder layout, `[[wikilinks]]` (aliases, headings, block ids), `![[embeds]]`, YAML frontmatter shown as properties, nested `#tags`, ordinary attachment files and a `.trash/` folder. Obsidian desktop can open a copy of the vault unchanged.
 - **Never lose a keystroke.** Atomic writes, content-hash version checks, a conflict banner with side-by-side compare, unsaved edits kept in the browser until the server confirms them, and a git history of every change (inside the vault, via JGit) with diff and restore.

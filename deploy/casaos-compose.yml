@@ -94,5 +94,5 @@ x-casaos:
   tagline:
     en_us: Self-hosted Obsidian-style notes, tailnet only
   description:
-    en_us: Markdown vault with wikilinks, backlinks, search, history and live sync. Open it at https://homeserver.<tailnet>.ts.net:8443 from any Tailscale device.
-  icon: https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/obsidian.png
+    en_us: Your notes, sheets, drawings and tasks as plain files with full history, live on every device. Markdown vault with wikilinks, backlinks and search. Open it at https://homeserver.<tailnet>.ts.net:8443 from any Tailscale device.
+  icon: https://raw.githubusercontent.com/rjgehan/notesapp/main/frontend/public/icon-192.png

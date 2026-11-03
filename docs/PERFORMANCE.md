@@ -1,6 +1,6 @@
 # Performance at scale
 
-How NotesApp behaves with a large vault, how to measure it again, what was fixed, and what is known to stay slow. The targets that the build checks are in [DESIGN §5.19](DESIGN.md#519-performance-targets); this document is the wider survey behind them.
+How Voyager behaves with a large vault, how to measure it again, what was fixed, and what is known to stay slow. The targets that the build checks are in [DESIGN §5.19](DESIGN.md#519-performance-targets); this document is the wider survey behind them.
 
 ## The load-test kit (`perf/`)
 

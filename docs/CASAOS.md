@@ -1,4 +1,4 @@
-# Installing NotesApp on CasaOS
+# Installing Voyager on CasaOS
 
 This is the short path for a CasaOS server that already runs Tailscale on the host: one compose file pasted into the CasaOS UI, two commands over SSH, no `.env`. [DEPLOY.md](DEPLOY.md) is the full runbook (plain Docker Compose, backups, rollback, troubleshooting); what it says about Watchtower and the app applies here too. The optional extras further down (app alerts, the GitHub mirror, voice note transcription, Ask your vault with Claude, nightly backups, public publishing) are off until you set them up, and a fresh install needs none of them.
 
@@ -14,6 +14,8 @@ The **host's own Tailscale** gives the HTTPS address and your login: `tailscale 
 Data lives in `/DATA/AppData/notesapp/data/`: `vault/` holds your notes and their git history. `secrets/` (the alert and mirror settings, the Claude token or Anthropic API key), `../whisper/` (the transcription model) and `../backup/` appear only if you set up the extras below.
 
 An older layout with its own Tailscale container is kept as an appendix (*Advanced: own Tailscale container*); CasaOS cannot run it as it stands.
+
+**Installed before November 2026?** The app was called NotesApp then (ROADMAP item 45). CasaOS keeps the title an app had when it was imported, so your dashboard still shows *NotesApp* (and *NotesApp Backup*, *NotesApp Whisper*) where this page says *Voyager*: they are the same apps. Nothing needs reinstalling: the image, the container names (`notesapp`, `notesapp-watchtower`, `notesapp-backup`, …), the data folder `/DATA/AppData/notesapp` and every `NOTES_*` setting are unchanged, and Watchtower brings the renamed app like any other update. Pasting the current compose file again only changes the title, description and icon in the dashboard.
 
 ## 1. Before installing (once)
 
@@ -52,10 +54,10 @@ curl -sI http://127.0.0.1:18095 | head -1                # on the host: still an
 
 ## Import an Obsidian vault
 
-Do this right after installing, before you write notes in NotesApp: a vault whose data folder has no settings yet takes its settings from Obsidian's `.obsidian/` folder at its first start (attachment folder, new notes, link format, excluded files, daily notes, templates, …; ROADMAP item 24). `.obsidian/` is read but never changed, so the vault keeps working in Obsidian. DEPLOY.md *Import an Obsidian vault* has the details.
+Do this right after installing, before you write notes in Voyager: a vault whose data folder has no settings yet takes its settings from Obsidian's `.obsidian/` folder at its first start (attachment folder, new notes, link format, excluded files, daily notes, templates, …; ROADMAP item 24). `.obsidian/` is read but never changed, so the vault keeps working in Obsidian. DEPLOY.md *Import an Obsidian vault* has the details.
 
 1. **Copy the vault to the server.** Close Obsidian (or let its sync finish), then from your PC, for example: `scp -r "C:\Users\<you>\Documents\MyVault" <you>@<server>:/tmp/MyVault`. Without SSH, zip the vault, upload it with CasaOS's **Files** app to `/DATA`, and unzip it there (Files → right-click → Extract); an iCloud vault must be fully downloaded on the PC first.
-2. **Swap it in**, in CasaOS's terminal or over SSH (the app's data folder must contain only the empty vault NotesApp created, with at most its `Welcome.md`):
+2. **Swap it in**, in CasaOS's terminal or over SSH (the app's data folder must contain only the empty vault Voyager created, with at most its `Welcome.md`):
    ```sh
    docker stop notesapp
    sudo mv /DATA/AppData/notesapp/data/vault /DATA/AppData/notesapp/data/vault.empty
@@ -65,9 +67,9 @@ Do this right after installing, before you write notes in NotesApp: a vault whos
    docker start notesapp
    ```
    The app is ready at once and records the import in its history in the background. Once the notes show up, delete `vault.empty` (and `/tmp/MyVault`).
-3. **Check `https://homeserver.<tailnet>.ts.net:8443/x/compat`**, the *Compatibility report* (also in the drawer and Settings › About): every Obsidian setting should be *In effect*. It lists the plugins the vault used and what NotesApp offers instead, and everything that does not carry over (Dataview queries, Templater commands, links to missing files or headings, …), each opening the note at its line. **Use them on this device** takes Obsidian's graph colors and forces for the graph view, once per device.
+3. **Check `https://homeserver.<tailnet>.ts.net:8443/x/compat`**, the *Compatibility report* (also in the drawer and Settings › About): every Obsidian setting should be *In effect*. It lists the plugins the vault used and what Voyager offers instead, and everything that does not carry over (Dataview queries, Templater commands, links to missing files or headings, …), each opening the note at its line. **Use them on this device** takes Obsidian's graph colors and forces for the graph view, once per device.
 
-If the vault has its own `.git` (the obsidian-git plugin), it is kept and NotesApp commits to it; turn the plugin off in Obsidian. Into an installation that already has notes, copy the vault into a subfolder instead and leave out its `.obsidian` and `.git` (DEPLOY.md).
+If the vault has its own `.git` (the obsidian-git plugin), it is kept and Voyager commits to it; turn the plugin off in Obsidian. Into an installation that already has notes, copy the vault into a subfolder instead and leave out its `.obsidian` and `.git` (DEPLOY.md).
 
 ## Updating
 
@@ -77,7 +79,7 @@ Push to `main`. CI builds and publishes the image, and Watchtower restarts `note
 
 ## Optional extras
 
-Each is off until you set it up, and each is the CasaOS form of a section of [DEPLOY.md](DEPLOY.md), which has the background. To change an environment variable of the app: CasaOS → NotesApp → **Settings**, the `notes` container, edit the variable, **Save** (CasaOS recreates the container). The files below go in `/DATA/AppData/notesapp/data/secrets/`, next to the vault but never inside it, so they never reach git, the trash or the mirror. The nightly backups copy them, encrypted.
+Each is off until you set it up, and each is the CasaOS form of a section of [DEPLOY.md](DEPLOY.md), which has the background. To change an environment variable of the app: CasaOS → Voyager → **Settings**, the `notes` container, edit the variable, **Save** (CasaOS recreates the container). The files below go in `/DATA/AppData/notesapp/data/secrets/`, next to the vault but never inside it, so they never reach git, the trash or the mirror. The nightly backups copy them, encrypted.
 
 ```sh
 sudo install -d -o 1000 -g 1000 -m 700 /DATA/AppData/notesapp/data/secrets   # once; uid 1000 is the app's user
@@ -97,9 +99,9 @@ No restart is needed. On the status page, *App alerts* then says "sent to ntfy a
 
 ### Reminders (Web Push, ntfy, in the app)
 
-Task reminders (set in a task's details) and an optional daily-note nudge (DEPLOY.md *Reminders*). Every way of delivering them is **off until you switch it on** in NotesApp's **Settings › Reminders**; nothing needs to change in CasaOS for Web Push or in-app reminders.
+Task reminders (set in a task's details) and an optional daily-note nudge (DEPLOY.md *Reminders*). Every way of delivering them is **off until you switch it on** in Voyager's **Settings › Reminders**; nothing needs to change in CasaOS for Web Push or in-app reminders.
 
-- **Web Push to the iPhone** (iOS 16.4 or later): open `https://homeserver.<tailnet>.ts.net:8443` in Safari, **Share › Add to Home Screen**, open NotesApp from the Home Screen icon, then **Settings › Reminders › Subscribe this device** and allow notifications. Switch on **Send by Web Push** and press **Send a test** next to the device. The app creates its push key in `/DATA/AppData/notesapp/data/secrets/push.json` on first use. Desktop Chrome, Edge and Firefox subscribe the same way, from a tab.
+- **Web Push to the iPhone** (iOS 16.4 or later): open `https://homeserver.<tailnet>.ts.net:8443` in Safari, **Share › Add to Home Screen**, open Voyager from the Home Screen icon, then **Settings › Reminders › Subscribe this device** and allow notifications. Switch on **Send by Web Push** and press **Send a test** next to the device. The app creates its push key in `/DATA/AppData/notesapp/data/secrets/push.json` on first use. Desktop Chrome, Edge and Firefox subscribe the same way, from a tab.
 - **ntfy** (the ntfy app, no Home Screen app needed): it uses the `ntfy.json` of *App alerts* above. To keep reminders apart from app problems, give them their own topic, subscribe to it in the ntfy app, and add it to the file:
 
   ```sh
@@ -109,7 +111,7 @@ Task reminders (set in a task's details) and an optional daily-note nudge (DEPLO
   ```
 
   Then switch on **Send through ntfy**. **Title only** (on by default) sends just the task's title: with ntfy.sh that title still leaves your tailnet.
-- **In the app:** **Show in open tabs** shows reminders in any open NotesApp tab (and as a browser notification after **Allow**).
+- **In the app:** **Show in open tabs** shows reminders in any open Voyager tab (and as a browser notification after **Allow**).
 
 Reminders use the time zone your devices report; **Settings › Reminders › Status** shows it, and the next reminders.
 
@@ -126,7 +128,7 @@ Then set `NOTES_MIRROR_URL` to `https://github.com/<you>/<repo>.git` in the app'
 
 ### Ask your vault (Claude)
 
-Questions about your notes with answers that cite them, summaries of a note, a folder, a selection or this week's daily notes, and suggested links, tags and tasks, written by Claude (DEPLOY.md *Ask your vault* has the details). By default it runs **Claude Code with your Claude subscription** (Pro or Max): the image contains the Claude Code CLI, and the server runs it for each question with every tool switched off, so Claude sees only the notes NotesApp hands it. **When you use it, your question and the text of the notes it needs are sent to Anthropic**; notes in excluded folders (`Private` by default) never are. Usage counts against your plan's usage limits like your own Claude use, and is for your personal use under your plan's terms. It stays off until you add a token **and** switch it on in Settings.
+Questions about your notes with answers that cite them, summaries of a note, a folder, a selection or this week's daily notes, and suggested links, tags and tasks, written by Claude (DEPLOY.md *Ask your vault* has the details). By default it runs **Claude Code with your Claude subscription** (Pro or Max): the image contains the Claude Code CLI, and the server runs it for each question with every tool switched off, so Claude sees only the notes Voyager hands it. **When you use it, your question and the text of the notes it needs are sent to Anthropic**; notes in excluded folders (`Private` by default) never are. Usage counts against your plan's usage limits like your own Claude use, and is for your personal use under your plan's terms. It stays off until you add a token **and** switch it on in Settings.
 
 1. **A token.** On any computer where Claude Code is logged in to your Claude account (`claude` once, then `/login`), run `claude setup-token`. It prints a long-lived token (`sk-ant-oat01-…`) for your subscription.
 2. **Save it on the server:**
@@ -153,14 +155,14 @@ Voice notes record without any setup (**Record voice note** in the command palet
 
 | Container | Job |
 |---|---|
-| `notesapp-whisper` | [whisper-asr-webservice](https://github.com/ahmetoner/whisper-asr-webservice) with faster-whisper on the CPU. Like NotesApp it shares the host's network and listens on the host's loopback only (`127.0.0.1:18097`), so only NotesApp and the host reach it, and it keeps no audio |
+| `notesapp-whisper` | [whisper-asr-webservice](https://github.com/ahmetoner/whisper-asr-webservice) with faster-whisper on the CPU. Like Voyager it shares the host's network and listens on the host's loopback only (`127.0.0.1:18097`), so only Voyager and the host reach it, and it keeps no audio |
 
 1. Optionally change `ASR_MODEL` in the file: `base` for a slow or arm64 CPU, `small` (the default), `medium` for better text with a strong CPU and about 2 GB of RAM.
-2. CasaOS → **App Store → Custom Install → Import**, paste, **Submit**, **Install**. The image is large (about 2.7 GB); on its first start it downloads the model into `/DATA/AppData/notesapp/whisper` (about 0.5 GB for `small`). Its log (CasaOS → NotesApp Whisper → **Logs**) shows when it is ready.
-3. In NotesApp's settings (the `notes` container, as above), set `NOTES_TRANSCRIPTION_URL` to `http://127.0.0.1:18097` and save. Optionally add `NOTES_TRANSCRIPTION_LANGUAGE` (for example `en`; empty detects the language of each recording).
+2. CasaOS → **App Store → Custom Install → Import**, paste, **Submit**, **Install**. The image is large (about 2.7 GB); on its first start it downloads the model into `/DATA/AppData/notesapp/whisper` (about 0.5 GB for `small`). Its log (CasaOS → Voyager Whisper → **Logs**) shows when it is ready.
+3. In Voyager's settings (the `notes` container, as above), set `NOTES_TRANSCRIPTION_URL` to `http://127.0.0.1:18097` and save. Optionally add `NOTES_TRANSCRIPTION_LANGUAGE` (for example `en`; empty detects the language of each recording).
 4. In the app, **Settings › This device** now says *New recordings are transcribed by whisper-asr at http://127.0.0.1:18097*. Record a few words to try it.
 
-To turn it off, empty `NOTES_TRANSCRIPTION_URL`, then uninstall the NotesApp Whisper app if you like. NotesApp runs the same with or without it. Other engines (whisper.cpp's server, speaches, an API) are in DEPLOY.md *Voice notes*; an API key goes in `/DATA/AppData/notesapp/data/secrets/transcription-key`, never in an environment variable.
+To turn it off, empty `NOTES_TRANSCRIPTION_URL`, then uninstall the Voyager Whisper app if you like. Voyager runs the same with or without it. Other engines (whisper.cpp's server, speaches, an API) are in DEPLOY.md *Voice notes*; an API key goes in `/DATA/AppData/notesapp/data/secrets/transcription-key`, never in an environment variable.
 
 ### Public publishing
 
@@ -169,7 +171,7 @@ To turn it off, empty `NOTES_TRANSCRIPTION_URL`, then uninstall the NotesApp Whi
 The publish server listens on `127.0.0.1` (here the host's loopback, like the app) unless `NOTES_PUBLISH_ADDRESS` says otherwise, so with this layout it takes these changes; none of them alone exposes anything to the internet:
 
 1. **Tailscale admin console → Access controls**: allow Funnel for the host, e.g. `"nodeAttrs": [ { "target": ["autogroup:member"], "attr": ["funnel"] } ]` (or a narrower target that includes the host).
-2. CasaOS → NotesApp → **Settings**, the `notes` container:
+2. CasaOS → Voyager → **Settings**, the `notes` container:
    - set `NOTES_PUBLISH_ENABLED` to `true`, `NOTES_PUBLISH_PORT` to `18096` (the publish server's port on the host's loopback; its default, 8081, is often taken on a host), and `NOTES_PUBLISH_BASE_URL` to `https://homeserver.<tailnet>.ts.net:10000` (only used for the links the app copies). Leave `NOTES_PUBLISH_ADDRESS` unset: `127.0.0.1` keeps the publish server off the LAN too;
    - **Save**. The log then says *Publish server listening on 127.0.0.1:18096*.
 3. Over SSH, put the publish server alone on the internet. Funnel offers the ports 443, 8443 and 10000; 443 and 8443 are taken here, so:
@@ -189,38 +191,38 @@ Settings › Vaults › **New vault** creates a separate vault (for example `wor
 
 ### Sharing with family
 
-Share **one note or one folder** with someone else, to view or to edit, without the rest of your vault (a shopping list with your partner, recipes with your parents). There are no accounts: NotesApp knows people by their Tailscale login, and a family member sees only what you shared with that login. DESIGN.md §5.40 has the design.
+Share **one note or one folder** with someone else, to view or to edit, without the rest of your vault (a shopping list with your partner, recipes with your parents). There are no accounts: Voyager knows people by their Tailscale login, and a family member sees only what you shared with that login. DESIGN.md §5.40 has the design.
 
-1. **Check that you are the owner.** `NOTES_IDENTITY_ALLOWED_LOGINS`, set when you installed (section 2), names the owners: your own Tailscale login (the email the admin console shows for you; comma-separate several people who should have *everything*). An install from an older compose file may have it unset: then set it in CasaOS → NotesApp → **Settings**, the `notes` container, and **Save**. Without it, everyone who can reach NotesApp already has the whole vault, so sharing stays off and **Settings › Sharing** says why. Never put family on this list: everyone on it has everything.
+1. **Check that you are the owner.** `NOTES_IDENTITY_ALLOWED_LOGINS`, set when you installed (section 2), names the owners: your own Tailscale login (the email the admin console shows for you; comma-separate several people who should have *everything*). An install from an older compose file may have it unset: then set it in CasaOS → Voyager → **Settings**, the `notes` container, and **Save**. Without it, everyone who can reach Voyager already has the whole vault, so sharing stays off and **Settings › Sharing** says why. Never put family on this list: everyone on it has everything.
 2. **Give them a way in.** Their phone or computer needs Tailscale, signed in to some account. Either:
    - **Share this machine** (recommended): admin console → **Machines** → the host → **⋯** → **Share…**, and send the invite to their email (or copy an invite link). They install Tailscale, sign in with their own account (Google, Apple, Microsoft, GitHub or email), and accept. They see only this machine, nothing else of your tailnet; their login is the account they accepted with. Sharing is on every Tailscale plan; your own tailnet does not grow.
    - **Invite them to your tailnet** (admin console → **Users** → **Invite users**): they then join as members, which counts toward your plan's users and, under the default *allow everything* policy, lets them reach **every** device of your tailnet. Only do this together with step 3.
-3. **Let them reach NotesApp and nothing else.** Tailscale's default policy allows every connection, and `"src": ["*"]` includes the people you share a machine with: they could open every port of the host (the CasaOS dashboard, your other apps). In the admin console → **Access controls**, replace the allow-all rule (`{"src": ["*"], "dst": ["*"], "ip": ["*"]}` in `grants`, or `{"action": "accept", "src": ["*"], "dst": ["*:*"]}` in older `acls`) with:
+3. **Let them reach Voyager and nothing else.** Tailscale's default policy allows every connection, and `"src": ["*"]` includes the people you share a machine with: they could open every port of the host (the CasaOS dashboard, your other apps). In the admin console → **Access controls**, replace the allow-all rule (`{"src": ["*"], "dst": ["*"], "ip": ["*"]}` in `grants`, or `{"action": "accept", "src": ["*"], "dst": ["*:*"]}` in older `acls`) with:
    ```json
    "hosts": { "homeserver": "100.x.y.z" },   // the host's Tailscale IPv4 (tailscale ip -4)
    "grants": [
      // You: everything, as before (list each login of yours).
      { "src": ["you@example.com"], "dst": ["*"], "ip": ["*"] },
-     // Everyone else: NotesApp's HTTPS port on the host, nothing more.
+     // Everyone else: Voyager's HTTPS port on the host, nothing more.
      { "src": ["autogroup:shared", "autogroup:member"], "dst": ["homeserver"], "ip": ["tcp:8443"] },
    ],
    ```
    (`autogroup:shared` is everyone you share a machine with; `autogroup:member` matters only if you invite members, and they keep reaching their own devices only if you add `{ "src": ["autogroup:member"], "dst": ["autogroup:self"], "ip": ["*"] }`.) The **Preview rules** tab shows what each person can reach. Your own access does not change.
-4. **Share.** In NotesApp: a note's **⋯** menu → **Share with family…**, a folder's (or note's) menu in the file list → **Share…**, or the command palette. Choose **Can view** or **Can edit**, type their Tailscale login (they can read it off the page in step 5 if you are not sure), optionally **Also make a link** and an end date, then **Share**, and send them the address the dialog shows. A link works for anyone who can reach NotesApp, so treat it like a key: it is shown once (the server keeps only a fingerprint of it), and **New link** or **Remove link** replaces or ends it.
+4. **Share.** In Voyager: a note's **⋯** menu → **Share with family…**, a folder's (or note's) menu in the file list → **Share…**, or the command palette. Choose **Can view** or **Can edit**, type their Tailscale login (they can read it off the page in step 5 if you are not sure), optionally **Also make a link** and an end date, then **Share**, and send them the address the dialog shows. A link works for anyone who can reach Voyager, so treat it like a key: it is shown once (the server keeps only a fingerprint of it), and **New link** or **Remove link** replaces or ends it.
 5. **What they see.** The address opens the note (or the folder's notes) in their browser: editable for *Can edit*, with your autosave, conflict handling and live updates, and your note's history records them as its author; read-only for *Can view*. `https://homeserver.<tailnet>.ts.net:8443` itself shows them everything shared with them and the login they are signed in with. On an iPhone, **Share → Add to Home Screen** keeps it one tap away. They never see your other notes, search, settings, history or anything else.
 
 **Settings › Sharing** lists every share with its people, link, end date and state; **Stop sharing** ends it at once, open pages included. To cut someone off from the host entirely, remove the machine share (or the user) in the admin console. Guessing addresses is rate-limited: a login refused 20 times in 15 minutes is locked out for a while, and with *App alerts* set up you get a notification (`SHARE_RATE_LIMITED`).
 
 ### Nightly backups
 
-A second CasaOS app, [`deploy/casaos-backup-compose.yml`](../deploy/casaos-backup-compose.yml), takes encrypted [restic](https://restic.net) snapshots of the vault, its history (and, with the advanced layout, the Tailscale identity) every night, to a second disk and optionally to Backblaze B2 or Amazon S3 (DEPLOY.md *Backups* explains the design: NotesApp is stopped for the seconds the local snapshot takes). It adds two containers:
+A second CasaOS app, [`deploy/casaos-backup-compose.yml`](../deploy/casaos-backup-compose.yml), takes encrypted [restic](https://restic.net) snapshots of the vault, its history (and, with the advanced layout, the Tailscale identity) every night, to a second disk and optionally to Backblaze B2 or Amazon S3 (DEPLOY.md *Backups* explains the design: Voyager is stopped for the seconds the local snapshot takes). It adds two containers:
 
 | Container | Job |
 |---|---|
 | `notesapp-backup` | The restic sidecar. Mounts the data read-only; every backup step runs in it |
 | `notesapp-backup-scheduler` | Starts each night's run at `NOTES_BACKUP_TIME` (04:00). Holds the Docker socket, like Watchtower, to stop and start `notesapp` |
 
-It refuses to install until steps 1 and 2 are done, and NotesApp itself runs the same with or without it.
+It refuses to install until steps 1 and 2 are done, and Voyager itself runs the same with or without it.
 
 **1. A second disk.** Add it in CasaOS's storage settings, or mount it yourself (DEPLOY.md *Set up the nightly backups*, step 1). Note where it is mounted, then create the repository directory on it. It must be a different filesystem from `/DATA`, or the backup refuses to run:
 
@@ -241,11 +243,11 @@ sudo nano /DATA/AppData/notesapp/backup/secrets/backup-offsite-credentials   # S
 sudo cat /DATA/AppData/notesapp/backup/secrets/restic-password              # into your password manager, now
 ```
 
-The credentials file has the AWS format shown in DEPLOY.md step 3, for B2 too. **Keep the password in your password manager**: the snapshots are encrypted with it, and without it nothing can be restored. When an update changes `deploy/backup/`, copy the scripts again and restart the NotesApp Backup app.
+The credentials file has the AWS format shown in DEPLOY.md step 3, for B2 too. **Keep the password in your password manager**: the snapshots are encrypted with it, and without it nothing can be restored. When an update changes `deploy/backup/`, copy the scripts again and restart the Voyager Backup app.
 
-**3. Install.** In `casaos-backup-compose.yml`, replace `/media/CHANGE-ME/notes-restic` with the directory from step 1, and set as needed: `TZ` (the same as NotesApp's), `NOTES_BACKUP_OFFSITE_REPO` (B2: `s3:https://s3.us-west-004.backblazeb2.com/<bucket>/notes`; S3: `s3:https://s3.<region>.amazonaws.com/<bucket>/notes`; empty = the second disk only), `NOTES_BACKUP_NTFY_URL` (`https://ntfy.sh/notes-<hex>`, for failures and a weekly OK on Sundays) and `NOTES_BACKUP_HEARTBEAT_URL` (optional, a healthchecks.io ping URL). Then CasaOS → **App Store → Custom Install → Import**, paste, **Submit**, **Install**.
+**3. Install.** In `casaos-backup-compose.yml`, replace `/media/CHANGE-ME/notes-restic` with the directory from step 1, and set as needed: `TZ` (the same as Voyager's), `NOTES_BACKUP_OFFSITE_REPO` (B2: `s3:https://s3.us-west-004.backblazeb2.com/<bucket>/notes`; S3: `s3:https://s3.<region>.amazonaws.com/<bucket>/notes`; empty = the second disk only), `NOTES_BACKUP_NTFY_URL` (`https://ntfy.sh/notes-<hex>`, for failures and a weekly OK on Sundays) and `NOTES_BACKUP_HEARTBEAT_URL` (optional, a healthchecks.io ping URL). Then CasaOS → **App Store → Custom Install → Import**, paste, **Submit**, **Install**.
 
-**4. Create the repositories and run the first backup by hand.** NotesApp is down while the first run reads every file:
+**4. Create the repositories and run the first backup by hand.** Voyager is down while the first run reads every file:
 
 ```sh
 docker exec notesapp-backup sh /backup/restic-job.sh init
@@ -254,7 +256,7 @@ docker exec notesapp-backup-scheduler sh /backup/nightly.sh   # ends with "backu
 docker exec notesapp-backup sh /backup/restic-job.sh snapshots
 ```
 
-The status page's *Backups* card now shows the run, and lists a failed run, or none for 36 hours, among its problems. A failure alert names the failed steps; restic's own messages are on the status page and in `docker logs notesapp-backup-scheduler`. Everything else in DEPLOY.md *Backups* applies with `docker exec notesapp-backup …` and `docker exec notesapp-backup-scheduler …` in place of `docker compose exec backup …` and `docker compose exec backup-scheduler …`. To pause the backups, stop the NotesApp Backup app in CasaOS.
+The status page's *Backups* card now shows the run, and lists a failed run, or none for 36 hours, among its problems. A failure alert names the failed steps; restic's own messages are on the status page and in `docker logs notesapp-backup-scheduler`. Everything else in DEPLOY.md *Backups* applies with `docker exec notesapp-backup …` and `docker exec notesapp-backup-scheduler …` in place of `docker compose exec backup …` and `docker compose exec backup-scheduler …`. To pause the backups, stop the Voyager Backup app in CasaOS.
 
 **Restore** (the whole vault; the current one is moved aside, never deleted). restic restores into an empty directory, here in the backup app's cache folder:
 
@@ -291,12 +293,12 @@ Use `offsite` instead of `local` when the second disk is gone. Check the result 
 | `notesapp` keeps restarting, log says `notes.git.large-file-threshold (…) is below the largest text size limit` | Set `NOTES_GIT_LARGE_FILE_THRESHOLD` to `0` or at least `5MB` (*Large files*). |
 | *Mirror is off: …* in the status bar | `NOTES_MIRROR_URL` is not a plain `https://github.com/<you>/<repo>.git` URL (*GitHub mirror*). Other mirror messages: DEPLOY.md Part 3. |
 | The *Ask* panel says *no Claude Code token* or *not readable* | `/DATA/AppData/notesapp/data/secrets/claude-token` is missing, empty or not owned by uid 1000 (*Ask your vault*). *Claude Code refused the token*: run `claude setup-token` again and replace the file. *usage limit is reached*: your plan's limit; wait for it to reset. Other messages: DEPLOY.md *"Ask your vault says it is unavailable"*. |
-| NotesApp Backup does not install: `bind source path does not exist` | The repository directory (step 1), `backup/scripts` or `backup/secrets` (step 2) is missing, or the second disk is not mounted. |
-| *NotesApp backup failed* | The status page's *Backups* card has restic's message; DEPLOY.md *"NotesApp backup failed"* explains each one. `not initialized`: run `init` (step 4). |
-| *NotesApp is down after the backup* | Restart NotesApp in CasaOS (or `docker start notesapp`), then read its log. |
-| Status page: "No backup has reported here yet" | NotesApp Backup is not installed, or has not run yet (step 4). |
-| *Transcribing … failed: cannot connect to http://127.0.0.1:18097* | The NotesApp Whisper app is stopped or still downloading its model (its **Logs**). Its compose must have `network_mode: host` and the `command` that sets `--host 127.0.0.1 --port 18097`. |
-| *Transcription is off* | `NOTES_TRANSCRIPTION_URL` is empty in NotesApp's settings (*Voice note transcription*, step 3). |
+| Voyager Backup does not install: `bind source path does not exist` | The repository directory (step 1), `backup/scripts` or `backup/secrets` (step 2) is missing, or the second disk is not mounted. |
+| *Voyager backup failed* | The status page's *Backups* card has restic's message; DEPLOY.md *"Voyager backup failed"* explains each one. `not initialized`: run `init` (step 4). |
+| *Voyager is down after the backup* | Restart Voyager in CasaOS (or `docker start notesapp`), then read its log. |
+| Status page: "No backup has reported here yet" | Voyager Backup is not installed, or has not run yet (step 4). |
+| *Transcribing … failed: cannot connect to http://127.0.0.1:18097* | The Voyager Whisper app is stopped or still downloading its model (its **Logs**). Its compose must have `network_mode: host` and the `command` that sets `--host 127.0.0.1 --port 18097`. |
+| *Transcription is off* | `NOTES_TRANSCRIPTION_URL` is empty in Voyager's settings (*Voice note transcription*, step 3). |
 | *Microphone access was refused* | Safari's **aA** menu › Website Settings › Microphone › Allow (iPhone), or the site settings in the browser. |
 
 ## Advanced: own Tailscale container
@@ -313,7 +315,7 @@ To use it:
 
 Publishing with this layout: set `NOTES_PUBLISH_FUNNEL` to `true` on the `tailscale` container (its next start writes a `serve.json` with `:8443` → `notesapp:8081` and Funnel for that port alone), `NOTES_PUBLISH_ENABLED` to `true` and `NOTES_PUBLISH_BASE_URL` to `https://notes.<tailnet>.ts.net:8443` on `notes`, and allow Funnel for `tag:notes` in the access controls (`"nodeAttrs": [ { "target": ["tag:notes"], "attr": ["funnel"] } ]`).
 
-The NotesApp Whisper app listens on the host's loopback, which the app cannot reach in this layout (it is not on the host's network). Put it on the app's network instead: in its compose, replace `network_mode: host` and `command:` with `networks: [notesapp]` and add
+The Voyager Whisper app listens on the host's loopback, which the app cannot reach in this layout (it is not on the host's network). Put it on the app's network instead: in its compose, replace `network_mode: host` and `command:` with `networks: [notesapp]` and add
 
 ```yaml
 networks:

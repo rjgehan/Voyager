@@ -1,5 +1,5 @@
 name: Pages
-# The live demo (README "Try the live demo", DESIGN §6.46): the frontend built with its in-memory
+# Voyager's live demo (README "Try the live demo", DESIGN §6.46): the frontend built with its in-memory
 # mock API and a showcase vault, published to GitHub Pages at https://rjgehan.github.io/notesapp/.
 # Nothing in it talks to a server; every visitor gets a fresh copy of the demo vault in the browser.
 on:

@@ -1,6 +1,6 @@
 # Security policy
 
-NotesApp is a self-hosted, single-owner notes server: your notes never leave your server unless you turn on a feature that sends them somewhere (the history mirror, Ask your vault, publishing). How it is protected, what it trusts in each way of deploying it, and the risks that remain are written down in [docs/SECURITY.md](docs/SECURITY.md). Read its *Hardening advice* before exposing an instance; in particular, the CasaOS layout that publishes port `18095` needs the firewall rule described there.
+Voyager is a self-hosted, single-owner notes server: your notes never leave your server unless you turn on a feature that sends them somewhere (the history mirror, Ask your vault, publishing). How it is protected, what it trusts in each way of deploying it, and the risks that remain are written down in [docs/SECURITY.md](docs/SECURITY.md). Read its *Hardening advice* before exposing an instance; in particular, the CasaOS layout that publishes port `18095` needs the firewall rule described there.
 
 ## Supported versions
 
@@ -27,7 +27,7 @@ In scope: the backend (the API, the event stream, raw file serving, the publish 
 
 Out of scope:
 
-- Tailscale, Docker, CasaOS and other software NotesApp runs on, unless NotesApp uses or configures them insecurely;
+- Tailscale, Docker, CasaOS and other software Voyager runs on, unless Voyager uses or configures them insecurely;
 - attacks that need root on the server or control of the owner's device;
 - the residual risks that docs/SECURITY.md documents with their mitigation (for example a LAN device reaching port `18095` of the older CasaOS bridge variant without the firewall rule), unless you found a way around the mitigation;
 - denial of service by the owner against their own instance, and findings from automated scanners without a demonstrated impact.

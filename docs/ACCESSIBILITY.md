@@ -1,6 +1,6 @@
 # Accessibility
 
-NotesApp aims at **WCAG 2.2 Level AA** on every page, panel, dialog and view, at desktop size and on a phone, in the dark and the light theme. This file says where it stands, how it is checked, and what is still missing. The design rules are in [DESIGN §6.19](DESIGN.md#619-accessibility-wcag-22-aa); the theme colours and their contrast in [§6.17](DESIGN.md#617-theming).
+Voyager aims at **WCAG 2.2 Level AA** on every page, panel, dialog and view, at desktop size and on a phone, in the dark and the light theme. This file says where it stands, how it is checked, and what is still missing. The design rules are in [DESIGN §6.19](DESIGN.md#619-accessibility-wcag-22-aa); the theme colours and their contrast in [§6.17](DESIGN.md#617-theming).
 
 ## Status (2026-11-02)
 

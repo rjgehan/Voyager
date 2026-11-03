@@ -1,6 +1,8 @@
-# NotesApp: deployment runbook
+# Voyager: deployment runbook
 
-This runbook takes a fresh Linux `homeserver` to a running NotesApp at `https://notes.<tailnet>.ts.net`. Follow Part 1 top to bottom once. Parts 2 and 3 cover day-to-day operations and troubleshooting. The reasoning behind each choice is in [DESIGN.md](DESIGN.md) §2 and §7.
+This runbook takes a fresh Linux `homeserver` to a running Voyager at `https://notes.<tailnet>.ts.net`. Follow Part 1 top to bottom once. Parts 2 and 3 cover day-to-day operations and troubleshooting. The reasoning behind each choice is in [DESIGN.md](DESIGN.md) §2 and §7.
+
+Voyager was called NotesApp until November 2026 (ROADMAP item 45). Only the name people read changed: the image `ghcr.io/<github-user>/notesapp`, the service and container names, the volumes, the `NOTES_*` variables, the vault's `.notesapp/` folder and the API are the same, so an existing installation updates through Watchtower like any other release.
 
 **Placeholders.** Replace these wherever they appear:
 
@@ -110,7 +112,7 @@ docker volume ls --filter name=notes-data --filter name=tailscale-state
 - `notes-data` is **bind-backed**: the vault is the plain directory `/srv/notes/data/vault` on the host, which makes backups, inspection and editing over SSH simple.
 - `tailscale-state` holds the node's identity and TLS certificate. **Never delete it.** A lost state creates a new node (`notes-1`, a different URL) and requests new certificates, and Let's Encrypt rate limits can then lock you out for about 34 hours.
 
-**Optional: import an existing Obsidian vault** now, before the first start, so that NotesApp takes over its settings (Part 2, *Import an Obsidian vault*, has the details and the checks afterwards):
+**Optional: import an existing Obsidian vault** now, before the first start, so that Voyager takes over its settings (Part 2, *Import an Obsidian vault*, has the details and the checks afterwards):
 
 ```sh
 sudo cp -a /path/to/MyVault/. /srv/notes/data/vault/
@@ -161,7 +163,7 @@ The deploy works without this step, but it is the only thing that limits what co
     // autogroup:self never includes tagged devices, so tag:notes is not covered.
     { "src": ["autogroup:member"], "dst": ["autogroup:self"], "ip": ["*"] },
 
-    // NotesApp: HTTPS only.
+    // Voyager: HTTPS only.
     { "src": ["autogroup:member"], "dst": ["tag:notes"], "ip": ["tcp:443"] },
 
     // Add one grant per flow from your list, for example:
@@ -385,7 +387,7 @@ crontab -e
 ```
 
 ```
-*/5 * * * * curl -fsS -m 10 --retry 4 --retry-delay 15 --retry-all-errors -o /dev/null https://notes.<tailnet>.ts.net/readyz || curl -fsS -m 20 -H 'Title: NotesApp is down' -d 'readyz failed from beach' https://ntfy.sh/notes-<hex>
+*/5 * * * * curl -fsS -m 10 --retry 4 --retry-delay 15 --retry-all-errors -o /dev/null https://notes.<tailnet>.ts.net/readyz || curl -fsS -m 20 -H 'Title: Voyager is down' -d 'readyz failed from beach' https://ntfy.sh/notes-<hex>
 ```
 
 `/readyz` is exempt from the identity allowlist, so the probe also works from a tagged machine; with the step 6 policy, that machine's tag then needs `{ "src": ["tag:<its tag>"], "dst": ["tag:notes"], "ip": ["tcp:443"] }`.
@@ -396,7 +398,7 @@ crontab -e
 
 ### App alerts
 
-NotesApp pushes its own problems to ntfy (ROADMAP item 38, DESIGN §5.18.1): history not being saved, the mirror failing, the disk filling up, the file watcher failing, read-only settings, and a restart after losing the Tailscale network (the ERROR markers in *Logs*). Each alert is a fixed text with a link to the status page; paths, error texts and note content never leave the server. While a problem lasts it is sent at most once an hour, with a "still happening" count, and at most 10 alerts go out in any hour. Nothing is sent until you create the file below.
+Voyager pushes its own problems to ntfy (ROADMAP item 38, DESIGN §5.18.1): history not being saved, the mirror failing, the disk filling up, the file watcher failing, read-only settings, and a restart after losing the Tailscale network (the ERROR markers in *Logs*). Each alert is a fixed text with a link to the status page; paths, error texts and note content never leave the server. While a problem lasts it is sent at most once an hour, with a "still happening" count, and at most 10 alerts go out in any hour. Nothing is sent until you create the file below.
 
 **1. A topic.** Reuse the Watchtower topic from step 7 (`notes-<hex>`), or make one for app problems with `openssl rand -hex 16`. Subscribe to it in the ntfy app on the iPhone.
 
@@ -416,7 +418,7 @@ EOF
 
 No restart is needed: the app reads the file again whenever it changes.
 
-**3. Test it.** On the status page, *App alerts* says "sent to ntfy at https://ntfy.sh", or what is wrong with the file. Press **Send a test alert**: the phone shows *NotesApp: test alert*.
+**3. Test it.** On the status page, *App alerts* says "sent to ntfy at https://ntfy.sh", or what is wrong with the file. Press **Send a test alert**: the phone shows *Voyager: test alert*.
 
 The backups (`NOTES_BACKUP_NTFY_URL`) and Watchtower (`WATCHTOWER_NOTIFICATION_URL`) keep their own settings in `.env`; all three can post to the same topic.
 
@@ -440,7 +442,7 @@ Task reminders and the daily-note nudge (ROADMAP items 9 and 4c, DESIGN §5.26).
 
 Switch on **Send through ntfy** and press its **Send a test**. **Title only** (on by default) sends the task's title and nothing else; with ntfy.sh, that title leaves the tailnet. With a self-hosted ntfy on the tailnet you may switch it off to get the due date and the start of the notes too (on iOS, instant delivery still passes message ids and timing through ntfy.sh, ROADMAP item 9).
 
-**In the app**: **Show in open tabs** shows a reminder in every open NotesApp tab, with a browser notification after **Allow**. Nothing arrives while every tab is closed, so pair it with one of the others.
+**In the app**: **Show in open tabs** shows a reminder in every open Voyager tab, with a browser notification after **Allow**. Nothing arrives while every tab is closed, so pair it with one of the others.
 
 **The daily-note nudge** (**Daily-note nudge**, at 09:00 unless changed) reminds you when today's daily note does not exist yet.
 
@@ -450,7 +452,7 @@ The scheduler's state is `.notesapp/reminders.json` in the vault, kept out of gi
 
 Nightly [restic](https://restic.net) snapshots (ROADMAP item 1, DESIGN §7.10) of the `notes-data` volume (the vault with its `.git`, trash and settings) and of `tailscale-state`. They go to a repository on a **second disk** on homeserver and from there to Backblaze B2 or Amazon S3, and keep 7 daily, 4 weekly and 12 monthly snapshots.
 
-Every night at 04:00 NotesApp is **stopped for the local snapshot** and started again. Stopping makes it commit its pending history, so a snapshot never holds a half-written file or a half-made commit. After the first run this takes seconds, plus the app's restart; open tabs show *Reconnecting* and recover on their own, and unsaved edits stay in the browser. The off-site copy and the clean-up run while the app is back up.
+Every night at 04:00 Voyager is **stopped for the local snapshot** and started again. Stopping makes it commit its pending history, so a snapshot never holds a half-written file or a half-made commit. After the first run this takes seconds, plus the app's restart; open tabs show *Reconnecting* and recover on their own, and unsaved edits stay in the browser. The off-site copy and the clean-up run while the app is back up.
 
 Nothing runs until you set it up. Two containers do the work:
 
@@ -527,7 +529,7 @@ docker compose exec backup sh /backup/restic-job.sh init
 docker compose logs backup-scheduler                        # "next backup run: ... 04:00 ..."
 ```
 
-**6. The first run, by hand.** It reads every file, and NotesApp is down while it does. For a large vault (gigabytes of attachments), start it at a time that suits you:
+**6. The first run, by hand.** It reads every file, and Voyager is down while it does. For a large vault (gigabytes of attachments), start it at a time that suits you:
 
 ```sh
 docker compose exec backup-scheduler sh /backup/nightly.sh  # ends with "backup run finished"
@@ -535,13 +537,13 @@ docker compose exec backup sh /backup/restic-job.sh snapshots
 docker compose exec backup sh /backup/restic-job.sh snapshots offsite
 ```
 
-The first off-site upload can take hours on a slow uplink. NotesApp is already running again by then, because the copy reads the local repository, not the vault.
+The first off-site upload can take hours on a slow uplink. Voyager is already running again by then, because the copy reads the local repository, not the vault.
 
 **7. Do the restore drill** (below) once, and again whenever the backup setup changes.
 
 #### Monitoring backups
 
-- **ntfy.** A failed run posts *NotesApp backup failed* (high priority) with the steps that failed. restic's output stays on homeserver, because its errors name your notes: the status page and the logs below have it. *NotesApp is down after the backup* (urgent) means the app could not be started again: run `docker compose up -d` at once. On Sundays, when the weekly repository check passes, a low-priority *NotesApp backups OK* arrives. **If that Sunday message stops coming, the backups have stopped**, for example because `backup-scheduler` is not running.
+- **ntfy.** A failed run posts *Voyager backup failed* (high priority) with the steps that failed. restic's output stays on homeserver, because its errors name your notes: the status page and the logs below have it. *Voyager is down after the backup* (urgent) means the app could not be started again: run `docker compose up -d` at once. On Sundays, when the weekly repository check passes, a low-priority *Voyager backups OK* arrives. **If that Sunday message stops coming, the backups have stopped**, for example because `backup-scheduler` is not running.
 - **Heartbeat (recommended).** It catches what ntfy cannot: homeserver being off, or the scheduler being gone. Create a check at [healthchecks.io](https://healthchecks.io) (or an Uptime Kuma push monitor) with a period of 1 day and a grace time of 2 hours. Set `NOTES_BACKUP_HEARTBEAT_URL` to its ping URL (`https://hc-ping.com/<uuid>`), run `docker compose up -d`, and let the check notify you, for example through the same ntfy topic. Every successful run pings it.
 - **Status:** the status page's *Backups* card shows the last run's time and result, the snapshot, the off-site result, the last success and the failures, and lists a failed run, or no success for 36 hours, among the problems at the top. The same file from the command line: `docker compose exec backup-scheduler cat /state/status.json`.
 - **Logs:** `docker compose logs --since 48h backup-scheduler` (each run, with restic's output) and `docker compose logs backup`.
@@ -574,9 +576,9 @@ crontab -e
 @reboot sleep 120; /bin/sh $HOME/notesapp/deploy/backup/nightly.sh --recover >> $HOME/notesapp-backup.log 2>&1
 ```
 
-The `@reboot` line starts NotesApp again if the server rebooted during a snapshot. Add `NOTES_BACKUP_HEARTBEAT_URL=<url>` before `/bin/sh` in the first line for a heartbeat. The state (`status.json`) is in `~/.local/state/notesapp-backup`, and the log grows by about a kilobyte a night. Monitoring is the same as above.
+The `@reboot` line starts Voyager again if the server rebooted during a snapshot. Add `NOTES_BACKUP_HEARTBEAT_URL=<url>` before `/bin/sh` in the first line for a heartbeat. The state (`status.json`) is in `~/.local/state/notesapp-backup`, and the log grows by about a kilobyte a night. Monitoring is the same as above.
 
-`NOTES_BACKUP_STATE` mounts that directory into the app instead of the scheduler's volume, so the status page sees the runs. It is an absolute path, since Compose does not expand `~`. **Create the directory before the `docker compose up -d` that mounts it**, as above: Docker creates a missing mount source as root, and the cron job, running as you, could then never write there. Each run would fail with *its state directory … cannot be written* (*"NotesApp backup failed"* in Part 3 has the fix). Finally, run `sh ~/notesapp/deploy/backup/nightly.sh` once by hand, as in step 6 of the setup.
+`NOTES_BACKUP_STATE` mounts that directory into the app instead of the scheduler's volume, so the status page sees the runs. It is an absolute path, since Compose does not expand `~`. **Create the directory before the `docker compose up -d` that mounts it**, as above: Docker creates a missing mount source as root, and the cron job, running as you, could then never write there. Each run would fail with *its state directory … cannot be written* (*"Voyager backup failed"* in Part 3 has the fix). Finally, run `sh ~/notesapp/deploy/backup/nightly.sh` once by hand, as in step 6 of the setup.
 
 #### Manual backups
 
@@ -715,9 +717,9 @@ If `readyz` never answers, `docker logs notes-drill` shows why. The drill contai
 
 ### Mirror to GitHub
 
-Optionally, NotesApp pushes the vault's git history to a **private** GitHub repository (ROADMAP item 2, DESIGN §5.8 *Mirror*): about 10 minutes after you stop editing, and at least hourly while you keep editing. You can then browse every note and its history on github.com, and the history survives the loss of homeserver. **Your notes then also live on GitHub**, outside the tailnet; files over the large-file threshold (*Large files* below) are not in the history, so they are never pushed. It is off until you set it up.
+Optionally, Voyager pushes the vault's git history to a **private** GitHub repository (ROADMAP item 2, DESIGN §5.8 *Mirror*): about 10 minutes after you stop editing, and at least hourly while you keep editing. You can then browse every note and its history on github.com, and the history survives the loss of homeserver. **Your notes then also live on GitHub**, outside the tailnet; files over the large-file threshold (*Large files* below) are not in the history, so they are never pushed. It is off until you set it up.
 
-NotesApp **never force-pushes**. If the GitHub repository gets commits from elsewhere, the mirror stops and says so instead of overwriting them.
+Voyager **never force-pushes**. If the GitHub repository gets commits from elsewhere, the mirror stops and says so instead of overwriting them.
 
 **1. An empty private repository.** On GitHub: *New repository*, **Private**, and **no** README, licence or `.gitignore` (any initial commit would make the first push stop as diverged). Note its HTTPS URL, `https://github.com/<you>/<repo>.git`.
 
@@ -763,17 +765,17 @@ Files larger than **25 MB** stay in the vault, the trash and the nightly backups
 
 - its History panel says why it has no new versions; the versions from before it grew past 25 MB are kept;
 - replacing it (an upload over it, or restoring an older version) first puts the current file in the **trash**, since history cannot bring it back;
-- `.git/info/exclude` lists it in the section NotesApp manages (`git -C /srv/notes/data/vault check-ignore -v '<path>'` shows the line).
+- `.git/info/exclude` lists it in the section Voyager manages (`git -C /srv/notes/data/vault check-ignore -v '<path>'` shows the line).
 
-**Settings › About** shows the history size and how many files are kept out of it. To change the threshold, set `NOTES_GIT_LARGE_FILE_THRESHOLD` in `.env` (for example `50MB`; `0` versions every file) and run `docker compose up -d`. At the next start, files now over the threshold stop being versioned (`Stop versioning …` commits) and files now under it are committed. Lowering it does not shrink the history: versions already committed stay. Keep it below 100 MB while the mirror is on, and at 5 MB or more, the largest note NotesApp saves (`notes.limits.max-text-size`): a lower threshold would leave large notes without versions while every save overwrites them, so NotesApp refuses to start with it and says why in `docker compose logs notes`.
+**Settings › About** shows the history size and how many files are kept out of it. To change the threshold, set `NOTES_GIT_LARGE_FILE_THRESHOLD` in `.env` (for example `50MB`; `0` versions every file) and run `docker compose up -d`. At the next start, files now over the threshold stop being versioned (`Stop versioning …` commits) and files now under it are committed. Lowering it does not shrink the history: versions already committed stay. Keep it below 100 MB while the mirror is on, and at 5 MB or more, the largest note Voyager saves (`notes.limits.max-text-size`): a lower threshold would leave large notes without versions while every save overwrites them, so Voyager refuses to start with it and says why in `docker compose logs notes`.
 
 ### Ask your vault
 
-Optionally, NotesApp answers questions about your notes, summarizes a note, a folder, a selection or this week's daily notes, and suggests links, tags and tasks, with Claude (ROADMAP item 18, DESIGN §5.25). **When you use it, your question and the text of the notes it needs are sent to Anthropic**, outside the tailnet; notes in the folders you exclude (`Private` by default) never are, and nothing is sent until you ask. It is off until the server has a credential **and** you switch it on in Settings. Two providers, chosen in **Settings › Ask and summaries › Provider**:
+Optionally, Voyager answers questions about your notes, summarizes a note, a folder, a selection or this week's daily notes, and suggests links, tags and tasks, with Claude (ROADMAP item 18, DESIGN §5.25). **When you use it, your question and the text of the notes it needs are sent to Anthropic**, outside the tailnet; notes in the folders you exclude (`Private` by default) never are, and nothing is sent until you ask. It is off until the server has a credential **and** you switch it on in Settings. Two providers, chosen in **Settings › Ask and summaries › Provider**:
 
 | Provider | How | Credential | Cost |
 |---|---|---|---|
-| **Claude Code** (default) | The image's Claude Code CLI (`/opt/claude/bin/claude`) runs once per answer, headless, with every tool off, a fresh empty home and no session, so it sees only the notes NotesApp hands it | A token from `claude setup-token`, in `/srv/notes/data/secrets/claude-token` (`/data/secrets/claude-token` in the container) | Your Claude Pro or Max subscription: usage counts against your plan's usage limits, like your own Claude use; for your personal use under its terms |
+| **Claude Code** (default) | The image's Claude Code CLI (`/opt/claude/bin/claude`) runs once per answer, headless, with every tool off, a fresh empty home and no session, so it sees only the notes Voyager hands it | A token from `claude setup-token`, in `/srv/notes/data/secrets/claude-token` (`/data/secrets/claude-token` in the container) | Your Claude Pro or Max subscription: usage counts against your plan's usage limits, like your own Claude use; for your personal use under its terms |
 | **Anthropic API** | The official Java SDK | An API key, as the `anthropic_key` compose secret | Billed per token |
 
 **Claude Code: the token.** On any computer where Claude Code is logged in to your Claude account (`claude`, then `/login`), run `claude setup-token`; it prints a long-lived OAuth token (`sk-ant-oat01-…`). On homeserver:
@@ -837,7 +839,7 @@ It takes **two** switches, and either one alone exposes nothing:
      ],
    ```
 
-   and, so that your own devices can open the public links too (from the tailnet the name resolves to the node, where the grants of step 6 allow only `:443`), extend the NotesApp grant to `"ip": ["tcp:443", "tcp:8443"]`.
+   and, so that your own devices can open the public links too (from the tailnet the name resolves to the node, where the grants of step 6 allow only `:443`), extend the Voyager grant to `"ip": ["tcp:443", "tcp:8443"]`.
 
 2. **The publish server**, in `deploy/.env`:
 
@@ -880,7 +882,7 @@ It takes **two** switches, and either one alone exposes nothing:
 
 ### Import an Obsidian vault
 
-NotesApp reads an Obsidian vault as it is (ROADMAP item 24): the same Markdown, wikilinks, embeds, tags, properties, daily notes and templates. `.obsidian/` is read but never written, so the vault keeps working in Obsidian; it stays hidden in NotesApp and is versioned except `workspace*.json`.
+Voyager reads an Obsidian vault as it is (ROADMAP item 24): the same Markdown, wikilinks, embeds, tags, properties, daily notes and templates. `.obsidian/` is read but never written, so the vault keeps working in Obsidian; it stays hidden in Voyager and is versioned except `workspace*.json`.
 
 **1. Get a copy of the vault to homeserver.** Close Obsidian on the device the copy comes from, or at least let its sync finish. From `rgpc` (an iCloud vault is under `iCloudDrive\iCloud~md~obsidian\` on Windows; make sure every file is downloaded, not just a placeholder):
 
@@ -888,7 +890,7 @@ NotesApp reads an Obsidian vault as it is (ROADMAP item 24): the same Markdown, 
 scp -r "C:\Users\<you>\Documents\MyVault" <you>@homeserver:/tmp/MyVault
 ```
 
-`rsync -a /path/to/MyVault/ <you>@homeserver:/tmp/MyVault/` works too, from a Mac or Linux. Obsidian's own `.trash/` folder, when the vault has one, is the folder NotesApp uses for its trash: its files show up on the Trash page, to restore or empty there.
+`rsync -a /path/to/MyVault/ <you>@homeserver:/tmp/MyVault/` works too, from a Mac or Linux. Obsidian's own `.trash/` folder, when the vault has one, is the folder Voyager uses for its trash: its files show up on the Trash page, to restore or empty there.
 
 **2. Put it in place before the first start** (an empty data folder, step 4 of Part 1):
 
@@ -900,18 +902,18 @@ docker compose up -d
 
 The first start creates `.notesapp/settings.json` from `.obsidian/`: attachment folder, new note location, link format and style, excluded files, strict line breaks, readable line length (as the note width: on is 600 px, off is full width), default view, the daily note format, folder, template and "open on startup", and the template folder and formats (`docker compose logs notes | grep Imported` shows how many). A vault that already has `.notesapp/settings.json` keeps it; the report below proposes Obsidian's values instead.
 
-- **The vault has its own `.git`** (the obsidian-git plugin): it is kept and NotesApp commits on its current branch; turn the plugin off in Obsidian for this vault, NotesApp is now the only git writer. A detached `HEAD` turns history off until it is on a branch (`/api/status` says so).
+- **The vault has its own `.git`** (the obsidian-git plugin): it is kept and Voyager commits on its current branch; turn the plugin off in Obsidian for this vault, Voyager is now the only git writer. A detached `HEAD` turns history off until it is on a branch (`/api/status` says so).
 - **A large vault** (thousands of files) is ready at once; its history commit runs in the background.
-- **Names Windows cannot use** (`Meeting 10:30.md`) work in NotesApp; new names follow the rules of DESIGN §4.4.
+- **Names Windows cannot use** (`Meeting 10:30.md`) work in Voyager; new names follow the rules of DESIGN §4.4.
 
 **3. Check the compatibility report.** Open `https://notes.<tailnet>.ts.net/x/compat` (also the ribbon, the drawer, *Open Compatibility report* in the palette, and Settings › About). It lists:
 
-- each Obsidian setting next to NotesApp's (*In effect* after a first start), with **Apply Obsidian's settings** for values that differ, for example after importing into an installation that already had settings;
+- each Obsidian setting next to Voyager's (*In effect* after a first start), with **Apply Obsidian's settings** for values that differ, for example after importing into an installation that already had settings;
 - **Use them on this device** for the graph settings of `graph.json` (graph settings are per device);
-- the core and community plugins the vault has turned on, and what NotesApp offers for each;
+- the core and community plugins the vault has turned on, and what Voyager offers for each;
 - what does not carry over, each place opening the note at its line: Dataview and Tasks queries, Templater commands, callouts, Mermaid and math (until they are rendered), links to missing files, headings or blocks, notes it cannot read, Excalidraw drawings and canvases.
 
-**Into a running installation** with notes of its own: stop the app, copy the vault into a subfolder, remove the copy's own `.git` and `.obsidian` (a nested repository would hide the folder from the vault's history; Obsidian settings apply to the vault root only), fix the owner, and start again. The app commits the new files as `Changes made while NotesApp was stopped`. To take over the old vault's settings anyway, compare them with the report's rows by hand under Settings.
+**Into a running installation** with notes of its own: stop the app, copy the vault into a subfolder, remove the copy's own `.git` and `.obsidian` (a nested repository would hide the folder from the vault's history; Obsidian settings apply to the vault root only), fix the owner, and start again. The app commits the new files as `Changes made while Voyager was stopped`. To take over the old vault's settings anyway, compare them with the report's rows by hand under Settings.
 
 ```sh
 cd ~/notesapp/deploy
@@ -1076,13 +1078,13 @@ Pushes to the GitHub mirror fail. The tooltip of the status-bar warning, **Setti
 - **`the token file ... is empty`:** `NOTES_MIRROR_TOKEN_SECRET` is not set in `.env`, so the empty placeholder `deploy/mirror/no-token` is mounted.
 - **`not found`, `repository not found`:** the URL is wrong, or the token was made for another repository.
 - **`connection failed`, timeouts:** homeserver cannot reach github.com (`curl -sI https://github.com` on homeserver). It recovers on its own.
-- **`GH001: Large files detected`, or another refusal by GitHub:** a file over 100 MB is in the history from before the large-file threshold applied, or the threshold is above 100 MB. Lower `NOTES_GIT_LARGE_FILE_THRESHOLD`. Versions already committed stay in the history, so the push keeps failing until that history is rewritten by hand, which NotesApp never does; make a full backup before attempting it.
+- **`GH001: Large files detected`, or another refusal by GitHub:** a file over 100 MB is in the history from before the large-file threshold applied, or the threshold is above 100 MB. Lower `NOTES_GIT_LARGE_FILE_THRESHOLD`. Versions already committed stay in the history, so the push keeps failing until that history is rewritten by hand, which Voyager never does; make a full backup before attempting it.
 
 **"Mirror is off: …"** (`mirror.state: disabled` with a `reason` other than *not configured*) means the configuration is refused and nothing is pushed: for example the SSH clone URL `git@github.com:…` (*not a valid URL*), an `http://` URL, or a URL with a token in it. The app logs it as `GIT_MIRROR_FAILED` at startup, so it also raises an app alert. Set `NOTES_MIRROR_URL` to the repository's plain `https://github.com/<you>/<repo>.git` URL and run `docker compose up -d`.
 
 ### "Mirror stopped: it has commits this vault does not"
 
-The GitHub repository got commits that are not in the vault's history: it was created with a README, someone pushed to it, or it is the mirror of another vault. NotesApp only fast-forwards, so it stopped instead of overwriting them; the vault is unaffected. Look at the repository's commits on github.com, then either:
+The GitHub repository got commits that are not in the vault's history: it was created with a README, someone pushed to it, or it is the mirror of another vault. Voyager only fast-forwards, so it stopped instead of overwriting them; the vault is unaffected. Look at the repository's commits on github.com, then either:
 
 - **keep the vault's history** (the usual case): delete the repository on GitHub and create it again, empty (*Mirror to GitHub*, step 1; give the token access to the new repository); or
 - **use another repository**: change `NOTES_MIRROR_URL` and run `docker compose up -d`.
@@ -1101,22 +1103,22 @@ After a rollback, the settings file was written by a newer build. The older buil
 
 Step 4 was skipped or used other names. Create the volumes as in step 4, then `docker compose up -d`.
 
-### "NotesApp backup failed"
+### "Voyager backup failed"
 
-The ntfy message names the steps that failed, never restic's output (its errors name your notes, and the topic may be on ntfy.sh). The status page's *Backups* card shows the last lines of each failing step (characters other than plain ASCII as `?`), and `docker compose logs --since 24h backup-scheduler` (with host cron, `~/notesapp-backup.log`) has restic's full output. A failed run never leaves NotesApp stopped on purpose: it starts it again first, and it alerts as *NotesApp is down after the backup* (urgent) when it cannot. Then run `docker compose up -d` and read `docker compose logs notes`.
+The ntfy message names the steps that failed, never restic's output (its errors name your notes, and the topic may be on ntfy.sh). The status page's *Backups* card shows the last lines of each failing step (characters other than plain ASCII as `?`), and `docker compose logs --since 24h backup-scheduler` (with host cron, `~/notesapp-backup.log`) has restic's full output. A failed run never leaves Voyager stopped on purpose: it starts it again first, and it alerts as *Voyager is down after the backup* (urgent) when it cannot. Then run `docker compose up -d` and read `docker compose logs notes`.
 
 - **`the local repository ... is not initialized`:** run `docker compose exec backup sh /backup/restic-job.sh init` (setup step 5).
 - **`on the same filesystem as the vault`:** the backup disk is not mounted at `NOTES_BACKUP_LOCAL_REPO`. Check with `findmnt /mnt/backup`, mount it (`sudo mount /mnt/backup`), then `docker compose up -d --force-recreate backup`: a container only sees a disk that was mounted before it started. Do the same after unplugging and re-plugging a USB disk.
 - **`backup container notes-backup-1 is not running`** (and `docker compose up -d` cannot start it, with *bind source path does not exist*): the same cause, an unmounted disk.
 - **`wrong password` (restic exit 12):** `deploy/secrets/restic-password` is not the password the repository was created with. Restore it from your password manager.
-- **`was started or replaced during the snapshot`:** a Watchtower update, or someone started NotesApp, while restic was reading. That snapshot was discarded because it may hold a half-written state; the next night takes a new one. Nothing to do unless it repeats.
+- **`was started or replaced during the snapshot`:** a Watchtower update, or someone started Voyager, while restic was reading. That snapshot was discarded because it may hold a half-written state; the next night takes a new one. Nothing to do unless it repeats.
 - **`snapshot (restic exit 3, snapshot ... kept)`:** restic could not read some files: files removed over SSH while it was reading, or read errors on the vault's disk (`sudo dmesg | grep -i error`). The snapshot is kept but incomplete; restic's message in the log names the files.
-- **`the snapshot was cancelled after 1800 s`:** the first snapshot of a large vault, or a very slow disk, took longer than NotesApp may be down. Run it once by hand with more time: `docker compose exec -e NOTES_BACKUP_MAX_STOP_SECONDS=14400 backup-scheduler sh /backup/nightly.sh`.
+- **`the snapshot was cancelled after 1800 s`:** the first snapshot of a large vault, or a very slow disk, took longer than Voyager may be down. Run it once by hand with more time: `docker compose exec -e NOTES_BACKUP_MAX_STOP_SECONDS=14400 backup-scheduler sh /backup/nightly.sh`.
 - **`off-site copy`:** the bucket, its keys or the network. Test with `docker compose exec backup sh /backup/restic-job.sh snapshots offsite`. The next successful run copies every snapshot that is missing off site, so nothing is lost while it is broken.
 - **`repository check`:** read restic's message in the log. If the local repository is damaged, move its directory aside, run `init` again (it takes the chunker parameters from the off-site repository) and let the next run fill it; the off-site copy keeps the history.
 - **`could not start: its state directory ... cannot be written`:** with host cron, the state directory was created by Docker as root because `NOTES_BACKUP_STATE` was mounted before the first run. Give it back to your user: `sudo chown -R "$(id -u):$(id -g)" ~/.local/state/notesapp-backup` (and `~/.local/state` or `~/.local`, if `ls -ld` shows them owned by root too), then run `sh ~/notesapp/deploy/backup/nightly.sh` once by hand.
-- **`NotesApp backup skipped`:** the previous run was still going, typically the first off-site upload. If no run is going (`docker compose exec backup-scheduler cat /state/run.lock/pid`), `docker compose restart backup-scheduler` clears the lock.
-- **`NotesApp backup interrupted`:** homeserver rebooted or the scheduler was restarted during a snapshot. NotesApp was started again and that snapshot was cancelled; the next night takes a new one.
+- **`Voyager backup skipped`:** the previous run was still going, typically the first off-site upload. If no run is going (`docker compose exec backup-scheduler cat /state/run.lock/pid`), `docker compose restart backup-scheduler` clears the lock.
+- **`Voyager backup interrupted`:** homeserver rebooted or the scheduler was restarted during a snapshot. Voyager was started again and that snapshot was cancelled; the next night takes a new one.
 
 ### App alerts do not arrive
 
@@ -1138,11 +1140,11 @@ Open the status page; its *App alerts* card says what the app sees:
 
 ### The status page says "AOT cache: not used"
 
-The JVM could not use the AOT cache built into the image (DESIGN §7.1), usually because the arm64 image's training run failed under emulation; the publish job's log says so. NotesApp works normally and only starts a little slower. The next image build tries again.
+The JVM could not use the AOT cache built into the image (DESIGN §7.1), usually because the arm64 image's training run failed under emulation; the publish job's log says so. Voyager works normally and only starts a little slower. The next image build tries again.
 
 ### The status page says "No backup has reported here yet"
 
-The app sees no `status.json`. With `backup-scheduler`, no run has finished yet (run one: *Run, pause or change the backups*). With host cron, set `NOTES_BACKUP_STATE` (*Host cron instead of backup-scheduler*); if the runs then fail with *state directory ... cannot be written*, see *"NotesApp backup failed"* above. "No backup for 2 days" instead means the runs have stopped: `docker compose ps backup-scheduler` and its logs.
+The app sees no `status.json`. With `backup-scheduler`, no run has finished yet (run one: *Run, pause or change the backups*). With host cron, set `NOTES_BACKUP_STATE` (*Host cron instead of backup-scheduler*); if the runs then fail with *state directory ... cannot be written*, see *"Voyager backup failed"* above. "No backup for 2 days" instead means the runs have stopped: `docker compose ps backup-scheduler` and its logs.
 
 ### Ask your vault says it is unavailable
 
@@ -1159,5 +1161,5 @@ The *Ask* panel and **Settings › Ask and summaries** say why:
 | *… is not readable by the app's user (uid 1000)* | `sudo chown 1000 <file> && sudo chmod 600 <file>`. |
 | *… must hold just the …, on one line* | The file has extra text; paste only the token or key. |
 | *The Claude API refused the API key* / *rate-limiting this key* | The API key was revoked, or the console's spend limit is reached. |
-| *This month's budget is used up* | NotesApp's own estimate reached **Monthly budget**: raise it in Settings, or wait for the next month. |
+| *This month's budget is used up* | Voyager's own estimate reached **Monthly budget**: raise it in Settings, or wait for the next month. |
 | *That is in a folder excluded from Ask and summaries* | The note is under **Never send** or the excluded files of **Files and links**, which is the point; remove it from there to allow it. |

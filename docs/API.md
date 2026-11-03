@@ -1,4 +1,4 @@
-# NotesApp REST and SSE API: v1 contract
+# Voyager REST and SSE API: v1 contract
 
 | | |
 |---|---|
@@ -407,7 +407,7 @@ Request `SettingsUpdateRequest`: `{"settings": { ...full Settings... }, "baseVer
 | `disk.repoBytes` | Size of `.git` (the history), measured by the last rescan; `null` before the first one |
 | `settings` | `readOnly` and its `reason` (§5) |
 | `mirror` | The push mirror of the history (§6.4, DESIGN §5.8), a `MirrorStatus` |
-| `mirror.state` | `disabled` (`reason` says why: `"not configured"`, `"history is disabled"`, or a configuration error such as a URL that is not `https://`; a configuration error is a problem the clients warn about, since such a mirror never pushes); `ready` (new commits are pushed about 10 minutes after the last one); `failing` (pushes fail and are retried with backoff; `lastError` and `failingSince` are set); `diverged` (the mirror has commits the vault's history lacks; nothing is pushed until §6.4 is called again, and NotesApp never force-pushes) |
+| `mirror.state` | `disabled` (`reason` says why: `"not configured"`, `"history is disabled"`, or a configuration error such as a URL that is not `https://`; a configuration error is a problem the clients warn about, since such a mirror never pushes); `ready` (new commits are pushed about 10 minutes after the last one); `failing` (pushes fail and are retried with backoff; `lastError` and `failingSince` are set); `diverged` (the mirror has commits the vault's history lacks; nothing is pushed until §6.4 is called again, and Voyager never force-pushes) |
 | `mirror.remote` | The mirror's URL. It never contains credentials: a URL with any is refused (`disabled`). |
 | `mirror.pushedCommit`, `mirror.lastPushAt` | The last commit the mirror is known to have and when it was pushed, during this server run; `null` until the first push |
 | `mirror.nextPushAt` | When the next push is due (after a failure: the next retry); `null` when the mirror is up to date, disabled or diverged |
@@ -1057,7 +1057,7 @@ Request `ResolveRequest`:
       "current": "Daily", "proposed": "Journal", "status": "different", "note": null },
     { "source": "app.json › userIgnoreFilters", "obsidianValue": "[\"Archive/\",\"/^Private.*$/\"]",
       "setting": "files.excludedPaths", "current": "", "proposed": "Archive", "status": "different",
-      "note": "Not used: /^Private.*$/ (NotesApp excludes folders and files by path, not by regular expression)" }
+      "note": "Not used: /^Private.*$/ (Voyager excludes folders and files by path, not by regular expression)" }
   ],
   "proposedSettings": { "schemaVersion": 1, "files": { "…": "…" }, "dailyNotes": { "folder": "Journal", "…": "…" }, "templates": { "…": "…" }, "editor": { "…": "…" } },
   "settingsVersion": "a1f3c5e7b9d0a2c4e6f8b0d2f4a6c8e0b2d4f6a8",
@@ -1080,7 +1080,7 @@ Request `ResolveRequest`:
 | Field | Meaning |
 |---|---|
 | `obsidian` | Whether the vault has a `.obsidian/` folder, the configuration files read from it, and the ones that could not be read (`"app.json is not valid JSON"`). |
-| `settings` | One row per Obsidian setting NotesApp maps (DESIGN §5.23 table), in file order. `obsidianValue` is the value as JSON text; `current` and `proposed` are display strings. `status`: `same` (in effect), `different` (applying changes it), `unsupported` (`proposed` is null, `note` says why). Empty without `.obsidian/`. |
+| `settings` | One row per Obsidian setting Voyager maps (DESIGN §5.23 table), in file order. `obsidianValue` is the value as JSON text; `current` and `proposed` are display strings. `status`: `same` (in effect), `different` (applying changes it), `unsupported` (`proposed` is null, `note` says why). Empty without `.obsidian/`. |
 | `proposedSettings`, `settingsVersion` | The current settings with every `different` row applied, and the settings version they are based on. Clients apply them with `PUT /api/settings {settings: proposedSettings, baseVersion: settingsVersion}`; a `409` means the settings changed since, so the report is fetched again. `proposedSettings` is null without `.obsidian/`. |
 | `graph` | The options of `.obsidian/graph.json` the graph view understands (`search`, `showTags`, `showAttachments`, `hideUnresolved`, `showOrphans`, `colorGroups`, `showArrow`, `textFadeMultiplier`, `nodeSizeMultiplier`, `lineSizeMultiplier`, `centerStrength`, `repelStrength`, `linkStrength`, `linkDistance`) as Obsidian wrote them; null when there are none. Group colors stay `{a, rgb}` objects. |
 | `plugins` | The enabled core plugins (`core-plugins.json`), then the enabled community plugins (`community-plugins.json`, named from their `manifest.json`), each group ordered by `status` (`unsupported`, `unknown`, `planned`, `partial`, `supported`) and name. |
@@ -1237,7 +1237,7 @@ The trash lives in `<vault>/.trash/` and is **flat**: each trashed file or folde
 ] }
 ```
 
-**Ids** are either 12 Crockford-base32 characters (`[0-9A-HJKMNP-TV-Z]{12}`), or `x-` followed by 16 hex characters for top-level items found in `.trash/` without app metadata (put there by Obsidian or by hand). For those items, `originalPath` is the item's name, `deletedBy` is `"unknown"` and `deletedAt` is the item's mtime. They were never seen by NotesApp and may not be in history, so clients warn before purging them.
+**Ids** are either 12 Crockford-base32 characters (`[0-9A-HJKMNP-TV-Z]{12}`), or `x-` followed by 16 hex characters for top-level items found in `.trash/` without app metadata (put there by Obsidian or by hand). For those items, `originalPath` is the item's name, `deletedBy` is `"unknown"` and `deletedAt` is the item's mtime. They were never seen by Voyager and may not be in history, so clients warn before purging them.
 
 Each top-level item in `.trash/` is listed exactly once.
 
@@ -3150,7 +3150,7 @@ The types are in §17 (`Task`, `TaskList`, ...). Field rules:
 | `archived` | `true` for a closed task that the nightly rollover moved into an archive file, `Tasks/Archive/<List> <YYYY>.tasks`, 90 days after it was completed. Archived tasks still appear in `completed` and `search`. |
 | `createdAt`, `updatedAt`, `completedAt` | Set by the server; `null` only for tasks added by hand without them. |
 
-**Lists.** A list is a file. `path` is the file, `order` its place among lists, and `archived` hides the list from Today, Upcoming and the all-lists view. `writable: false` means the file was written by a newer version of NotesApp: it is shown, but every change to it is refused with `409 malformed-file`.
+**Lists.** A list is a file. `path` is the file, `order` its place among lists, and `archived` hides the list from Today, Upcoming and the all-lists view. `writable: false` means the file was written by a newer version of Voyager: it is shown, but every change to it is refused with `409 malformed-file`.
 
 **Problems.** The server never rewrites a file to repair it. Responses that list tasks carry `problems`: a whole file that cannot be used (`taskId: null`: not valid JSON, not a task file, larger than the text limit, written by a newer version, or a copy that repeats the list id of a file earlier in path order, whose tasks are then not shown) or a single task (an invalid `status`, `priority`, date or id is skipped; a smaller defect, such as a bad reminder, is reported while the rest of the task is shown). A task id that appears in two files is shown from the first file in path order. Every field the server does not know, and every task it cannot read, survives each write.
 
@@ -3341,7 +3341,7 @@ Bookmarks are stored in `.notesapp/bookmarks.json`, in the format of Obsidian's 
 
 - Every item may have `ctime` (when it was bookmarked, epoch milliseconds, which Obsidian writes) and `title` (a display name; without one, the client shows the target's name, the heading, or the query).
 - Items are **passed through** in Obsidian's shape: a field that does not apply is absent, not `null`, and fields this build does not know are kept, at the item and at the top level of the file.
-- Without the file, the response lists the bookmarks of `.obsidian/bookmarks.json` when Obsidian left one (it is only ever read), or none. `version` is then the blob id of the document NotesApp would write, so a `PUT` with it creates the file.
+- Without the file, the response lists the bookmarks of `.obsidian/bookmarks.json` when Obsidian left one (it is only ever read), or none. `version` is then the blob id of the document Voyager would write, so a `PUT` with it creates the file.
 - Items in the file that break the rules of §21.2 (a hand edit) are left out of the response and logged, so a client never receives an item it could not send back. A file that is not JSON at all reads as no bookmarks; the next save keeps it beside the new one as `bookmarks.json.bak-<timestamp>`.
 - The file is read on every request, so a hand edit or a pull is seen at once.
 

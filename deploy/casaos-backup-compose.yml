@@ -106,4 +106,4 @@ x-casaos:
     en_us: Nightly encrypted backups of Voyager
   description:
     en_us: restic snapshots of the Voyager vault, its history and its Tailscale identity to a second disk and off site, with ntfy alerts. Needs the setup in docs/CASAOS.md first.
-  icon: https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/obsidian.png
+  icon: https://raw.githubusercontent.com/rjgehan/notesapp/main/frontend/public/icon-192.png

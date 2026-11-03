@@ -1,10 +1,10 @@
 <div align="center">
 
-<img src="frontend/public/favicon.svg" width="84" height="84" alt="NotesApp icon">
+<img src="docs/images/icon.svg" width="112" height="112" alt="Voyager's icon: a pale blue dot in a sunbeam, in deep space">
 
-# NotesApp
+# Voyager
 
-**A self-hosted, Obsidian-style notes app. Your notes are plain Markdown files on your own server, and every device you own sees them live.**
+**Your notes, spreadsheets, drawings and tasks in one self-hosted, Obsidian-style app. Plain files on your own server, every version kept, and live on every device you own.**
 
 [![CI](https://github.com/rjgehan/notesapp/actions/workflows/ci.yml/badge.svg)](https://github.com/rjgehan/notesapp/actions/workflows/ci.yml)
 [![Live demo](https://img.shields.io/badge/live%20demo-open%20in%20your%20browser-8a5cf5)](https://rjgehan.github.io/notesapp/)
@@ -18,13 +18,13 @@
 
 It runs entirely in your browser on a sample vault: nothing to install, nothing saved.
 
-<img src="docs/images/live-preview.webp" alt="NotesApp's Live Preview editor: a note with properties and a Markdown table whose totals are spreadsheet formulas" width="100%">
+<img src="docs/images/live-preview.webp" alt="Voyager's Live Preview editor: a note with properties and a Markdown table whose totals are spreadsheet formulas" width="100%">
 
 </div>
 
 ## What it is
 
-NotesApp is a complete notes app that I built for myself and use every day on an iPhone and a Windows PC. It looks and works like [Obsidian](https://obsidian.md), but the vault lives on a home server instead of a sync service: one Docker image, reachable only over a private [Tailscale](https://tailscale.com) network, with every change kept in git.
+Voyager is a complete notes app that I built for myself and use every day on an iPhone and a Windows PC. It looks and works like [Obsidian](https://obsidian.md), but the vault lives on a home server instead of a sync service: one Docker image, reachable only over a private [Tailscale](https://tailscale.com) network, with every change kept in git.
 
 - **Write without seeing Markdown.** One Live Preview editor (CodeMirror 6) that renders as you type; tables are editable grids whose cells take spreadsheet formulas.
 - **More than notes.** Spreadsheets, Excalidraw drawings, canvases, Kanban boards, a task manager, a calendar, a graph, flashcards and a habit tracker, all stored as ordinary files in the vault.
@@ -34,6 +34,8 @@ NotesApp is a complete notes app that I built for myself and use every day on an
 
 Every feature is explained in the user guide, which is built into the app as its **Help** page: [open it in the live demo](https://rjgehan.github.io/notesapp/x/help), or read it here in [docs/guide](docs/guide/index.md).
 
+**Why "Voyager".** The Voyager probes were launched in 1977 and are still sending data home. This app is built to last in the same way: your notes are plain files, and every change is kept. Each probe carries a Golden Record of what matters to us; this is your own, with notes, sheets, drawings and tasks in one place. And it travels with you, on the PC and on the iPhone. The icon is Voyager 1's *pale blue dot*, Earth as a speck in a sunbeam. More in [BRAND.md](BRAND.md). (The app was called NotesApp until November 2026; the repository and the Docker image keep that name.)
+
 ## See it in action
 
 <img src="docs/images/formulas.gif" alt="Editing a cost in a Live Preview table: the totals, the per-person shares and an inline formula update as you type" width="640">
@@ -42,7 +44,7 @@ Every feature is explained in the user guide, which is built into the app as its
 
 | | |
 |:---:|:---:|
-| <img src="docs/images/spreadsheet.webp" alt="Spreadsheet view with a formula bar and a line chart" width="100%"><br>**Spreadsheets** with ~400 Google-Sheets functions (HyperFormula), charts, and CSV and Excel import and export | <img src="docs/images/drawing.webp" alt="An Excalidraw drawing of the NotesApp architecture" width="100%"><br>**Drawings** in Excalidraw, stored in the vault, merged across devices and embeddable in notes |
+| <img src="docs/images/spreadsheet.webp" alt="Spreadsheet view with a formula bar and a line chart" width="100%"><br>**Spreadsheets** with ~400 Google-Sheets functions (HyperFormula), charts, and CSV and Excel import and export | <img src="docs/images/drawing.webp" alt="An Excalidraw drawing of the Voyager architecture" width="100%"><br>**Drawings** in Excalidraw, stored in the vault, merged across devices and embeddable in notes |
 | <img src="docs/images/tasks-board.webp" alt="A task list shown as a Kanban board with To do, Doing and Review columns" width="100%"><br>**Tasks** with due dates, priorities, subtasks and repeating rules, as lists or Kanban boards | <img src="docs/images/calendar.webp" alt="Month calendar with daily notes, tasks and meetings" width="100%"><br>**Calendar** of daily notes, tasks and notes dated by a property |
 | <img src="docs/images/canvas.webp" alt="A canvas with cards, embedded notes and links" width="100%"><br>**Canvases** in Obsidian's JSON Canvas format | <img src="docs/images/graph.webp" alt="Graph view of notes and links, colored by folder" width="100%"><br>**Graph** of every note and link, laid out in a Web Worker |
 | <img src="docs/images/kanban.webp" alt="An Obsidian Kanban plugin board" width="100%"><br>**Kanban boards** in the Obsidian Kanban plugin's Markdown format | <img src="docs/images/flashcards.webp" alt="A flashcard review with Again, Hard, Good and Easy" width="100%"><br>**Flashcards** written in notes, scheduled with FSRS |
@@ -110,7 +112,7 @@ Optional extras are off until you set them up: nightly backups, alerts, the GitH
 
 ## Desktop app
 
-Windows and macOS installers are attached to the **[GitHub Releases](https://github.com/rjgehan/notesapp/releases)** named `desktop-v…` (`NotesApp-Setup-<version>.exe`, `NotesApp-<version>-mac.dmg`). The app is a thin, sandboxed window around your own server with a tray icon, a system-wide quick-capture shortcut (`Ctrl+Shift+Space` / `Cmd+Shift+Space`), native notifications and launch at login. The installers are not code-signed yet; [docs/DESKTOP.md](docs/DESKTOP.md) has the SmartScreen and Gatekeeper steps.
+Windows and macOS installers are attached to the **[GitHub Releases](https://github.com/rjgehan/notesapp/releases)** named `desktop-v…` (`Voyager-Setup-<version>.exe`, `Voyager-<version>-mac.dmg`). The app is a thin, sandboxed window around your own server with a tray icon, a system-wide quick-capture shortcut (`Ctrl+Shift+Space` / `Cmd+Shift+Space`), native notifications and launch at login. The installers are not code-signed yet; [docs/DESKTOP.md](docs/DESKTOP.md) has the SmartScreen and Gatekeeper steps.
 
 ## Run it locally
 
@@ -143,9 +145,10 @@ Or run the frontend alone on the in-memory mock (`$env:VITE_MOCK_API = "1"; npm 
 | [PERFORMANCE.md](docs/PERFORMANCE.md) | Performance at scale: the load-test kit, results before and after, known limits |
 | [SECURITY.md](docs/SECURITY.md) | Threat model, the trust boundaries of each deployment layout, the security audit's findings, residual risks and hardening advice ([SECURITY.md](SECURITY.md): how to report a vulnerability) |
 | [ROADMAP.md](docs/ROADMAP.md) | Every roadmap item, what each one became, and the proposals still open |
+| [BRAND.md](BRAND.md) | The name Voyager and its story, the voice, the colours and the icon |
 
 ## Licence
 
-NotesApp is free software under the GNU General Public License, version 3 only ([LICENSE](LICENSE), SPDX `GPL-3.0-only`). The spreadsheet formula engine, HyperFormula, is used under its GPL-3.0 licence option, which is why the whole repository is GPL-3.0 (decided 2026-10-17, [ROADMAP](docs/ROADMAP.md) item 6). Running your own image needs nothing further; if you ever distribute NotesApp, distribute its source under the same licence.
+Voyager is free software under the GNU General Public License, version 3 only ([LICENSE](LICENSE), SPDX `GPL-3.0-only`). The spreadsheet formula engine, HyperFormula, is used under its GPL-3.0 licence option, which is why the whole repository is GPL-3.0 (decided 2026-10-17, [ROADMAP](docs/ROADMAP.md) item 6). Running your own image needs nothing further; if you ever distribute Voyager, distribute its source under the same licence.
 
 Third-party packages and their licences are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). It is generated: after changing dependencies, run `node scripts/third-party-notices.mjs` from the repository root.
