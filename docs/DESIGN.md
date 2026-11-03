@@ -150,7 +150,7 @@ There is no app-level login. Tailscale identity admits requests (the allowlist),
 ```
 NotesApp/                              (monorepo; branch main)
 ├── .github/
-│   ├── dependabot.yml                 WP-Infra  weekly grouped updates: actions, docker, compose, maven, npm
+│   ├── dependabot.yml                 WP-Infra  monthly grouped updates (majors apart): actions, docker, compose, maven, npm, clipper
 │   └── workflows/
 │       ├── ci.yml                     WP-Infra  tests on PRs, pushes and weekly; PR image build; on main calls publish.yml
 │       ├── publish.yml                WP-Infra  reusable: multi-arch image to GHCR
@@ -4965,29 +4965,79 @@ jobs:
 - **GHCR.** The first publish creates a **private** package linked to the repo. It stays private: the server pulls with a classic PAT that has only the `read:packages` scope (fine-grained PATs are not supported by GitHub Packages), created **without an expiry**, so an expired token can never silently stop deploys. The same PAT backs Watchtower's credentials directory.
 - **Executable bit.** `backend/mvnw` is run as `sh ./mvnw`, so the executable bit, which is lost on Windows, does not matter. WP-Infra still sets it with `git update-index --chmod=+x backend/mvnw`.
 
-`.github/dependabot.yml` (weekly, grouped, so it produces about one PR per ecosystem per week):
+`.github/dependabot.yml` (monthly and grouped, so it produces about one PR per ecosystem a month; maven, the web app and the clipper put major versions in a second group of their own, so at most two a month each). Pinned lines and versions are ignored and moved by hand: Node 24 and `@types/node` with it, the JDK majors, the web app's TypeScript `~6.0`, SheetJS from its CDN, and HyperFormula (§6.21: a new engine is a deliberate `SHEET_ENGINE` change). The image's weekly rebuild is `ci.yml`'s schedule, not Dependabot's:
 
 ```yaml
+# Monthly and grouped: about one PR per ecosystem a month, and for maven, the web app and the clipper a second
+# one that holds the major versions, so one incompatible major never blocks the routine updates. The weekly image
+# rebuild for base-image fixes is ci.yml's schedule, not Dependabot's.
+# Ignored where the design pins a line or a version and moves it by hand: Node 24 (with @types/node following it),
+# Java 21 to build and 25 to run, TypeScript ~6.0 in the web app for typescript-eslint, SheetJS from its CDN, and
+# HyperFormula (DESIGN §6.21: a new engine is a deliberate SHEET_ENGINE change).
 version: 2
 updates:
   - package-ecosystem: github-actions
     directory: /
-    schedule: { interval: weekly }
+    schedule: { interval: monthly }
     groups: { actions: { patterns: ['*'] } }
+
   - package-ecosystem: docker              # Dockerfile base images
     directory: /
-    schedule: { interval: weekly }
-  - package-ecosystem: docker-compose      # tailscale and watchtower images (digest pins)
+    schedule: { interval: monthly }
+    groups: { docker: { patterns: ['*'] } }
+    ignore:
+      - dependency-name: node              # Node 24 here and in ci.yml; move both together, by hand
+        update-types: ['version-update:semver-major']
+      - dependency-name: eclipse-temurin   # JDK 21 builds (--release 21), JDK 25 runs (DESIGN §7.1); majors by hand
+        update-types: ['version-update:semver-major']
+
+  - package-ecosystem: docker-compose      # watchtower, restic, docker:cli and whisper images (tag + digest pins); tailscale follows :stable
     directory: /deploy
-    schedule: { interval: weekly }
+    schedule: { interval: monthly }
+    groups: { compose: { patterns: ['*'] } }
+
   - package-ecosystem: maven
     directory: /backend
-    schedule: { interval: weekly }
-    groups: { maven: { patterns: ['*'] } }
+    schedule: { interval: monthly }
+    groups:
+      maven:
+        patterns: ['*']
+        update-types: [minor, patch]
+      maven-major:
+        patterns: ['*']
+        update-types: [major]
+
   - package-ecosystem: npm
     directory: /frontend
-    schedule: { interval: weekly }
-    groups: { npm: { patterns: ['*'] } }
+    schedule: { interval: monthly }
+    groups:
+      npm:
+        patterns: ['*']
+        update-types: [minor, patch]
+      npm-major:
+        patterns: ['*']
+        update-types: [major]
+    ignore:
+      - dependency-name: typescript        # pinned ~6.0.x until typescript-eslint supports newer (DESIGN §6.1)
+        update-types: ['version-update:semver-major', 'version-update:semver-minor']
+      - dependency-name: xlsx              # SheetJS from cdn.sheetjs.com (DESIGN §6.21.10); the registry's xlsx is frozen at 0.18.x with advisories
+      - dependency-name: '@types/node'     # follows the Node 24 runtime and moves by hand with it, like the docker node image
+        update-types: ['version-update:semver-major']
+      - dependency-name: hyperformula      # pinned exactly (DESIGN §6.21): a new engine is a deliberate SHEET_ENGINE change, by hand
+
+  - package-ecosystem: npm                 # the web clipper (ROADMAP item 19); exact pins
+    directory: /clipper
+    schedule: { interval: monthly }
+    groups:
+      clipper:
+        patterns: ['*']
+        update-types: [minor, patch]
+      clipper-major:
+        patterns: ['*']
+        update-types: [major]
+    ignore:
+      - dependency-name: '@types/node'     # follows the Node 24 runtime and moves by hand with it
+        update-types: ['version-update:semver-major']
 ```
 
 If the `docker-compose` ecosystem is not available to the repository, the monthly manual update in §7.9 covers the compose images.

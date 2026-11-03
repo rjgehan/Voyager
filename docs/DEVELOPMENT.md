@@ -61,7 +61,7 @@ cd e2e; npm ci; npm run reset -- --prod; npm test; npm run stop   # end to end, 
 2. **A push to `main`** (docs-only pushes excepted) runs the same checks and then [`publish.yml`](../.github/workflows/publish.yml), which builds `linux/amd64` and `linux/arm64` images and pushes `ghcr.io/rjgehan/notesapp:latest` and `:sha-<7 hex>` to the GitHub Container Registry (GHCR).
 3. **Watchtower** on the server polls GHCR every 5 minutes, pulls the new image and recreates the `notes` container with a 45 s graceful stop. Open browser tabs reconnect and reload themselves onto the new build.
 4. **The live demo** ([`pages.yml`](../.github/workflows/pages.yml)) is rebuilt and deployed to GitHub Pages on pushes to `main` that touch `frontend/`.
-5. **Weekly**, a scheduled run rebuilds and republishes the image so base-image security fixes arrive without a code change. Dependabot proposes grouped dependency updates weekly.
+5. **Weekly**, a scheduled run rebuilds and republishes the image so base-image security fixes arrive without a code change. Dependabot proposes grouped dependency updates monthly, with major versions in a group of their own.
 
 Rolling back, pausing updates, backups and everything else on the server side are in [docs/DEPLOY.md](DEPLOY.md).
 
