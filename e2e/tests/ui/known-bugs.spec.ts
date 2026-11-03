@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { MODE, createFile, unique } from '../../lib/api.ts';
+import { createFile, unique } from '../../lib/api.ts';
 import { editor, newNote, noteTitle, openNote } from '../../lib/ui.ts';
 
 /**
@@ -26,7 +26,6 @@ test('New note pressed while the app is still opening keeps what is typed into i
 });
 
 test('going offline just after opening a note does not reload the page', async ({ page, context }) => {
-  test.fail(MODE === 'prod', 'KNOWN BUG (FINDINGS F1): a lazy chunk that cannot load offline is taken for a new deploy (vite:preloadError → handleNewBuild) and the page reloads into the browser’s offline error');
   const path = `${unique('Offline')}.md`;
   await createFile(path, '# Offline\n\nstart\n');
   await openNote(page, path);

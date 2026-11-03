@@ -1,5 +1,14 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { handleNewBuild, reloadForNewBuild, reportServerBuild, setReloader, setReloadPreparer, setUnsavedProbe } from './buildCheck';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  handleNewBuild,
+  installPreloadErrorHandler,
+  pageBuild,
+  reloadForNewBuild,
+  reportServerBuild,
+  setReloader,
+  setReloadPreparer,
+  setUnsavedProbe,
+} from './buildCheck';
 import { useUi } from './ui';
 
 describe('build check with the service worker', () => {
@@ -56,6 +65,90 @@ describe('build check with the service worker', () => {
     setReloaderKeepingGuard(reload);
     handleNewBuild('build-3');
     expect(reload).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('a lazy chunk that cannot load (vite:preloadError)', () => {
+  let reload: ReturnType<typeof vi.fn<() => void>>;
+
+  beforeAll(() => installPreloadErrorHandler());
+
+  beforeEach(() => {
+    useUi.getState().setNewBuildAvailable(false);
+    setUnsavedProbe(() => false);
+    setReloadPreparer(null);
+    reload = vi.fn<() => void>();
+    setReloader(reload);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function chunkFails(): Event {
+    const event = new Event('vite:preloadError', { cancelable: true });
+    window.dispatchEvent(event);
+    return event;
+  }
+
+  function serverAnswers(build: string | null) {
+    const fetchMock = vi.fn(() => Promise.resolve(new Response('{}', { status: 200, headers: build ? { 'X-Notes-Build': build } : {} })));
+    vi.stubGlobal('fetch', fetchMock);
+    return fetchMock;
+  }
+
+  it('offline: no reload, no banner, and the import rejects as usual', async () => {
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    const fetchMock = serverAnswers('build-2');
+    const event = chunkFails();
+    expect(event.defaultPrevented).toBe(false);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(reload).not.toHaveBeenCalled();
+    expect(useUi.getState().newBuildAvailable).toBe(false);
+  });
+
+  it('online with the same server build (a passing network failure): nothing happens', async () => {
+    const fetchMock = serverAnswers(pageBuild);
+    const event = chunkFails();
+    expect(event.defaultPrevented).toBe(false);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(reload).not.toHaveBeenCalled();
+    expect(useUi.getState().newBuildAvailable).toBe(false);
+  });
+
+  it('the server cannot be reached: nothing happens', async () => {
+    const fetchMock = vi.fn(() => Promise.reject(new TypeError('Failed to fetch')));
+    vi.stubGlobal('fetch', fetchMock);
+    chunkFails();
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(reload).not.toHaveBeenCalled();
+    expect(useUi.getState().newBuildAvailable).toBe(false);
+  });
+
+  it('the server runs a new build: a clean page reloads', async () => {
+    serverAnswers('build-2');
+    chunkFails();
+    await vi.waitFor(() => expect(reload).toHaveBeenCalledTimes(1));
+  });
+
+  it('the server runs a new build with unsaved work: the banner shows', async () => {
+    setUnsavedProbe(() => true);
+    serverAnswers('build-2');
+    chunkFails();
+    await vi.waitFor(() => expect(useUi.getState().newBuildAvailable).toBe(true));
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it('asks the server once for a burst of failed chunks', async () => {
+    const fetchMock = serverAnswers(pageBuild);
+    chunkFails();
+    chunkFails();
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
 

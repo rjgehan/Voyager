@@ -5,8 +5,11 @@
 // With the service worker (DESIGN §6.26) a reload first lets the new worker take over (see
 // pwa/serviceWorker.ts). A page that comes back on the same old bundle anyway (the network was too
 // slow and the cached shell answered) does not reload again for the same server build within a
-// minute: it shows the banner instead, so a reload can never loop.
+// minute: it shows the banner instead, so a reload can never loop. A lazy chunk that fails to load
+// counts as a deploy only when a fresh request confirms the server runs another build.
+import { MOCK_API } from '../demo/mode';
 import { useUi } from './ui';
+import { apiUrl } from './vault';
 
 export const pageBuild: string = import.meta.env.VITE_BUILD_SHA ?? 'dev';
 
@@ -88,10 +91,33 @@ export function handleNewBuild(serverBuild = 'unknown'): void {
   useUi.getState().setNewBuildAvailable(true);
 }
 
-/** Called once at startup: a lazy chunk of the old build vanished after a deploy. */
+let preloadHandlerInstalled = false;
+let checkingChunk = false;
+
+/** The build the server runs now, from a fresh request; rejects when the server cannot be reached. */
+async function serverBuildNow(): Promise<string | null> {
+  // The demo (and the dev server's mock API) has no server to ask: a missing chunk there means a new deploy.
+  if (MOCK_API) return 'unknown';
+  const res = await fetch(apiUrl('/api/status'), { cache: 'no-store', credentials: 'same-origin' });
+  return res.headers.get('X-Notes-Build');
+}
+
+/**
+ * Called once at startup: a lazy chunk could not be loaded. That is a deploy that removed the old
+ * build's chunks only when the server now runs another build; offline, or with the same build, it is
+ * a connection problem. The import is never default-prevented, so it rejects and its caller (or the
+ * view's error boundary) handles that; only a confirmed new build takes the reload path.
+ */
 export function installPreloadErrorHandler(): void {
-  window.addEventListener('vite:preloadError', (event) => {
-    event.preventDefault();
-    handleNewBuild();
+  if (preloadHandlerInstalled) return;
+  preloadHandlerInstalled = true;
+  window.addEventListener('vite:preloadError', () => {
+    if (navigator.onLine === false || checkingChunk || reloading) return;
+    checkingChunk = true;
+    void serverBuildNow()
+      .then((build) => reportServerBuild(build), () => undefined)
+      .finally(() => {
+        checkingChunk = false;
+      });
   });
 }
