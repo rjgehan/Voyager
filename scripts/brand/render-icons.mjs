@@ -2,25 +2,28 @@
 /*
  * Renders every icon the apps ship from the two drawings next to this file (BRAND.md):
  *
- *   voyager.svg        the icon, 1024 full bleed: the Golden Record on deep space
- *   voyager-small.svg  the same icon for 16 to 48 px: one groove band, a lighter label, a bigger hole
+ *   voyager.svg              the icon, 1024 full bleed: the Golden Record on deep space (the tile)
+ *   voyager-small.svg        the same icon for 16 to 48 px: one groove band, a lighter label, a bigger hole
+ *   voyager-disc.svg         the disc alone on a transparent background, 1024 (the PC: desktop app, favicon)
+ *   voyager-disc-small.svg   the disc alone for 16 to 48 px: a deeper gold and a dark rim for light bars
  *
  *   node scripts/brand/render-icons.mjs                  (npm ci in e2e/ first: it uses its Playwright)
  *   node scripts/brand/render-icons.mjs --preview out.png   also a sheet (and out.html) showing it in place
+ *   node scripts/brand/render-icons.mjs --preview-pc out.png   also a sheet of the disc on the PC
  *   node scripts/brand/render-icons.mjs --into some/dir      writes the files under that folder instead, to compare
  *
- *   frontend/public/favicon.svg                 voyager-small.svg on a rounded tile
+ *   frontend/public/favicon.svg                 voyager-disc-small.svg, transparent
  *   docs/images/icon.svg                        voyager.svg on a rounded tile (README, BRAND.md, the demo's logo)
  *   frontend/public/apple-touch-icon.png        180, full bleed and opaque (iOS rounds the corners itself
  *                                               and paints transparency black)
  *   frontend/public/icon-192.png, icon-512.png  rounded tile, for "any" in the manifest
  *   frontend/public/icon-maskable-512.png       full bleed: the disc is well inside the 80% safe zone
- *   desktop/build/icon.png                      1024 rounded tile (electron-builder makes the macOS icns)
- *   desktop/build/icon.ico                      Windows: 16 to 48 px from voyager-small.svg, 64 to 256 from
- *   desktop/src/pages/icon.ico                  voyager.svg (the exe, the window and the tray)
- *   desktop/src/pages/icon.png                  256 rounded tile (setup and offline pages, notifications)
- *   desktop/src/pages/icon-small.png            64, voyager-small.svg rounded (the macOS menu bar, at 18)
- *   clipper/icons/icon-16.png … icon-128.png    the extension's toolbar and store sizes
+ *   desktop/build/icon.png                      1024, the disc (electron-builder makes the macOS icns)
+ *   desktop/build/icon.ico                      Windows: 16 to 48 px from voyager-disc-small.svg, 64 to 256
+ *   desktop/src/pages/icon.ico                  from voyager-disc.svg (the exe, the window and the tray)
+ *   desktop/src/pages/icon.png                  256, the disc (setup and offline pages, notifications)
+ *   desktop/src/pages/icon-small.png            64, voyager-disc-small.svg (the macOS menu bar, at 18)
+ *   clipper/icons/icon-16.png … icon-128.png    the extension's toolbar and store sizes, on the rounded tile
  *
  * Each image is the SVG drawn on a canvas in headless Edge or Chrome (Playwright's channel; PW_CHANNEL
  * picks one, `chromium` for Playwright's own build), read back as pixels and written here, so the PNGs
@@ -36,6 +39,8 @@ const here = dirname(fileURLToPath(import.meta.url));
 const repo = join(here, '..', '..');
 const ICON = readFileSync(join(here, 'voyager.svg'), 'utf8');
 const SMALL = readFileSync(join(here, 'voyager-small.svg'), 'utf8');
+const DISC = readFileSync(join(here, 'voyager-disc.svg'), 'utf8');
+const DISC_SMALL = readFileSync(join(here, 'voyager-disc-small.svg'), 'utf8');
 /** The tile's corner radius, as a share of its side (the web app's icons and the desktop app). */
 const ROUND = 0.225;
 
@@ -226,8 +231,15 @@ async function pixels(svg, size) {
 const roundIcon = rounded(ICON, 'voyager.svg');
 const roundSmall = rounded(SMALL, 'voyager-small.svg');
 const pngOf = async (svg, size, opaque = false) => png(await pixels(svg, size), size, opaque);
+/** A drawing used as it is (the disc, already transparent), marked as generated. */
+const marked = (svg, source) =>
+  svg.replace(/<!--[\s\S]*?-->/, `<!-- Voyager's icon (BRAND.md), made by scripts/brand/render-icons.mjs from ${source}: edit that file. -->`);
+const disc = marked(DISC, 'voyager-disc.svg');
+const discSmall = marked(DISC_SMALL, 'voyager-disc-small.svg');
 
-write('frontend/public/favicon.svg', Buffer.from(roundSmall));
+// The PC (BRAND.md, "Which drawing goes where"): the disc alone, transparent. The tile where a platform
+// needs an opaque square: the iPhone's Home Screen, the installed web app, Android, CasaOS, the README.
+write('frontend/public/favicon.svg', Buffer.from(discSmall));
 write('docs/images/icon.svg', Buffer.from(roundIcon));
 write('frontend/public/apple-touch-icon.png', await pngOf(ICON, 180, true));
 write('frontend/public/icon-192.png', await pngOf(roundIcon, 192));
@@ -236,14 +248,14 @@ write('frontend/public/icon-maskable-512.png', await pngOf(ICON, 512, true));
 
 const icoImages = [];
 for (const size of [16, 20, 24, 32, 40, 48, 64, 96, 128, 256]) {
-  icoImages.push({ size, rgba: await pixels(size <= 48 ? roundSmall : roundIcon, size) });
+  icoImages.push({ size, rgba: await pixels(size <= 48 ? discSmall : disc, size) });
 }
 const icoFile = ico(icoImages);
 write('desktop/build/icon.ico', icoFile);
 write('desktop/src/pages/icon.ico', icoFile);
-write('desktop/build/icon.png', await pngOf(roundIcon, 1024));
-write('desktop/src/pages/icon.png', await pngOf(roundIcon, 256));
-write('desktop/src/pages/icon-small.png', await pngOf(roundSmall, 64));
+write('desktop/build/icon.png', await pngOf(disc, 1024));
+write('desktop/src/pages/icon.png', await pngOf(disc, 256));
+write('desktop/src/pages/icon-small.png', await pngOf(discSmall, 64));
 
 for (const size of [16, 32, 48, 128]) {
   write(`clipper/icons/icon-${size}.png`, await pngOf(size <= 48 ? roundSmall : roundIcon, size));
@@ -257,10 +269,13 @@ for (const size of [16, 32, 48, 128]) {
  * 2×, so the icon is 120 px), in a dark and a light browser tab bar at 16 px (100%) and 32 px (200%),
  * and on a dark and a light Windows 11 taskbar at 100% (24 px) and 150% (36 px). The page itself is
  * written next to the PNG, as out.html.
+ *
+ * --preview-pc out.png: the disc alone, where the PC shows it: dark and light Windows 11 taskbars, desktop
+ * shortcuts on a dark and a light wallpaper, and dark and light browser tab bars.
  */
 const previewAt = process.argv.indexOf('--preview');
-if (previewAt > 0) {
-  const out = process.argv[previewAt + 1];
+const pcAt = process.argv.indexOf('--preview-pc');
+if (previewAt > 0 || pcAt > 0) {
   const dataUrl = async (svg, size, opaque) => 'data:image/png;base64,' + (await pngOf(svg, size, opaque)).toString('base64');
   const big = await dataUrl(roundIcon, 512);
   const bleed = await dataUrl(ICON, 320, true);
@@ -270,6 +285,13 @@ if (previewAt > 0) {
   const s32 = await dataUrl(roundSmall, 32);
   const s36 = await dataUrl(roundSmall, 36);
   const s48 = await dataUrl(roundSmall, 48);
+  const d16 = await dataUrl(discSmall, 16);
+  const d24 = await dataUrl(discSmall, 24);
+  const d32 = await dataUrl(discSmall, 32);
+  const d36 = await dataUrl(discSmall, 36);
+  const d48 = await dataUrl(discSmall, 48);
+  const d72 = await dataUrl(disc, 72);
+  const d256 = await dataUrl(disc, 256);
 
   // Neutral stand-ins for other apps: a flat grey-blue tile and a plain white glyph, no real product's mark.
   const glyphs = {
@@ -305,7 +327,7 @@ if (previewAt > 0) {
   ].join('');
 
   const tabbar = (dark, scale) => {
-    const fav = scale === 1 ? s16 : s32;
+    const fav = scale === 1 ? d16 : d32;
     const z = (n) => n * scale;
     const c = dark
       ? { bar: '#202124', tab: '#35363a', fg: '#e8eaed', dim: '#9aa0a6', field: '#282828' }
@@ -323,7 +345,7 @@ if (previewAt > 0) {
   const taskbar = (dark, scale) => {
     const z = (n) => Math.round(n * scale);
     const size = z(24);
-    const img = scale === 1 ? s24 : s36;
+    const img = scale === 1 ? d24 : d36;
     const c = dark
       ? { bg: 'rgba(32,32,36,0.97)', fg: '#ffffff', pill: '#9aa0a6', on: '#aa89f8', hover: 'rgba(255,255,255,0.08)' }
       : { bg: 'rgba(238,238,242,0.97)', fg: '#1f1f1f', pill: '#8a8a8a', on: '#7a4fe0', hover: 'rgba(0,0,0,0.05)' };
@@ -338,6 +360,17 @@ if (previewAt > 0) {
   };
 
   const zoom = (src, px, k) => `<img class="px" src="${src}" width="${px * k}" height="${px * k}">`;
+  const shoot = async (out, html, width) => {
+    mkdirSync(dirname(out), { recursive: true });
+    writeFileSync(out.replace(/\.png$/i, '') + '.html', html);
+    await page.setViewportSize({ width, height: 1000 });
+    await page.setContent(html);
+    await page.waitForLoadState('load');
+    writeFileSync(out, await page.screenshot({ fullPage: true }));
+    console.log(`preview  ${out} (and .html)`);
+  };
+
+  if (previewAt > 0) {
   const html = `<!doctype html><html><head><meta charset="utf-8"><title>Voyager icon</title><style>
     * { box-sizing: border-box; }
     body { margin: 0; width: 2400px; padding: 56px 64px 64px; background: #f4f2f8; font: 17px/1.45 'Segoe UI', system-ui, sans-serif; color: #2b2540; }
@@ -412,13 +445,78 @@ if (previewAt > 0) {
       </div>
     </div>
   </body></html>`;
-  mkdirSync(dirname(out), { recursive: true });
-  writeFileSync(out.replace(/\.png$/i, '') + '.html', html);
-  await page.setViewportSize({ width: 2400, height: 1200 });
-  await page.setContent(html);
-  await page.waitForLoadState('load');
-  writeFileSync(out, await page.screenshot({ fullPage: true }));
-  console.log(`preview  ${out} (and .html)`);
+  await shoot(process.argv[previewAt + 1], html, 2400);
+  }
+
+  if (pcAt > 0) {
+    const shortcut = (dark, scale) => {
+      const size = scale === 1 ? 48 : 72;
+      const src = scale === 1 ? d48 : d72;
+      const z = (n) => Math.round(n * scale);
+      const label = (text) => `<span style="font-size:${z(12)}px;margin-top:${z(4)}px">${text}</span>`;
+      const gen = (i, l) => `<div class="sc" style="width:${z(76)}px">${tile(neutral[i][0], neutral[i][1], size, 0.2)}${label(l)}</div>`;
+      return `<div class="wall ${dark ? 'dark' : ''}" style="gap:${z(10)}px;padding:${z(16)}px">
+          ${gen(9, 'Files')}<div class="sc on" style="width:${z(76)}px"><img src="${src}" width="${size}" height="${size}">${label('Voyager')}</div>${gen(10, 'Browser')}${gen(2, 'Utilities')}
+        </div>`;
+    };
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Voyager on the PC</title><style>
+      * { box-sizing: border-box; }
+      body { margin: 0; width: 1800px; padding: 48px 56px 56px; background: #f4f2f8; font: 17px/1.45 'Segoe UI', system-ui, sans-serif; color: #2b2540; }
+      h1 { font-size: 32px; margin: 0 0 6px; } .lede { margin: 0 0 32px; color: #6b6480; max-width: 1400px; }
+      h2 { font-size: 14px; text-transform: uppercase; letter-spacing: 1.2px; color: #7a7290; margin: 0 0 18px; font-weight: 600; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; align-items: start; }
+      .card { background: #fff; border-radius: 22px; padding: 28px; box-shadow: 0 1px 2px rgba(30,20,60,.06), 0 8px 30px rgba(30,20,60,.06); }
+      .stack { display: flex; flex-direction: column; gap: 18px; }
+      .row { display: flex; gap: 32px; align-items: flex-end; justify-content: center; flex-wrap: wrap; }
+      figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+      figcaption { font-size: 14px; color: #6b6480; }
+      .px { image-rendering: pixelated; border: 1px solid #e3dff0; }
+      .chk { background: repeating-conic-gradient(#e6e2ee 0 25%, #fff 0 50%) 0 0 / 16px 16px; padding: 12px; border-radius: 12px; }
+      .browser { border-radius: 10px 10px 0 0; overflow: hidden; }
+      .tabs { display: flex; align-items: flex-end; } .tab { display: inline-flex; align-items: center; white-space: nowrap; }
+      .tab b { font-weight: 400; } .omni { display: flex; } .omni span { flex: 1; }
+      .gen { display: inline-flex; align-items: center; justify-content: center; flex: none; }
+      .taskbar { position: relative; display: flex; align-items: center; justify-content: center; border-radius: 0 0 10px 10px; }
+      .center { display: flex; } .slot { position: relative; display: inline-flex; align-items: center; justify-content: center; }
+      .slot i { position: absolute; left: 50%; transform: translateX(-50%); border-radius: 3px; }
+      .clock { position: absolute; text-align: right; }
+      .desk { padding: 70px 0 0; border-radius: 10px; overflow: hidden; background: linear-gradient(135deg, #cfd8e6, #9fb0c8); }
+      .desk.dark { background: linear-gradient(135deg, #2c3442, #151a22); }
+      .wall { display: flex; border-radius: 10px; background: linear-gradient(135deg, #dfe6ef, #b4c3d6); color: #fff; }
+      .wall.dark { background: linear-gradient(135deg, #2b3445, #10141c); }
+      .sc { display: flex; flex-direction: column; align-items: center; padding: 6px 2px; border-radius: 4px; text-shadow: 0 1px 3px rgba(0,0,0,.7); }
+      .sc.on { background: rgba(255,255,255,.18); outline: 1px solid rgba(255,255,255,.35); }
+    </style></head><body>
+      <h1>Voyager on the PC: the disc alone</h1>
+      <p class="lede">The desktop app and the browser show the Golden Record without its tile, on a transparent background. From 48 px down it is the simplified disc (a deeper gold, a dark rim, one groove band, a bigger hole). Every image is at its real size in pixels.</p>
+      <div class="grid">
+        <div class="stack">
+          <div class="card"><h2>Windows 11 taskbar, 100% (24 px) and 150% (36 px)</h2><div class="stack">
+            <div class="desk dark">${taskbar(true, 1)}</div>
+            <div class="desk">${taskbar(false, 1)}</div>
+            <div class="desk dark">${taskbar(true, 1.5)}</div>
+            <div class="desk">${taskbar(false, 1.5)}</div>
+          </div></div>
+          <div class="card"><h2>Desktop shortcut, 100% (48 px) and 150% (72 px)</h2><div class="stack">
+            <div class="row" style="justify-content:flex-start">${shortcut(true, 1)}${shortcut(false, 1)}</div>
+            <div class="row" style="justify-content:flex-start">${shortcut(true, 1.5)}${shortcut(false, 1.5)}</div>
+          </div></div>
+        </div>
+        <div class="stack">
+          <div class="card"><h2>Browser tab, 16 px (100%)</h2><div class="stack">${tabbar(true, 1)}${tabbar(false, 1)}</div></div>
+          <div class="card"><h2>Browser tab, 32 px (200%)</h2><div class="stack">${tabbar(true, 2)}${tabbar(false, 2)}</div></div>
+          <div class="card"><h2>The files, on transparency</h2>
+            <div class="row"><figure><div class="chk"><img src="${d256}" width="256" height="256"></div><figcaption>256</figcaption></figure>
+              <figure><div class="chk"><img src="${d48}" width="48" height="48"></div><figcaption>48</figcaption></figure>
+              <figure><div class="chk"><img src="${d32}" width="32" height="32"></div><figcaption>32</figcaption></figure>
+              <figure><div class="chk"><img src="${d16}" width="16" height="16"></div><figcaption>16</figcaption></figure></div>
+            <div class="row" style="margin-top:22px"><figure>${zoom(d32, 32, 8)}<figcaption>32 px, 8×</figcaption></figure><figure>${zoom(d16, 16, 8)}<figcaption>16 px, 8×</figcaption></figure></div>
+          </div>
+        </div>
+      </div>
+    </body></html>`;
+    await shoot(process.argv[pcAt + 1], html, 1800);
+  }
 }
 
 await browser.close();

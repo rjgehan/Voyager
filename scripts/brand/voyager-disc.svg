@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- Voyager's icon on the PC (BRAND.md): the Golden Record alone, on a transparent background, for
+       the desktop app (64 px and up) and wherever the platform shows icons without a tile. The same
+       disc as voyager.svg (gold, four groove tracks, the sheen, the label with the pulsar map, the
+       spindle hole), 92% of the side, with a darker rim and a soft shadow so it holds on light
+       backgrounds too. Transparent: render-icons.mjs uses it as it is. -->
+  <defs>
+    <linearGradient id="gold" x1="0.12" y1="0.06" x2="0.88" y2="0.96">
+      <stop offset="0" stop-color="#fff0bd"/>
+      <stop offset="0.24" stop-color="#f5d07a"/>
+      <stop offset="0.52" stop-color="#e2a940"/>
+      <stop offset="0.8" stop-color="#b87c22"/>
+      <stop offset="1" stop-color="#8e5c16"/>
+    </linearGradient>
+    <radialGradient id="label" cx="0.4" cy="0.36" r="0.75">
+      <stop offset="0" stop-color="#fbe4a2"/>
+      <stop offset="0.6" stop-color="#ecc067"/>
+      <stop offset="1" stop-color="#c98f30"/>
+    </radialGradient>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="30"/></filter>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="12"/></filter>
+    <clipPath id="disc"><circle cx="512" cy="512" r="470"/></clipPath>
+  </defs>
+  <circle cx="512" cy="526" r="466" fill="#1a0e02" opacity="0.38" filter="url(#shadow)"/>
+  <circle cx="512" cy="512" r="470" fill="url(#gold)"/>
+  <g clip-path="url(#disc)">
+    <g filter="url(#soft)">
+      <path d="M512,512 L61.7,272.6 L272.6,61.7 Z M512,512 L962.3,751.4 L751.4,962.3 Z" fill="#fffbe8" opacity="0.5"/>
+      <path d="M512,512 L751.4,61.7 L953.7,257 Z M512,512 L272.6,962.3 L70.3,767 Z" fill="#5e3608" opacity="0.3"/>
+    </g>
+  </g>
+  <g transform="translate(512 512)" fill="none" stroke="#5c3608" stroke-opacity="0.28" stroke-width="1.8">
+    <circle r="193.7"/><circle r="198.5"/><circle r="203.4"/><circle r="208.2"/><circle r="213.1"/><circle r="217.9"/><circle r="222.8"/><circle r="227.6"/><circle r="232.4"/><circle r="237.3"/><circle r="242.1"/><circle r="247"/><circle r="262.1"/><circle r="266.9"/><circle r="271.7"/><circle r="276.6"/><circle r="281.4"/><circle r="286.3"/><circle r="291.1"/><circle r="296"/><circle r="300.8"/><circle r="305.6"/><circle r="310.5"/><circle r="315.3"/><circle r="320.2"/><circle r="333.3"/><circle r="338.1"/><circle r="343"/><circle r="347.8"/><circle r="352.6"/><circle r="357.5"/><circle r="362.3"/><circle r="367.2"/><circle r="372"/><circle r="376.9"/><circle r="381.7"/><circle r="393.1"/><circle r="397.9"/><circle r="402.8"/><circle r="407.6"/><circle r="412.5"/><circle r="417.3"/><circle r="422.1"/><circle r="427"/><circle r="431.8"/><circle r="436.7"/><circle r="441.5"/>
+  </g>
+  <circle cx="512" cy="512" r="465" fill="none" stroke="#5e370a" stroke-opacity="0.7" stroke-width="10"/>
+  <circle cx="512" cy="512" r="455" fill="none" stroke="#fff4cf" stroke-opacity="0.4" stroke-width="3.5"/>
+  <circle cx="512" cy="512" r="176.6" fill="url(#label)"/>
+  <circle cx="512" cy="512" r="176.6" fill="none" stroke="#6a3f0a" stroke-opacity="0.45" stroke-width="4"/>
+  <circle cx="512" cy="512" r="183" fill="none" stroke="#fff4cf" stroke-opacity="0.35" stroke-width="3"/>
+  <path d="M551.9,512 L665.8,512 M549,526.9 L599.2,547.2 M539.2,541.2 L599.4,605.7 M525,549.7 L538,587.4 M506.4,551.5 L495.7,627.7 M488.6,544.3 L460.1,583.4 M477.5,531.9 L393.6,580.4 M472.6,518.2 L413.5,527.6 M473.7,501 L391.5,477.5 M481.9,485.8 L449.7,457.8 M493.9,476.5 L461.6,413 M510.6,472.1 L508.8,420.9 M526.9,475 L561.1,390.5 M541.6,485.3 L590.3,441.5 M549.5,498.4 L592.3,482.8" fill="none" stroke="#6a3f0a" stroke-opacity="0.62" stroke-width="4.5" stroke-linecap="round"/>
+  <circle cx="512" cy="512" r="24.2" fill="#160e40"/>
+  <circle cx="512" cy="512" r="24.2" fill="none" stroke="#6a3f0a" stroke-opacity="0.6" stroke-width="4"/>
+</svg>

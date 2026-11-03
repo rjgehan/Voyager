@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Voyager's icon on the PC simplified for 16 to 48 px (favicon, tray, small Windows icons): the
+       disc of voyager-disc.svg alone on a transparent background, nearly edge to edge, in a deeper
+       gold with a dark rim so it stands out on dark and light bars alike, its grooves as one darker
+       band, a lighter label and a bigger spindle hole. Transparent: render-icons.mjs uses it as it is. -->
+  <defs>
+    <linearGradient id="gold" x1="0.12" y1="0.06" x2="0.88" y2="0.96">
+      <stop offset="0" stop-color="#fde29a"/>
+      <stop offset="0.35" stop-color="#f0c45f"/>
+      <stop offset="0.7" stop-color="#d49633"/>
+      <stop offset="1" stop-color="#a06818"/>
+    </linearGradient>
+    <clipPath id="disc"><circle cx="32" cy="32" r="30.5"/></clipPath>
+  </defs>
+  <circle cx="32" cy="32" r="31.5" fill="#4a2a06"/>
+  <circle cx="32" cy="32" r="29.5" fill="url(#gold)"/>
+  <circle cx="32" cy="32" r="19.5" fill="none" stroke="#7a4a10" stroke-opacity="0.42" stroke-width="12"/>
+  <g clip-path="url(#disc)">
+    <path d="M32,32 L2.6,15 L15,2.6 Z M32,32 L61.4,49 L49,61.4 Z" fill="#fffbe8" opacity="0.3"/>
+  </g>
+  <circle cx="32" cy="32" r="5.2" fill="#160e40"/>
+</svg>

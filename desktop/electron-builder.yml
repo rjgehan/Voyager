@@ -21,7 +21,7 @@ electronLanguages: [en-US]
 
 win:
   target: [nsis]
-  # 16 to 48 px are the simplified drawing (scripts/brand/render-icons.mjs).
+  # The disc alone, transparent; 16 to 48 px are the simplified drawing (scripts/brand/render-icons.mjs).
   icon: build/icon.ico
   artifactName: Voyager-Setup-${version}.${ext}
   # Not code-signed: Windows SmartScreen asks once ("More info" › "Run anyway").

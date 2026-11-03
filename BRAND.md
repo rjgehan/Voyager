@@ -69,7 +69,7 @@ around it (the social preview), not for the interface.
 
 ## The icon
 
-<img src="frontend/public/icon-512.png" width="160" alt=""> <img src="frontend/public/favicon.svg" width="48" alt="">
+<img src="frontend/public/icon-512.png" width="160" alt=""> <img src="desktop/src/pages/icon.png" width="128" alt=""> <img src="frontend/public/favicon.svg" width="48" alt="">
 
 **The Golden Record.** Each Voyager probe carries a gold-plated copper record: sounds and pictures
 chosen to tell whoever finds it what life on Earth was like in 1977, with the instructions for
@@ -99,34 +99,52 @@ dot in a sunbeam; it was replaced in November 2026 by this one.)
 grooves and the pulsar map turn to mush, so `voyager-small.svg` makes the disc a little bigger
 (78% of the width), turns the grooves into one darker band between a lighter label and a lighter
 rim, makes the hole bigger (13% of the width), keeps one light wedge of sheen and drops the stars.
-Both have the same space, glow, gold and proportions, so they read as one icon. The favicon, the
-tray icon, the clipper's 16 to 48 px icons and the small Windows icon sizes are the small drawing.
+Both have the same space, glow, gold and proportions, so they read as one icon.
+
+**Two variants: the tile and the disc.** The *tile* is the disc on its square of deep space
+(`voyager.svg`, `voyager-small.svg`). The *disc* is the Golden Record alone on a transparent
+background (`voyager-disc.svg`, `voyager-disc-small.svg`): the same drawing, 92% of the side,
+with a darker rim and a soft shadow so it holds on a light taskbar or tab bar as well as a dark
+one. Its small drawing uses a slightly deeper gold for the same reason.
+
+| Where | Variant |
+| --- | --- |
+| The desktop app: the exe, its windows, the taskbar, the Start menu, desktop shortcuts, the tray, the setup and offline pages, notifications, the macOS app icon | The disc (`build/icon.ico` at every size, 16 to 48 px from the small drawing; `build/icon.png`; `src/pages/icon.ico`, `icon.png`, `icon-small.png`) |
+| The browser tab (`favicon.svg`) | The disc, small drawing |
+| The iPhone's Home Screen (`apple-touch-icon.png`) and the installed web app (`icon-192.png`, `icon-512.png`, `icon-maskable-512.png`) | The tile: iOS and Android need an opaque square (iOS paints transparency black) |
+| CasaOS (it shows `icon-192.png`), the README and BRAND.md (`docs/images/icon.svg`), the social preview, the demo vault's logo | The tile |
+| The clipper's toolbar and store icons | The tile (16 to 48 px from the small drawing) |
 
 **Using it.**
-- On its own tile, never cropped, recoloured, rotated or outlined, and never with text over it.
-- Rounded tile (corner radius 22.5% of the side) in browsers, the README, Windows and macOS; full
-  bleed where the platform rounds or masks it (the iPhone's Home Screen, Android's maskable icon).
-  The disc stays inside a maskable icon's 80% safe zone.
+- As the tile or as the disc, never cropped, recoloured, rotated or outlined, never with text over
+  it, and never the disc on a tile of another colour.
+- The disc on the PC (the desktop app and the browser tab); the tile everywhere else. The tile is
+  rounded (corner radius 22.5% of the side) in the README and the clipper, and full bleed where the
+  platform rounds or masks it (the iPhone's Home Screen, Android's maskable icon); the disc stays
+  inside a maskable icon's 80% safe zone.
 - Under 64 px use the small drawing; never shrink the large one to a favicon.
 - Next to the name, the icon goes on the left, as tall as the name's capital letters or a little
   taller (the README, the social preview, the desktop app's first-run page).
 - On a light page, give it room: the tile is dark and needs no border.
 
-**Files.** The drawings are in [`scripts/brand/`](scripts/brand) (`voyager.svg`, 1024 full bleed;
-`voyager-small.svg`, 64). Edit those, then render everything again:
+**Files.** The drawings are in [`scripts/brand/`](scripts/brand): the tile (`voyager.svg`, 1024
+full bleed; `voyager-small.svg`, 64) and the disc (`voyager-disc.svg`, 1024; `voyager-disc-small.svg`,
+64; both transparent). Edit those, then render everything again:
 
 ```sh
 cd e2e && npm ci && cd ..                      # once: the scripts use e2e's Playwright
 node scripts/brand/render-icons.mjs --preview icon-preview.png   # also a sheet: large, Home Screen, tabs, taskbar
+node scripts/brand/render-icons.mjs --preview-pc icon-pc.png      # also a sheet of the disc: taskbar, shortcuts, tabs
 node scripts/brand/render-images.mjs           # with the demo build served on :5230 (the script says how)
 ```
 
 `render-icons.mjs` draws each size on a canvas in headless Edge or Chrome and writes every icon the
-apps ship: `frontend/public/` (favicon.svg; apple-touch-icon.png, 180, opaque RGB, because iOS
-paints transparency black; icon-192 and icon-512 on the rounded tile; icon-maskable-512 full
-bleed), `docs/images/icon.svg`, the desktop app's `build/icon.png` (1024), `build/icon.ico` and
-`src/pages/icon.ico` (16 to 48 px from the small drawing, 64 to 256 from the large one),
-`src/pages/icon.png` and `icon-small.png`, and the clipper's 16, 32, 48 and 128 px icons. No image
+apps ship: `frontend/public/` (favicon.svg, the small disc; apple-touch-icon.png, 180, opaque RGB,
+because iOS paints transparency black; icon-192 and icon-512 on the rounded tile; icon-maskable-512
+full bleed), `docs/images/icon.svg` (the tile), the desktop app's `build/icon.png` (1024),
+`build/icon.ico` and `src/pages/icon.ico` (16 to 48 px from the small disc, 64 to 256 from the
+large one), `src/pages/icon.png` and `icon-small.png` (all the disc), and the clipper's 16, 32, 48
+and 128 px icons (the tile). No image
 library and no new dependency. `render-images.mjs` renders the social preview (1280×640, the
 repository's and the live demo's link preview) and the two README screenshots that show the name.
 The demo vault's `Attachments/voyager-logo.svg` is a copy of `docs/images/icon.svg`.
