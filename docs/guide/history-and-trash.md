@@ -33,7 +33,7 @@ Deleting a note (or a folder or any file) moves it to the trash; nothing is dele
 
 - Open the trash with the bin icon in the ribbon, **Trash** at the bottom of the phone's drawer, or **Open trash** in the palette.
 - **Restore** puts an item back where it was (if something else now has its name, you are asked whether to restore it as a copy).
-- **Delete permanently** removes one item; **Empty trash** removes them all. Even then, notes can still be brought back from **Vault history › Deleted files**.
+- **Delete permanently** removes one item; **Empty trash** removes them all. If the trash changes while you are being asked (something else is deleted, or a sync app drops a file into it), you are asked again with the new count. Even then, notes can still be brought back from **Vault history › Deleted files**.
 - Moving and renaming are not deletions: links follow along, and a move made by dragging shows **Undo** for a few seconds.
 
 ## When two devices disagree

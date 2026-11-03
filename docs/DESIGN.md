@@ -936,6 +936,7 @@ This is `MoveService.move(from, to, updateLinks, dryRun, identity, origin)`. `up
 
 - **Safety.** `trashPath` is validated as one safe segment directly under `realpath(.trash)` (§4.7). `GET /api/trash/{id}/raw` refuses symlinks with `404`.
 - **History coverage.** Content trashed by the app was committed before the move. Items with an `x-` id were never seen by Voyager and may not be in history, so the UI warns before purging them: "This item was not deleted through Voyager and may not be in history. Delete it permanently?"
+- **Empty trash confirms what it deletes.** `DELETE /api/trash` takes no ids, so after the user confirms, the Trash page fetches `GET /api/trash` again. If the set of ids changed while the dialog was open (an item trashed in another tab, or one a sync app dropped into `.trash/`), it asks again with the new count and the `x-` warning, and only an unchanged confirmation sends the request. The window between that refetch and the delete is a single round trip.
 - There is no automatic purge in v1. Git history already keeps the content, and the user empties the trash by hand.
 
 ### 5.8 History with JGit
