@@ -61,3 +61,23 @@ export function historyEntryOf(commit: TimelineEntry, file: TimelineFile): Histo
     renamedFrom: file.renamedFrom,
   };
 }
+
+/**
+ * Where a file at `path` in commit `commitId` is now, as far as the loaded timeline shows:
+ * renames in later commits are followed (newest first in `entries`, as the log returns them).
+ * `null` when a later commit deleted it; `path` itself when nothing later touched it.
+ */
+export function laterPathOf(entries: readonly TimelineEntry[], commitId: string, path: string): string | null {
+  const index = entries.findIndex((e) => e.commitId === commitId);
+  let current = path;
+  for (let i = index - 1; i >= 0; i--) {
+    for (const f of entries[i].files) {
+      if (f.change === 'renamed' && f.renamedFrom === current) {
+        current = f.path;
+        break;
+      }
+      if (f.change === 'deleted' && f.path === current) return null;
+    }
+  }
+  return current;
+}

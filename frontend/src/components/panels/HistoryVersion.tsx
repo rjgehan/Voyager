@@ -132,7 +132,9 @@ export default function HistoryVersion({ entry, currentPath, onClose, versions =
     const ok = await confirmAction({
       title: 'Restore this version?',
       message: !currentEntry
-        ? `“${displayName(currentPath)}” will be brought back with its version from ${formatDateTime(entry.time)}.`
+        ? deleted
+          ? `“${displayName(currentPath)}” will be brought back with its version from ${formatDateTime(entry.time)}.`
+          : `There is no file at this path now (it was renamed, moved or deleted since). Restoring creates a new note “${displayName(currentPath)}” with its version from ${formatDateTime(entry.time)}.`
         : large
           ? `“${displayName(currentPath)}” will be replaced with the version from ${formatDateTime(entry.time)}. The current version is larger than ${formatLimit(limit)}, so it is not in history: it is moved to the trash instead.`
           : `“${displayName(currentPath)}” will be replaced with the version from ${formatDateTime(entry.time)}. The current version stays in history.`,
@@ -272,6 +274,8 @@ export default function HistoryVersion({ entry, currentPath, onClose, versions =
           <FullTextPane text={historical} markdown={markdown} />
         ) : other ? (
           versionDiff()
+        ) : !currentEntry && !deleted && tree ? (
+          <div className="panel-empty">No file at this path now (renamed or moved since). Full text shows this version.</div>
         ) : open ? (
           <SessionText path={currentPath}>{diff}</SessionText>
         ) : currentText === null ? (

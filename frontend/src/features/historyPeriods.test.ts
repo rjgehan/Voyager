@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { TimelineEntry } from '../api/types';
-import { groupByDay, historyEntryOf, periodStart } from './historyPeriods';
+import { groupByDay, historyEntryOf, laterPathOf, periodStart } from './historyPeriods';
 
 describe('periodStart', () => {
   // Thursday, 2026-10-22 15:30 local time.
@@ -57,5 +57,39 @@ describe('historyEntryOf', () => {
       change: 'renamed',
       renamedFrom: 'a.md',
     });
+  });
+});
+
+describe('laterPathOf', () => {
+  const commit = (commitId: string, files: TimelineEntry['files']): TimelineEntry => ({
+    commitId,
+    shortId: commitId,
+    parentCommitId: null,
+    time: '2026-10-21T10:00:00.000Z',
+    authorName: 'A',
+    authorLogin: 'a',
+    message: 'm',
+    files,
+    filesTotal: files.length,
+  });
+  // Newest first, as GET /api/history/log returns them.
+  const log = [
+    commit('c4', [{ path: 'Done/Roadmap.md', change: 'deleted', renamedFrom: null }]),
+    commit('c3', [{ path: 'Done/Roadmap.md', change: 'renamed', renamedFrom: 'Roadmap.md' }]),
+    commit('c2', [
+      { path: 'Other.md', change: 'modified', renamedFrom: null },
+      { path: 'Roadmap.md', change: 'renamed', renamedFrom: 'Plan.md' },
+    ]),
+    commit('c1', [{ path: 'Plan.md', change: 'modified', renamedFrom: null }]),
+  ];
+
+  it('follows later renames and moves', () => {
+    expect(laterPathOf(log.slice(1), 'c1', 'Plan.md')).toBe('Done/Roadmap.md');
+    expect(laterPathOf(log.slice(1), 'c2', 'Roadmap.md')).toBe('Done/Roadmap.md');
+    expect(laterPathOf(log, 'c2', 'Other.md')).toBe('Other.md');
+  });
+
+  it('is null when a later commit deleted the file', () => {
+    expect(laterPathOf(log, 'c1', 'Plan.md')).toBeNull();
   });
 });

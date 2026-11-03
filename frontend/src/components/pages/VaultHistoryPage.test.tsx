@@ -133,4 +133,47 @@ describe('VaultHistoryPage', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Restore' }));
     await waitFor(() => expect(restore).toHaveBeenCalledWith({ path: 'Old.md', commit: C1, sourcePath: 'Old.md', baseVersion: null }));
   });
+
+  describe('a version of a file renamed since', () => {
+    const C3 = 'c'.repeat(40);
+    const edit = { ...LOG.entries[1], message: 'Update Plan.md', files: [{ path: 'Plan.md', change: 'modified' as const, renamedFrom: null }], filesTotal: 1 };
+    const rename = {
+      ...LOG.entries[0],
+      commitId: C3,
+      shortId: 'ccccccc',
+      parentCommitId: C1,
+      message: 'Rename Plan.md → Roadmap.md',
+      files: [{ path: 'Roadmap.md', change: 'renamed' as const, renamedFrom: 'Plan.md' }],
+    };
+    const roadmap: FileEntry = { ...restored, path: 'Roadmap.md', name: 'Roadmap.md', basename: 'Roadmap' };
+
+    beforeEach(() => {
+      queryClient.setQueryData(queryKeys.tree(), { eventId: 'b.1', folders: [], files: [roadmap] });
+      vi.spyOn(api, 'getHistoryContent').mockResolvedValue({ commitId: C1, path: 'Plan.md', version: 'x', size: 11, binary: false, content: 'alpha\nbeta\n', lossy: false });
+      vi.spyOn(api, 'readFile').mockResolvedValue({ path: 'Roadmap.md', content: 'alpha\nbeta\ngamma\n', version: roadmap.version, mtime: roadmap.mtime, size: 17, lossy: false } as never);
+    });
+
+    it('compares with the note under its new name and restores into it', async () => {
+      vi.mocked(api.getHistoryLog).mockResolvedValue({ hasMore: false, entries: [rename, edit] });
+      const restore = vi.spyOn(api, 'restoreHistory').mockResolvedValue({ file: roadmap, created: false, createdFolders: [], commitId: C3 });
+      renderPage();
+      const commit = (await screen.findByText('Update Plan.md')).closest('li')!;
+      fireEvent.click(within(commit).getByTitle('Show this version of Plan.md'));
+      expect(await screen.findByText('1 change')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: /Restore this version/ }));
+      expect(await screen.findByText(/“Roadmap” will be replaced/)).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Restore' }));
+      await waitFor(() => expect(restore).toHaveBeenCalledWith({ path: 'Roadmap.md', commit: C1, sourcePath: 'Plan.md', baseVersion: roadmap.version }));
+    });
+
+    it('says when there is no file at its path now, and that restoring creates one', async () => {
+      // The rename is not in the loaded timeline (filtered out, or on a later page).
+      vi.mocked(api.getHistoryLog).mockResolvedValue({ hasMore: false, entries: [edit] });
+      renderPage();
+      fireEvent.click(await screen.findByTitle('Show this version of Plan.md'));
+      expect(await screen.findByText(/No file at this path now/)).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: /Restore this version/ }));
+      expect(await screen.findByText(/creates a new note “Plan”/)).toBeInTheDocument();
+    });
+  });
 });
