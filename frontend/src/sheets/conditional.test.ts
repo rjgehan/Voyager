@@ -25,6 +25,21 @@ describe('conditional formatting', () => {
     expect(style(5, 5)).toBeUndefined();
   });
 
+  it('colours a scale over a range of more than 200,000 cells as it colours a small one', () => {
+    const numbers = { B1: { v: 1 }, B2: { v: 5 }, B3: { v: 10 } };
+    const scale = { min: '#ffffff', max: '#57bb8a' };
+    const small = conditionalStyles(sheet(numbers, { r1: { range: 'B1:B3', scale } }))!;
+    for (const range of ['B1:B300000', 'A1:AD10000']) {
+      const big = conditionalStyles(sheet(numbers, { r1: { range, scale } }))!;
+      expect(big).not.toBeNull();
+      expect(big(1, 0)).toEqual(small(1, 0));
+      expect(big(1, 0)?.bg).toBe('#ffffff');
+      expect(big(1, 2)?.bg).toBe('#57bb8a');
+      expect(big(1, 1)).toEqual(small(1, 1));
+      expect(big(1, 2)).toEqual(small(1, 2));
+    }
+  });
+
   it('colours a range by its numbers on a scale, through the median, skipping text', () => {
     const s = sheet(cells, { r1: { range: 'A1:B4', scale: { min: '#ffffff', mid: '#ffd666', max: '#57bb8a' } } });
     const style = conditionalStyles(s)!;

@@ -3,7 +3,7 @@
 // scale from its smallest to its largest value, through its median). Rules apply in the order they
 // were made; the first that applies to a cell styles it. Pure and engine-free, from cached values,
 // so the grid and embeds show the same colours.
-import { toA1 } from './a1';
+import { parseA1, toA1 } from './a1';
 import { meetsCondition } from './conditions';
 import { shownCell } from './display';
 import { cellValue, compareIds, type ColorScale, type ConditionalRule, type Sheet } from './format';
@@ -82,7 +82,7 @@ interface Prepared {
 
 const inside = (r: CellRange, col: number, row: number) => col >= r.col && col < r.col + r.width && row >= r.row && row < r.row + r.height;
 
-/** At most this many cells of a range are read for a colour scale's smallest, median and largest value. */
+/** Up to this many cells a colour scale reads its range cell by cell; over it, the cells that exist. */
 const SCALE_CELLS = 200_000;
 
 /**
@@ -105,6 +105,14 @@ export function conditionalStyles(sheet: Sheet): ((col: number, row: number) => 
               const v = cellValue(sheet.cells[toA1(col, row)]);
               if (typeof v === 'number') numbers.push(v);
             }
+          }
+        } else {
+          // A larger range (a whole column, Mod-A on a big sheet) reads the cells that exist instead.
+          for (const [ref, cell] of Object.entries(sheet.cells)) {
+            const at = parseA1(ref);
+            if (!at || !inside(r, at.col, at.row)) continue;
+            const v = cellValue(cell);
+            if (typeof v === 'number') numbers.push(v);
           }
         }
         if (numbers.length === 0) return [];
