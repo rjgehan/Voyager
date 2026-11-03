@@ -1,14 +1,13 @@
 // The Habits panel (DESIGN §6.35): check-ins from a daily note. For the daily note in view it
 // lists the habits of that day, otherwise today's; one tap checks a habit in.
-import { useEffect, useState } from 'react';
 import { useVaultSettings } from '../../api/hooks';
 import { dailyNoteDate } from '../../features/daily';
 import { navigateTo } from '../../features/navigation';
 import { useUi } from '../../state/ui';
+import { useToday } from '../../tasks/dates';
 import type { CheckInContext } from '../actions';
 import { dayLabel } from '../labels';
 import { scheduleLabel } from '../model';
-import { todayString } from '../progress';
 import { habitsUrl } from '../routes';
 import { useHabits } from '../useHabits';
 import { CheckButton } from './parts';
@@ -17,11 +16,7 @@ import '../habits.css';
 export default function HabitsPanel({ activePath }: { activePath: string | null }) {
   const settings = useVaultSettings();
   const data = useHabits();
-  const [today, setToday] = useState(() => todayString());
-  useEffect(() => {
-    const timer = window.setInterval(() => setToday(todayString()), 60_000);
-    return () => window.clearInterval(timer);
-  }, []);
+  const today = useToday();
   const noteDay = activePath ? dailyNoteDate(activePath, settings.dailyNotes)?.format('YYYY-MM-DD') : undefined;
   const day = noteDay && noteDay <= today ? noteDay : today;
   const ctx: CheckInContext = { byDay: data.byDay, dailyPaths: data.dailyPaths };
