@@ -6,6 +6,9 @@
 //   npm run reset -- --prod    the jar serving the BUILT frontend on :18570, as in production
 //   npm run reset -- --build   rebuild the jar (and, with --prod, the frontend) even if it looks current
 //
+// For the hallway test on the iPhone (README): E2E_WEB_HOST=<the PC's tailnet address> binds Vite to
+// that one address (never 0.0.0.0), and E2E_EXTRA_HOSTS=<name:port,...> admits more Host names.
+//
 // The jar is rebuilt by itself when backend/src/main, pom.xml or target/classes is newer than its
 // last packaging, the frontend build (--prod) when anything `npm run build` reads is newer than it
 // (scripts/builds.mjs).
@@ -14,7 +17,7 @@ import { cpSync, existsSync, mkdirSync, openSync, readFileSync, rmSync } from 'n
 import { connect } from 'node:net';
 import { join } from 'node:path';
 import { findJar, frontendIsStale, jarIsStale } from './builds.mjs';
-import { serverArgs as launchArgs } from './launch.mjs';
+import { hostPort, listOf, serverArgs as launchArgs, viteLaunch } from './launch.mjs';
 import { API_PORT, E2E_LOGIN, ROOT, RUN, WEB_PORT, recordPids, stopRecorded, writeEnv } from './stack.mjs';
 
 const args = new Set(process.argv.slice(2));
@@ -23,8 +26,17 @@ const forceBuild = args.has('--build');
 const win = process.platform === 'win32';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// The hallway test (README): Vite on the PC's tailnet address, and the host names the phone uses.
+const WEB_HOST = process.env.E2E_WEB_HOST?.trim() || undefined;
+const EXTRA_HOSTS = listOf(process.env.E2E_EXTRA_HOSTS);
+if (prod && WEB_HOST) throw new Error('E2E_WEB_HOST is for the dev stack (Vite); with --prod the server listens on 127.0.0.1 only.');
+
 const API_URL = `http://127.0.0.1:${API_PORT}`;
-const WEB_URL = prod ? `http://localhost:${API_PORT}` : `http://localhost:${WEB_PORT}`;
+const WEB_URL = prod
+  ? `http://localhost:${API_PORT}`
+  : WEB_HOST // Vite then listens on that address only.
+    ? `http://${hostPort(WEB_HOST, WEB_PORT)}`
+    : `http://localhost:${WEB_PORT}`;
 
 function run(cmd, cmdArgs, cwd, env = {}) {
   console.log(`> ${cmd} ${cmdArgs.join(' ')}   (in ${cwd})`);
@@ -131,7 +143,16 @@ console.log('Wiping the scratch vaults...');
 for (const d of ['vault', 'vaults', 'publish', 'web']) rmSync(join(RUN, d), { recursive: true, force: true });
 for (const d of ['vault', 'vaults', 'publish']) mkdirSync(join(RUN, d), { recursive: true });
 
-const serverArgs = launchArgs({ platform: process.platform, apiPort: API_PORT, webPort: WEB_PORT, run: RUN, login: E2E_LOGIN, join });
+const serverArgs = launchArgs({
+  platform: process.platform,
+  apiPort: API_PORT,
+  webPort: WEB_PORT,
+  run: RUN,
+  login: E2E_LOGIN,
+  join,
+  webHost: WEB_HOST,
+  extraHosts: EXTRA_HOSTS,
+});
 
 const pids = [];
 const backendLog = join(RUN, 'backend.log');
@@ -161,11 +182,14 @@ if (!prod) {
   const webLog = join(RUN, 'web.log');
   const fe = join(ROOT, 'frontend');
   if (!existsSync(join(fe, 'node_modules', 'vite'))) throw new Error('Run `npm ci` in frontend/ first.');
-  const vite = start('vite', 'node', process.execPath, [join(fe, 'node_modules', 'vite', 'bin', 'vite.js'), '--port', String(WEB_PORT), '--strictPort'], {
-    cwd: fe,
-    env: { NOTES_DEV_BACKEND: API_URL },
-    log: webLog,
+  const launch = viteLaunch({
+    vite: join(fe, 'node_modules', 'vite', 'bin', 'vite.js'),
+    webPort: WEB_PORT,
+    apiUrl: API_URL,
+    webHost: WEB_HOST,
+    extraHosts: EXTRA_HOSTS,
   });
+  const vite = start('vite', 'node', process.execPath, launch.args, { cwd: fe, env: launch.env, log: webLog });
   pids.push(vite.entry);
   recordPids(pids);
   console.log(`Starting Vite on ${WEB_URL} (pid ${vite.entry.pid}, log .run/web.log)...`);

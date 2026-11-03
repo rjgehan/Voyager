@@ -28,7 +28,8 @@ npm run test:scripts       # the tooling's own tests (no server needed)
   fixed by the reproducible build), so a `mvnw test`, a failed `verify` or an IDE compile after an
   edit no longer passes for a current jar. `--build` forces both rebuilds. Run `npm ci` in
   `frontend/` once before the first reset.
-- **Ports and processes.** Only :18570 and :5153 (`E2E_API_PORT`, `E2E_WEB_PORT` to change them).
+- **Ports and processes.** Only :18570 and :5153 (`E2E_API_PORT`, `E2E_WEB_PORT` to change them), on
+  loopback (`E2E_WEB_HOST` and `E2E_EXTRA_HOSTS` are for the hallway test below).
   `reset` refuses to start when something else listens there, and stops only the processes it
   recorded in `.run/pids.json`, by PID, after checking each is still the java or node it started
   (with `tasklist` on Windows, `/proc` on Linux, `ps` on macOS). A recorded process it cannot check
@@ -110,8 +111,21 @@ grep -rn "KNOWN BUG" tests/
 Give the iPhone to someone who has not seen the app, one task at a time, and say nothing. Write down
 every pause, wrong tap and "where's the…". Stop a task after two minutes.
 
-Set up with `npm run reset && npm run seed`, then open the app on the phone (over the tailnet, as
-docs/DESIGN.md §9.1 step 4 describes; never bind Vite to 0.0.0.0).
+Set up on the PC, with Vite on its tailnet address only (never 0.0.0.0, which would open the
+unauthenticated dev backend to every network the PC joins):
+
+```bash
+E2E_WEB_HOST=<the PC's address from `tailscale ip -4`> npm run reset && npm run seed
+```
+
+then open `http://<that address>:5153` in Safari on the phone (on the tailnet). To use the PC's
+tailnet name instead, add `E2E_EXTRA_HOSTS=<pc>.<tailnet>.ts.net:5153` (comma-separated, each
+`host:port`): the server and Vite then answer that name too. The phone talks to Vite directly, so it
+sends no Tailscale identity and the dev profile's default "Owner" applies. It is a plain-http origin,
+so there is no service worker: offline, the open page keeps working (task 11), but a reload does not
+load the app. `npm test`
+still works against this stack (it uses the address reset reports); `npm run reset` without
+`E2E_WEB_HOST` goes back to localhost.
 
 1. Write a note called **Packing list** with three things to bring.
 2. In it, link to the note about the **renovation**.
