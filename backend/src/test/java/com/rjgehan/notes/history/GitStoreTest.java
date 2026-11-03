@@ -162,4 +162,35 @@ class GitStoreTest {
 		}
 	}
 
+	@Test
+	void foldersNamedLikeTempFilesAreStillCommitted() throws Exception {
+		GitStore git = store(Map.of());
+		git.openOrInit();
+		try {
+			for (String folder : List.of("Drafts~", "old.swp", "Thumbs.db")) {
+				Files.createDirectories(this.vault.resolve(folder));
+				Files.writeString(this.vault.resolve(folder + "/n.md"), "v1");
+				Files.writeString(this.vault.resolve(folder + "/n.md~"), "backup");
+				GitStore.Commit commit = git.commit(List.of(ApiPath.of(folder + "/n.md"), ApiPath.of(folder + "/n.md~")),
+						List.of(), (changes) -> new GitStore.Message("Update", null), Author.EXTERNAL);
+				assertThat(commit).isNotNull();
+				assertThat(commit.paths()).containsExactly(folder + "/n.md");
+			}
+			Files.writeString(this.vault.resolve("a.md"), "moved");
+			commitFile(git, this.vault, "a.md", "moved");
+			Files.move(this.vault.resolve("a.md"), this.vault.resolve("Drafts~/a.md"));
+			GitStore.Commit move = git.commit(List.of(ApiPath.of("Drafts~/a.md")), List.of(ApiPath.of("a.md")),
+					(changes) -> new GitStore.Message("Move", null), Author.EXTERNAL);
+			assertThat(move.paths()).contains("Drafts~/a.md");
+			assertThat(git.log("Drafts~/a.md", 0, 10).entries()).isNotEmpty();
+			Files.writeString(this.vault.resolve("Drafts~/b.md"), "b");
+			Files.writeString(this.vault.resolve("Drafts~/x.swp"), "swap");
+			GitStore.Commit all = git.commitAll((changes) -> new GitStore.Message("x", null), Author.EXTERNAL);
+			assertThat(all.paths()).containsExactly("Drafts~/b.md");
+		}
+		finally {
+			git.close();
+		}
+	}
+
 }

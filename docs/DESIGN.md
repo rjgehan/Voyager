@@ -343,12 +343,17 @@ The app owns this file: it rewrites it at every startup, and it keeps its last s
 .notesapp-*.tmp
 .DS_Store
 Thumbs.db
+!Thumbs.db/
 *.swp
+!*.swp/
 *~
+!*~/
 # kept out of history, larger than 25 MB (ROADMAP item 23); kept current by NotesApp
 /Attachments/Holiday 2026.mp4
 /Scans/Contract \[signed].pdf
 ```
+
+The `!Thumbs.db/`, `!*.swp/` and `!*~/` lines un-ignore folders with those names: such folders are indexed (§5.9), so a note in `Drafts~/` gets history like any other, while a file named like a temp file inside it (`Drafts~/plan.md~`) stays out.
 
 The last section is the large-file policy (§5.8 *Large files*): one line per file over `notes.git.large-file-threshold`, rebuilt at startup and before every commit from the index and, for the hidden files and ignored names the index never sees, from the disk. Each line is anchored with a leading `/` and escapes `\`, `*`, `?`, `[` and trailing spaces, so it matches exactly one on-disk path (`Scan [1].pdf` never excludes `Scan 1.pdf`). With the threshold set to 0 the section is absent.
 
