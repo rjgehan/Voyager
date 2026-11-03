@@ -1176,6 +1176,7 @@ The date token mapping table (moment, dayjs, and java.time for future server-sid
 - **Unknown fields are preserved.** `SettingsService` keeps the file's raw JSON tree and merges the known fields into it on write, so an older build never drops fields a newer build added.
 - Writes go through `PUT /api/settings` with a `baseVersion` (the file's blob id): validate, `atomicWrite`, `markDirty`, then publish `settings.changed`.
 - The Settings page (`features/settingsWriter.ts`) sends a draft with the version of the settings the draft was made from, never the version the cache holds when the write goes out: a change from another device that reached the cache meanwhile (`settings.changed` refetches it while a draft waits for its debounce, stays invalid, or failed to save) is answered `409`, and only the fields this tab edited are applied on top of the server's settings, so the draft's other fields never revert that change.
+- An edit that fails because the connection is down is not dropped: it stays in the form and waiting, is sent when Settings is left or the page hidden (like a debounced edit), on the browser's `online` event, and by itself every 2 s doubling to 30 s until it lands. Only the first failure shows the offline notice; a refused write (any problem other than a version conflict) is reported and not retried.
 - External edits to `settings.json` are picked up at restart, because the watcher ignores `.notesapp/`.
 - The merged tree is written with keys sorted, so the file has a stable key order, which diffs well.
 - The schema is in API.md §5.

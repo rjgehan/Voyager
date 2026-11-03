@@ -2,7 +2,7 @@
 
 Open Settings with **Settings** at the bottom of the ribbon (phone: at the bottom of the drawer), `Ctrl+,`, or **Open settings** in the palette.
 
-Most settings belong to the **vault** and apply on every device. **Hotkeys** and **This device** belong to the device you change them on, so your phone and your PC can differ. Changes save by themselves.
+Most settings belong to the **vault** and apply on every device. **Hotkeys** and **This device** belong to the device you change them on, so your phone and your PC can differ. Changes save by themselves; one made offline is saved when the connection returns.
 
 ## Files and links
 

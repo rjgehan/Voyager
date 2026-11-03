@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ApiError } from '../api/client';
+import { ApiError, TransientError } from '../api/client';
 import type { Settings, SettingsResponse, SettingsUpdateRequest } from '../api/types';
 import { DEFAULT_SETTINGS } from './settings';
 import { applyDelta, SettingsWriter, WRITE_DEBOUNCE_MS } from './settingsWriter';
@@ -153,6 +153,54 @@ describe('SettingsWriter', () => {
     await vi.advanceTimersByTimeAsync(WRITE_DEBOUNCE_MS + 200);
     expect(s.settings.templates.folder).toBe('Tpl');
     expect(s.put).toHaveBeenCalledTimes(1);
+  });
+
+  describe('offline', () => {
+    const offlineOnce = (s: ReturnType<typeof server>) => s.put.mockRejectedValueOnce(new TransientError('Network error'));
+
+    it('an edit that failed offline is sent when the page is left, after one notice', async () => {
+      const s = server({ recordErrors: true });
+      offlineOnce(s);
+      s.writer.update({ ...s.view(), dailyNotes: { ...s.view().dailyNotes, folder: 'Journal' } }, true);
+      await vi.advanceTimersByTimeAsync(100);
+      expect(s.errors).toHaveLength(1);
+      expect(s.writer.draft?.dailyNotes.folder).toBe('Journal');
+      // Leaving Settings once the connection is back.
+      s.writer.setAttached(false);
+      void s.writer.flush();
+      await vi.advanceTimersByTimeAsync(200);
+      expect(s.settings.dailyNotes.folder).toBe('Journal');
+      expect(s.put).toHaveBeenCalledTimes(2);
+      expect(s.errors).toHaveLength(1);
+    });
+
+    it('is resent by itself when the connection returns, with no notice for each retry', async () => {
+      const s = server({ recordErrors: true });
+      offlineOnce(s);
+      offlineOnce(s);
+      offlineOnce(s);
+      s.writer.update({ ...s.view(), templates: { ...s.view().templates, folder: 'Tpl' } }, false);
+      await vi.advanceTimersByTimeAsync(WRITE_DEBOUNCE_MS + 100);
+      expect(s.errors).toHaveLength(1);
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(s.settings.templates.folder).toBe('Tpl');
+      expect(s.put).toHaveBeenCalledTimes(4);
+      expect(s.errors).toHaveLength(1);
+      expect(s.writer.draft).toBeNull();
+      // Nothing more is sent once it is saved.
+      await vi.advanceTimersByTimeAsync(120_000);
+      expect(s.put).toHaveBeenCalledTimes(4);
+    });
+
+    it('a refused edit (not a connection problem) is not retried', async () => {
+      const s = server({ recordErrors: true });
+      s.put.mockRejectedValueOnce(new ApiError({ type: 'urn:notesapp:problem:io-error', title: 'I/O', status: 500, code: 'io-error' }));
+      s.writer.update({ ...s.view(), templates: { ...s.view().templates, folder: 'Tpl' } }, true);
+      await vi.advanceTimersByTimeAsync(60_000);
+      void s.writer.flush();
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(s.put).toHaveBeenCalledTimes(1);
+    });
   });
 });
 

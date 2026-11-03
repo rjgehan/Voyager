@@ -7,10 +7,13 @@
 // a change from another device that reached the cache meanwhile (settings.changed) is a conflict
 // too, so the draft's other fields can never silently revert it.
 // Debounced edits are written when the page is left, never dropped.
-import { isProblem } from '../api/client';
+// An edit that fails for want of a connection stays waiting and is resent, never silently dropped.
+import { isProblem, isTransient } from '../api/client';
 import type { Settings, SettingsResponse, SettingsUpdateRequest } from '../api/types';
 
 export const WRITE_DEBOUNCE_MS = 600;
+const RETRY_FIRST_MS = 2000;
+const RETRY_MAX_MS = 30_000;
 
 export interface SettingsWriterDeps {
   /** The cached settings (the server state this tab last saw). */
@@ -72,6 +75,8 @@ export class SettingsWriter {
   private timer: ReturnType<typeof setTimeout> | null = null;
   /** The form is mounted: draft and saving changes reach it. */
   private attached = true;
+  /** Failed attempts in a row because the connection was down (see retryLater). */
+  private retries = 0;
 
   constructor(deps: SettingsWriterDeps) {
     this.deps = deps;
@@ -146,12 +151,17 @@ export class SettingsWriter {
     if (!current) return;
     try {
       const saved = await this.deps.put({ settings: next, baseVersion: current.version });
+      this.retries = 0;
       this.deps.store(saved);
       // Newer edits were made on top of this one: the saved settings are their base now.
       if (this.latest === next) this.showServer();
       else this.base = saved;
       return;
     } catch (e) {
+      if (isTransient(e)) {
+        this.retryLater(e);
+        return;
+      }
       if (!isProblem(e, 'version-conflict')) {
         this.deps.onError(e);
         return;
@@ -174,6 +184,19 @@ export class SettingsWriter {
         this.deps.onError(e);
       }
     }
+  }
+
+  /**
+   * The connection failed: the edit stays shown and waiting, as a debounced one does, so leaving
+   * Settings or hiding the page sends it (flush), and it is resent by itself with a growing pause
+   * until the connection returns. Only the first failure is reported (the offline notice).
+   */
+  private retryLater(e: unknown): void {
+    if (this.retries === 0) this.deps.onError(e);
+    const delay = Math.min(RETRY_MAX_MS, RETRY_FIRST_MS * 2 ** this.retries);
+    this.retries++;
+    // A newer edit already has its own timer, or is queued behind this write; either sends it all.
+    if (this.timer === null && this.pending === null) this.timer = setTimeout(() => void this.flush(), delay);
   }
 
   /** Newer edits (shown, or queued) move onto the server's settings after a conflict. */
