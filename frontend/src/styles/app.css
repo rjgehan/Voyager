@@ -849,18 +849,33 @@ body.is-resizing {
   padding: 12px 0 32px;
 }
 
+/* The image is its own fit / actual-size toggle (a button, so the keyboard reaches it). */
+.image-toggle {
+  display: block;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-s);
+  background: none;
+  cursor: zoom-in;
+}
+
 .image-stage img {
+  display: block;
   max-width: 100%;
   max-height: calc(var(--vvh, 100vh) - 200px);
   border-radius: var(--radius-s);
-  cursor: zoom-in;
   background: repeating-conic-gradient(var(--background-secondary) 0 25%, var(--background-primary) 0 50%) 0 0 / 16px 16px;
+}
+
+.image-stage.is-actual .image-toggle {
+  max-width: none;
+  cursor: zoom-out;
 }
 
 .image-stage.is-actual img {
   max-width: none;
   max-height: none;
-  cursor: zoom-out;
 }
 
 .image-stage.is-actual {

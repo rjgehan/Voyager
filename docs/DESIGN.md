@@ -2737,7 +2737,7 @@ The table grid of ROADMAP 10 (§6.6.1) added three smaller hooks. **Editor:** th
 |---|---|---|---|
 | `markdown` | `.md` (3) | yes | Live Preview (reads and edits), and source mode as an escape hatch (§6.6.1) |
 | `text` | other `kind:"text"` (2) | yes | Plain CodeMirror editor (JSON language for `.json`) with the same autosave and conflict handling |
-| `image` | `kind:"image"` (2) | no | Zoomable `<img>` |
+| `image` | `kind:"image"` (2) | no | Zoomable `<img>`: the image is a toggle button (`aria-pressed`, "Actual size") between fitting the pane and its actual size, by click, Enter or Space |
 | `pdf` | `kind:"pdf"` (2) | no | PDF.js since ROADMAP item 32 (§6.8.3); v1 had an `<iframe>` plus an "Open in new tab" link |
 | `media` | audio and video (2) | no | Native controls |
 | `unsupported` | everything (1) | no | File info and a Download button |
