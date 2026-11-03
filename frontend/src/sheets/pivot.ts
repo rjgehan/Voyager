@@ -5,7 +5,7 @@
 // over the source range, so it stays live as the data changes; the groups are those of the data
 // when the table is made (make it again for new ones). Pure: the new sheet's cells.
 import { columnLetters, toA1 } from './a1';
-import { shownCell } from './display';
+import { effectiveFormat, shownCell } from './display';
 import { cellValue, type CellValue, type Sheet, type SheetCell } from './format';
 import { absoluteRangeText, type CellRange } from './refs';
 import { compareSortValues } from './sort';
@@ -38,18 +38,27 @@ export function headerName(sheet: Sheet, range: CellRange, col: number): string 
   return text || `Column ${columnLetters(col)}`;
 }
 
+/** A group: a distinct value, and the format of the cell it first comes from (its label's). */
+interface Group {
+  v: CellValue;
+  fmt: string | undefined;
+}
+
 /** The distinct values of a column of the range's body, sorted as Google Sheets sorts them; blanks left out. */
-function groups(sheet: Sheet, range: CellRange, col: number): CellValue[] {
-  const seen = new Map<string, CellValue>();
+function groups(sheet: Sheet, range: CellRange, col: number): Group[] {
+  const seen = new Map<string, Group>();
   for (let row = range.row + 1; row < range.row + range.height; row++) {
     const v = cellValue(sheet.cells[toA1(col, row)]);
     if (v === null || v === '' || typeof v === 'object') continue;
     // Criteria compare text without regard to case, so groups do too.
     const key = typeof v === 'string' ? `s${v.toLocaleLowerCase()}` : `${typeof v}${String(v)}`;
-    if (!seen.has(key)) seen.set(key, v);
+    if (!seen.has(key)) seen.set(key, { v, fmt: effectiveFormat(sheet, col, row) });
   }
-  return [...seen.values()].sort((a, b) => compareSortValues(a, b));
+  return [...seen.values()].sort((a, b) => compareSortValues(a.v, b.v));
 }
+
+/** A label cell: the group's value in the format of its source cell. */
+const label = (g: Group): SheetCell => (g.fmt === undefined ? { v: g.v } : { v: g.v, fmt: g.fmt });
 
 const NAMES: Record<PivotSummary, string> = { SUM: 'SUM', COUNT: 'COUNT', AVERAGE: 'AVERAGE', MIN: 'MIN', MAX: 'MAX' };
 
@@ -93,13 +102,13 @@ export function pivotTable(sheet: Sheet, opts: PivotOptions): PivotTable {
   const width = 1 + (byCol !== null ? across.length + 1 : 1);
   if (byCol === null) put(1, 0, { v: valueTitle });
   else {
-    across.forEach((g, j) => put(1 + j, 0, { v: g }));
+    across.forEach((g, j) => put(1 + j, 0, label(g)));
     put(1 + across.length, 0, { v: 'Grand total' });
   }
   rowGroups.forEach((g, i) => {
     const row = 1 + i;
     const key = `$A${row + 1}`;
-    put(0, row, { v: g });
+    put(0, row, label(g));
     if (byCol === null) put(1, row, { f: summary([[byRow, key]]) });
     else {
       across.forEach((_, j) => put(1 + j, row, { f: summary([[byRow, key], [byCol, `${columnLetters(1 + j)}$1`]]) }));

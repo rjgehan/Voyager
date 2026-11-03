@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { shownCell } from './display';
 import { Workbook } from './engine';
 import { cellValue, parseSheet, type SheetCell } from './format';
 import { pivotTable } from './pivot';
@@ -73,6 +74,33 @@ describe('pivot tables', () => {
     expect(made({ range, rows: 0, cols: 1, values: 2, summary: 'AVERAGE' })[2]).toEqual(['Living', 60, 300, 180]);
     expect(made({ range, rows: 0, values: 2, summary: 'MAX' })[2]).toEqual(['Living', 300]);
     expect(made({ range, rows: 0, values: 2, summary: 'MIN' })[3]).toEqual(['Grand total', 60]);
+  });
+
+  it('shows group labels in the format of the cells they come from (dates as dates)', () => {
+    const cells: Record<string, SheetCell> = {
+      A1: { v: 'Date' }, B1: { v: 'Category' }, C1: { v: 'Cost' },
+      A2: { v: 46312, fmt: 'yyyy-mm-dd' }, B2: { v: 'Home' }, C2: { v: 1450, fmt: '$#,##0.00' },
+      A3: { v: 46312, fmt: 'yyyy-mm-dd' }, B3: { v: 'Living' }, C3: { v: 300 },
+      A4: { v: 46313, fmt: 'yyyy-mm-dd' }, B4: { v: 'Home' }, C4: { v: 120 },
+      A5: { v: 46313, fmt: 'yyyy-mm-dd' }, B5: { v: 'Living' }, C5: { v: 60 },
+    };
+    const sheet = workbook(cells).file.sheets[0];
+    const r = { col: 0, row: 0, width: 3, height: 5 };
+    const down = pivotTable(sheet, { range: r, rows: 0, values: 2, summary: 'SUM' });
+    expect(down.cells.A2).toEqual({ v: 46312, fmt: 'yyyy-mm-dd' });
+    expect(down.cells.A3).toEqual({ v: 46313, fmt: 'yyyy-mm-dd' });
+    expect(down.cells.A4).toEqual({ v: 'Grand total' });
+    const across = pivotTable(sheet, { range: r, rows: 1, cols: 0, values: 2, summary: 'SUM' });
+    expect([across.cells.B1, across.cells.C1]).toEqual([{ v: 46312, fmt: 'yyyy-mm-dd' }, { v: 46313, fmt: 'yyyy-mm-dd' }]);
+    expect(across.cells.A2).toEqual({ v: 'Home' });
+    const byCost = pivotTable(sheet, { range: r, rows: 2, values: 2, summary: 'COUNT' });
+    expect(Object.values(byCost.cells).find((c) => c.v === 1450)).toEqual({ v: 1450, fmt: '$#,##0.00' });
+    // The labels show as dates once on their sheet, and still match their rows.
+    expect(made({ range: r, rows: 0, values: 2, summary: 'SUM' }, cells).slice(1, 3)).toEqual([[46312, 1750], [46313, 180]]);
+    const wb = workbook(cells);
+    const id = wb.addSheet('Pivot');
+    wb.setCells(Object.entries(down.cells).map(([ref, c]) => ({ sheet: id, ref, content: c.f !== undefined ? { f: c.f } : { v: c.v as string | number }, fmt: c.fmt ?? null })));
+    expect(shownCell(wb.file.sheets[1], 0, 1).text).toBe('2026-10-17');
   });
 
   it('works on a sheet whose name has a dot', () => {
