@@ -15,6 +15,8 @@ import { fakeApi } from '../../../test/fakes';
 import { axeViolations } from '../../../test/axe';
 import { useTestLinkHost } from '../../../test/linkHost';
 import { clearSheetBindings } from '../../../views/sheet/useSheetDocument';
+import { sheetClip, setSheetClip } from '../../clipboard';
+import { copyRange } from '../../edits';
 import { parseSheet } from '../../format';
 import { loadSheetEngine } from '../../loadEngine';
 import { resetLinkStore } from '../store';
@@ -243,6 +245,32 @@ describe('a spreadsheet embedded in a note that can be written', () => {
     fireEvent.mouseDown(cell(container, 'A2'));
     expect(table.getAttribute('aria-activedescendant')).toBe(cell(container, 'A2').id);
     expect((await axeViolations(container)).filter((l) => !l.startsWith('color-contrast'))).toEqual([]);
+  });
+
+  it('shares its copies with the spreadsheet view: formulas both ways, and a newer copy there wins', async () => {
+    const path = newFile();
+    const { container } = show(path);
+    await waitFor(() => expect(cell(container, 'B4').textContent).toBe('1750'));
+    const table = container.querySelector('table')!;
+    const data = new Map<string, string>();
+    const clipboardData = { setData: (t: string, v: string) => data.set(t, v), getData: (t: string) => data.get(t) ?? '' };
+    // A copy here is the view's to paste too.
+    fireEvent.mouseDown(cell(container, 'B4'));
+    fireEvent.copy(table, { clipboardData });
+    expect(sheetClip()?.cells).toEqual([[{ f: '=SUM(B2:B3)' }]]);
+    // A copy in the view (C4 of the same sheet, its text '1750' too) is pasted here as that copy.
+    const parsed = parseSheet(JSON.stringify(BUDGET));
+    if (!parsed.ok) throw new Error(parsed.error);
+    setSheetClip(copyRange({ ...parsed.file.sheets[0], cells: { ...parsed.file.sheets[0].cells, C4: { v: 1750 } } }, { col: 2, row: 3, width: 1, height: 1 }));
+    fireEvent.mouseDown(cell(container, 'C1'));
+    fireEvent.paste(table, { clipboardData });
+    await waitFor(() => expect(cell(container, 'C1').textContent).toBe('1750'));
+    // The view's copy of a formula keeps it here.
+    setSheetClip(copyRange(parsed.file.sheets[0], { col: 1, row: 3, width: 1, height: 1 }));
+    fireEvent.mouseDown(cell(container, 'C4'));
+    fireEvent.paste(table, { clipboardData });
+    await waitFor(() => expect(saved(path).C4?.f).toBe('=SUM(C2:C3)'), { timeout: 4000 });
+    expect(saved(path).C1.v).toBe(1750);
   });
 
   it('types over a selected cell, cancels with Escape, and undoes from the toolbar', async () => {

@@ -24,7 +24,7 @@ import { cellText, cellValue, compareIds, isCellError, sheetById, type Sheet, ty
 import { pickSlot, placeReference, spanOf, type PickedSlot } from '../../formulaText';
 import { rangeText, type CellRange } from '../../refs';
 import { resolveTarget, usedRange } from '../../target';
-import { embedClip, setEmbedClip } from './clipboard';
+import { setSheetClip, sheetClip } from '../../clipboard';
 
 /** An embed shows at most this many rows and columns (as item 6b's); the spreadsheet has the rest. */
 export const EMBED_ROWS = 100;
@@ -361,7 +361,8 @@ export function EmbedGrid(props: Props) {
     e.clipboardData.setData('text/plain', clip.text);
     e.preventDefault();
     e.stopPropagation();
-    setEmbedClip(clip);
+    // Shared with the spreadsheet view (sheets/clipboard.ts), so a paste there brings the formulas too.
+    setSheetClip(clip);
     if (cut && editable) apply(clearEdits(sheet, selection));
   };
 
@@ -370,7 +371,7 @@ export function EmbedGrid(props: Props) {
     e.preventDefault();
     e.stopPropagation();
     const text = e.clipboardData.getData('text/plain');
-    const { edits, range: pasted } = pasteEdits(sheet, selection, text, embedClip());
+    const { edits, range: pasted } = pasteEdits(sheet, selection, text, sheetClip());
     apply(edits);
     setActive({ col: pasted.col, row: pasted.row });
     setAnchor({ col: pasted.col + pasted.width - 1, row: pasted.row + pasted.height - 1 });

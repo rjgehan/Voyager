@@ -14,6 +14,8 @@ import { Dialogs } from '../../components/overlays/Dialogs';
 import { Toasts } from '../../components/overlays/Toasts';
 import { runCommand } from '../../features/commands';
 import { activeSheet } from '../../sheets/activeSheet';
+import { setSheetClip } from '../../sheets/clipboard';
+import { copyRange } from '../../sheets/edits';
 import { loadSheetEngine } from '../../sheets/loadEngine';
 import { parseSheet, type SheetFile } from '../../sheets/format';
 import { useToasts } from '../../state/toasts';
@@ -263,6 +265,22 @@ describe('the spreadsheet view', () => {
     act(() => void window.dispatchEvent(other));
     const after = (await saved(path)).sheets[0].cells;
     expect([after.E2, after.F2.f, after.E3]).toEqual([{ v: 'x' }, '=1+1', { v: 3 }]);
+  });
+
+  it('pastes a copy made in a note’s embed of the same spreadsheet with its formulas', async () => {
+    const path = await openGrid();
+    // What copying C2 (=B2/Total) in an embed of this file leaves: the shared clip and its text.
+    const sheet = parseSheet(JSON.stringify(BUDGET));
+    if (!sheet.ok) throw new Error(sheet.error);
+    const clip = copyRange(sheet.file.sheets[0], { col: 2, row: 1, width: 1, height: 1 });
+    setSheetClip(clip);
+    screen.getByTestId('grid').focus();
+    select(2, 5); // C7
+    const clipboardData = { setData: () => {}, getData: () => clip.text };
+    const paste = new Event('paste', { cancelable: true }) as ClipboardEvent;
+    Object.defineProperty(paste, 'clipboardData', { value: clipboardData });
+    act(() => void window.dispatchEvent(paste));
+    expect((await saved(path)).sheets[0].cells.C7.f).toBe('=B7/Total');
   });
 
   it('moves cut cells on paste: formulas and named ranges follow, one undo step', async () => {

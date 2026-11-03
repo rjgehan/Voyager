@@ -42,6 +42,7 @@ import { pivotTable, type PivotOptions } from '../../sheets/pivot';
 import { columnFiltered, dataRegion, filterRange, looksLikeHeader } from '../../sheets/filter';
 import type { Separator } from '../../sheets/csv';
 import { effectiveFormat, formatShown, shownCell } from '../../sheets/display';
+import { dropPendingCut, setSheetClip, sheetClip } from '../../sheets/clipboard';
 import { clearEdits, clipStillHolds, copyRange, fillDownEdits, fillEdits, fillRightEdits, pasteEdits, typedEdit, usedExtent, type SheetClip } from '../../sheets/edits';
 import type { CellEdit, FormatEdit, Workbook } from '../../sheets/engine';
 import {
@@ -113,16 +114,8 @@ interface Props {
 /** Per file, while the page lives: the open sheet, each sheet's selection, and whether the charts pane is folded. */
 const remembered = new Map<string, { sheetId: string; selections: ReadonlyMap<string, SheetSelection>; chartsOpen: boolean }>();
 
-/** The last copy (or cut) made in any spreadsheet, so a paste in this app brings formulas, or moves the cut cells. */
-let lastClip: SheetClip | null = null;
-
 /** Until when a paste is Mod-Shift-V's: values only. */
 let pasteValuesUntil = 0;
-
-/** Escape drops a pending cut: a later paste copies. */
-function dropPendingCut(): void {
-  if (lastClip?.cut) lastClip = { ...lastClip, cut: undefined };
-}
 
 /** Rows at most that "Bold" changes in one go (a whole-column selection bolds columns instead). */
 const BOLD_LIMIT = 5000;
@@ -893,8 +886,10 @@ ${JSON.stringify(sheet.filter ?? null)}`;
       e.preventDefault();
       // A cut moves the cells when it is pasted in this spreadsheet, as in Google Sheets and Excel;
       // until then they stay, marked (pasted elsewhere, the cut is a copy).
-      lastClip = cut && canEdit ? { ...clip, cut: { source, sheet: s.id } } : clip;
-      setCutMark(lastClip.cut ? lastClip : null);
+      // The clip is shared with the grids embedded in notes (sheets/clipboard.ts).
+      const next = cut && canEdit ? { ...clip, cut: { source, sheet: s.id } } : clip;
+      setSheetClip(next);
+      setCutMark(next.cut ? next : null);
     };
     const onCopy = (e: ClipboardEvent) => copy(e, false);
     const onCut = (e: ClipboardEvent) => copy(e, true);
@@ -907,7 +902,7 @@ ${JSON.stringify(sheet.filter ?? null)}`;
       // Mod-Shift-V: the values only, without formulas or formats (Google Sheets' Paste values only).
       const valuesOnly = Date.now() < pasteValuesUntil;
       pasteValuesUntil = 0;
-      const clip = lastClip;
+      const clip = sheetClip();
       if (clip?.cut && clip.text === text && !valuesOnly) {
         setCutMark(null);
         const from = clip.cut.source === here ? sheetById(wb.file, clip.cut.sheet) : undefined;
@@ -922,14 +917,15 @@ ${JSON.stringify(sheet.filter ?? null)}`;
           }
           // Pasting again copies the moved cells from their new place.
           const moved = sheetById(wb.file, s.id);
-          lastClip = moved ? { ...copyRange(moved, range), text: clip.text } : null;
+          setSheetClip(moved ? { ...copyRange(moved, range), text: clip.text } : null);
           const shown = displayRange(v, range) ?? { ...range, row: sel.range.row, height: 1 };
           choose({ active: { col: shown.col, row: shown.row }, range: shown });
           return;
         }
         // The cut cells changed meanwhile (or are in another spreadsheet): an ordinary paste.
-        lastClip = { ...clip, cut: undefined };
+        setSheetClip({ ...clip, cut: undefined });
       }
+      const lastClip = sheetClip();
       const own = lastClip !== null && lastClip.text === text;
       // Values only: this app's copy as its values; other text as typed, without the formats it implies.
       const values = valuesOnly
@@ -1270,7 +1266,7 @@ ${JSON.stringify(sheet.filter ?? null)}`;
           theme={theme}
           handlers={handlers}
           picked={picked && displayRange(view, picked)}
-          marked={cutMark !== null && cutMark === lastClip && cutMark.cut?.sheet === sheet.id && cutMark.cut.source === path ? displayRange(view, cutMark.range) : null}
+          marked={cutMark !== null && cutMark === sheetClip() && cutMark.cut?.sheet === sheet.id && cutMark.cut.source === path ? displayRange(view, cutMark.range) : null}
           gridRef={gridRef}
           portalRef={portalRef}
         />
