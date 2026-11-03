@@ -2,6 +2,8 @@
 // The tree query is patched by every SSE event and every own write, so a change of the tree (or of
 // the settings, for excluded paths) schedules a refresh. The refresh sends the current version as
 // `since`, so an edit that changed no link costs an empty answer and leaves the layout alone.
+// The tree is only watched while a graph view is mounted, so every mount asks again (the same
+// cheap `since` request): links changed while no graph view was open would otherwise be missing.
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo } from 'react';
 import { api } from '../../api/endpoints';
@@ -51,7 +53,7 @@ function watch(): () => void {
 }
 
 export function useGraphData(): { base: BaseGraph | null; loading: boolean; error: unknown } {
-  const query = useQuery({ queryKey: queryKeys.graph(), queryFn: fetchGraph, staleTime: Infinity, refetchOnWindowFocus: false });
+  const query = useQuery({ queryKey: queryKeys.graph(), queryFn: fetchGraph, staleTime: Infinity, refetchOnWindowFocus: false, refetchOnMount: 'always' });
   useEffect(() => watch(), []);
   const data = query.data;
   const base = useMemo(() => {

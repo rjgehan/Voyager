@@ -121,6 +121,24 @@ describe('graph view (ROADMAP item 16)', () => {
     expect(screen.getByRole('img', { name: /Graph of 3 notes/ })).toBeInTheDocument();
   });
 
+  it('asks the server again when a graph view is reopened, so changes made while none was open show', async () => {
+    const getGraph = vi.spyOn(api, 'getGraph').mockResolvedValue(graph);
+    const first = renderWithClient(<GraphPage />);
+    await screen.findByRole('img', { name: 'Graph of 3 notes and 3 links' });
+    first.unmount();
+    // While no graph view is mounted, a new note C linking to Hub is created.
+    const changed: GraphResponse = {
+      version: 'v2',
+      unchanged: false,
+      nodes: [...graph.nodes.slice(0, 3), { path: 'C.md', type: 'note', tags: [] }, ...graph.nodes.slice(3)],
+      edges: [0, 1, 1, 1, 0, 1, 0, 2, 1, 3, 0, 1],
+    };
+    getGraph.mockResolvedValue(changed);
+    renderWithClient(<GraphPage />);
+    expect(await screen.findByRole('img', { name: 'Graph of 4 notes and 3 links' })).toBeInTheDocument();
+    expect(getGraph).toHaveBeenLastCalledWith('v1');
+  });
+
   it('shows the local graph of the open note and changes its depth', async () => {
     vi.spyOn(api, 'getGraph').mockResolvedValue(graph);
     renderWithClient(<LocalGraphPanel activePath="Daily/B.md" />);
