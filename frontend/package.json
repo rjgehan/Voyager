@@ -43,7 +43,7 @@
     "dayjs": "^1.11.23",
     "dompurify": "^3.4.17",
     "fuzzysort": "^4.0.2",
-    "hyperformula": "3.4.0",
+    "hyperformula": "3.5.0",
     "katex": "0.19.1",
     "lucide-react": "^1.65.0",
     "lz-string": "1.5.0",

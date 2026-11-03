@@ -92,7 +92,7 @@ export function engineConfig(): Partial<ConfigParams> {
     undoLimit: 0,
     maxRows: MAX_ROWS,
     maxColumns: MAX_COLUMNS,
-    dateFormats: ['YYYY-MM-DD', 'DD/MM/YYYY', 'DD/MM/YY'],
+    dateFormats: ['YYYY-MM-DD', 'MM/DD/YYYY', 'MM/DD/YY'],
   };
 }
 

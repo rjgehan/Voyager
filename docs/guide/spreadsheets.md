@@ -15,7 +15,7 @@ You can also start from a file: **Import spreadsheet from CSV or Excel…** in t
 - **Computer**: click a cell and start typing, or double-click it (or press `Enter` or `F2`) to change what is there. `Enter` saves and moves down, `Tab` moves right, `Esc` cancels.
 - **Phone**: tap a cell to select it, and tap it again to type. You type in the **formula bar** above the grid; `Enter` saves and moves to the next cell with the keyboard still up.
 - **Delete** clears the selected cells.
-- Typing `$1,450`, `12%` or a date such as `2026-10-17` stores the number and gives the cell the matching format.
+- Typing `$1,450`, `12%` or a date such as `2026-10-17` or `10/17/2026` stores the number and gives the cell the matching format. Dates are read month first, in formulas too: `=COUNTIF(A:A, ">=10/1/2026")` counts from October 1.
 
 Select a range by dragging (or `Shift`+click); click a column letter or a row number to select the whole column or row. `Ctrl+A` selects everything, `Ctrl+Space` whole columns and `Shift+Space` whole rows. `Ctrl+Arrow` jumps to the end of the data, and `Ctrl+Shift+Arrow` selects up to it.
 
