@@ -28,10 +28,13 @@ export interface Rewritten {
 const hiddenName = (path: string, sheet: string) => `${path}#${sheet}`;
 const quoted = (name: string) => `'${name.replace(/'/g, "''")}'`;
 
-/** A sheet's values as the engine takes them: text stays text, errors stay errors. */
-function sheetValues(sheet: Sheet): RawCellContent[][] {
+/**
+ * A sheet's values as the engine takes them: text stays text, errors stay errors. Each row is only
+ * as long as its last value, so a far-away cell (AZ50000) costs one row, not a block of millions of
+ * empty cells. Null when the sheet holds more than `largest` values.
+ */
+function sheetValues(sheet: Sheet, largest: number): RawCellContent[][] | null {
   let rows = 0;
-  let cols = 0;
   const cells: Array<[number, number, RawCellContent]> = [];
   for (const [ref, cell] of Object.entries(sheet.cells)) {
     const m = /^([A-Z]+)([0-9]+)$/.exec(ref);
@@ -44,17 +47,20 @@ function sheetValues(sheet: Sheet): RawCellContent[][] {
     col -= 1;
     const input: RawCellContent = isCellError(value) ? `=${value.e}` : typeof value === 'string' ? `'${value}` : value;
     cells.push([row, col, input]);
+    if (cells.length > largest) return null;
     rows = Math.max(rows, row + 1);
-    cols = Math.max(cols, col + 1);
   }
-  // A sheet with a far-away cell is not worth a dense block of millions of empty cells.
-  if (rows * cols > 2_000_000) return [];
-  const out: RawCellContent[][] = Array.from({ length: rows }, () => new Array<RawCellContent>(cols).fill(null));
+  const widths = new Array<number>(rows).fill(0);
+  for (const [r, c] of cells) widths[r] = Math.max(widths[r], c + 1);
+  const out: RawCellContent[][] = widths.map((w) => new Array<RawCellContent>(w).fill(null));
   for (const [r, c, v] of cells) out[r][c] = v;
   return out;
 }
 
 export class ExternalSheets {
+  /** The most values a note reads from one sheet of a spreadsheet; a larger sheet is #REF!. */
+  static largestRead = 2_000_000;
+
   private readonly store: LinkStore;
   private readonly context: LinkContext;
   /** Hidden sheets by name, with whether the engine has them yet. */
@@ -141,7 +147,14 @@ export class ExternalSheets {
       }
     }
     const name = hiddenName(path, sheet.name);
-    if (!this.hidden.has(name)) this.hidden.set(name, { values: sheetValues(sheet), given: false });
+    if (!this.hidden.has(name)) {
+      const values = sheetValues(sheet, ExternalSheets.largestRead);
+      if (values === null) {
+        out.problem ??= `“${ref.file}” is too large for a note to read: its sheet “${sheet.name}” holds more than ${ExternalSheets.largestRead.toLocaleString('en-US')} values.`;
+        return '#REF!';
+      }
+      this.hidden.set(name, { values, given: false });
+    }
     return `${quoted(name)}!${target}`;
   }
 
