@@ -43,7 +43,13 @@ public class NoteQueryService {
 	/** At most this many tasks per note are returned. */
 	static final int MAX_TASKS = 500;
 
-	private static final Pattern TASK = Pattern.compile("^\\s*(?:>\\s?)*\\s*(?:[-+*]|\\d{1,9}[.)])\\s+\\[(.)\\]\\s+(.*)$");
+	/**
+	 * A task after its line's leading blanks and blockquote markers, which {@link #listStart} skips in a plain loop:
+	 * a quantified group before the list marker backtracks quadratically on a long blank line and recurses once per
+	 * {@code >} (a stack overflow on a few thousand).
+	 */
+	private static final Pattern TASK = Pattern.compile("(?:[-+*]|\\d{1,9}[.)])[ \\t]+\\[(.)\\][ \\t]+(.*)",
+			Pattern.DOTALL);
 
 	private static final Pattern FENCE = Pattern.compile("^\\s{0,3}(`{3,}|~{3,})");
 
@@ -215,13 +221,26 @@ public class NoteQueryService {
 			if (fence != null) {
 				continue;
 			}
-			Matcher m = TASK.matcher(line);
+			Matcher m = TASK.matcher(line).region(listStart(line), line.length());
 			if (m.matches()) {
 				String status = m.group(1);
 				out.add(new NoteTask(i, status, status.equalsIgnoreCase("x"), m.group(2).strip()));
 			}
 		}
 		return out;
+	}
+
+	/** Where a line's list marker would start: after its leading blanks and blockquote markers ({@code >}). */
+	private static int listStart(String line) {
+		int i = 0;
+		while (i < line.length()) {
+			char c = line.charAt(i);
+			if (c != '>' && c != ' ' && c != '\t' && c != '\f' && c != '\u000B') {
+				break;
+			}
+			i++;
+		}
+		return i;
 	}
 
 	/** {@code folder} as a path prefix ({@code Projects/}), or null for the whole vault. */

@@ -3916,7 +3916,7 @@ The metadata of the notes matching every filter given (filters combine with AND;
 | `prop` (repeatable) | `name` (present and not empty), `name=value` or `name!=value` (a note without the property matches `!=`). Names compare ignoring case; values compare as text ignoring case, an element of a list property matches, and `[[Note]]` matches `Note` |
 | `linksTo` | Notes with a link or embed that resolves to this note (a vault path, or a link target resolved from the vault root) |
 | `q` | Notes the full-text search (§12.1's syntax) matches |
-| `tasks` | `true`: each note's Markdown checkbox tasks (outside code fences, at most 500 per note); otherwise `tasks` is `null` |
+| `tasks` | `true`: each note's Markdown checkbox tasks (outside code fences, at most 500 per note; a list item `- [ ] text`, `1. [x] text` after any blanks and blockquote markers `>`); otherwise `tasks` is `null` |
 | `limit` | 1–2000, default 500 |
 
 At most 10 `tag` and `prop` filters together, each (and `folder`, `linksTo`) at most 200 characters. Repeated parameters are read as sent (a value may hold a comma).
