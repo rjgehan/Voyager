@@ -170,8 +170,8 @@ jobs:
           image=$(sed -n 's/^ *image: \(restic\/restic:[^ ]*\).*/\1/p' deploy/docker-compose.yml)
           docker run --rm -v "$PWD/deploy/backup:/backup:ro" --entrypoint sh "$image" /backup/test/restic-job-test.sh
 
-  docker-build:                              # the Dockerfile is tested before anything reaches main
-    if: github.event_name == 'pull_request'
+  docker-build:                              # the Dockerfile is tested before anything reaches main: pull requests and "Run workflow" on build/next
+    if: github.ref != 'refs/heads/main'      # on main, publish.yml builds the image itself
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:

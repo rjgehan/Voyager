@@ -4889,8 +4889,8 @@ jobs:
       - run: npm test
       - run: npm run build
 
-  docker-build:                              # the Dockerfile is tested before anything reaches main
-    if: github.event_name == 'pull_request'
+  docker-build:                              # the Dockerfile is tested before anything reaches main: pull requests and "Run workflow" on build/next
+    if: github.ref != 'refs/heads/main'      # on main, publish.yml builds the image itself
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -5381,7 +5381,7 @@ There are three parallel work packages with **strict file ownership**. API.md is
 **Definition of done:**
 
 - The files match this document.
-- The CI workflow runs green on the first push to GitHub. That push is the first real test of the Dockerfile, because `rgpc` has no Docker; from then on, every PR builds the image in the `docker-build` job before it can reach `main`.
+- The CI workflow runs green on the first push to GitHub. That push is the first real test of the Dockerfile, because `rgpc` has no Docker; from then on, the `docker-build` job builds the image on every run outside `main` (pull requests, and **Run workflow** on `build/next` before `main` is fast-forwarded), so it is built before it can reach `main`.
 - The image appears in GHCR for both architectures.
 - `docker compose config` validates on homeserver.
 - Following DEPLOY.md on homeserver ends with the app reachable from the iPhone.
@@ -5417,7 +5417,7 @@ There are three parallel work packages with **strict file ownership**. API.md is
 | 15 | CSRF or DNS rebinding from another tab or site. | Low / High | Required custom header, Origin and `Sec-Fetch-Site` checks, the Host allowlist, no CORS, side-effect-free GETs; the dev server binds only to the tailnet address. |
 | 16 | Memory pressure with large vaults (in-memory text and index) or huge request bodies. | Low / Medium | Budget of about 120 MB for 10k notes, over-size text files not held in memory, the JSON body limit (§5.14), 1 GB container limit, 75 % heap, `ExitOnOutOfMemoryError` plus the restart policy. The perf test guards regressions. |
 | 17 | Windows dev differences: watcher handles, `localhost` resolving to `::1`, CRLF, the `mvnw` executable bit. | High / Low | Watcher off in dev, the proxy uses 127.0.0.1, `.gitattributes`, CI uses `sh ./mvnw`. |
-| 18 | The first real Docker build happens only in CI, because rgpc has no Docker. | Medium / Low | The PR `docker-build` job builds the image before anything reaches `main`; the frontend stage uses glibc like CI, and CI asserts the lockfile's Linux bindings. |
+| 18 | The first real Docker build happens only in CI, because rgpc has no Docker. | Medium / Low | The `docker-build` job builds the image on every CI run outside `main` (pull requests, and **Run workflow** on `build/next`) before anything reaches `main`; the frontend stage uses glibc like CI, and CI asserts the lockfile's Linux bindings. |
 | 19 | The identity header is absent for tagged source devices, or non-ASCII names arrive encoded. | Medium / Low | Tagged devices are refused by the identity allowlist (the user's devices are user-owned). The RFC 2047 decoder with tests. |
 | 20 | Clock skew or time zone confusion in daily notes. | Low / Low | Dates are always computed in the browser's local zone. The server never decides "today". |
 | 21 | Disk loss, `rm`, or a deleted volume destroys the vault and its history together. | Low / High | Accepted for v1 (backups declined). External volumes stop `down -v`; manual backups and a tried restore drill (§7.9). Since ROADMAP item 1: nightly restic snapshots to a second disk and off site, failure alerts, and a restic restore drill (§7.10). |
