@@ -17,6 +17,8 @@ import { installCaptureSync } from './features/captureSync';
 import { startReminders } from './features/reminders/register';
 import { installHotkeys } from './features/hotkeys';
 import { prepareReload, registerServiceWorker, setOfflineMedia } from './pwa/serviceWorker';
+import { appLinkHost } from './sheets/links/host';
+import { provideLinkHost } from './sheets/links/pageHost';
 import { installPreloadErrorHandler, setReloadPreparer } from './state/buildCheck';
 import { installOnlineListener } from './state/connection';
 import { applyTheme, installThemeListener, usePrefs } from './state/prefs';
@@ -44,6 +46,8 @@ export function startApp(root: HTMLElement, options: StartOptions): Root {
   setOfflineMedia(usePrefs.getState().offlineNotes);
   installOnlineListener();
   documents.installLifecycle(() => currentBreakpoint() === 'desktop');
+  // What formulas read from other files: this vault (DESIGN §6.47; the guest page provides its share).
+  provideLinkHost(appLinkHost);
   void startLiveSync();
   installCaptureSync();
   startReminders();

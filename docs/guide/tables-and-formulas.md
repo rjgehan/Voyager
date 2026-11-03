@@ -128,6 +128,7 @@ A formula in a note's table, or in a sentence, can read a [spreadsheet](spreadsh
 - Filling a column or `Ctrl+D` moves these references like any other (`Budget.sheet!B2` becomes `B3`).
 - `#REF!` means no such spreadsheet or sheet, `#NAME?` no such named range. `#CYCLE!` means the spreadsheet reads this note's values back (with `NOTETABLE`), so neither can use the other's.
 - Reading a spreadsheet does not make a link: to see the note among the spreadsheet's backlinks, link it too (`[[Budget.sheet]]`).
+- In a note shared with family, these read the spreadsheets shared with it (in the same shared folder). `NOTEPROP`, `NOTECOUNT` and `NOTEQUERY` need your whole vault, so on the shared page they say *Not available in a shared note*.
 
 ## Formulas in a sentence
 
