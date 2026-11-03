@@ -159,6 +159,30 @@ describe('writing typed into a new note before it exists (DESIGN §6.15)', () =>
     expect(vault.readFile('Groceries.md').content).toBe('milk\neggs');
   });
 
+  it('keeps what is typed into the body after the writing went in, until the note shows', async () => {
+    const release = gateCreate();
+    createNote('', '', 'md');
+    const id = usePendingNote.getState().pending!.id;
+    updatePendingTitle(id, 'Shopping', true);
+    setPendingBody(id, { text: 'milk', selectionStart: 4, selectionEnd: 4 });
+    release();
+    await vi.waitFor(() => expect(routes).toEqual(['/n/Shopping.md']));
+    // The pending view still shows (the pane has not swapped yet) and takes more keys.
+    expect(usePendingNote.getState().pending).toMatchObject({ id, opening: 'Shopping.md' });
+    setPendingBody(id, { text: 'milk eggs', selectionStart: 9, selectionEnd: 9 });
+    setPendingBody(id, { text: 'Fresh milk eggs', selectionStart: 6, selectionEnd: 6 });
+    const session = sessionOf('Shopping.md');
+    expect(session.getText()).toBe('Fresh milk eggs');
+    expect(session.editorState.selection.main.head).toBe(6);
+    expect(hasPendingBody(id)).toBe(false);
+    // Once the note shows, the pending view's body is gone: nothing more is forwarded.
+    clearPendingNote(id);
+    setPendingBody(id, { text: 'stale', selectionStart: 5, selectionEnd: 5 });
+    expect(session.getText()).toBe('Fresh milk eggs');
+    await session.flush();
+    expect(vault.readFile('Shopping.md').content).toBe('Fresh milk eggs');
+  });
+
   it('keeps the free name when the title is committed untouched', async () => {
     const release = gateCreate();
     createNote('', '', 'md');

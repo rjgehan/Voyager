@@ -11,6 +11,7 @@ import { newIdempotencyKey } from '../state/clientId';
 import {
   clearPendingNote,
   committedTitle,
+  followPendingBody,
   hasPendingBody,
   openPendingNote,
   setPendingProblem,
@@ -122,11 +123,52 @@ const BODY_HOLDER = 'pending-body';
  * Writing typed into the pending view's body (DESIGN §6.15) goes into the loaded note at the note's
  * caret (a template's `{{cursor}}`) or its end, with the caret where it was in the body.
  */
-function insertPendingBody(session: DocumentSession, id: number): void {
-  if (!hasPendingBody(id) || !session.isEditable()) return;
+function insertPendingBody(session: DocumentSession, id: number): { from: number; text: string } | null {
+  if (!hasPendingBody(id) || !session.isEditable()) return null;
   const body = takePendingBody(id)!;
   const { from, to } = session.insertionRange();
   session.applyEdit({ from, to, insert: body.text }, { selection: { anchor: from + body.selectionStart, head: from + body.selectionEnd } });
+  return { from, text: body.text };
+}
+
+/**
+ * The pending view of note `id` stays until the pane shows the note (its body field focused, on a
+ * phone the keyboard up): what is typed into the body meanwhile goes into the note too, as the
+ * change from what went in last (`inserted`, at `from`), with the caret. If the note's text there
+ * is no longer that (an edit from elsewhere), the writing is kept as before.
+ */
+function followBodyIntoNote(path: string, id: number, inserted: { from: number; text: string }): void {
+  const holder = `${BODY_HOLDER}-follow-${id}`;
+  const session = documents.acquire(path, holder);
+  const at = inserted.from;
+  let last = inserted.text;
+  const stop = followPendingBody(id, (body) => {
+    if (session.isDisposed || !session.isEditable() || session.getText().slice(at, at + last.length) !== last) return false;
+    if (body.text !== last) {
+      let start = 0;
+      while (start < last.length && start < body.text.length && last[start] === body.text[start]) start++;
+      let end = 0;
+      while (end < last.length - start && end < body.text.length - start && last[last.length - 1 - end] === body.text[body.text.length - 1 - end]) end++;
+      session.applyEdit(
+        { from: at + start, to: at + last.length - end, insert: body.text.slice(start, body.text.length - end) },
+        { selection: { anchor: at + body.selectionStart, head: at + body.selectionEnd } },
+      );
+      last = body.text;
+    }
+    return true;
+  });
+  let released = false;
+  const release = () => {
+    if (released) return;
+    released = true;
+    unsubscribe();
+    stop();
+    documents.release(session, holder);
+  };
+  const unsubscribe = usePendingNote.subscribe((state) => {
+    if (state.pending?.id !== id) release();
+  });
+  if (usePendingNote.getState().pending?.id !== id) release();
 }
 
 const WAITING_FOR_SERVER = "Can't reach the server. The note is created as soon as it answers, with what you type here.";
@@ -221,13 +263,16 @@ async function openWhenReady(path: string, id: number, note: boolean, offered: s
     await Promise.all([session ? whenOpenable(session, id) : undefined, entry ? preloadView(entry).catch(() => undefined) : undefined]);
     // A title committed meanwhile (Enter while the note was read) is a rename first.
     if (renameTo(id, path) !== null) return 'rename';
+    let inserted: { from: number; text: string } | null = null;
     if (session) {
-      insertPendingBody(session, id);
+      inserted = insertPendingBody(session, id) ?? (session.isEditable() ? { from: session.insertionRange().from, text: '' } : null);
       // A read that failed for good (its error panel offers Try again) takes the writing later.
       if (hasPendingBody(id)) insertWhenEditable(path, id);
     }
     const { pending } = usePendingNote.getState();
     if (pending?.id !== id) return 'opened';
+    // Writing typed into the pending view until the pane swaps to the note follows into it.
+    if (inserted) followBodyIntoNote(path, id, inserted);
     // A title still being typed continues in the inline title; after a committed one the writing
     // continues in the note's text. The navigation then clears the pending view (App's guard).
     openPendingNote(id, path, offered);
