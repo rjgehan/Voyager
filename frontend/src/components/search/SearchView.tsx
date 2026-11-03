@@ -137,7 +137,10 @@ export function SearchView({ query, onQuery, autoFocus }: Props) {
     }
   }, [focusRequest]);
 
-  const data = search.data;
+  // Offline the fetch pauses rather than fails: say so, and never show the last query's results as this one's.
+  const offline = search.fetchStatus === 'paused' && (search.isPlaceholderData || search.data === undefined);
+  const data = offline ? undefined : search.data;
+  const failed = search.isError || offline;
   const empty = trimmed === '';
   const highlight = data && data.corrections.length > 0 ? `${trimmed} ${data.corrections.flatMap((c) => c.replacements).join(' ')}` : trimmed;
 
@@ -167,7 +170,7 @@ export function SearchView({ query, onQuery, autoFocus }: Props) {
       </div>
       <div className="search-toolbar">
         <span className="search-count" aria-live="polite">
-          {empty ? '' : search.isError ? '' : data ? `${data.total} ${data.total === 1 ? 'result' : 'results'}${data.total > data.results.length ? ` · showing ${data.results.length}` : ''}` : 'Searching…'}
+          {empty ? '' : failed ? '' : data ? `${data.total} ${data.total === 1 ? 'result' : 'results'}${data.total > data.results.length ? ` · showing ${data.results.length}` : ''}` : 'Searching…'}
         </span>
         {typed !== '' && (
           <button
@@ -189,14 +192,14 @@ export function SearchView({ query, onQuery, autoFocus }: Props) {
           </select>
         </label>
       </div>
-      {!empty && data && !search.isError && <Corrections data={data} onExact={() => setExact(trimmed)} />}
+      {!empty && data && !failed && <Corrections data={data} onExact={() => setExact(trimmed)} />}
       {/* With only the help to show it has nothing to Tab to, so it takes the focus itself to scroll (WCAG 2.1.1). */}
       <div className="search-results" role="region" aria-label="Search results" tabIndex={empty ? 0 : undefined}>
         {empty ? (
           <SearchHelp />
-        ) : search.isError ? (
+        ) : failed ? (
           <div className="panel-empty search-error" role="alert">
-            {errorMessage(search.error)}
+            {offline ? 'Offline: search needs the server.' : errorMessage(search.error)}
           </div>
         ) : data && data.results.length === 0 ? (
           <div className="panel-empty">No matches.</div>
