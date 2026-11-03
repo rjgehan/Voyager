@@ -2,8 +2,9 @@
 # one that holds the major versions, so one incompatible major never blocks the routine updates. The weekly image
 # rebuild for base-image fixes is ci.yml's schedule, not Dependabot's.
 # Ignored where the design pins a line or a version and moves it by hand: Node 24 (with @types/node following it),
-# Java 21 to build and 25 to run, TypeScript ~6.0 in the web app for typescript-eslint, SheetJS from its CDN, and
-# HyperFormula (DESIGN §6.21: a new engine is a deliberate SHEET_ENGINE change).
+# Java 21 to build and 25 to run, TypeScript ~6.0 in the web app for typescript-eslint, SheetJS from its CDN,
+# HyperFormula (DESIGN §6.21: a new engine is a deliberate SHEET_ENGINE change) and ts-fsrs majors (DESIGN §6.34:
+# 6.x would move the due dates of cards whose schedule is replayed).
 version: 2
 updates:
   - package-ecosystem: github-actions
@@ -54,6 +55,8 @@ updates:
       - dependency-name: '@types/node'     # follows the Node 24 runtime and moves by hand with it, like the docker node image
         update-types: ['version-update:semver-major']
       - dependency-name: hyperformula      # pinned exactly (DESIGN §6.21): a new engine is a deliberate SHEET_ENGINE change, by hand
+      - dependency-name: ts-fsrs           # 6.x fuzzes intervals differently, so replayed cards' due dates would move unreviewed (DESIGN §6.34)
+        update-types: ['version-update:semver-major']
 
   - package-ecosystem: npm                 # the web clipper (ROADMAP item 19); exact pins
     directory: /clipper

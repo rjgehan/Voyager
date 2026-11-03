@@ -1972,7 +1972,7 @@ Everything else answers a guest `403 identity-not-allowed`, as any login outside
 
 ### 6.1 Stack
 
-These versions were verified on 2026-10-16 and follow the Dependabot updates merged on 2026-11-02 (HyperFormula excepted, §6.21). The lockfile pins them.
+These versions were verified on 2026-10-16 and follow the Dependabot updates merged on 2026-11-02 (HyperFormula and ts-fsrs 6.0 excepted, §6.21 and §6.34). The lockfile pins them.
 
 | Concern | Choice |
 |---|---|
@@ -1986,7 +1986,7 @@ These versions were verified on 2026-10-16 and follow the Dependabot updates mer
 | Reading view | markdown-it 15.0.3 (bundled types), `@mdit/plugin-tasklist` 1.1.4, `@mdit/plugin-footnote` 1.1.3, `@mdit/plugin-mark` (same @mdit release line; exact version pinned at scaffold), dompurify 3.4.17. Rich Markdown (ROADMAP item 3, §6.7.1), pinned exactly: `@mdit/plugin-tex` 1.1.3 (math parsing only), katex 0.19.1, mermaid 12.2.0 |
 | Rich paste (ROADMAP 10) | turndown 7.2.4 (MIT) and `@joplin/turndown-plugin-gfm` 1.0.68 (MIT; the maintained fork of turndown's own GFM plugin, whose last release is from 2018), pinned exactly, in a lazy chunk (§6.6.1); `@types/turndown` 5.0.6 (dev) |
 | Utilities | dayjs 1.11.23 (+ plugins), fuzzysort 4.0.2 (always `threshold: 0`), `yaml` 2.9.1 for client-side frontmatter merge |
-| Flashcards (ROADMAP item 34) | `ts-fsrs` 5.4.2 (MIT, no dependencies), pinned exactly, in the flashcards page's lazy chunk (§6.34) |
+| Flashcards (ROADMAP item 34) | `ts-fsrs` 5.4.2 (MIT, no dependencies), pinned exactly, in the flashcards page's lazy chunk; 6.x is held back (§6.34) |
 | Drawings (ROADMAP item 5) | `@excalidraw/excalidraw` 0.18.1 (MIT; peer React 17–19; a lazy chunk with self-hosted fonts, §6.8.1), `lz-string` 1.5.0 (MIT) for Obsidian Excalidraw's compressed-json blocks. Both pinned exactly. |
 | Tasks (ROADMAP item 4, §6.22) | `chrono-node` 2.10.3 (MIT, no dependencies) for dates in quick add; `rrule` 2.8.1 (BSD-3-Clause, with `tslib` 2.8.1, 0BSD) for `every …` and readable rules. Both are pinned exactly and load only in lazy chunks. |
 | Spreadsheets | `hyperformula` 3.4.0, pinned exactly; GPL-3.0-only with `licenseKey: 'gpl-v3'`; a lazy chunk (§6.21). `@glideapps/glide-data-grid` 6.0.4-alpha24, pinned exactly (MIT), the grid of the `sheet` view's lazy chunk (§6.21.5) |
@@ -4087,7 +4087,7 @@ The code is in `frontend/src/flashcards/`. The pure parts are `parse.ts` (cards 
 - **Identity.** A card's id is `c` plus a 53-bit hash (cyrb53) of its kind and its normalized question (white space collapsed, SR comments dropped). A forward card has the same id written on one line or on several; a reverse card hashes its own question; a cloze hashes the paragraph's plain text with the deletion's text and occurrence (or its group number), so adding a deletion keeps the other deletions' ids. Nothing is written into the note, moving or renaming the note keeps every id, and the same card written in two notes is one card.
 - **Edited questions.** Editing a question makes a new id. Adoption keeps the history: a card without a record takes the record of a card that is gone from the same note when its `front` hint is at least 75 % similar (Levenshtein), and the card's next answer carries `from`, so the server moves the record (API.md §34.4). The records of cards in no note can be pruned from the statistics page.
 
-**Scheduling.** FSRS through ts-fsrs with the vault's settings (desired retention, maximum interval, learning and relearning steps, fuzz; short-term steps on). A card's FSRS card is its stored state when that covers its answers, else the replay of its answers in order (cached per record); a `reset` answer starts the card over as new. ts-fsrs seeds its fuzz with the review time and the card, so a replay on another device gives the same due date. The study day starts at `dayStartsAt` local time (Anki's 4 a.m.): a review card is due when it falls due before the next study day starts, a learning card when it is due within 20 minutes (learning ahead). New cards count against `newPerDay` and reviews against `reviewsPerDay`, across every device, from the day's answers.
+**Scheduling.** FSRS through ts-fsrs with the vault's settings (desired retention, maximum interval, learning and relearning steps, fuzz; short-term steps on). A card's FSRS card is its stored state when that covers its answers, else the replay of its answers in order (cached per record); a `reset` answer starts the card over as new. ts-fsrs seeds its fuzz with the review time and the card, so a replay on another device gives the same due date. That holds within one ts-fsrs major only: 6.0 swaps the fuzz's random-number generator (Alea for FNV-1a and Mulberry32), and replaying the same answers under it gave another due date in about two thirds of simulated histories (fuzz on, by up to 8 days). A record whose state is `null` would then move without being answered, and devices on the two versions would disagree. ts-fsrs therefore stays on 5.x and Dependabot ignores its majors (§7.5); moving is a deliberate change that first keeps those due dates (for example by storing a state for every record). The study day starts at `dayStartsAt` local time (Anki's 4 a.m.): a review card is due when it falls due before the next study day starts, a learning card when it is due within 20 minutes (learning ahead). New cards count against `newPerDay` and reviews against `reviewsPerDay`, across every device, from the day's answers.
 
 **Records on the device** (`store.ts`). The server's records are the `['flashcards', 'state']` query, and this device's answers not yet confirmed are laid over them, so the page never waits for the network. Answers and undos go through an **outbox** kept in `localStorage` (a few hundred bytes each). It sends them in order, consecutive answers in one request, and retries with backoff (2, 4, 8, 16, 30 s) after transient and storage failures, and at once when the event stream has caught up or the browser is back online; an operation the server refuses is dropped with a toast. Undoing an answer still in the outbox removes it there; one already sent is undone on the server. `flashcards.changed` patches the query. Note events (`file.*`, `entry.moved`, `folder.deleted`) refetch the source notes a second later, only while the page is open; parsed notes are cached by version.
 
@@ -4965,15 +4965,16 @@ jobs:
 - **GHCR.** The first publish creates a **private** package linked to the repo. It stays private: the server pulls with a classic PAT that has only the `read:packages` scope (fine-grained PATs are not supported by GitHub Packages), created **without an expiry**, so an expired token can never silently stop deploys. The same PAT backs Watchtower's credentials directory.
 - **Executable bit.** `backend/mvnw` is run as `sh ./mvnw`, so the executable bit, which is lost on Windows, does not matter. WP-Infra still sets it with `git update-index --chmod=+x backend/mvnw`.
 
-`.github/dependabot.yml` (monthly and grouped, so it produces about one PR per ecosystem a month; maven, the web app and the clipper put major versions in a second group of their own, so at most two a month each). Pinned lines and versions are ignored and moved by hand: Node 24 and `@types/node` with it, the JDK majors, the web app's TypeScript `~6.0`, SheetJS from its CDN, and HyperFormula (§6.21: a new engine is a deliberate `SHEET_ENGINE` change). The image's weekly rebuild is `ci.yml`'s schedule, not Dependabot's:
+`.github/dependabot.yml` (monthly and grouped, so it produces about one PR per ecosystem a month; maven, the web app and the clipper put major versions in a second group of their own, so at most two a month each). Pinned lines and versions are ignored and moved by hand: Node 24 and `@types/node` with it, the JDK majors, the web app's TypeScript `~6.0`, SheetJS from its CDN, HyperFormula (§6.21: a new engine is a deliberate `SHEET_ENGINE` change) and ts-fsrs majors (§6.34: 6.x would move the due dates of replayed cards). The image's weekly rebuild is `ci.yml`'s schedule, not Dependabot's:
 
 ```yaml
 # Monthly and grouped: about one PR per ecosystem a month, and for maven, the web app and the clipper a second
 # one that holds the major versions, so one incompatible major never blocks the routine updates. The weekly image
 # rebuild for base-image fixes is ci.yml's schedule, not Dependabot's.
 # Ignored where the design pins a line or a version and moves it by hand: Node 24 (with @types/node following it),
-# Java 21 to build and 25 to run, TypeScript ~6.0 in the web app for typescript-eslint, SheetJS from its CDN, and
-# HyperFormula (DESIGN §6.21: a new engine is a deliberate SHEET_ENGINE change).
+# Java 21 to build and 25 to run, TypeScript ~6.0 in the web app for typescript-eslint, SheetJS from its CDN,
+# HyperFormula (DESIGN §6.21: a new engine is a deliberate SHEET_ENGINE change) and ts-fsrs majors (DESIGN §6.34:
+# 6.x would move the due dates of cards whose schedule is replayed).
 version: 2
 updates:
   - package-ecosystem: github-actions
@@ -5024,6 +5025,8 @@ updates:
       - dependency-name: '@types/node'     # follows the Node 24 runtime and moves by hand with it, like the docker node image
         update-types: ['version-update:semver-major']
       - dependency-name: hyperformula      # pinned exactly (DESIGN §6.21): a new engine is a deliberate SHEET_ENGINE change, by hand
+      - dependency-name: ts-fsrs           # 6.x fuzzes intervals differently, so replayed cards' due dates would move unreviewed (DESIGN §6.34)
+        update-types: ['version-update:semver-major']
 
   - package-ecosystem: npm                 # the web clipper (ROADMAP item 19); exact pins
     directory: /clipper
