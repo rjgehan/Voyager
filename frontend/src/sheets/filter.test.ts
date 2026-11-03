@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { parseA1, toA1 } from './a1';
 import { describeCondition, meetsCondition } from './conditions';
 import { dataRegion, filterValues, filterView, looksLikeHeader, rowShows } from './filter';
 import { emptySheet, type Sheet, type SheetCell, type SheetFilter } from './format';
@@ -92,5 +93,25 @@ describe('the data region around a cell', () => {
     expect(dataRegion(s, 4, 0)).toEqual({ col: 4, row: 0, width: 1, height: 1 });
     expect(looksLikeHeader(s, { col: 0, row: 0, width: 3, height: 6 })).toBe(true);
     expect(looksLikeHeader(s, { col: 0, row: 1, width: 1, height: 5 })).toBe(false);
+  });
+
+  it('grows diagonally and around corners, as before', () => {
+    const s = sheet({ A1: { v: 1 }, B2: { v: 2 }, C3: { v: 3 }, E3: { v: 'x' }, D5: { v: 'y' }, C4: { v: 'z' } });
+    expect(dataRegion(s, 0, 0)).toEqual({ col: 0, row: 0, width: 5, height: 5 });
+    expect(dataRegion(s, 6, 6)).toEqual({ col: 6, row: 6, width: 1, height: 1 });
+  });
+
+  it('takes time in proportion to the cells, wherever it starts (2,001 × 30 from the bottom)', () => {
+    const cells: Record<string, SheetCell> = {};
+    for (let row = 0; row < 2001; row++) for (let col = 0; col < 30; col++) cells[toA1(col, row)] = { v: row === 0 ? 'h' : row * col };
+    const s = sheet(cells);
+    // One walk over the cells, reading their references: the least any region can cost.
+    let start = performance.now();
+    expect(Object.keys(s.cells).filter((ref) => parseA1(ref) !== null)).toHaveLength(60030);
+    const walk = performance.now() - start;
+    start = performance.now();
+    expect(dataRegion(s, 26, 2000)).toEqual({ col: 0, row: 0, width: 30, height: 2001 });
+    // Growing a row per pass over every cell took about 20 walks; a linear region takes about two.
+    expect(performance.now() - start).toBeLessThan(6 * walk + 30);
   });
 });

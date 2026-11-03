@@ -96,28 +96,72 @@ export function filterValues(sheet: Sheet, filter: SheetFilter, col: number): Fi
 /**
  * The data region around a cell: the rectangle of cells that touch one another (diagonals too)
  * through cells that show something, grown from the cell, as Google Sheets and Excel take a filter's
- * or a sort's range from a single cell. A cell with nothing around it is its own region.
+ * or a sort's range from a single cell. A cell with nothing around it is its own region. The used
+ * cells are indexed by row and by column, so each step of growth looks up one row or column of
+ * the rectangle's border: the time follows the number of cells, not their rows times the cells.
  */
 export function dataRegion(sheet: Sheet, col: number, row: number): CellRange {
-  const used: Array<{ col: number; row: number }> = [];
+  const byRow = new Map<number, number[]>();
+  const byCol = new Map<number, number[]>();
+  const add = (index: Map<number, number[]>, key: number, value: number) => {
+    const list = index.get(key);
+    if (list) list.push(value);
+    else index.set(key, [value]);
+  };
   for (const [ref, cell] of Object.entries(sheet.cells)) {
     const at = parseA1(ref);
     const v = cellValue(cell);
-    if (at && v !== null && v !== '') used.push(at);
+    if (!at || v === null || v === '') continue;
+    add(byRow, at.row, at.col);
+    add(byCol, at.col, at.row);
   }
-  let r = { col1: col, row1: row, col2: col, row2: row };
+  for (const list of byRow.values()) list.sort((a, b) => a - b);
+  for (const list of byCol.values()) list.sort((a, b) => a - b);
+  /** The smallest and largest entry of a sorted list within [lo, hi], or null. */
+  const span = (list: number[] | undefined, lo: number, hi: number): [number, number] | null => {
+    if (!list) return null;
+    const first = (bound: number) => {
+      let a = 0;
+      let b = list.length;
+      while (a < b) {
+        const m = (a + b) >> 1;
+        if (list[m] < bound) a = m + 1;
+        else b = m;
+      }
+      return a;
+    };
+    const i = first(lo);
+    if (i >= list.length || list[i] > hi) return null;
+    return [list[i], list[first(hi + 1) - 1]];
+  };
+  let c1 = col;
+  let r1 = row;
+  let c2 = col;
+  let r2 = row;
   for (let grew = true; grew; ) {
     grew = false;
-    for (const at of used) {
-      if (at.col >= r.col1 - 1 && at.col <= r.col2 + 1 && at.row >= r.row1 - 1 && at.row <= r.row2 + 1) {
-        if (at.col < r.col1 || at.col > r.col2 || at.row < r.row1 || at.row > r.row2) {
-          r = { col1: Math.min(r.col1, at.col), row1: Math.min(r.row1, at.row), col2: Math.max(r.col2, at.col), row2: Math.max(r.row2, at.row) };
-          grew = true;
-        }
-      }
+    for (let s = span(byRow.get(r1 - 1), c1 - 1, c2 + 1); s; s = span(byRow.get(r1 - 1), c1 - 1, c2 + 1)) {
+      r1--;
+      [c1, c2] = [Math.min(c1, s[0]), Math.max(c2, s[1])];
+      grew = true;
+    }
+    for (let s = span(byRow.get(r2 + 1), c1 - 1, c2 + 1); s; s = span(byRow.get(r2 + 1), c1 - 1, c2 + 1)) {
+      r2++;
+      [c1, c2] = [Math.min(c1, s[0]), Math.max(c2, s[1])];
+      grew = true;
+    }
+    for (let s = span(byCol.get(c1 - 1), r1 - 1, r2 + 1); s; s = span(byCol.get(c1 - 1), r1 - 1, r2 + 1)) {
+      c1--;
+      [r1, r2] = [Math.min(r1, s[0]), Math.max(r2, s[1])];
+      grew = true;
+    }
+    for (let s = span(byCol.get(c2 + 1), r1 - 1, r2 + 1); s; s = span(byCol.get(c2 + 1), r1 - 1, r2 + 1)) {
+      c2++;
+      [r1, r2] = [Math.min(r1, s[0]), Math.max(r2, s[1])];
+      grew = true;
     }
   }
-  return { col: r.col1, row: r.row1, width: r.col2 - r.col1 + 1, height: r.row2 - r.row1 + 1 };
+  return { col: c1, row: r1, width: c2 - c1 + 1, height: r2 - r1 + 1 };
 }
 
 /**

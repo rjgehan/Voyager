@@ -5,7 +5,9 @@
 //
 // A binding per session does this outside React; views subscribe to its snapshot. Bindings (and
 // their workbooks) stay cached for a few files that are not shown, so the undo history survives
-// switching between files, as CodeMirror's states do for notes.
+// switching between files, as CodeMirror's states do for notes. A cached workbook keeps following
+// its session (another device's save) while no view shows it, because notes read its values
+// through the link store (ROADMAP item 42) for as long as it lives.
 import { useSyncExternalStore } from 'react';
 import type { Workbook } from '../../sheets/engine';
 import { parseSheet } from '../../sheets/format';
@@ -63,8 +65,11 @@ export class SheetBinding {
     return () => {
       this.listeners.delete(fn);
       if (this.listeners.size === 0) {
-        this.offSession?.();
-        this.offSession = null;
+        // A workbook stays linked for notes that read it, so it keeps catching up with the session.
+        if (!this.workbook) {
+          this.offSession?.();
+          this.offSession = null;
+        }
         evict();
       }
     };

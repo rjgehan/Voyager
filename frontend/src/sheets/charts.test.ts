@@ -102,6 +102,17 @@ describe('axis ticks', () => {
     expect(niceTicks(0.1, 0.9)).toEqual([0, 0.2, 0.4, 0.6, 0.8, 1]);
   });
 
+  it('fits the data without zero for a scatter chart’s X axis', () => {
+    const ticks = niceTicks(46023, 46387, 4, false);
+    expect(ticks[0]).toBeLessThanOrEqual(46023);
+    expect(ticks[0]).toBeGreaterThan(45800);
+    expect(ticks.at(-1)).toBeGreaterThanOrEqual(46387);
+    expect(ticks.at(-1)).toBeLessThan(46600);
+    expect(niceTicks(100, 110, 4, false)).toEqual([100, 102.5, 105, 107.5, 110]);
+    // A single value still has a span.
+    expect(niceTicks(7, 7, 4, false).length).toBeGreaterThan(1);
+  });
+
   it('labels ticks compactly', () => {
     expect(tickLabel(1500, false)).toBe('1.5K');
     expect(tickLabel(2_500_000, false)).toBe('2.5M');

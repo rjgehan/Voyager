@@ -42,6 +42,7 @@ import { pivotTable, type PivotOptions } from '../../sheets/pivot';
 import { columnFiltered, dataRegion, filterRange, looksLikeHeader } from '../../sheets/filter';
 import type { Separator } from '../../sheets/csv';
 import { effectiveFormat, formatShown, shownCell } from '../../sheets/display';
+import { dropPendingCut, setSheetClip, sheetClip } from '../../sheets/clipboard';
 import { clearEdits, clipStillHolds, copyRange, fillDownEdits, fillEdits, fillRightEdits, pasteEdits, typedEdit, usedExtent, type SheetClip } from '../../sheets/edits';
 import type { CellEdit, FormatEdit, Workbook } from '../../sheets/engine';
 import {
@@ -52,13 +53,14 @@ import {
   sheetById,
   sheetByName,
   sheetNameProblem,
+  type CachedValue,
   type ChartProps,
   type FilterColumn,
   type Sheet,
   type SheetFilter,
   type ValidationType,
 } from '../../sheets/format';
-import { dropdownItems, isValid, validationLooks, validations } from '../../sheets/validation';
+import { dropdownItems, holdsItem, isValid, validationLooks, validations } from '../../sheets/validation';
 import { changeDecimals, isGeneral } from '../../sheets/numfmt';
 import { absoluteRangeText, parseRangeText, rangeText, type CellRange } from '../../sheets/refs';
 import { typedInput } from '../../sheets/input';
@@ -112,16 +114,8 @@ interface Props {
 /** Per file, while the page lives: the open sheet, each sheet's selection, and whether the charts pane is folded. */
 const remembered = new Map<string, { sheetId: string; selections: ReadonlyMap<string, SheetSelection>; chartsOpen: boolean }>();
 
-/** The last copy (or cut) made in any spreadsheet, so a paste in this app brings formulas, or moves the cut cells. */
-let lastClip: SheetClip | null = null;
-
 /** Until when a paste is Mod-Shift-V's: values only. */
 let pasteValuesUntil = 0;
-
-/** Escape drops a pending cut: a later paste copies. */
-function dropPendingCut(): void {
-  if (lastClip?.cut) lastClip = { ...lastClip, cut: undefined };
-}
 
 /** Rows at most that "Bold" changes in one go (a whole-column selection bolds columns instead). */
 const BOLD_LIMIT = 5000;
@@ -147,6 +141,11 @@ function decodeHash(hash: string): string | null {
 
 function errorText(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
+}
+
+/** The dropdown item a cell holds (marked in its list): as it shows, or the one whose value it holds ($5 for 5). */
+function currentItem(items: readonly string[], cell: { value: CachedValue; text: string }): string {
+  return items.find((item) => holdsItem(item, cell.value, cell.text)) ?? cell.text;
 }
 
 function step(at: CellAt, move: Move): CellAt {
@@ -325,11 +324,12 @@ ${JSON.stringify(sheet.filter ?? null)}`;
     bar.current?.edit({ ...target, sheet: sheet.id }, editText(sheet, target), initial);
   };
 
-  const commit = (target: EditTarget, text: string, move: Move) => {
+  /** Ends an edit: writes `text` when it was `changed` from where the edit started and differs from the cell now, then moves. */
+  const commit = (target: EditTarget, text: string, move: Move, changed = true) => {
     const s = sheetById(workbook.file, target.sheet);
     if (!s) return;
     // Typed input brings the format it implies (`10%`, `=TODAY()`) into a cell without one.
-    if (text !== editText(s, target)) {
+    if (changed && text !== editText(s, target)) {
       const typed = typedEdit(s, target.col, target.row, text);
       // A strict validation refuses other input, as Google Sheets' "Reject the input".
       const rule = validations(s)?.(target.col, target.row)?.validation;
@@ -709,11 +709,14 @@ ${JSON.stringify(sheet.filter ?? null)}`;
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the filter's text says when it changed
   }, [filterKey]);
 
-  const sortRangeLabel = (() => {
-    let range = dataRange();
-    if (single && looksLikeHeader(sheet, range)) range = { ...range, row: range.row + 1, height: Math.max(1, range.height - 1) };
-    return rangeText(range);
-  })();
+  // Worked out only while the Sort and filter menu is open: the data around a cell costs a walk over every cell.
+  const sortRangeLabel = sortMenu
+    ? (() => {
+        let range = dataRange();
+        if (single && looksLikeHeader(sheet, range)) range = { ...range, row: range.row + 1, height: Math.max(1, range.height - 1) };
+        return rangeText(range);
+      })()
+    : '';
   const sortItems: MenuEntry[] = [
     { id: 'filter', label: filter ? 'Remove filter' : 'Create a filter', run: toggleFilter },
     ...(filter && fRange ? [{ id: 'filterColumn', label: `Filter column ${columnLetters(Math.max(fRange.col, Math.min(fRange.col + fRange.width - 1, activeAt.col)))}…`, run: () => openColumnFilter(sortMenu ? { x: sortMenu.x, y: sortMenu.y - 4, width: 0, height: 0 } : undefined) }] : []),
@@ -883,8 +886,10 @@ ${JSON.stringify(sheet.filter ?? null)}`;
       e.preventDefault();
       // A cut moves the cells when it is pasted in this spreadsheet, as in Google Sheets and Excel;
       // until then they stay, marked (pasted elsewhere, the cut is a copy).
-      lastClip = cut && canEdit ? { ...clip, cut: { source, sheet: s.id } } : clip;
-      setCutMark(lastClip.cut ? lastClip : null);
+      // The clip is shared with the grids embedded in notes (sheets/clipboard.ts).
+      const next = cut && canEdit ? { ...clip, cut: { source, sheet: s.id } } : clip;
+      setSheetClip(next);
+      setCutMark(next.cut ? next : null);
     };
     const onCopy = (e: ClipboardEvent) => copy(e, false);
     const onCut = (e: ClipboardEvent) => copy(e, true);
@@ -897,7 +902,7 @@ ${JSON.stringify(sheet.filter ?? null)}`;
       // Mod-Shift-V: the values only, without formulas or formats (Google Sheets' Paste values only).
       const valuesOnly = Date.now() < pasteValuesUntil;
       pasteValuesUntil = 0;
-      const clip = lastClip;
+      const clip = sheetClip();
       if (clip?.cut && clip.text === text && !valuesOnly) {
         setCutMark(null);
         const from = clip.cut.source === here ? sheetById(wb.file, clip.cut.sheet) : undefined;
@@ -912,14 +917,15 @@ ${JSON.stringify(sheet.filter ?? null)}`;
           }
           // Pasting again copies the moved cells from their new place.
           const moved = sheetById(wb.file, s.id);
-          lastClip = moved ? { ...copyRange(moved, range), text: clip.text } : null;
+          setSheetClip(moved ? { ...copyRange(moved, range), text: clip.text } : null);
           const shown = displayRange(v, range) ?? { ...range, row: sel.range.row, height: 1 };
           choose({ active: { col: shown.col, row: shown.row }, range: shown });
           return;
         }
         // The cut cells changed meanwhile (or are in another spreadsheet): an ordinary paste.
-        lastClip = { ...clip, cut: undefined };
+        setSheetClip({ ...clip, cut: undefined });
       }
+      const lastClip = sheetClip();
       const own = lastClip !== null && lastClip.text === text;
       // Values only: this app's copy as its values; other text as typed, without the formats it implies.
       const values = valuesOnly
@@ -1260,7 +1266,7 @@ ${JSON.stringify(sheet.filter ?? null)}`;
           theme={theme}
           handlers={handlers}
           picked={picked && displayRange(view, picked)}
-          marked={cutMark !== null && cutMark === lastClip && cutMark.cut?.sheet === sheet.id && cutMark.cut.source === path ? displayRange(view, cutMark.range) : null}
+          marked={cutMark !== null && cutMark === sheetClip() && cutMark.cut?.sheet === sheet.id && cutMark.cut.source === path ? displayRange(view, cutMark.range) : null}
           gridRef={gridRef}
           portalRef={portalRef}
         />
@@ -1345,7 +1351,7 @@ ${JSON.stringify(sheet.filter ?? null)}`;
       {dropdown && dropdownRule && (
         <DropdownList
           items={dropdownItems(workbook.file, sheet, dropdownRule)}
-          current={shownCell(sheet, dropdown.at.col, dropdown.at.row).text}
+          current={currentItem(dropdownItems(workbook.file, sheet, dropdownRule), shownCell(sheet, dropdown.at.col, dropdown.at.row))}
           cell={toA1(dropdown.at.col, dropdown.at.row)}
           anchor={dropdown.anchor}
           phone={phone}

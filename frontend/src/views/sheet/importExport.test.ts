@@ -1,8 +1,21 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { newPathError } from '../../features/paths';
 import { Workbook } from '../../sheets/engine';
 import { cellValue, parseSheet, serializeSheet, type SheetFile } from '../../sheets/format';
 import type { ImportedBook } from '../../sheets/xlsx';
-import { addToWorkbook, baseName, bookToFile, csvBook, importKind } from './importExport';
+import { addToWorkbook, baseName, bookToFile, createSheetFile, csvBook, importKind } from './importExport';
+
+const created = vi.hoisted(() => [] as string[]);
+vi.mock('../../api/endpoints', async (original) => {
+  const actual = await original<typeof import('../../api/endpoints')>();
+  const createFile = async (req: { path: string }) => {
+    created.push(req.path);
+    return { file: { path: req.path } };
+  };
+  return { ...actual, api: { ...actual.api, createFile } };
+});
+vi.mock('../../features/navigation', async (original) => ({ ...(await original<object>()), openPath: () => {} }));
+vi.mock('../../sync/treePatch', async (original) => ({ ...(await original<object>()), applyWriteResult: () => {} }));
 
 function file(value: unknown): SheetFile {
   const result = parseSheet(JSON.stringify(value));
@@ -95,6 +108,24 @@ describe('importing as a new file', () => {
 
   it('writes an empty workbook for an empty book', () => {
     expect(bookToFile({ sheets: [], named: {}, skipped: [] }).sheets).toHaveLength(1);
+  });
+
+  it('names the file after the imported one, cleaned to a name the server takes', async () => {
+    const names = ['Invoice #12.csv', 'Budget [final].xlsx', 'Bank^export.csv', 'A|B.csv', 'Sales %%.csv', ' Budget.csv', '.notes.csv', 'CON.csv', 'aux.xlsx', 'a:b*c?.csv', '###.csv', 'x'.repeat(300) + '.csv'];
+    created.length = 0;
+    for (const name of names) await createSheetFile('Imports', baseName(name), bookToFile({ sheets: [], named: {}, skipped: [] }));
+    for (const path of created) {
+      expect(newPathError(path)).toBeNull();
+      expect(path).toMatch(/^Imports\/.+\.sheet$/);
+    }
+    expect(created.slice(0, 3)).toEqual(['Imports/Invoice -12.sheet', 'Imports/Budget -final-.sheet', 'Imports/Bank-export.sheet']);
+    expect(created[5]).toBe('Imports/Budget.sheet');
+    expect(created[6]).toBe('Imports/notes.sheet');
+    expect(created[7]).toBe('Imports/_CON.sheet');
+    // Plain names are kept as they are.
+    created.length = 0;
+    await createSheetFile('', 'Budget 2026', bookToFile({ sheets: [], named: {}, skipped: [] }));
+    expect(created).toEqual(['Budget 2026.sheet']);
   });
 });
 

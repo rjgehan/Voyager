@@ -4,7 +4,7 @@
 // sheets and charts, and a spreadsheet that reads notes.
 import { QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { httpEndpoints, installEndpoints } from '../../../api/endpoints';
 import { MockVault } from '../../../api/mock/vault';
 import { queryClient } from '../../../api/queryClient';
@@ -12,8 +12,11 @@ import type { FileEntry } from '../../../api/types';
 import { formulaEngineForTests } from '../../../formulas/load';
 import { documents } from '../../../sync/instance';
 import { fakeApi } from '../../../test/fakes';
+import { axeViolations } from '../../../test/axe';
 import { useTestLinkHost } from '../../../test/linkHost';
 import { clearSheetBindings } from '../../../views/sheet/useSheetDocument';
+import { sheetClip, setSheetClip } from '../../clipboard';
+import { copyRange } from '../../edits';
 import { parseSheet } from '../../format';
 import { loadSheetEngine } from '../../loadEngine';
 import { resetLinkStore } from '../store';
@@ -22,7 +25,7 @@ import SheetLiveEmbed from './SheetLiveEmbed';
 const BUDGET = {
   type: 'notesapp-sheet',
   version: 1,
-  engine: 'hyperformula@3.4.0',
+  engine: 'hyperformula@3.5.0',
   sheets: [
     {
       id: 's1',
@@ -137,6 +140,137 @@ describe('a spreadsheet embedded in a note that can be written', () => {
     expect(cell(container, 'B4').classList.contains('is-active')).toBe(true);
     await waitFor(() => expect(saved(path).B3.v).toBe(500), { timeout: 4000 });
     expect(saved(path).B4.c).toBe(1950);
+  });
+
+  it('writes nothing when a cell is opened and left untouched, even after another device changed it', async () => {
+    const path = newFile();
+    const { container } = show(path);
+    await waitFor(() => expect(cell(container, 'B3').textContent).toBe('300'));
+    // Just looking at B3's contents.
+    fireEvent.doubleClick(cell(container, 'B3'));
+    const input = screen.getByRole('textbox', { name: 'Cell' }) as HTMLInputElement;
+    expect(input.value).toBe('300');
+    // Another device sets B3 to 999 meanwhile.
+    const next = structuredClone(BUDGET);
+    next.sheets[0].cells.B3 = { v: 999 };
+    (next.sheets[0].cells as Record<string, unknown>).B4 = { f: '=SUM(B2:B3)', c: 2449 };
+    vault.externalWrite(path, JSON.stringify(next));
+    await act(async () => {
+      await documents.get(path)!.onRemoteChanged({ version: vault.readFile(path).version });
+    });
+    await waitFor(() => expect(cell(container, 'B3').textContent).toBe('999'));
+    fireEvent.blur(input);
+    // A real edit elsewhere, so the session saves.
+    fireEvent.doubleClick(cell(container, 'A3'));
+    fireEvent.change(input, { target: { value: 'Groceries' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() => expect(saved(path).A3.v).toBe('Groceries'), { timeout: 4000 });
+    expect(saved(path).B3.v).toBe(999);
+    // Enter on an untouched cell moves on and writes nothing either.
+    fireEvent.doubleClick(cell(container, 'B2'));
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(cell(container, 'B3').classList.contains('is-active')).toBe(true);
+    const undo = screen.getByRole('button', { name: 'Undo' }) as HTMLButtonElement;
+    fireEvent.click(undo);
+    await waitFor(() => expect(cell(container, 'A3').textContent).toBe('Food'));
+  });
+
+  it('keeps a cell’s line breaks: leaving it untouched writes nothing, and an edit keeps them', async () => {
+    const content = structuredClone(BUDGET);
+    (content.sheets[0].cells as Record<string, unknown>).A2 = { v: '12 Main St\nSpringfield' };
+    const path = newFile(content);
+    const { container } = show(path);
+    await waitFor(() => expect(cell(container, 'B3').textContent).toBe('300'));
+    fireEvent.doubleClick(cell(container, 'A2'));
+    const input = screen.getByRole('textbox', { name: 'Cell' }) as HTMLTextAreaElement;
+    expect(input.value).toBe('12 Main St\nSpringfield');
+    fireEvent.keyDown(input, { key: 'Enter' });
+    fireEvent.doubleClick(cell(container, 'A3'));
+    fireEvent.change(input, { target: { value: 'Groceries' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() => expect(saved(path).A3.v).toBe('Groceries'), { timeout: 4000 });
+    expect(saved(path).A2.v).toBe('12 Main St\nSpringfield');
+    fireEvent.doubleClick(cell(container, 'A2'));
+    fireEvent.change(input, { target: { value: input.value + '!' } });
+    fireEvent.keyDown(input, { key: 'Tab' });
+    await waitFor(() => expect(saved(path).A2.v).toBe('12 Main St\nSpringfield!'), { timeout: 4000 });
+    // Alt+Enter adds a line break instead of committing.
+    fireEvent.doubleClick(cell(container, 'A3'));
+    fireEvent.keyDown(input, { key: 'Enter', altKey: true });
+    expect(input.value).toBe('Groceries\n');
+    expect(input.hidden).toBe(false);
+  });
+
+  it('does not serialize the workbook to draw itself once it has been edited', async () => {
+    const engine = await loadSheetEngine();
+    const spy = vi.spyOn(engine.Workbook.prototype, 'serialize');
+    try {
+      const path = newFile();
+      const { container } = show(path);
+      await waitFor(() => expect(cell(container, 'B3').textContent).toBe('300'));
+      fireEvent.doubleClick(cell(container, 'B3'));
+      const input = screen.getByRole('textbox', { name: 'Cell' }) as HTMLTextAreaElement;
+      fireEvent.change(input, { target: { value: '500' } });
+      fireEvent.keyDown(input, { key: 'Enter' });
+      await waitFor(() => expect(cell(container, 'B4').textContent).toBe('1950'));
+      await waitFor(() => expect(saved(path).B3.v).toBe(500), { timeout: 4000 });
+      await waitFor(() => expect(documents.get(path)!.currentStatus).toBe('clean'));
+      // A second edit: drawing it serializes nothing (only the save and the draft do, later).
+      fireEvent.doubleClick(cell(container, 'B2'));
+      fireEvent.change(input, { target: { value: '1500' } });
+      spy.mockClear();
+      fireEvent.keyDown(input, { key: 'Enter' });
+      expect(cell(container, 'B4').textContent).toBe('2000');
+      expect(spy).not.toHaveBeenCalled();
+      await waitFor(() => expect(saved(path).B2.v).toBe(1500), { timeout: 4000 });
+      await waitFor(() => expect(documents.get(path)!.currentStatus).toBe('clean'));
+      expect(spy.mock.calls.length).toBeLessThanOrEqual(2);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('is a grid to assistive technology, with its selected and active cells, and passes axe', async () => {
+    const path = newFile();
+    const { container } = show(path);
+    await waitFor(() => expect(cell(container, 'B2').textContent).toBe('$1,450.00'));
+    const table = container.querySelector('table.sheet-live-table.is-editable')!;
+    expect(table.getAttribute('role')).toBe('grid');
+    expect(table.getAttribute('aria-multiselectable')).toBe('true');
+    fireEvent.mouseDown(cell(container, 'B3'));
+    fireEvent.mouseDown(cell(container, 'B4'), { shiftKey: true });
+    expect(cell(container, 'B3').getAttribute('aria-selected')).toBe('true');
+    expect(cell(container, 'A3').getAttribute('aria-selected')).toBe('false');
+    expect(table.getAttribute('aria-activedescendant')).toBe(container.querySelector('td.is-active')!.id);
+    fireEvent.mouseDown(cell(container, 'A2'));
+    expect(table.getAttribute('aria-activedescendant')).toBe(cell(container, 'A2').id);
+    expect((await axeViolations(container)).filter((l) => !l.startsWith('color-contrast'))).toEqual([]);
+  });
+
+  it('shares its copies with the spreadsheet view: formulas both ways, and a newer copy there wins', async () => {
+    const path = newFile();
+    const { container } = show(path);
+    await waitFor(() => expect(cell(container, 'B4').textContent).toBe('1750'));
+    const table = container.querySelector('table')!;
+    const data = new Map<string, string>();
+    const clipboardData = { setData: (t: string, v: string) => data.set(t, v), getData: (t: string) => data.get(t) ?? '' };
+    // A copy here is the view's to paste too.
+    fireEvent.mouseDown(cell(container, 'B4'));
+    fireEvent.copy(table, { clipboardData });
+    expect(sheetClip()?.cells).toEqual([[{ f: '=SUM(B2:B3)' }]]);
+    // A copy in the view (C4 of the same sheet, its text '1750' too) is pasted here as that copy.
+    const parsed = parseSheet(JSON.stringify(BUDGET));
+    if (!parsed.ok) throw new Error(parsed.error);
+    setSheetClip(copyRange({ ...parsed.file.sheets[0], cells: { ...parsed.file.sheets[0].cells, C4: { v: 1750 } } }, { col: 2, row: 3, width: 1, height: 1 }));
+    fireEvent.mouseDown(cell(container, 'C1'));
+    fireEvent.paste(table, { clipboardData });
+    await waitFor(() => expect(cell(container, 'C1').textContent).toBe('1750'));
+    // The view's copy of a formula keeps it here.
+    setSheetClip(copyRange(parsed.file.sheets[0], { col: 1, row: 3, width: 1, height: 1 }));
+    fireEvent.mouseDown(cell(container, 'C4'));
+    fireEvent.paste(table, { clipboardData });
+    await waitFor(() => expect(saved(path).C4?.f).toBe('=SUM(C2:C3)'), { timeout: 4000 });
+    expect(saved(path).C1.v).toBe(1750);
   });
 
   it('types over a selected cell, cancels with Escape, and undoes from the toolbar', async () => {

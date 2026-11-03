@@ -3,7 +3,7 @@
 // `.sheet` file. A lazy chunk (load.ts), loaded only for notes that hold formulas. Results are never
 // written into the note: they are computed from its text each time it changes.
 import { CellValueDetailedType, DetailedCellError, HyperFormula, type CellValue, type ConfigParams, type RawCellContent } from 'hyperformula';
-import { engineConfig } from '../sheets/engine';
+import { BUILT_IN_NAMES, engineConfig } from '../sheets/engine';
 import { friendlyError } from '../sheets/functions';
 import { LOADING } from '../sheets/links/noteFunctions';
 import { ExternalSheets, type Rewritten } from '../sheets/links/noteRefs';
@@ -107,7 +107,7 @@ export function computeNote(model: FormulaModel, context?: LinkContext): NoteRes
   const config: Partial<ConfigParams> = context ? { ...engineConfig(), context } : engineConfig();
   let hf: HyperFormula | null;
   try {
-    hf = HyperFormula.buildFromSheets(sheets, config);
+    hf = HyperFormula.buildFromSheets(sheets, config, [...BUILT_IN_NAMES]);
   } catch (e) {
     // A name the engine refuses, say: every formula shows as typed rather than breaking the note.
     console.warn('[formulas] building the note’s sheets failed', e);

@@ -509,7 +509,14 @@ export class LinkStore {
     return () => {
       entry.off();
       if (this.live.get(at) === entry) {
-        this.live.delete(at);
+        // The workbook goes: what it held last (this device's saved edits too) stands until the
+        // file is read again, never the values read before it was opened.
+        const cached = this.sheets.get(at);
+        if (cached) {
+          this.settle(`sheet:${at}`, cached, { status: 'ready', value: sheet.file() }, null);
+          this.live.delete(at);
+          this.fetchSheet(at, cached);
+        } else this.live.delete(at);
         this.changed(`sheet:${at}`);
       }
     };

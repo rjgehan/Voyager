@@ -12,7 +12,7 @@ interface Options {
   /** Where Glide's cell editor opens. */
   portalRef: RefObject<HTMLDivElement | null>;
   /** The formula bar's field, while it edits a cell. */
-  barInput(): HTMLInputElement | null;
+  barInput(): HTMLInputElement | HTMLTextAreaElement | null;
 }
 
 export function useFormulaAssist({ portalRef, barInput }: Options): void {

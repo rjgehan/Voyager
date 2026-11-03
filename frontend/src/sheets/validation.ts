@@ -4,6 +4,7 @@
 // When validations overlap, the newest one applies. Pure and engine-free, from cached values.
 import { shownCell } from './display';
 import { compareIds, sheetByName, type CachedValue, type Sheet, type SheetFile, type Validation } from './format';
+import { typedInput } from './input';
 import { parseRangeText, type CellRange } from './refs';
 
 const inside = (r: CellRange, col: number, row: number) => col >= r.col && col < r.col + r.width && row >= r.row && row < r.row + r.height;
@@ -57,14 +58,29 @@ export function dropdownItems(file: SheetFile, sheet: Sheet, v: Validation): str
   return out;
 }
 
+/** The value a dropdown item writes into a cell, as typed input reads it (`$5` is 5, `001` is 1, `true` TRUE). */
+function itemValue(item: string): CachedValue | undefined {
+  return typedInput(item).content?.v;
+}
+
+/**
+ * Whether a cell holding `value` (and showing `shown`) holds the dropdown item `item`: it shows
+ * as the item, or holds what the item writes (`$5` writes 5, which shows `$5.00`).
+ */
+export function holdsItem(item: string, value: CachedValue, shown: string): boolean {
+  if (item === shown) return true;
+  const v = itemValue(item);
+  return v !== undefined && v === value;
+}
+
 /**
  * Whether a cell's value is valid under `v`: empty is; a dropdown's value must be one of its items
- * (as the value shows); a checkbox holds TRUE or FALSE.
+ * (as the value shows, or as the item reads when typed); a checkbox holds TRUE or FALSE.
  */
 export function isValid(file: SheetFile, sheet: Sheet, v: Validation, value: CachedValue, shown: string): boolean {
   if (value === null || value === '') return true;
   if (v.type === 'checkbox') return typeof value === 'boolean';
-  if (v.type === 'list' || v.type === 'range') return dropdownItems(file, sheet, v).includes(shown);
+  if (v.type === 'list' || v.type === 'range') return dropdownItems(file, sheet, v).some((item) => holdsItem(item, value, shown));
   return true;
 }
 
@@ -79,8 +95,8 @@ export interface ValidationLook {
 export function validationLooks(file: SheetFile, sheet: Sheet): ((col: number, row: number) => ValidationLook | undefined) | null {
   const at = validations(sheet);
   if (!at) return null;
-  // Dropdown items per validation, read once.
-  const items = new Map<string, Set<string>>();
+  // Dropdown items per validation (as they show, and the values they write), read once.
+  const items = new Map<string, { shown: Set<string>; values: Set<CachedValue> }>();
   return (col, row) => {
     const hit = at(col, row);
     if (!hit) return undefined;
@@ -91,10 +107,11 @@ export function validationLooks(file: SheetFile, sheet: Sheet): ((col: number, r
     }
     let set = items.get(hit.id);
     if (!set) {
-      set = new Set(dropdownItems(file, sheet, hit.validation));
+      const list = dropdownItems(file, sheet, hit.validation);
+      set = { shown: new Set(list), values: new Set(list.map(itemValue).filter((v) => v !== undefined)) };
       items.set(hit.id, set);
     }
-    return { kind: 'dropdown', invalid: !empty && !set.has(shown) };
+    return { kind: 'dropdown', invalid: !empty && !set.shown.has(shown) && !set.values.has(value) };
   };
 }
 
