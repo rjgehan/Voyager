@@ -1,11 +1,11 @@
 import { expect, test } from '@playwright/test';
-import { call, createFile, day, eventually, newList, newTask, readFile, tree, unique } from '../../lib/api.ts';
+import { call, createFile, day, eventually, madeUpWord, newList, newTask, readFile, tree, unique } from '../../lib/api.ts';
 import { editor, noteTitle, noteUrl, openNote } from '../../lib/ui.ts';
 
 /** Finding things and planning: search, task quick add, the calendar and a spreadsheet formula. */
 
 test('search finds a word and opens the note at the match', async ({ page }) => {
-  const word = `quokka${Date.now().toString(36).replace(/\d/g, '')}`;
+  const word = madeUpWord('quokka');
   const path = `${unique('Found')}.md`;
   await createFile(path, `# Trip\n\n${'Filler line.\n'.repeat(40)}\nWe saw a ${word} on the island.\n`);
   await page.goto(`/search?q=${encodeURIComponent(word)}`);
@@ -20,7 +20,7 @@ test('search finds a word and opens the note at the match', async ({ page }) => 
 });
 
 test('search from the box: typing shows results as you type', async ({ page }) => {
-  const word = `wombat${Date.now().toString(36).replace(/\d/g, '')}`;
+  const word = madeUpWord('wombat');
   await createFile(`${unique('Typed')}.md`, `A ${word} in the garden.\n`);
   await page.goto('/search');
   const input = page.getByRole('searchbox').or(page.getByRole('textbox', { name: /search/i })).first();

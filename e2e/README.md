@@ -83,6 +83,9 @@ grep -rn "KNOWN BUG" tests/
   then click only through the part the test is about. Every test makes its own notes under a
   `unique()` name: the vault is shared, and runs pile up until the next `reset`.
 - Basenames resolve vault-wide (`[[Plan]]` finds any `Plan.md`), so make linked names unique too.
+- Search for a `madeUpWord('stem')` of the test's own: random letters, so no earlier run's word
+  shares its prefix or is a typo away from it (a word from the clock would be, and a rerun without
+  `reset` would find both).
 - After typing, poll the file (`eventually(() => readFile(path), …)`) rather than trusting the
   screen: the app saves in the background.
 - Follow a link with Mod-click on the PC and a tap on the phone; a plain click edits it.
