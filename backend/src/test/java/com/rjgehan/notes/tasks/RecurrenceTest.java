@@ -65,6 +65,38 @@ class RecurrenceTest {
 	}
 
 	@Test
+	void aRuleOnSetDaysTickedEarlyFromCompletionMovesPastTheOccurrenceBeingCompleted() {
+		// Watered on Tuesday 2026-11-03, due Wednesday 2026-11-04, weekly on Wednesday from completion: the next one,
+		// never the occurrence just done (nor an earlier one).
+		LocalDate tuesday = LocalDate.of(2026, 11, 3);
+		RecurrenceFrom completion = RecurrenceFrom.COMPLETION;
+		assertThat(next("FREQ=WEEKLY;BYDAY=WE", completion, "2026-11-04", tuesday)).isEqualTo("2026-11-11");
+		assertThat(next("FREQ=WEEKLY;BYDAY=WE", completion, "2026-11-04T09:00", tuesday))
+			.isEqualTo("2026-11-11T09:00");
+		assertThat(next("FREQ=WEEKLY;INTERVAL=2;BYDAY=WE", completion, "2026-11-04", tuesday)).isEqualTo("2026-11-18");
+		assertThat(next("FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR", completion, "2026-11-04", tuesday))
+			.isEqualTo("2026-11-05");
+		assertThat(next("FREQ=WEEKLY;BYDAY=WE", completion, "2026-11-11", tuesday)).isEqualTo("2026-11-18");
+		assertThat(next("FREQ=WEEKLY;BYDAY=MO", completion, "2046-11-05", tuesday)).isEqualTo("2046-11-12");
+		assertThat(next("FREQ=MONTHLY;BYMONTHDAY=15", completion, "2026-11-15", LocalDate.of(2026, 11, 14)))
+			.isEqualTo("2026-12-15");
+		assertThat(next("FREQ=YEARLY;BYMONTH=11;BYMONTHDAY=15", completion, "2026-11-15", LocalDate.of(2026, 11, 14)))
+			.isEqualTo("2027-11-15");
+		Recurrence.Next counted = Recurrence.next("FREQ=WEEKLY;BYDAY=WE;COUNT=3", completion, "2026-11-04", tuesday);
+		assertThat(counted).isNotNull();
+		assertThat(counted.value()).isEqualTo("2026-11-11");
+		assertThat(counted.rrule()).isEqualTo("FREQ=WEEKLY;BYDAY=WE;COUNT=2");
+		// Ticked late, or without a date: the first set day after the completion day, as before.
+		assertThat(next("FREQ=WEEKLY;BYDAY=WE", completion, "2026-11-04", LocalDate.of(2026, 11, 6)))
+			.isEqualTo("2026-11-11");
+		assertThat(next("FREQ=WEEKLY;BYDAY=WE", completion, null, tuesday)).isEqualTo("2026-11-04");
+		// A plain interval counts from the completion day only: three days after Sunday is the due Wednesday.
+		assertThat(next("FREQ=DAILY;INTERVAL=3", completion, "2026-11-04", LocalDate.of(2026, 11, 1)))
+			.isEqualTo("2026-11-04");
+		assertThat(next("FREQ=DAILY", completion, "2026-11-04", tuesday)).isEqualTo("2026-11-04");
+	}
+
+	@Test
 	void timesAreKept() {
 		assertThat(next("FREQ=DAILY", RecurrenceFrom.DUE, "2026-10-14T09:30", WEDNESDAY))
 			.isEqualTo("2026-10-15T09:30");

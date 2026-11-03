@@ -14,6 +14,8 @@ const SUPPORTED = new Set<Frequency>([Frequency.YEARLY, Frequency.MONTHLY, Frequ
 /** The parts of the server's subset (Recurrence.PARTS). */
 const PARTS = new Set(['FREQ', 'INTERVAL', 'COUNT', 'UNTIL', 'BYDAY', 'BYMONTHDAY', 'BYMONTH', 'BYYEARDAY', 'BYWEEKNO', 'BYSETPOS', 'WKST', 'BYHOUR', 'BYMINUTE']);
 const FREQUENCIES = new Set(['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY']);
+/** The parts that set the days a rule falls on (Recurrence.SET_DAYS). */
+const SET_DAYS = ['BYDAY', 'BYMONTHDAY', 'BYMONTH', 'BYYEARDAY', 'BYWEEKNO', 'BYSETPOS'];
 const NUMBER = /^[1-9][0-9]{0,4}$/;
 const UNTIL = /^(\d{8})(T\d{6}Z?)?$/;
 const MAX_LENGTH = 300;
@@ -344,7 +346,8 @@ export function ruleFromDraft(d: RuleDraft): string {
 /**
  * The occurrence after the one being completed, mirrored from the server (API.md §20.6,
  * `Recurrence.next`): null when the rule has no more (the task closes), undefined when the rule
- * cannot be evaluated here. `anchor` is the due date, else the start date.
+ * cannot be evaluated here. `anchor` is the due date, else the start date. A rule on set days
+ * counted from completion never lands on or before the anchor (ticked early, it moves on).
  */
 export function nextOccurrence(rrule: string, from: 'due' | 'completion', anchor: TaskDate | null, completionDay: LocalDate): { value: TaskDate; rrule: string } | null | undefined {
   let parts: Map<string, string>;
@@ -363,9 +366,10 @@ export function nextOccurrence(rrule: string, from: 'due' | 'completion', anchor
   const fromDue = from === 'due' && anchor !== null;
   const start = utcOf(fromDue ? anchor : timed ? `${completionDay}T${timePart(anchor)}` : completionDay);
   const earliest = fromDue ? utcOf(addDays(completionDay, 1)) : null;
+  const floor = !fromDue && anchor !== null && SET_DAYS.some((p) => parts.has(p)) ? utcOf(anchor) : null;
   try {
     const rule = evaluator(parts, start, timed);
-    const next = earliest && earliest > start ? rule.after(earliest, true) : rule.after(start, false);
+    const next = earliest && earliest > start ? rule.after(earliest, true) : rule.after(floor && floor > start ? floor : start, false);
     if (!next) return null;
     if (until && dateOf(next) > until) return null;
     if (count !== null) parts.set('COUNT', String(count - 1));

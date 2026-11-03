@@ -3271,7 +3271,7 @@ Rules are evaluated on local dates and times, so daylight-saving changes never s
 | `from` | The next occurrence is |
 |---|---|
 | `due` | The first occurrence after the task's `due` (else `start`) date that also falls after the completion day. Completing an overdue task therefore skips the occurrences already missed: a weekly Wednesday task three weeks late moves to the next Wednesday. |
-| `completion` | The first occurrence after the completion day, at the task's time if it has one: `FREQ=DAILY;INTERVAL=3` means "three days after I last did it". |
+| `completion` | The first occurrence after the completion day, at the task's time if it has one: `FREQ=DAILY;INTERVAL=3` means "three days after I last did it". A rule on set days (`BYDAY`, `BYMONTHDAY`, `BYMONTH`, `BYYEARDAY`, `BYWEEKNO` or `BYSETPOS`) also skips the occurrences up to the task's `due` (else `start`): `FREQ=WEEKLY;BYDAY=WE` due Wednesday 2026-11-04 and completed the day before moves to 2026-11-11, never to the occurrence being completed. |
 
 Examples, completed on Wednesday 2026-10-14: `FREQ=WEEKLY` from `due` `2026-10-14T08:00` gives `2026-10-21T08:00`; `FREQ=MONTHLY;BYMONTHDAY=-1` from `due` `2026-09-30` gives `2026-10-31`; `FREQ=MONTHLY` from `due` `2026-01-31` skips months without a 31st, as RFC 5545 says.
 

@@ -40,6 +40,10 @@ final class Recurrence {
 
 	private static final Set<String> FREQUENCIES = Set.of("DAILY", "WEEKLY", "MONTHLY", "YEARLY");
 
+	/** The parts that set the days a rule falls on (as against counting them from its start). */
+	private static final Set<String> SET_DAYS = Set.of("BYDAY", "BYMONTHDAY", "BYMONTH", "BYYEARDAY", "BYWEEKNO",
+			"BYSETPOS");
+
 	private static final Pattern NUMBER = Pattern.compile("[1-9][0-9]{0,4}");
 
 	private static final Pattern UNTIL = Pattern.compile("(\\d{8})(T\\d{6}Z?)?");
@@ -108,7 +112,9 @@ final class Recurrence {
 	 * {@code anchor} is the task's due date, or its start date when it has no due date, or null. Counting from the due
 	 * date, the next occurrence is the first one after the anchor that falls after the completion day, so completing
 	 * an overdue task skips the occurrences already missed; counting from completion, it is the first one after the
-	 * completion day (at the anchor's time, if it has one).
+	 * completion day (at the anchor's time, if it has one). A rule on set days ({@code BYDAY}, {@code BYMONTHDAY}, ...)
+	 * counted from completion also skips the occurrences up to the anchor: ticked the day before its due Wednesday, a
+	 * weekly Wednesday task moves to the next Wednesday, never to the one being completed.
 	 * <p>
 	 * A rule from a file edited by hand is not always one {@link #normalize} would store: an {@code INTERVAL} or
 	 * {@code COUNT} that is not a whole number from 1 to 99999 cannot be evaluated (lib-recur's lax mode would read
@@ -137,14 +143,20 @@ final class Recurrence {
 			LocalDateTime start = fromDue ? TaskDates.dateTime(anchor)
 					: TaskDates.dateTime(TaskDates.withTimeOf(completionDay, anchor));
 			LocalDate earliest = fromDue ? completionDay.plusDays(1) : null;
+			LocalDateTime floor = (!fromDue && anchor != null && parts.keySet().stream().anyMatch(SET_DAYS::contains))
+					? TaskDates.dateTime(anchor) : null;
 			RecurrenceRule rule = new RecurrenceRule(join(parts), RecurrenceRule.RfcMode.RFC5545_LAX);
 			RecurrenceRuleIterator iterator = rule.iterator(toDateTime(start, timed));
 			if (earliest != null && earliest.isAfter(start.toLocalDate())) {
 				iterator.fastForward(toDateTime(earliest.atStartOfDay(), timed));
 			}
+			else if (floor != null && floor.isAfter(start)) {
+				iterator.fastForward(toDateTime(floor, timed));
+			}
 			for (int i = 0; i < MAX_STEPS && iterator.hasNext(); i++) {
 				LocalDateTime occurrence = toLocal(iterator.nextDateTime());
-				if (!occurrence.isAfter(start) || (earliest != null && occurrence.toLocalDate().isBefore(earliest))) {
+				if (!occurrence.isAfter(start) || (earliest != null && occurrence.toLocalDate().isBefore(earliest))
+						|| (floor != null && !occurrence.isAfter(floor))) {
 					continue;
 				}
 				if (until != null && occurrence.toLocalDate().isAfter(until)) {
