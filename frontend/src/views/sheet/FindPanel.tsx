@@ -19,7 +19,8 @@ interface Props {
   editable: boolean;
   /** Open with Replace showing (Mod-H). */
   replace: boolean;
-  onGo(match: FindMatch): void;
+  /** Selects a match; returns the cell it selected (another one when a filter hides the match's row). */
+  onGo(match: FindMatch): FindMatch | void;
   onClose(): void;
 }
 
@@ -38,6 +39,8 @@ export function FindPanel({ workbook, version, sheetId, active, editable, replac
   const [replacing, setReplacing] = useState(startReplacing && editable);
   const [opts, setOpts] = useState<Omit<FindOptions, 'query'>>({});
   const [current, setCurrent] = useState<number | null>(null);
+  /** The match the panel went to last, and the cell that selected (they differ in a hidden row). */
+  const [landed, setLanded] = useState<{ match: Position; at: Position } | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const options: FindOptions = { ...opts, query };
   const broken = query !== '' && findPattern(options) === null;
@@ -56,11 +59,22 @@ export function FindPanel({ workbook, version, sheetId, active, editable, replac
     input.current?.select();
   }, []);
 
+  const here = position(order, active);
+  /** Whether the active cell is the counted match: the match itself, or where going to it landed. */
+  const on =
+    index !== null &&
+    (compare(position(order, matches[index]), here) === 0 ||
+      (landed !== null && compare(landed.match, position(order, matches[index])) === 0 && compare(landed.at, here) === 0));
+
+  const goTo = (list: FindMatch[], i: number) => {
+    setCurrent(i);
+    const at = onGo(list[i]);
+    setLanded({ match: position(order, list[i]), at: position(order, at ?? list[i]) });
+  };
+
   /** Goes to the next (or previous) match from the active cell, wrapping around. */
   const go = (step: 1 | -1) => {
     if (matches.length === 0) return;
-    const here = position(order, active);
-    const on = index !== null && compare(position(order, matches[index]), here) === 0;
     let i: number;
     if (on && index !== null) i = (index + step + matches.length) % matches.length;
     else if (step === 1) {
@@ -71,19 +85,27 @@ export function FindPanel({ workbook, version, sheetId, active, editable, replac
       while (i >= 0 && compare(position(order, matches[i]), here) >= 0) i--;
       if (i < 0) i = matches.length - 1;
     }
-    setCurrent(i);
-    onGo(matches[i]);
+    goTo(matches, i);
   };
 
   const replaceOne = () => {
-    if (index === null || compare(position(order, matches[index]), position(order, active)) !== 0) {
+    if (index === null || !on) {
       go(1);
       return;
     }
+    const replaced = position(order, matches[index]);
     const edit = replaceEdit(workbook.file, matches[index], options, replacement);
     if (edit) workbook.setCells([edit]);
     else toast('This cell shows a formula’s result: search within formulas to replace in its formula.');
-    go(1);
+    // On to the first match after the replaced cell among the matches that are left, wrapping around.
+    const left = findMatches(workbook.file, sheetId, options);
+    if (left.length === 0) {
+      setCurrent(null);
+      setLanded(null);
+      return;
+    }
+    const i = left.findIndex((m) => compare(position(order, m), replaced) > 0);
+    goTo(left, i < 0 ? 0 : i);
   };
 
   const replaceAll = () => {
