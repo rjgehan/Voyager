@@ -14,6 +14,7 @@ import { cpSync, existsSync, mkdirSync, openSync, readFileSync, rmSync } from 'n
 import { connect } from 'node:net';
 import { join } from 'node:path';
 import { findJar, frontendIsStale, jarIsStale } from './builds.mjs';
+import { serverArgs as launchArgs } from './launch.mjs';
 import { API_PORT, E2E_LOGIN, ROOT, RUN, WEB_PORT, recordPids, stopRecorded, writeEnv } from './stack.mjs';
 
 const args = new Set(process.argv.slice(2));
@@ -24,9 +25,6 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const API_URL = `http://127.0.0.1:${API_PORT}`;
 const WEB_URL = prod ? `http://localhost:${API_PORT}` : `http://localhost:${WEB_PORT}`;
-// The hosts the browser and the suite use. Vite's proxy keeps the browser's Host, so the Vite
-// origin must be allowed too.
-const ALLOWED_HOSTS = [`localhost:${WEB_PORT}`, `127.0.0.1:${WEB_PORT}`, `localhost:${API_PORT}`, `127.0.0.1:${API_PORT}`];
 
 function run(cmd, cmdArgs, cwd, env = {}) {
   console.log(`> ${cmd} ${cmdArgs.join(' ')}   (in ${cwd})`);
@@ -133,20 +131,7 @@ console.log('Wiping the scratch vaults...');
 for (const d of ['vault', 'vaults', 'publish', 'web']) rmSync(join(RUN, d), { recursive: true, force: true });
 for (const d of ['vault', 'vaults', 'publish']) mkdirSync(join(RUN, d), { recursive: true });
 
-const serverArgs = [
-  '--spring.profiles.active=dev',
-  `--server.port=${API_PORT}`,
-  '--server.address=127.0.0.1',
-  `--notes.vault-dir=${join(RUN, 'vault')}`,
-  `--notes.vaults.dir=${join(RUN, 'vaults')}`,
-  `--notes.publish.dir=${join(RUN, 'publish')}`,
-  `--notes.allowed-hosts=${ALLOWED_HOSTS.join(',')}`,
-  '--notes.identity.allow-default=true',
-  `--notes.identity.allowed-logins=${E2E_LOGIN}`,
-  '--notes.security.require-tailscale-interface=false',
-  '--notes.git.commit-quiet-period=2s',
-  '--logging.level.com.rjgehan.notes=INFO',
-];
+const serverArgs = launchArgs({ platform: process.platform, apiPort: API_PORT, webPort: WEB_PORT, run: RUN, login: E2E_LOGIN, join });
 
 const pids = [];
 const backendLog = join(RUN, 'backend.log');
