@@ -6,12 +6,13 @@
 // bookmarklet's page keeps its handle on the window.
 import { CircleCheck, ClipboardPaste, NotebookText, Scissors } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState, type ClipboardEvent, type FormEvent } from 'react';
-import { errorMessage } from '../../api/client';
 import { api } from '../../api/endpoints';
 import { useTree, useVaultSettings } from '../../api/hooks';
 import {
   announceReady,
   announceResult,
+  clipErrorMessage,
+  clipKeys,
   fragmentInfo,
   loadClipper,
   parseClipMessage,
@@ -39,6 +40,8 @@ interface Ready {
   folder: string;
   autoSave: boolean;
   source: ReceivedClip['source'];
+  /** The clip's Idempotency-Keys, kept for every Save of it (clipKeys). */
+  key(part: string): string;
 }
 
 type State =
@@ -95,11 +98,11 @@ export function ClipPage() {
   const save = async (ready: Ready, c: NotesClipper, name: string, dir: string) => {
     setState({ phase: 'saving', ready });
     try {
-      const result = await saveClip(ready.clip, ready.images, { folder: dir, basename: name, created: c.localDate(), newKey: newIdempotencyKey }, c, api);
+      const result = await saveClip(ready.clip, ready.images, { folder: dir, basename: name, created: c.localDate(), key: ready.key }, c, api);
       setState({ phase: 'saved', path: result.file.path });
       if (ready.source === 'extension') announceResult({ status: 'saved', path: result.file.path });
     } catch (e) {
-      const message = errorMessage(e);
+      const message = clipErrorMessage(e);
       setState({ phase: 'failed', message, ready });
       if (ready.source === 'extension') announceResult({ status: 'failed', error: message });
     }
@@ -119,6 +122,7 @@ export function ClipPage() {
       folder: r.kind === 'clip' && r.folder !== null ? r.folder : c.defaultFolder,
       autoSave: r.kind === 'clip' && r.autoSave,
       source: r.source,
+      key: clipKeys(newIdempotencyKey),
     };
     const name = c.noteBasename(clip.title);
     setBasename(name);

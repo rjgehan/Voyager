@@ -3,6 +3,7 @@
 // through the ordinary same-origin API (POST /api/attachments, then POST /api/files), so the CSRF
 // rules of API.md §2 apply unchanged. The extraction code is the clipper's own build
 // (`clipper/`), served at /clipper/clipper.js and loaded on demand.
+import { errorMessage, isTransient } from '../api/client';
 import type { AttachmentResult, WriteResult } from '../api/types';
 
 export const READY_MESSAGE = 'notesapp-clip-ready';
@@ -200,7 +201,27 @@ export interface SaveOptions {
   basename: string;
   /** `YYYY-MM-DD` on this device. */
   created: string;
-  newKey(): string;
+  /** The Idempotency-Key of one part of the clip (`image <n>`, `note`); see `clipKeys`. */
+  key(part: string): string;
+}
+
+/**
+ * One Idempotency-Key per part of a clip (each image, the note), the same on every Save of that
+ * clip: when a response was lost, Save again gets the stored result instead of a second note
+ * (`Title 1.md`) and second copies of the images (API.md §2).
+ */
+export function clipKeys(newKey: () => string): (part: string) => string {
+  const keys = new Map<string, string>();
+  return (part) => {
+    let key = keys.get(part);
+    if (key === undefined) keys.set(part, (key = newKey()));
+    return key;
+  };
+}
+
+/** What a failed save says: nothing of a clip is kept on the device, unlike a note's edits. */
+export function clipErrorMessage(e: unknown): string {
+  return isTransient(e) ? 'Not saved: the server could not be reached. Keep this page open and press Save again.' : errorMessage(e);
 }
 
 /**
@@ -211,16 +232,16 @@ export interface SaveOptions {
 export async function saveClip(clip: Clip, images: ClipImage[], options: SaveOptions, clipper: NotesClipper, api: ClipApi): Promise<WriteResult> {
   const planned = clipper.composeNote(clip, { folder: options.folder, basename: options.basename, created: options.created });
   let markdown = clip.markdown;
-  for (const image of images) {
+  for (const [i, image] of images.entries()) {
     try {
-      const uploaded = await api.uploadAttachment(image.name, planned.path, base64Blob(image.data, image.type), { idempotencyKey: options.newKey() });
+      const uploaded = await api.uploadAttachment(image.name, planned.path, base64Blob(image.data, image.type), { idempotencyKey: options.key(`image ${i}`) });
       markdown = clipper.replaceImage(markdown, image.url, uploaded.markdown);
     } catch {
       // Left as a link.
     }
   }
   const req = markdown === clip.markdown ? planned : clipper.composeNote({ ...clip, markdown }, { folder: options.folder, basename: options.basename, created: options.created });
-  return api.createFile(req, { idempotencyKey: options.newKey() });
+  return api.createFile(req, { idempotencyKey: options.key('note') });
 }
 
 /** In the built bookmarklet, the app's origin is this placeholder (clipper/src/web/bookmarklet.ts). */

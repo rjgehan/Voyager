@@ -90,8 +90,7 @@ describe('saveClip', () => {
         return { file: entry('Clippings/Mine 1.md'), created: true, createdFolders: [] };
       }),
     };
-    const keys = ['k1', 'k2'];
-    const result = await saveClip(CLIP, [{ url: 'https://cdn.example.com/p.png', name: 'p.png', type: 'image/png', data: btoa('abc') }], { folder: 'Clippings', basename: 'Mine', created: '2026-10-21', newKey: () => keys.shift()! }, fakeClipper, api);
+    const result = await saveClip(CLIP, [{ url: 'https://cdn.example.com/p.png', name: 'p.png', type: 'image/png', data: btoa('abc') }], { folder: 'Clippings', basename: 'Mine', created: '2026-10-21', key: (part) => (part === 'note' ? 'k2' : part === 'image 0' ? 'k1' : 'other') }, fakeClipper, api);
     expect(result.file.path).toBe('Clippings/Mine 1.md');
     expect(calls).toEqual(['upload p.png for Clippings/Mine.md (3 bytes, image/png)', 'create Clippings/Mine.md']);
     expect(api.createFile.mock.calls[0][0].content).toContain('Text ![[p.png]] more ![[p.png]]');
@@ -106,7 +105,7 @@ describe('saveClip', () => {
       }),
       createFile: vi.fn(async (_req: { path: string; content: string }): Promise<WriteResult> => ({ file: entry('Clippings/A page.md'), created: true, createdFolders: [] })),
     };
-    await saveClip(CLIP, [{ url: 'https://cdn.example.com/p.png', name: 'p.png', type: 'image/png', data: btoa('abc') }], { folder: 'Clippings', basename: 'A page', created: '2026-10-21', newKey: () => 'k' }, fakeClipper, api);
+    await saveClip(CLIP, [{ url: 'https://cdn.example.com/p.png', name: 'p.png', type: 'image/png', data: btoa('abc') }], { folder: 'Clippings', basename: 'A page', created: '2026-10-21', key: () => 'k' }, fakeClipper, api);
     expect(api.createFile.mock.calls[0][0]).toMatchObject({ path: 'Clippings/A page.md', onConflict: 'rename' });
     expect(api.createFile.mock.calls[0][0].content).toContain('![pic](https://cdn.example.com/p.png)');
   });
