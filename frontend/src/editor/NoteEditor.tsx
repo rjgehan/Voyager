@@ -15,7 +15,8 @@ import { renderLiveEmbed, renderLiveProperties } from '../render/liveEmbeds';
 import { renderLiveMarkdown, renderLiveMath } from '../render/liveRich';
 import { usePrefs } from '../state/prefs';
 import type { DocumentSession } from '../sync/DocumentSession';
-import { clearActiveEditor, setActiveEditor } from './activeEditor';
+import { activeEditor, clearActiveEditor, setActiveEditor } from './activeEditor';
+import { tableCellHost } from './livePreview/table/facets';
 // The palette's editor commands (extensions/builtins.ts) run from here once an editor exists.
 import './kit';
 import { vaultChanged, type NoteContext } from './context';
@@ -56,9 +57,17 @@ export function NoteEditor({ session, readOnly, preview, extensions = noteExtens
     paneActiveRef.current = paneActive;
   });
 
-  // The pane became active: its editor is the one palette commands and the toolbar act on.
+  // The pane became active: its editor is the one palette commands and the toolbar act on. When
+  // another pane becomes active, this editor (or a table cell being edited in it) stops being the
+  // active one, so a pane without an editor (a board, a sheet, a PDF) never sends them here.
   useLayoutEffect(() => {
-    if (paneActive && view.current) setActiveEditor(view.current);
+    const v = view.current;
+    if (!v) return;
+    if (paneActive) setActiveEditor(v);
+    else {
+      const active = activeEditor();
+      if (active === v || active?.state.facet(tableCellHost) === v) setActiveEditor(null);
+    }
   }, [paneActive]);
 
   useLayoutEffect(() => {
