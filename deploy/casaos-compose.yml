@@ -5,7 +5,7 @@
 # Before installing, once over SSH on the server (the app runs as uid 1000):
 #   sudo mkdir -p /DATA/AppData/notesapp/data && sudo chown -R 1000:1000 /DATA/AppData/notesapp/data
 # Replace homeserver.<tailnet>.ts.net below with the host's MagicDNS name (twice), and you@example.com with your
-# Tailscale login (required: nobody else is let in).
+# Tailscale login (required: you are the owner; any other login sees only what you share with it).
 # After installing, once (HTTPS on your tailnet with your Tailscale login passed to the app; survives reboots):
 #   sudo tailscale serve --bg --https=8443 http://127.0.0.1:18095
 # Then open https://homeserver.<tailnet>.ts.net:8443
@@ -35,8 +35,9 @@ services:
       SERVER_PORT: "18095"                      # tailscale serve proxies https://…:8443 to http://127.0.0.1:18095
       # The names the app answers to: the host's MagicDNS name, with and without the serve port.
       NOTES_ALLOWED_HOSTS: homeserver.<tailnet>.ts.net,homeserver.<tailnet>.ts.net:8443
-      # Required: your Tailscale login, the email the admin console shows (comma-separate several). Only these
-      # logins are let in; the placeholder lets nobody in.
+      # Required: your Tailscale login, the email the admin console shows (comma-separate several). These
+      # logins are the owners; every other login sees only what is shared with it, and the placeholder
+      # makes nobody an owner.
       NOTES_IDENTITY_ALLOWED_LOGINS: you@example.com
       NOTES_SECURITY_REQUIRE_TAILSCALE_INTERFACE: "false"   # Tailscale runs on the host, not in the container
       NOTES_TAILSCALE_WATCHDOG_ENABLED: "false"

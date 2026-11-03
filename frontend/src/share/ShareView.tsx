@@ -13,6 +13,7 @@ import { vaultChanged } from '../editor/context';
 import { noteExtensions, type EditorHooks } from '../editor/editorSetup';
 import { displayName, folderOf, joinPath, newNameError } from '../features/paths';
 import { isPhoneLayout, PHONE_QUERY } from '../features/platform';
+import { provideLinkHost } from '../sheets/links/pageHost';
 import { promptText } from '../state/dialogs';
 import { usePrefs } from '../state/prefs';
 import { toast } from '../state/toasts';
@@ -21,6 +22,7 @@ import type { DocumentSession } from '../sync/DocumentSession';
 import type { DocumentRegistry } from '../sync/documents';
 import { guestHref, parseGuestRoute } from './guestApi';
 import { guestNoteContext, type GuestEnv } from './guestContext';
+import { guestLinkHost } from './guestLinks';
 import { GuestSync, inShare, isGuestNote, type GuestState } from './guestSync';
 import { setTitle } from './page';
 import { LandingLink, Loading, Problem } from './parts';
@@ -327,6 +329,11 @@ export default function ShareView({ shareKey, path, navigate }: { shareKey: stri
   useEffect(() => {
     void sync.start();
     return () => sync.stop();
+  }, [sync]);
+  // Formulas read the share's files, never the owner's (before any editor: those wait for the share).
+  useLayoutEffect(() => {
+    provideLinkHost(() => guestLinkHost(sync));
+    return () => provideLinkHost(null);
   }, [sync]);
   const state = useSyncExternalStore(sync.subscribe, sync.getState);
   const tree = useSyncExternalStore(

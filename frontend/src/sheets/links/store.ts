@@ -13,11 +13,11 @@
 // `tables:<path>` (a note's computed tables), `sheet:<path>`, `query:<filter>`.
 import type { NotesQueryFilter } from '../../api/endpoints';
 import type { FileEntry, NotesQueryResponse, QueriedNote } from '../../api/types';
-import type { VaultTree } from '../../api/vaultTree';
+import { buildVaultTree, EMPTY_TREE, type VaultTree } from '../../api/vaultTree';
 import { resolve } from '../../features/links';
 import type { FormulaModel } from '../../formulas/model';
 import { parseSheet, type SheetFile } from '../format';
-import { appLinkHost } from './host';
+import { linkHostGeneration, pageLinkHost } from './pageHost';
 import { allFormulas, noteFormulas, type NoteFormulas } from './noteText';
 import { externalRefs, fileSheet, noteCalls } from './syntax';
 import type { LinkValue } from './values';
@@ -643,18 +643,44 @@ function errorText(e: unknown): string {
 
 // ---------- the page's store ----------
 
-let store: LinkStore | null = null;
-let hostFactory: () => LinkHost = appLinkHost;
+/** The store's host when the page provided none: no files, so references to other files show an error. */
+function noLinkHost(): LinkHost {
+  const unavailable = () => Promise.reject(new Error('Other files cannot be read here.'));
+  const tree = buildVaultTree(EMPTY_TREE);
+  return {
+    tree: () => tree,
+    onTreeChange: () => () => {},
+    queryNotes: unavailable,
+    readFile: unavailable,
+    openDocument: () => null,
+    tableComputer: unavailable,
+  };
+}
 
-/** The page's store: one vault per page (DESIGN §6.44), so one store. */
+let store: LinkStore | null = null;
+/** The generation of the page's host the store was made over (pageHost.ts). */
+let storeGeneration = -1;
+let testHost: LinkHost | null = null;
+
+/**
+ * The page's store: one vault per page (DESIGN §6.44), so one store, over what the page provided
+ * (the owner's vault or the guest page's share, pageHost.ts), and made again when that changes.
+ */
 export function linkStore(): LinkStore {
-  store ??= new LinkStore(hostFactory());
+  if (store && !testHost && storeGeneration !== linkHostGeneration()) {
+    store.destroy();
+    store = null;
+  }
+  if (!store) {
+    store = new LinkStore(testHost ?? pageLinkHost() ?? noLinkHost());
+    storeGeneration = linkHostGeneration();
+  }
   return store;
 }
 
-/** Starts the page's store afresh over `host` (tests), or over the app again. */
+/** Starts the page's store afresh over `host` (tests), or over what the page provided again. */
 export function resetLinkStore(host?: LinkHost): void {
   store?.destroy();
   store = null;
-  hostFactory = host ? () => host : appLinkHost;
+  testHost = host ?? null;
 }

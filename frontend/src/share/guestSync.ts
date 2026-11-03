@@ -15,6 +15,7 @@ import { clientId } from '../state/clientId';
 import { toast } from '../state/toasts';
 import { vaultKey } from '../state/vault';
 import { applyEvent, type SyncTarget } from '../sync/applyEvents';
+import type { DocumentSession } from '../sync/DocumentSession';
 import { DocumentRegistry } from '../sync/documents';
 import { IdbDraftStore, type DraftRecord, type DraftStore } from '../sync/drafts';
 import { MoveMap } from '../sync/moves';
@@ -117,6 +118,11 @@ export class GuestSync {
   get registry(): DocumentRegistry {
     if (!this.registryInstance) throw new Error('The share is not loaded yet');
     return this.registryInstance;
+  }
+
+  /** The session of `path` on this page, if any (none before the share has loaded). */
+  session(path: string): DocumentSession | undefined {
+    return this.registryInstance?.get(path);
   }
 
   /** Loads the share, then opens its event stream. */
