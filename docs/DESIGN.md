@@ -343,12 +343,17 @@ The app owns this file: it rewrites it at every startup, and it keeps its last s
 .notesapp-*.tmp
 .DS_Store
 Thumbs.db
+!Thumbs.db/
 *.swp
+!*.swp/
 *~
+!*~/
 # kept out of history, larger than 25 MB (ROADMAP item 23); kept current by NotesApp
 /Attachments/Holiday 2026.mp4
 /Scans/Contract \[signed].pdf
 ```
+
+The `!Thumbs.db/`, `!*.swp/` and `!*~/` lines un-ignore folders with those names: such folders are indexed (§5.9), so a note in `Drafts~/` gets history like any other, while a file named like a temp file inside it (`Drafts~/plan.md~`) stays out.
 
 The last section is the large-file policy (§5.8 *Large files*): one line per file over `notes.git.large-file-threshold`, rebuilt at startup and before every commit from the index and, for the hidden files and ignored names the index never sees, from the disk. Each line is anchored with a leading `/` and escapes `\`, `*`, `?`, `[` and trailing spaces, so it matches exactly one on-disk path (`Scan [1].pdf` never excludes `Scan 1.pdf`). With the threshold set to 0 the section is absent.
 
@@ -1840,7 +1845,7 @@ Cards are written in notes and parsed by the client (§6.34); nothing is ever wr
 
 - **The answers are the truth; the state is a cache.** A card's answers are a set keyed by their instant, so merging two devices' answers is a union: it commutes, and a retried request changes nothing. The FSRS state is what the answering client computed; the server keeps it only while it covers every answer (`n` and `lastReview`), and otherwise stores `null` for clients to recompute by replaying the answers (§6.34). Replaying every card on every load would cost about 30 µs per answer on a desktop (a second for 2,000 cards of 20 answers), so the cache matters on the phone.
 - **Server-owned operations, not file saves.** Every change (an answer, an undo, a prune, a settings change) is applied under one lock to the file as it is on disk, so two devices reviewing at once never meet a version conflict, and a client sends a few hundred bytes per answer instead of the whole file. The settings change field by field for the same reason. A write that changes nothing (a duplicate) is not written, committed or announced.
-- **Layout.** Written by hand for stable bytes: cards sorted by id, one answer per line, a card's state on one line, the settings sorted by key with only the fields that were set. An answer adds one line and changes one, so git diffs stay readable. Fields this build does not know are kept at every level; an entry that cannot be read is skipped with a WARN. When reading left anything out (the file is not JSON or not an object, `config` or `cards` is not an object, or a record cannot be read), the next write first keeps the file on disk as `srs.json.bak-<timestamp>` beside it, as settings and bookmarks do, so a hand edit or a sync tool's broken copy is never lost: `.notesapp/` is reserved for the history restore, so that copy is the only way back.
+- **Layout.** Written by hand for stable bytes: cards sorted by id, one answer per line, a card's state on one line, the settings sorted by key with only the fields that were set. An answer adds one line and changes one, so git diffs stay readable. Fields this build does not know are kept at every level; an entry that cannot be read is skipped with a WARN. When reading left anything out (the file is not JSON or not an object, `config` or `cards` is not an object, a record cannot be read, or a card has an answer line that cannot be read or a `reviews` that is not a list; the WARN names the card), the next write first keeps the file on disk as `srs.json.bak-<timestamp>` beside it, as settings and bookmarks do, so a hand edit or a sync tool's broken copy is never lost: `.notesapp/` is reserved for the history restore, so that copy is the only way back. A write that fails or is refused (`503 busy` while the startup import holds another author's batch, §5.8) leaves the server's copy of the file as the disk has it, so the client's retry writes the answer instead of being told it was saved.
 - **Reads.** The parsed file is cached with its blob id and read again when the bytes on disk differ (a hand edit, a history restore). `flashcards.changed` (API.md §34.7) carries the changed records, so an open page on another device updates without a refetch.
 - **Source notes.** `GET /api/flashcards/notes` takes the notes from the index: by tag (`TagIndex.notesWithTag`, nested tags included), or, with folder decks, every note with a card marker. Only the client parses them: it alone schedules, and one parser keeps the syntax in one language.
 - **Why not in the notes.** The Spaced Repetition plugin writes `<!--SR:!2026-10-25,3,250-->` after each card. Writing into notes from a review on the phone would put an open copy of the note on another device into conflict while the user types there, and those numbers are SM-2's, not FSRS's. Such comments in an imported vault are ignored (and hidden from the cards); their schedule is not imported.

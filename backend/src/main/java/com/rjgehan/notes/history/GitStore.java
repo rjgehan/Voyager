@@ -105,8 +105,11 @@ public class GitStore implements DisposableBean {
 			.notesapp-*.tmp
 			.DS_Store
 			Thumbs.db
+			!Thumbs.db/
 			*.swp
+			!*.swp/
 			*~
+			!*~/
 			""";
 
 	/** The header of the managed large-file section of {@code info/exclude}; the threshold follows it. */

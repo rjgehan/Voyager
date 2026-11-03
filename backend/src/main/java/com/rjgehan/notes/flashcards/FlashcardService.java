@@ -407,8 +407,10 @@ public class FlashcardService {
 					return new FlashcardWriteResult(cards, version);
 				}
 				Author author = Author.of(identity);
-				this.batcher.prepareWrite(author);
 				try {
+					// Inside the try: a 503 busy here must not leave the change in the cache, or its retry would
+					// find nothing to write and answer 200 without saving it.
+					this.batcher.prepareWrite(author);
 					Files.createDirectories(this.fs.resolve(FILE).getParent());
 					if (file.lossy) {
 						keepBackup();

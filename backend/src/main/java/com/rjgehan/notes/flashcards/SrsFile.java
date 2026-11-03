@@ -95,7 +95,7 @@ final class SrsFile {
 
 	/**
 	 * True when reading left something out (the file is not JSON or not an object, a section is not an object, or a
-	 * record cannot be read): the next write keeps the file beside it first, so a hand edit is never lost.
+	 * record or one of its answers cannot be read): the next write keeps the file beside it first, so a hand edit is never lost.
 	 */
 	boolean lossy;
 
@@ -141,8 +141,14 @@ final class SrsFile {
 				case "cards" -> {
 					if (field.getValue() instanceof ObjectNode cards) {
 						for (Map.Entry<String, JsonNode> entry : cards.properties()) {
-							Card card = (CARD_ID.matcher(entry.getKey()).matches()) ? parseCard(entry.getValue(), mapper)
-									: null;
+							List<String> skipped = new ArrayList<>();
+							Card card = (CARD_ID.matcher(entry.getKey()).matches())
+									? parseCard(entry.getValue(), mapper, skipped) : null;
+							if (card != null && !skipped.isEmpty()) {
+								logger.warn("{}: card {} has answers that cannot be read and are skipped: {}",
+										FlashcardService.FILE, entry.getKey(), skipped);
+								file.lossy = true;
+							}
 							if (card == null) {
 								logger.warn("{}: the record of card {} cannot be read and is skipped",
 										FlashcardService.FILE, entry.getKey());
@@ -164,7 +170,8 @@ final class SrsFile {
 		return file;
 	}
 
-	private static @Nullable Card parseCard(JsonNode node, JsonMapper mapper) {
+	/** Reads one card; answers it cannot read go to {@code skipped} (as JSON) so the caller can mark the file lossy. */
+	private static @Nullable Card parseCard(JsonNode node, JsonMapper mapper, List<String> skipped) {
 		if (!(node instanceof ObjectNode object)) {
 			return null;
 		}
@@ -182,7 +189,13 @@ final class SrsFile {
 							if (review != null) {
 								card.reviews.putIfAbsent(review.at(), review);
 							}
+							else {
+								skipped.add(item.toString());
+							}
 						}
+					}
+					else {
+						skipped.add(value.toString());
 					}
 				}
 				default -> card.extra.put(field.getKey(), value);
