@@ -61,8 +61,13 @@ function rememberReload(build: string, now: number): void {
   }
 }
 
-/** The reload into the new build (also the banner's Reload button). */
+/** The reload into the new build: the banner's Reload button. */
 export function reloadForNewBuild(): void {
+  startReload(false);
+}
+
+/** `automatic`: nothing was unsaved when the new build was seen, so no one asked for this reload. */
+function startReload(automatic: boolean): void {
   if (reloading) return;
   reloading = true;
   if (!prepare) {
@@ -71,7 +76,15 @@ export function reloadForNewBuild(): void {
   }
   void prepare()
     .catch(() => undefined)
-    .then(() => reloadPage());
+    .then(() => {
+      // Text may have been typed during the hand-over (up to 10 s): ask again before reloading.
+      if (automatic && anyUnsaved()) {
+        reloading = false;
+        useUi.getState().setNewBuildAvailable(true);
+        return;
+      }
+      reloadPage();
+    });
 }
 
 export function reportServerBuild(serverBuild: string | null | undefined, ownBuild: string = pageBuild): void {
@@ -85,7 +98,7 @@ export function handleNewBuild(serverBuild = 'unknown'): void {
   const now = Date.now();
   if (!anyUnsaved() && !reloadedRecentlyFor(serverBuild, now)) {
     rememberReload(serverBuild, now);
-    reloadForNewBuild();
+    startReload(true);
     return;
   }
   useUi.getState().setNewBuildAvailable(true);
