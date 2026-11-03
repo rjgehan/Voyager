@@ -220,6 +220,7 @@ notesapp/                              (monorepo, the GitHub repository's name; 
 | `.notesapp/searches.json.migrated` | The saved searches of an earlier build, kept after they became search bookmarks at startup (§5.17, API.md §12.4) | hidden | committed |
 | `.notesapp/trash.json` | Trash metadata (§5.7) | hidden | **excluded** |
 | `.notesapp/reminders.json` | The reminder scheduler's state: baseline, zone, delivered reminders, snoozes (§5.26) | hidden | **excluded** |
+| `.notesapp/ai-usage.json` | The AI spend per month, counts only (§5.25); kept in backups, unlike `cache/` | hidden | **excluded** |
 | `.notesapp/srs.json` | Flashcard answers, their cached FSRS state and the flashcard settings (§5.34) | hidden | committed |
 | `.notesapp/tmp/` | Staging area for every write (§5.4) and for purged trash items awaiting deletion (§5.7); emptied at startup | hidden | excluded |
 | `.notesapp/cache/` | Derived caches: `search-text/` holds the extracted text of PDFs (§5.5.10) | hidden | excluded |
@@ -336,6 +337,7 @@ The app owns this file: it rewrites it at every startup, and it keeps its last s
 .notesapp/tmp/
 .notesapp/trash.json
 .notesapp/reminders.json
+.notesapp/ai-usage.json
 .trash/
 .obsidian/workspace*.json
 .notesapp-*.tmp
@@ -500,7 +502,7 @@ The last section is the large-file policy (§5.8 *Large files*): one line per fi
 | | `WebPushCrypto`, `WebPushSender`, `PushStore` | RFC 8291 encryption and VAPID with JDK crypto, one push request, and `push.json` (the key pair and devices) in `notes.secrets-dir`. |
 | `ai` | `AiService`, `PromptBuilder`, `QueryTerms`, `Excerpts` | Ask your vault and summaries (ROADMAP item 18, §5.25): availability and budget checks, retrieval over the search index, the prompt with its caps and the rebuild of earlier turns, the stream of events. |
 | | `AiProviders`, `ClaudeGateway`, `ClaudeCodeGateway`, `AnthropicGateway`, `FakeGateway` | The two providers and one streamed answer: Claude Code run headless with the subscription (the default), the Messages API through the official SDK, or canned for development (`notes.ai.fake`). |
-| | `ApiKeyFile`, `UsageLedger`, `AiModels`, `AiProperties` | The credential files, the Claude Code token or the API key (read again when they change), the monthly spend in `.notesapp/cache/ai-usage.json`, the models and their prices, `notes.ai.*`. |
+| | `ApiKeyFile`, `UsageLedger`, `AiModels`, `AiProperties` | The credential files, the Claude Code token or the API key (read again when they change), the monthly spend in `.notesapp/ai-usage.json`, the models and their prices, `notes.ai.*`. |
 | `obsidian` | `ObsidianConfigReader`, `ObsidianConfig` | Reads `.obsidian/` (never writes it): app, daily-notes, templates, graph and plugin files (ROADMAP item 24, §5.23). |
 | | `ObsidianSettings` | Obsidian's settings in Voyager terms; the `SettingsSeed` of a first start. |
 | | `CompatScanner`, `CompatService`, `ObsidianPlugins` | The compatibility report of `GET /api/compat`. |
@@ -1693,7 +1695,7 @@ Questions about the notes answered by Claude with citations, summaries of a note
 **Privacy rules.**
 
 - Notes under `settings.ai.excludedPaths` (default `Private`) or `settings.files.excludedPaths` (the search exclusions) are never read for a request: retrieval skips them, a folder summary skips them (and counts them, so the panel can say so), an earlier turn's sources that became excluded are dropped, and naming one explicitly (a note, a folder, a selection's note) is refused with `403 ai-excluded` instead of being skipped silently. The suggested tags come only from tags used by notes that are not excluded.
-- The server keeps no conversation and no question. Conversations live on each device (§6.31); `.notesapp/cache/ai-usage.json` holds monthly counts only.
+- The server keeps no conversation and no question. Conversations live on each device (§6.31); `.notesapp/ai-usage.json` holds monthly counts only.
 - The log line has counts, never content (§5.18).
 - Note text inside the prompt is data: the system prompt says never to follow instructions found in a note, notes sit inside `<note>` elements whose closing tag cannot be forged from inside (`</note` is broken up), and the answer is rendered with the reading-view sanitizer (§6.7). An answer cannot write to the vault: the API has no tool use, and the panel only displays text.
 
@@ -1709,7 +1711,7 @@ Questions about the notes answered by Claude with citations, summaries of a note
 
 **Streaming to the browser.** `AiController` checks the request and builds the prompt before answering (so refusals are problem documents), then returns an `SseEmitter` and writes the answer from a virtual thread: `start`, `delta`…, `restart`, `done` or `error` (API.md §24.5). When the browser closes the stream (Stop, a closed tab), the next write fails, the exception leaves the gateway's stream loop, and closing the SDK stream cancels the upstream request, so nothing more is generated or paid for. At most `notes.ai.max-concurrent` (2) answers are written at once; another gets `error: busy`.
 
-**Spend guard** (`UsageLedger`, `AiModels`). Each request's cost is estimated from the usage the API reports at list prices (Sonnet 5.5 $2/$10, Opus 5.5 $4/$20, Haiku 5.5 $0.10/$0.50 per million input/output tokens, cache reads and writes priced separately; a fallback hop at its own model's price, an unknown model at the highest price) and added to the calendar month (server time zone) in `.notesapp/cache/ai-usage.json`: inside the volume, so it survives restarts and is in the backups, but excluded from git (§4.6), so it is never history or mirrored. A request whose stream the browser closed is counted too, estimated at four characters per token. Once the month reaches `settings.ai.monthlyBudgetUsd`, requests are refused with `429 ai-budget-exceeded` until the next month or a higher budget. The cap is a guard, not a hard limit: two requests in flight can each finish past it. Losing the file resets the month to zero.
+**Spend guard** (`UsageLedger`, `AiModels`). Each request's cost is estimated from the usage the API reports at list prices (Sonnet 5.5 $2/$10, Opus 5.5 $4/$20, Haiku 5.5 $0.10/$0.50 per million input/output tokens, cache reads and writes priced separately; a fallback hop at its own model's price, an unknown model at the highest price) and added to the calendar month (server time zone) in `.notesapp/ai-usage.json`: inside the volume and outside `.notesapp/cache/` (which backups skip), so it survives restarts and a restore, but excluded from git (§4.6), so it is never history or mirrored. Earlier builds kept it in `.notesapp/cache/`; that file is read when the new one is missing and removed once the new one is written (`UsageLedgerTest`). A request whose stream the browser closed is counted too, estimated at four characters per token. Once the month reaches `settings.ai.monthlyBudgetUsd`, requests are refused with `429 ai-budget-exceeded` until the next month or a higher budget. The cap is a guard, not a hard limit: two requests in flight can each finish past it. Losing the file resets the month to zero.
 
 **Per-request caps.** The question (4,000 characters), the context (`maxContextChars`, 60,000 by default, about 15,000 tokens), the history (50 turns sent, 12 used, answers of at most 100,000 characters), a selection (200,000 characters), the output (`max_tokens` 16,000) and the time (`notes.ai.timeout`, 5 minutes).
 

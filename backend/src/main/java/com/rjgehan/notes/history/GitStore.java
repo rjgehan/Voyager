@@ -99,6 +99,7 @@ public class GitStore implements DisposableBean {
 			.notesapp/tmp/
 			.notesapp/trash.json
 			.notesapp/reminders.json
+			.notesapp/ai-usage.json
 			.trash/
 			.obsidian/workspace*.json
 			.notesapp-*.tmp
