@@ -34,9 +34,10 @@ import org.springframework.stereotype.Component;
 
 /**
  * Batches autosaves into debounced commits (DESIGN §5.8): a commit is made once a path has been quiet for
- * {@code commit-quiet-period} or at most {@code commit-max-delay} after the first change. Each batch has one author;
- * {@link #prepareWrite} flushes the batch before a different author writes. Failed commits keep their paths pending
- * and are retried with backoff. The batcher stops after the web server has drained and flushes on the way out.
+ * {@code commit-quiet-period} or at most {@code commit-max-delay} after the first change. Each commit has one author:
+ * {@link #prepareWrite} flushes the batch before a different author writes, and every pending path remembers who
+ * changed it, so two authors whose writes interleave anyway are committed separately, each under their own name.
+ * Failed commits keep their paths pending and are retried with backoff. The batcher stops after the web server has drained and flushes on the way out.
  * <p>
  * Every commit is announced with {@code history.committed}. Inside an {@link Operation} the announcements wait until
  * the operation closes, so they follow the operation's content and trash events (API.md §16.2), including the commit
@@ -81,7 +82,8 @@ public class CommitBatcher implements SmartLifecycle {
 
 	private final Map<String, ApiPath> pending = new LinkedHashMap<>();
 
-	private @Nullable Author author;
+	/** Who changed each pending path (same keys as {@link #pending}); a flush makes one commit per author. */
+	private final Map<String, Author> authors = new LinkedHashMap<>();
 
 	/** The author of the batch {@link #flush} is committing right now, or null; guarded by {@link #state}. */
 	private @Nullable Author inFlightAuthor;
@@ -128,7 +130,12 @@ public class CommitBatcher implements SmartLifecycle {
 
 	// ---------------------------------------------------------------- batch
 
-	/** Records a changed path; whether it is added or removed is decided at commit time. */
+	/**
+	 * Records a changed path; whether it is added or removed is decided at commit time. An app author's change is
+	 * committed under their name even when another author's batch is pending (their {@link #prepareWrite} and this
+	 * call are not atomic with another writer's); an External change on a path with a pending app edit is committed
+	 * under that app author (best-effort, DESIGN §5.8).
+	 */
 	public void markDirty(ApiPath path, Author changeAuthor) {
 		if (!this.git.isEnabled()) {
 			return;
@@ -137,11 +144,24 @@ public class CommitBatcher implements SmartLifecycle {
 			Instant now = this.clock.instant();
 			if (this.pending.isEmpty()) {
 				this.firstDirtyAt = now;
-				this.author = changeAuthor;
 			}
 			this.pending.put(path.nfc(), path);
+			Author previous = this.authors.get(path.nfc());
+			if (previous == null || !Author.EXTERNAL.equals(changeAuthor)) {
+				this.authors.put(path.nfc(), changeAuthor);
+			}
 			this.lastDirtyAt = now;
 		}
+	}
+
+	/** Some pending path was changed by an author other than {@code writer}; call holding {@link #state}. */
+	private boolean pendingByOther(Author writer) {
+		for (Author pathAuthor : this.authors.values()) {
+			if (!pathAuthor.equals(writer)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**
@@ -155,7 +175,7 @@ public class CommitBatcher implements SmartLifecycle {
 			boolean otherPending;
 			boolean otherInFlight;
 			synchronized (this.state) {
-				otherPending = !this.pending.isEmpty() && this.author != null && !this.author.equals(writer);
+				otherPending = pendingByOther(writer);
 				otherInFlight = this.inFlightAuthor != null && !this.inFlightAuthor.equals(writer);
 			}
 			if (otherPending) {
@@ -233,31 +253,44 @@ public class CommitBatcher implements SmartLifecycle {
 	public GitStore.@Nullable Commit flush() {
 		this.commitLock.lock();
 		try {
-			List<ApiPath> paths;
-			Author batchAuthor;
+			// One commit per author, in the order they first changed a path; usually there is only one.
+			Map<Author, List<ApiPath>> byAuthor = new LinkedHashMap<>();
 			synchronized (this.state) {
 				if (this.pending.isEmpty() || this.importing || !this.git.isEnabled()) {
 					return null;
 				}
-				paths = new ArrayList<>(this.pending.values());
-				batchAuthor = (this.author != null) ? this.author : Author.EXTERNAL;
+				for (ApiPath path : this.pending.values()) {
+					Author pathAuthor = this.authors.getOrDefault(path.nfc(), Author.EXTERNAL);
+					byAuthor.computeIfAbsent(pathAuthor, (key) -> new ArrayList<>()).add(path);
+				}
 				clearPending();
-				this.inFlightAuthor = batchAuthor;
 			}
-			GitStore.Commit commit;
-			try {
-				commit = commitPaths(paths, (changes) -> batchMessage(changes, batchAuthor), batchAuthor);
+			GitStore.Commit last = null;
+			List<Map.Entry<Author, List<ApiPath>>> groups = new ArrayList<>(byAuthor.entrySet());
+			for (int i = 0; i < groups.size(); i++) {
+				Author batchAuthor = groups.get(i).getKey();
+				List<ApiPath> paths = groups.get(i).getValue();
+				synchronized (this.state) {
+					this.inFlightAuthor = batchAuthor;
+				}
+				GitStore.Commit commit;
+				try {
+					commit = commitPaths(paths, (changes) -> batchMessage(changes, batchAuthor), batchAuthor);
+				}
+				catch (Exception ex) {
+					for (int j = groups.size() - 1; j >= i; j--) {
+						addPending(groups.get(j).getValue(), groups.get(j).getKey());
+					}
+					failed(ex);
+					throw new CommitFailedException(ex);
+				}
+				succeeded();
+				if (commit != null) {
+					announce(commit);
+					last = commit;
+				}
 			}
-			catch (Exception ex) {
-				addPending(paths, batchAuthor);
-				failed(ex);
-				throw new CommitFailedException(ex);
-			}
-			succeeded();
-			if (commit != null) {
-				announce(commit);
-			}
-			return commit;
+			return last;
 		}
 		finally {
 			synchronized (this.state) {
@@ -492,32 +525,38 @@ public class CommitBatcher implements SmartLifecycle {
 
 	private void clearPending() {
 		this.pending.clear();
-		this.author = null;
+		this.authors.clear();
 		this.firstDirtyAt = null;
 		this.lastDirtyAt = null;
 	}
 
 	/**
-	 * Adds paths back to the batch (a failed commit), keeping anything marked dirty meanwhile. A batch has one author:
-	 * when the paths marked dirty meanwhile are External changes, the app author of the failed paths takes the batch,
-	 * because External attribution is best-effort (DESIGN §5.8) while an app author's edit must keep its name.
+	 * Adds paths back to the batch (a failed commit), ahead of anything marked dirty meanwhile, each keeping its
+	 * author. A path changed meanwhile keeps its newer app author; when only an External change touched it meanwhile,
+	 * the failed path's app author keeps it, because External attribution is best-effort (DESIGN §5.8) while an app
+	 * author's edit must keep its name.
 	 */
 	private void addPending(Collection<ApiPath> paths, Author pathsAuthor) {
 		synchronized (this.state) {
 			Instant now = this.clock.instant();
 			if (this.pending.isEmpty()) {
-				this.author = pathsAuthor;
 				this.firstDirtyAt = now;
 				this.lastDirtyAt = now;
 			}
-			else if (Author.EXTERNAL.equals(this.author) && !Author.EXTERNAL.equals(pathsAuthor)) {
-				this.author = pathsAuthor;
-			}
 			Map<String, ApiPath> merged = new LinkedHashMap<>();
-			paths.forEach((path) -> merged.put(path.nfc(), path));
-			merged.putAll(this.pending);
+			Map<String, Author> mergedAuthors = new LinkedHashMap<>();
+			for (ApiPath path : paths) {
+				merged.put(path.nfc(), path);
+				Author meanwhile = this.authors.get(path.nfc());
+				mergedAuthors.put(path.nfc(),
+						(meanwhile != null && !Author.EXTERNAL.equals(meanwhile)) ? meanwhile : pathsAuthor);
+			}
+			this.pending.forEach(merged::put);
+			this.authors.forEach(mergedAuthors::putIfAbsent);
 			this.pending.clear();
 			this.pending.putAll(merged);
+			this.authors.clear();
+			this.authors.putAll(mergedAuthors);
 		}
 	}
 

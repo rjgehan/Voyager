@@ -160,6 +160,65 @@ class CommitBatcherTest {
 		assertThat(retried.author().name()).isEqualTo("Alice");
 	}
 
+	private String committedText(String path) throws Exception {
+		return new String(this.vault.git.readAt(commits(path).get(0).name(), path).bytes(), StandardCharsets.UTF_8);
+	}
+
+	@Test
+	void twoAuthorsWritingAtOnceAreEachCommittedUnderTheirOwnName() throws Exception {
+		write("A.md", "a0");
+		write("G.md", "g0");
+		this.vault.flush();
+		// Two request threads on different path stripes: both see an empty batch, then Bob's write lands first.
+		this.batcher.prepareWrite(Author.of(TestVault.ALICE));
+		this.batcher.prepareWrite(Author.of(TestVault.BOB));
+		Files.writeString(this.dir.resolve("G.md"), "bob edit");
+		this.batcher.markDirty(this.vault.path("G.md"), Author.of(TestVault.BOB));
+		Files.writeString(this.dir.resolve("A.md"), "alice edit");
+		this.batcher.markDirty(this.vault.path("A.md"), Author.of(TestVault.ALICE));
+		this.vault.flush();
+
+		assertThat(commits("A.md").get(0).getAuthorIdent().getName()).isEqualTo("Alice");
+		assertThat(committedText("A.md")).isEqualTo("alice edit");
+		assertThat(commits("G.md").get(0).getAuthorIdent().getName()).isEqualTo("Bob");
+		assertThat(committedText("G.md")).isEqualTo("bob edit");
+		assertThat(commits("A.md").get(0).name()).isNotEqualTo(commits("G.md").get(0).name());
+	}
+
+	@Test
+	void anAppEditNeverJoinsABatchOfExternalChanges() throws Exception {
+		write("A.md", "a0");
+		write("X.md", "x0");
+		this.vault.flush();
+		Files.writeString(this.dir.resolve("X.md"), "edited elsewhere");
+		this.batcher.markDirty(this.vault.path("X.md"), Author.EXTERNAL);
+		Files.writeString(this.dir.resolve("A.md"), "alice edit");
+		this.batcher.markDirty(this.vault.path("A.md"), Author.of(TestVault.ALICE));
+		this.vault.flush();
+
+		assertThat(commits("A.md").get(0).getAuthorIdent().getName()).isEqualTo("Alice");
+		assertThat(commits("X.md").get(0).getAuthorIdent().getName()).isEqualTo("External");
+	}
+
+	@Test
+	void aFailedCommitNeverMergesTwoAuthors() throws Exception {
+		write("A.md", "a0");
+		write("G.md", "g0");
+		this.vault.flush();
+		Files.writeString(this.dir.resolve("G.md"), "bob edit");
+		this.batcher.markDirty(this.vault.path("G.md"), Author.of(TestVault.BOB));
+		this.vault.git.failing = true;
+		// Alice's write: prepareWrite cannot commit Bob's batch, which stays pending.
+		this.batcher.prepareWrite(Author.of(TestVault.ALICE));
+		Files.writeString(this.dir.resolve("A.md"), "alice edit");
+		this.batcher.markDirty(this.vault.path("A.md"), Author.of(TestVault.ALICE));
+		this.vault.git.failing = false;
+		this.vault.flush();
+
+		assertThat(commits("A.md").get(0).getAuthorIdent().getName()).isEqualTo("Alice");
+		assertThat(commits("G.md").get(0).getAuthorIdent().getName()).isEqualTo("Bob");
+	}
+
 	@Test
 	void aTickNeverThrowsSoTheTickerIsNeverCancelled() throws Exception {
 		write("x.md", "x");
