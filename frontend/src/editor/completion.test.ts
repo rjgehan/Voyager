@@ -251,6 +251,23 @@ describe('block completion (item 20)', () => {
     expect(view.state.doc.toString()).toBe('![[Projects/Plan#^given1]]');
   });
 
+  it('[[#^ in a table cell lists the note’s blocks and gives the note’s block the new id', async () => {
+    const note = makeView('# Plan\n\nAlpha idea ^alpha\n\nBeta idea\n\n| a |\n|---|\n| b |', 0);
+    const cell = new EditorView({
+      state: EditorState.create({ doc: '[[#^', selection: EditorSelection.cursor(4), extensions: [noteContext.of(context()), tableCellHost.of(note), cellLanguage] }),
+    });
+    views.push(cell);
+    const result = (await headingSource(new CompletionContext(cell.state, 4, false))) as CompletionResult;
+    expect(result.options.map((o) => o.label)).toEqual(expect.arrayContaining(['Plan', 'Alpha idea', 'Beta idea']));
+    expect(result.options.find((o) => o.label === 'Alpha idea')?.detail).toBe('^alpha');
+    pick(cell, result, 'Beta idea');
+    const id = /Beta idea \^([a-z0-9]{6})\n/.exec(note.state.doc.toString())?.[1];
+    expect(id).toBeDefined();
+    expect(cell.state.doc.toString()).toBe(`[[#^${id}]]`);
+    const query = (await headingSource(new CompletionContext(EditorState.create({ doc: '[[#^alp', extensions: [noteContext.of(context()), tableCellHost.of(note), cellLanguage] }), 7, false))) as CompletionResult;
+    expect(query.options[0].label).toBe('Alpha idea');
+  });
+
   it('[[#^ adds the id to a block of this note in the same edit', async () => {
     const doc = 'First thought\n\n| a |\n|---|\n\nSee [[#^';
     const view = makeView(doc, doc.length);

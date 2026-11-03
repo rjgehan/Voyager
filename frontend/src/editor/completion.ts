@@ -189,10 +189,12 @@ interface BlockQuery {
 async function blockCompletion(context: CompletionContext, ctx: NoteContext, q: BlockQuery): Promise<CompletionResult | null> {
   const source = ctx.path();
   const same = q.resolved === source;
+  // In a table cell, this note is the cell's host (the cell's own document is one cell).
+  const host = context.state.facet(tableCellHost);
   let text: string;
   if (same) {
     if (!source.toLowerCase().endsWith('.md')) return null;
-    text = context.state.doc.toString();
+    text = (host?.state ?? context.state).doc.toString();
   } else {
     if (!q.resolved.toLowerCase().endsWith('.md') || !ctx.blocks) return null;
     try {
@@ -202,7 +204,8 @@ async function blockCompletion(context: CompletionContext, ctx: NoteContext, q: 
     }
     if (context.aborted) return null;
   }
-  const cursorLine = context.state.doc.lineAt(context.pos).number - 1;
+  // Not the block the cursor is in (a cell's line numbers are not the note's: none is left out there).
+  const cursorLine = host ? -1 : context.state.doc.lineAt(context.pos).number - 1;
   const blocks = pickableBlocks(scanBlocks(text)).filter((b) => !same || cursorLine < b.start || cursorLine > b.end);
   const ranked =
     q.query.trim() === ''
@@ -215,7 +218,7 @@ async function blockCompletion(context: CompletionContext, ctx: NoteContext, q: 
     apply: (view, completion, _from, to) => {
       const insertFor = (id: string) => (same ? sameNoteLink(ctx, q.embed, '^' + id, null) : buildInsert(ctx, { path: q.resolved, alias: null }, q.embed, '^' + id, null));
       if (b.id) return replaceLink(view, completion, q.linkFrom, to, insertFor(b.id));
-      if (same) return linkToNewBlockHere(view, completion, q.linkFrom, to, b, text, insertFor);
+      if (same) return linkToNewBlockHere(view, completion, q.linkFrom, to, b, text, insertFor, host);
       const provisional = newBlockId(blockIdsIn(text));
       replaceLink(view, completion, q.linkFrom, to, insertFor(provisional));
       void ctx.blocks!.ensureBlockId(q.resolved, text, b, provisional).then(
@@ -236,15 +239,31 @@ function sameNoteLink(ctx: NoteContext, embed: boolean, subpath: string, display
   return `${embed ? '!' : ''}[${display ?? (embed ? '' : subpath)}](#${encodeMdPath(subpath)})`;
 }
 
-/** Adds the id to a block of this note and the link to it, as one edit (one undo step). */
-function linkToNewBlockHere(view: EditorView, completion: Completion, linkFrom: number, to: number, block: NoteBlock, text: string, insertFor: (id: string) => string): void {
-  const current = view.state.doc.toString();
+/**
+ * Adds the id to a block of this note and the link to it, as one edit (one undo step). In a table
+ * cell (`host` is the note's editor) the id goes into the note and the link into the cell (two steps).
+ */
+function linkToNewBlockHere(
+  view: EditorView,
+  completion: Completion,
+  linkFrom: number,
+  to: number,
+  block: NoteBlock,
+  text: string,
+  insertFor: (id: string) => string,
+  host: EditorView | null = null,
+): void {
+  const current = (host ?? view).state.doc.toString();
   const lineText = noteLines(text)[block.anchor] ?? '';
   const id = newBlockId(blockIdsIn(current));
   const plan = planBlockId(current, { line: block.anchor, lineText, placement: block.placement }, id);
   if (plan.kind === 'missing') return;
   const insert = insertFor(plan.id);
   if (plan.kind === 'existing') return replaceLink(view, completion, linkFrom, to, insert);
+  if (host) {
+    host.dispatch({ changes: { from: plan.from, insert: plan.insert }, userEvent: 'input.complete' });
+    return replaceLink(view, completion, linkFrom, to, insert);
+  }
   const end = view.state.sliceDoc(to, to + 2) === ']]' ? to + 2 : to;
   const shift = plan.from <= linkFrom ? plan.insert.length : 0;
   view.dispatch({
