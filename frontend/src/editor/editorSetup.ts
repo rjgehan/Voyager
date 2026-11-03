@@ -6,6 +6,7 @@ import { bracketMatching, indentOnInput, syntaxHighlighting, type LanguageSuppor
 import { highlightSelectionMatches, openSearchPanel, search, searchKeymap } from '@codemirror/search';
 import { EditorState, Prec, type Extension } from '@codemirror/state';
 import { drawSelection, EditorView, highlightActiveLine, keymap, placeholder } from '@codemirror/view';
+import { runCommand } from '../features/commands';
 import { isCustomized } from '../features/hotkeyPrefs';
 import { isIOS, modKey } from '../features/platform';
 import { headingSource, tagSource, wikilinkSource } from './completion';
@@ -156,12 +157,13 @@ function baseKeymaps(): Extension {
   return [
     Prec.highest(
       keymap.of([
+        // The commands: they walk the tab's own history when the browser has none (DESIGN §6.40).
         { key: 'Mod-Alt-ArrowLeft', run: ifDefault('nav.back', () => {
-          window.history.back();
+          runCommand('nav.back', { activePath: null });
           return true;
         }), preventDefault: true },
         { key: 'Mod-Alt-ArrowRight', run: ifDefault('nav.forward', () => {
-          window.history.forward();
+          runCommand('nav.forward', { activePath: null });
           return true;
         }), preventDefault: true },
       ]),

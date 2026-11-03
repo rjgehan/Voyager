@@ -100,6 +100,30 @@ describe('global hotkeys', () => {
     expect(add).toHaveBeenCalledTimes(2);
   });
 
+  it.skipIf(isApple)('Ctrl+Alt+] and Ctrl+Alt+[ (next and previous pane) work while typing on a US or UK keyboard', () => {
+    const next = vi.fn();
+    const prev = vi.fn();
+    registerCommand({ id: 'test.paneNext', name: 'Next pane', hotkey: 'Mod-Alt-]', globalHotkey: true, run: next });
+    registerCommand({ id: 'test.panePrev', name: 'Previous pane', hotkey: 'Mod-Alt-[', globalHotkey: true, run: prev });
+    const editor = document.createElement('div');
+    editor.className = 'cm-editor';
+    const content = document.createElement('div');
+    content.contentEditable = 'true';
+    editor.appendChild(content);
+    const input = document.createElement('input');
+    document.body.append(editor, input);
+    expect(press(content, { key: ']', code: 'BracketRight', ctrlKey: true, altKey: true }).defaultPrevented).toBe(true);
+    expect(press(input, { key: '[', code: 'BracketLeft', ctrlKey: true, altKey: true }).defaultPrevented).toBe(true);
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(prev).toHaveBeenCalledTimes(1);
+    // German: AltGr+9 types ] and AltGr+8 types [: they stay characters in a text field.
+    const typed = press(content, { key: ']', code: 'Digit9', ctrlKey: true, altKey: true });
+    press(input, { key: '[', code: 'Digit8', ctrlKey: true, altKey: true });
+    expect(typed.defaultPrevented).toBe(false);
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(prev).toHaveBeenCalledTimes(1);
+  });
+
   it('runs F2 without modifiers and ignores plain keys', () => {
     const rename = vi.fn();
     registerCommand({ id: 'file.rename', name: 'Rename', hotkey: 'F2', run: rename });

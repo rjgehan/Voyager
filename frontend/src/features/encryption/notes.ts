@@ -9,7 +9,7 @@ import { toast } from '../../state/toasts';
 import { documents, draftStore } from '../../sync/instance';
 import { applyWriteResult } from '../../sync/treePatch';
 import { toastError } from '../errors';
-import { createNote, moveRequest, newNoteFolder } from '../fileOps';
+import { createNote, moveRequest } from '../fileOps';
 import { activePath, navigateTo, openPath } from '../navigation';
 import { folderOf, joinPath, lastSegment } from '../paths';
 import { encryptText, type WriteKey } from './cipher';
@@ -43,7 +43,7 @@ export async function createEncryptedNote(fromPath: string | null): Promise<void
   const key = await chooseKey('New encrypted note', ENCRYPTED_NOTE_WARNING);
   if (!key) return;
   const content = await encryptedFileText('', key.write, key.hint);
-  createNote(newNoteFolder(fromPath), content, MDENC_EXTENSION, 'encrypted note');
+  createNote({ from: fromPath }, content, MDENC_EXTENSION, 'encrypted note');
 }
 
 /** Drops this browser's plain copies of a note: its drafts and its offline copy. */

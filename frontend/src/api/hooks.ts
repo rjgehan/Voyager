@@ -2,7 +2,7 @@
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { DEFAULT_SETTINGS } from '../features/settings';
 import { treePatchCount } from '../sync/treePatch';
-import { ApiError } from './client';
+import { ApiError, TransientError } from './client';
 import { api, type TimelineFilter } from './endpoints';
 import { queryClient } from './queryClient';
 import { queryKeys, STALE } from './queryKeys';
@@ -55,6 +55,31 @@ export function useVaultSettings(): Settings {
 
 export function currentSettings(): Settings {
   return queryClient.getQueryData<SettingsResponse>(queryKeys.settings())?.settings ?? DEFAULT_SETTINGS;
+}
+
+const SETTINGS_WAIT_MS = 10_000;
+
+/**
+ * The vault's settings for a command that creates files (Today, New note, a link to a missing note,
+ * a folder template): the loaded ones, or one request for them, never the defaults, which would put
+ * the file in the wrong place. Rejects (a TransientError: "You're offline") when the server cannot be
+ * reached, at once rather than through the query's retries.
+ */
+export async function settingsReady(): Promise<Settings> {
+  const loaded = queryClient.getQueryData<SettingsResponse>(queryKeys.settings());
+  if (loaded) return loaded.settings;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new TransientError('The server did not answer')), SETTINGS_WAIT_MS);
+  });
+  try {
+    const res = await Promise.race([api.getSettings(), timeout]);
+    // The page's own settings query may have answered meanwhile: keep what is there.
+    if (!queryClient.getQueryData(queryKeys.settings())) queryClient.setQueryData(queryKeys.settings(), res);
+    return (queryClient.getQueryData<SettingsResponse>(queryKeys.settings()) ?? res).settings;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export function useMe() {

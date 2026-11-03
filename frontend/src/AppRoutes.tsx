@@ -1,8 +1,9 @@
 // The routes of DESIGN §6.4, rendered once per pane (§6.40): each pane passes the location of its
 // shown tab, so an inactive pane renders its own route while the URL shows the active pane's.
-import { lazy, Suspense, type ComponentType } from 'react';
+import { Suspense, type ComponentType } from 'react';
 import { Route, Routes, useLocation, type Location } from 'react-router';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { cachedLazy } from './components/lazyCache';
 import { HomePage } from './components/pages/HomePage';
 import { NotFoundPage } from './components/pages/NotFoundPage';
 import { PendingNoteView } from './components/pages/PendingNoteView';
@@ -13,29 +14,31 @@ import { pathFromLocation } from './features/paths';
 import { usePendingNote } from './state/pendingNote';
 import { FileView } from './views/FileView';
 
-const SettingsPage = lazy(() => import('./components/pages/SettingsPage'));
-
 const lazyPages = new Map<string, ComponentType>();
+/** The cache key of Settings, which no page route can take. */
+const SETTINGS = ' settings';
+const loadSettings = () => import('./components/pages/SettingsPage');
 
-function pageComponent(p: PageDescriptor): ComponentType {
-  let c = lazyPages.get(p.route);
-  if (!c) {
-    c = lazy(p.load);
-    lazyPages.set(p.route, c);
-  }
-  return c;
+/** Resolves the page as it mounts, so a remount after a failed chunk ("Reload view") loads it again. */
+function PageHost({ id, load }: { id: string; load: PageDescriptor['load'] }) {
+  const Page = cachedLazy(lazyPages, id, load);
+  // Page comes from a module-level cache keyed by route, so its identity is stable.
+  // eslint-disable-next-line react-hooks/static-components
+  return <Page />;
 }
 
 const pageFallback = <div className="view-loading" aria-busy="true" />;
 
 export function AppRoutes({ location, active = true }: { location?: Location; active?: boolean }) {
   useExtensionsVersion();
-  const pending = usePendingNote((s) => s.pending);
   const routerLocation = useLocation();
-  const pages = registeredPages().map((p) => ({ route: p.route, Page: pageComponent(p) }));
+  // Each page has its own error boundary, cleared when the address changes (another list).
+  const pathname = (location ?? routerLocation).pathname;
+  const pending = usePendingNote((s) => s.pending);
+  const pages = registeredPages();
   // A note being created shows in the active pane, where New note was asked for, until the pane
   // shows the note it became (never the pane's previous route in between).
-  const opened = pending?.opening != null && pathFromLocation((location ?? routerLocation).pathname) === pending.opening;
+  const opened = pending?.opening != null && pathFromLocation(pathname) === pending.opening;
   if (pending && active && !opened) return <PendingNoteView key={pending.id} pending={pending} />;
   return (
     <Routes location={location}>
@@ -46,21 +49,21 @@ export function AppRoutes({ location, active = true }: { location?: Location; ac
       <Route
         path="/settings/*"
         element={
-          <ErrorBoundary label="page">
+          <ErrorBoundary key="settings" label="page" resetKeys={[pathname]}>
             <Suspense fallback={pageFallback}>
-              <SettingsPage />
+              <PageHost id={SETTINGS} load={loadSettings} />
             </Suspense>
           </ErrorBoundary>
         }
       />
-      {pages.map(({ route, Page }) => (
+      {pages.map(({ route, load }) => (
         <Route
           key={route}
           path={`/x/${route}`}
           element={
-            <ErrorBoundary label="page">
+            <ErrorBoundary key={route} label="page" resetKeys={[pathname]}>
               <Suspense fallback={pageFallback}>
-                <Page />
+                <PageHost id={route} load={load} />
               </Suspense>
             </ErrorBoundary>
           }

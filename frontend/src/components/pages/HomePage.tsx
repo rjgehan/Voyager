@@ -9,6 +9,7 @@ import { getCommand, runCommand, useCommandsVersion } from '../../features/comma
 import { openTodaysDailyNote } from '../../features/daily';
 import { noteRoute } from '../../features/paths';
 import { lastOpenedPath } from '../../features/recent';
+import { useOffline } from '../../offline/offlineStore';
 
 /** Once per page load. */
 let startupHandled = false;
@@ -21,20 +22,27 @@ export function HomePage() {
   const wantsDaily = askedForDaily || !!settings.data?.settings.dailyNotes.openOnStartup;
   // React state, so that a startup daily note that could not be opened re-renders this page.
   const [handled, setHandled] = useState(startupHandled);
-  const settingsPending = settings.isPending && !handled;
+  // Settings are waited for only while their first request runs and the tree is the server's: at
+  // an offline start (the tree is the device's snapshot) or once a request failed, the retries
+  // can take minutes (and a request paused offline waits for the network), and the last note opens
+  // without them (DESIGN §6.26).
+  const fromSnapshot = useOffline((s) => s.treeSnapshotAt) !== null;
+  const waitSettings = settings.isPending && settings.failureCount === 0 && settings.fetchStatus !== 'paused' && !fromSnapshot;
+  const settingsPending = waitSettings && !handled;
 
   useEffect(() => {
-    if (settings.isPending || startupHandled) return;
+    if (waitSettings || startupHandled) return;
     startupHandled = true;
     if (!wantsDaily) return;
     // On success the route changes; on failure (a toast says why) the usual home page shows.
     void openTodaysDailyNote().then((opened) => {
       if (!opened) setHandled(true);
     });
-  }, [settings.isPending, wantsDaily]);
+  }, [waitSettings, wantsDaily]);
 
   if (tree.isPending || settingsPending) return <div className="view-loading" aria-busy="true" />;
-  if (tree.isError) {
+  // A failed refresh keeps the snapshot as data: the error page is only for no tree at all.
+  if (!tree.data) {
     return (
       <div className="empty-state">
         <h2>Cannot reach the server</h2>

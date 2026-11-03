@@ -1,21 +1,24 @@
 // Sidebar panel tabs over the registered panels (DESIGN §6.8 registerPanel). The strip follows the
 // ARIA tabs pattern (§6.19): one Tab stop, the arrow keys, Home and End move between panels.
-import { lazy, Suspense, type ComponentType, type KeyboardEvent } from 'react';
+import { Suspense, type ComponentType, type KeyboardEvent } from 'react';
 import { useLocation } from 'react-router';
 import { registeredPanels, useExtensionsVersion, type PanelDescriptor } from '../../extensions';
 import { pathFromLocation } from '../../features/paths';
 import { ErrorBoundary } from '../ErrorBoundary';
+import { cachedLazy } from '../lazyCache';
 
 const lazyPanels = new Map<string, ComponentType<{ activePath: string | null }>>();
 
 function panelComponent(p: PanelDescriptor): ComponentType<{ activePath: string | null }> {
-  if (p.component) return p.component;
-  let c = lazyPanels.get(p.id);
-  if (!c) {
-    c = lazy(p.load);
-    lazyPanels.set(p.id, c);
-  }
-  return c;
+  return p.component ?? cachedLazy(lazyPanels, p.id, p.load);
+}
+
+/** Resolves the panel as it mounts, so a remount after a failed chunk loads it again. */
+function PanelHost({ panel, activePath }: { panel: PanelDescriptor; activePath: string | null }) {
+  const Panel = panelComponent(panel);
+  // Panel comes from a module-level cache keyed by panel id, so its identity is stable.
+  // eslint-disable-next-line react-hooks/static-components
+  return <Panel activePath={activePath} />;
 }
 
 interface Props {
@@ -30,7 +33,6 @@ export function PanelTabs({ side, active, onSelect }: Props) {
   const activePath = pathFromLocation(useLocation().pathname);
   const current = panels.find((p) => p.id === active) ?? panels[0];
   if (!current) return null;
-  const Panel = panelComponent(current);
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     const i = panels.findIndex((p) => p.id === current.id);
     const next =
@@ -77,11 +79,10 @@ export function PanelTabs({ side, active, onSelect }: Props) {
       )}
       <div className="panel-body" role="tabpanel" id={`panel-${current.id}`} aria-labelledby={`tab-${current.id}`}>
         {panels.length === 1 && <h2 className="panel-title">{current.title}</h2>}
-        <ErrorBoundary label="panel">
+        {/* One boundary per panel, cleared when the note changes: a crash stays with its panel and note. */}
+        <ErrorBoundary key={current.id} label="panel" resetKeys={[activePath]}>
           <Suspense fallback={<div className="panel-empty">Loading…</div>}>
-            {/* Panel comes from a module-level cache keyed by panel id, so its identity is stable. */}
-            {/* eslint-disable-next-line react-hooks/static-components */}
-            <Panel activePath={activePath} />
+            <PanelHost panel={current} activePath={activePath} />
           </Suspense>
         </ErrorBoundary>
       </div>

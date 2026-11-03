@@ -196,6 +196,29 @@ export function pop(ws: Workspace, route: string, dir: 'back' | 'forward'): { ws
   return { ws, url: tab.route };
 }
 
+/**
+ * Back or forward in the active tab's own history, for when the browser has no entry of the app
+ * that way: the app was reopened and the tab's saved history came back with it (DESIGN §6.40).
+ * Entries equal to the tab's route are skipped. Null when there is nothing that way.
+ */
+export function step(ws: Workspace, dir: 'back' | 'forward'): { ws: Workspace; route: string } | null {
+  const pane = activePaneOf(ws);
+  const tab = activeTabOf(pane);
+  const back = [...tab.back];
+  const forward = [...tab.forward];
+  const nav = (tab.nav ?? 0) + 1;
+  if (dir === 'back') {
+    while (back.length > 0 && back[back.length - 1] === tab.route) back.pop();
+    const target = back.pop();
+    if (target === undefined) return null;
+    return { ws: updateTab(ws, pane.id, { ...tab, route: target, nav, back, forward: cap([tab.route, ...forward], true) }), route: target };
+  }
+  while (forward.length > 0 && forward[0] === tab.route) forward.shift();
+  const target = forward.shift();
+  if (target === undefined) return null;
+  return { ws: updateTab(ws, pane.id, { ...tab, route: target, nav, forward, back: cap([...back, tab.route], false) }), route: target };
+}
+
 // ---------- tabs ----------
 
 export interface OpenOptions {
@@ -487,7 +510,9 @@ export function adoptUrl(ws: Workspace, route: string): Workspace {
   if (inActive) return selectTab(ws, ws.activePane, inActive.id);
   const anywhere = allTabs(ws).find(({ tab }) => tab.route === route);
   if (anywhere) return selectTab(ws, anywhere.pane.id, anywhere.tab.id);
-  return navigate(ws, route, 'push');
+  // '/' (the installed app's start, the desktop app) only redirects to the last note, which is
+  // usually the tab's own route: it is no step of the tab's history.
+  return navigate(ws, route, route === '/' ? 'replace' : 'push');
 }
 
 // ---------- persistence ----------

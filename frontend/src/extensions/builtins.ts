@@ -49,7 +49,7 @@ import { getCommand, setViewCommandSource } from '../features/commands';
 import { registerReminders } from '../features/reminders/register';
 import { isDailyNote, openAdjacentDailyNote, openTodaysDailyNote } from '../features/daily';
 import { toastError } from '../features/errors';
-import { copyLink, createNote, downloadFile, nameWithExtension, newNoteFolder, renameEntry, validateNewName } from '../features/fileOps';
+import { copyLink, createNote, downloadFile, nameWithExtension, renameEntry, validateNewName } from '../features/fileOps';
 import { navigateTo, openSearch } from '../features/navigation';
 import { mirrorConfigured, pushMirrorNow } from '../features/mirror';
 import { toggleSourceMode } from '../features/noteMode';
@@ -65,6 +65,7 @@ import { registerFlashcards } from '../flashcards/register';
 import { registerHabits } from '../habits/register';
 import { registerCalendar } from '../calendar/register';
 import { registerWorkspace } from '../workspace/register';
+import { navigateHistory } from '../workspace/store';
 import { registerProperties } from '../properties/register';
 import { registerCanvasView } from '../views/canvas/register';
 import { registerKanban } from '../views/kanban/register';
@@ -132,14 +133,18 @@ function registerCreateCommands(): void {
       id: `file.new.${d.id}`,
       name: `Create new ${create.label}`,
       icon: d.icon,
-      run: (c) => createNote(newNoteFolder(c.activePath), create.initialContent(), create.extension, create.label),
+      run: (c) => createNote({ from: c.activePath }, create.initialContent(), create.extension, create.label),
     });
   }
 }
 
-/** F2 / "Rename current file": the inline title when the note shows one, otherwise a prompt. */
+/**
+ * F2 / "Rename current file": the inline title when the note shows one, otherwise a prompt. Only the
+ * active pane's title (its scroll container is #workspace-scroll, DESIGN §6.40): with split panes the
+ * first title in the page may be another note's.
+ */
 function renameCurrent(path: string): void {
-  const title = document.querySelector<HTMLTextAreaElement>('.inline-title-input:not([readonly])');
+  const title = document.getElementById('workspace-scroll')?.querySelector<HTMLTextAreaElement>('.inline-title-input:not([readonly])');
   if (title) {
     title.focus();
     title.select();
@@ -246,7 +251,7 @@ export function registerBuiltins(): void {
   registerCommand({ id: 'capture.quick', name: 'Quick capture', hotkey: 'Mod-Shift-Space', globalHotkey: true, icon: Inbox, run: () => useUi.getState().setOverlay('capture') });
 
   // ---------- files ----------
-  registerCommand({ id: 'file.newNote', name: 'Create new note', hotkey: 'Mod-Alt-n', icon: FilePlus, run: (c) => createNote(newNoteFolder(c.activePath)) });
+  registerCommand({ id: 'file.newNote', name: 'Create new note', hotkey: 'Mod-Alt-n', icon: FilePlus, run: (c) => createNote({ from: c.activePath }) });
   registerCommand({ id: 'file.newNoteFromTemplate', name: 'Create new note from template', icon: LayoutTemplate, run: () => useUi.getState().setOverlay('templates-new') });
   registerCommand({ id: 'file.newFolder', name: 'Create new folder', run: (c) => promptNewFolder(c.activePath ? folderOf(c.activePath) : '') });
   registerCommand({ id: 'file.rename', name: 'Rename current file', hotkey: 'F2', when: hasFile, run: (c) => renameCurrent(c.activePath!) });
@@ -447,8 +452,9 @@ export function registerBuiltins(): void {
     },
   });
   registerCommand({ id: 'mirror.push', name: 'Push history to the mirror now', icon: CloudUpload, when: () => mirrorConfigured(), run: pushMirrorNow });
-  registerCommand({ id: 'nav.back', name: 'Navigate back', hotkey: 'Mod-Alt-ArrowLeft', run: () => window.history.back() });
-  registerCommand({ id: 'nav.forward', name: 'Navigate forward', hotkey: 'Mod-Alt-ArrowRight', run: () => window.history.forward() });
+  // The browser's history, or the tab's own after the app was reopened (DESIGN §6.40).
+  registerCommand({ id: 'nav.back', name: 'Navigate back', hotkey: 'Mod-Alt-ArrowLeft', run: () => navigateHistory('back') });
+  registerCommand({ id: 'nav.forward', name: 'Navigate forward', hotkey: 'Mod-Alt-ArrowRight', run: () => navigateHistory('forward') });
   registerCommand({ id: 'trash.open', name: 'Open trash', icon: Trash, run: () => goTo('/trash') });
   // The server at a glance (ROADMAP item 38, DESIGN §6.18.1): /x/status, a ribbon and drawer entry, and "Open Status".
   registerPage({ route: 'status', title: 'Status', icon: Activity, load: () => import('../components/pages/StatusPage') });

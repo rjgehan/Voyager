@@ -3,7 +3,7 @@
 // the caches from its own response (DESIGN §6.3 "Own mutations").
 import { errorMessage, isProblem, isStorageProblem, isTransient } from '../api/client';
 import { api } from '../api/endpoints';
-import { currentSettings, currentTree, treeQuery } from '../api/hooks';
+import { currentSettings, currentTree, settingsReady, treeQuery } from '../api/hooks';
 import { queryClient } from '../api/queryClient';
 import { queryKeys } from '../api/queryKeys';
 import type { FailedUpdate, FileEntry, MoveResult, Settings, WriteResult } from '../api/types';
@@ -45,6 +45,17 @@ export function newNoteFolder(fromPath: string | null, settings: Settings = curr
   if (s.newNoteLocation === 'folder') return s.newNoteFolder;
   if (s.newNoteLocation === 'current') return fromPath ? folderOf(fromPath) : '';
   return '';
+}
+
+/**
+ * Where a new file goes: a folder, or `{ from }`: the configured new-note location (`newNoteFolder`)
+ * seen from the open file, decided once the vault's settings have loaded rather than with the
+ * defaults (which would put it at the root, without its folder template).
+ */
+export type NewFileFolder = string | { from: string | null };
+
+function resolveFolder(where: NewFileFolder): Promise<string> {
+  return typeof where === 'string' ? Promise.resolve(where) : settingsReady().then((settings) => newNoteFolder(where.from, settings));
 }
 
 /** Inline validation of a new name (one segment, extension included). */
@@ -279,17 +290,24 @@ function titleCommitted(id: number): Promise<PendingNote | null> {
  * note is created. A note without content gets its folder's template (ROADMAP item 30). Another
  * view's file (`extension`, called `label` in the pending view) is created the same way.
  */
-export function createNote(folder: string, initialContent: string | Promise<string | TitledContent | null> = '', extension = 'md', label = 'note'): void {
+export function createNote(where: NewFileFolder, initialContent: string | Promise<string | TitledContent | null> = '', extension = 'md', label = 'note'): void {
   const id = ++pendingSeq;
   const key = newIdempotencyKey();
   const initialTitle = NEW_TITLE;
-  startPendingNote(id, folder, initialTitle, { extension, label });
+  const target = resolveFolder(where);
+  // The folder may still wait for the settings; nothing reads it from the pending view.
+  startPendingNote(id, typeof where === 'string' ? where : '', initialTitle, { extension, label });
   useUi.getState().setDrawerOpen(false);
-  if (extension === 'md' && initialContent === '') initialContent = folderTemplateRenderer(folder);
+  if (extension === 'md' && initialContent === '') {
+    initialContent = target.then(folderTemplateRenderer);
+    // Without the settings it fails with the folder below, which reports it.
+    initialContent.catch(() => undefined);
+  }
   void (async () => {
     let created: FileEntry;
     let render: TitledContent | null;
     try {
+      const folder = await target;
       // A template renders while the pending view is already up (its title focused in the tap).
       const loaded = await initialContent;
       if (loaded === null) {
@@ -369,7 +387,14 @@ export function createNote(folder: string, initialContent: string | Promise<stri
  */
 export async function createNamedNote(name: string, fromPath: string | null, viaKeyboard: boolean): Promise<void> {
   const clean = name.trim().replace(/\.md$/i, '');
-  const path = joinPath(newNoteFolder(fromPath), clean + '.md');
+  let folder: string;
+  try {
+    folder = await resolveFolder({ from: fromPath });
+  } catch (e) {
+    toastError(e);
+    return;
+  }
+  const path = joinPath(folder, clean + '.md');
   const invalid = newPathError(path);
   if (invalid) {
     toast(invalid, { kind: 'error' });

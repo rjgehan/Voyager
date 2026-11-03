@@ -2,7 +2,7 @@
 // own (a board is a note, recognized by its frontmatter): the Markdown view shows it.
 import { FileText, LayoutDashboard, SquareKanban } from 'lucide-react';
 import { registerCommand } from '../../features/commands';
-import { createNote, newNoteFolder } from '../../features/fileOps';
+import { createNote } from '../../features/fileOps';
 import { documents } from '../../sync/instance';
 import { isKanbanText, KANBAN_PROBE_CHARS, setKanbanAsMarkdown, showsKanbanAsMarkdown } from './detect';
 
@@ -16,7 +16,7 @@ export function registerKanban(): void {
     id: 'file.new.kanban',
     name: 'Create new Kanban board',
     icon: SquareKanban,
-    run: (c) => createNote(newNoteFolder(c.activePath), import('./format').then((m) => m.newBoardText())),
+    run: (c) => createNote({ from: c.activePath }, import('./format').then((m) => m.newBoardText())),
   });
   registerCommand({
     id: 'kanban.showMarkdown',
