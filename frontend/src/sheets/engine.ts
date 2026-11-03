@@ -71,11 +71,20 @@ import {
 } from './refs';
 // The functions that read notes (ROADMAP item 42), registered before any engine is built.
 import './links/noteFunctions';
+// Built-in functions given their Google Sheets meaning (TEXT, SPLIT), registered the same way.
+import './sheetsFunctions';
 
 export { functionCatalog } from './functions';
 
-/** The engine identity written to `engine`. A config change that alters results must change it too. */
-export const ENGINE_ID = `hyperformula@${HyperFormula.version}`;
+/**
+ * Counts this app's changes to the engine that alter results (its configuration, the functions it
+ * replaces): 1 is TEXT with Google Sheets' format codes, 2 text comparison that keeps accents apart,
+ * 3 SPLIT with Google Sheets' meaning.
+ */
+export const ENGINE_REVISION = 3;
+
+/** The engine identity written to `engine`. A config change that alters results must change ENGINE_REVISION. */
+export const ENGINE_ID = `hyperformula@${HyperFormula.version}+${ENGINE_REVISION}`;
 
 /** Edits of more cells than this rebuild the engine, which is faster than as many single updates. */
 const REBUILD_THRESHOLD = 1000;
@@ -85,6 +94,7 @@ const UNDO_LIMIT = 200;
  * HyperFormula settings. The engine runs under its GPL-3.0 licence (`gpl-v3`; without it every
  * function returns #LIC!). The defaults already match Google Sheets where it matters: 1899-12-30
  * as day 0 without the 1900 leap-year bug, case-insensitive text comparison, wildcards in criteria.
+ * Text comparison keeps accents apart, as Google Sheets does (="é"="e" is FALSE; COUNTIF, UNIQUE).
  */
 export function engineConfig(): Partial<ConfigParams> {
   return {
@@ -93,6 +103,7 @@ export function engineConfig(): Partial<ConfigParams> {
     maxRows: MAX_ROWS,
     maxColumns: MAX_COLUMNS,
     dateFormats: ['YYYY-MM-DD', 'MM/DD/YYYY', 'MM/DD/YY'],
+    accentSensitive: true,
   };
 }
 

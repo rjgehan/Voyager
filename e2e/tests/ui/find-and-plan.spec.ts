@@ -117,7 +117,7 @@ test('a spreadsheet: a formula typed in the formula bar is computed and saved wi
 test('a note embeds a range of a spreadsheet with its computed values @desktop', async ({ page }) => {
   const name = unique('Embedded');
   const sheet = {
-    type: 'notesapp-sheet', version: 1, engine: 'hyperformula@3.5.0', named: {},
+    type: 'notesapp-sheet', version: 1, engine: 'hyperformula@3.5.0+3', named: {},
     sheets: [{ id: 's1', name: 'Data', cells: { A1: { v: 'Total' }, B1: { f: '=6*7', c: 42 } }, cols: {}, rows: {}, frozen: { rows: 0, cols: 0 } }],
   };
   await createFile(`${name}.sheet`, JSON.stringify(sheet) + '\n');

@@ -30,6 +30,7 @@ const NAMED: Record<string, string> = {
   NOT: 'logical',
   CONCATENATE: 'string',
   TEXT: 'number, format',
+  SPLIT: 'text, delimiter, split_by_each, remove_empty_text',
   LEN: 'text',
   TODAY: '',
   NOW: '',
@@ -159,5 +160,9 @@ function functionNames(): ReadonlySet<string> {
 export function friendlyError(code: string, formula: string | null | undefined, message: string): string {
   if (code === '#NAME?' && formula) return nameHint(formula, functionNames()) ?? message;
   if (code === '#ERROR!' && formula) return unfinishedHint(formula) ?? message;
+  // The engine knows how far a result spills before it runs, so SPLIT of a cell's text cannot spill.
+  if (code === '#VALUE!' && formula && message === 'Cell range not allowed.' && /\bSPLIT\s*\(/i.test(formula)) {
+    return 'SPLIT spills across cells only when its text is written in the formula, such as SPLIT("a,b", ","). For a cell’s text, take one part with INDEX: INDEX(SPLIT(A2, ","), 1, 2) is the second.';
+  }
   return message;
 }

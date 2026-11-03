@@ -2,6 +2,7 @@ import * as XLSX from 'xlsx';
 import { describe, expect, it } from 'vitest';
 import { Workbook } from './engine';
 import { cellValue, formulaSheetName, parseSheet, type SheetFile } from './format';
+import { dateSerial } from './numfmt';
 import { fromExcelFormula, readWorkbook, toExcelFormula, writeWorkbook } from './xlsx';
 
 function file(value: unknown): SheetFile {
@@ -13,7 +14,7 @@ function file(value: unknown): SheetFile {
 const BUDGET = file({
   type: 'notesapp-sheet',
   version: 1,
-  engine: 'hyperformula@3.5.0',
+  engine: 'hyperformula@3.5.0+3',
   sheets: [
     {
       id: 's1',
@@ -176,6 +177,27 @@ describe('importing workbooks made elsewhere', () => {
     expect(book.sheets[0].cells).toEqual({ A1: { v: 'Name' }, B1: { v: 'Score' }, A2: { v: 'Ada' }, B2: { v: 0.9 }, C1: { v: '#N/A' } });
     expect(book.named).toEqual({ Scores: 'Data!$B$2:$B$9' });
     expect(book.skipped).toEqual(['Merged cells are shown unmerged.', 'The name “Local” belongs to one sheet and was left out.']);
+  });
+
+  it('moves dates from a workbook on the 1904 date system to the right day', () => {
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([[0]]);
+    // 2026-10-17 counted from 1904-01-01 is 1462 days less than counted from 1899-12-30.
+    const day = dateSerial(2026, 10, 17) as number;
+    ws.A1 = { t: 'n', v: day - 1462, z: 'yyyy-mm-dd' };
+    ws.B1 = { t: 'n', f: 'A1+1', v: day - 1461, z: 'yyyy-mm-dd' };
+    ws.C1 = { t: 'n', v: 0.5, z: 'h:mm' };
+    ws.D1 = { t: 'n', v: 1.5, z: '[h]:mm:ss' };
+    ws.E1 = { t: 'n', v: 42 };
+    ws['!ref'] = 'A1:E1';
+    XLSX.utils.book_append_sheet(wb, ws, 'Dates');
+    wb.Workbook = { WBProps: { date1904: true } };
+    const cells = readWorkbook(new Uint8Array(XLSX.write(wb, { type: 'array', bookType: 'xlsx' }) as ArrayBuffer)).sheets[0].cells;
+    expect(cells.A1.v).toBe(day);
+    expect(cells.B1.c).toBe(day + 1);
+    expect(cells.C1.v).toBe(0.5);
+    expect(cells.D1.v).toBe(1.5);
+    expect(cells.E1.v).toBe(42);
   });
 
   it('refuses what is not a workbook', () => {

@@ -7,6 +7,7 @@ import { formulaEngineForTests } from '../../formulas/load';
 import { useTestLinkHost, type TestLinkHost } from '../../test/linkHost';
 import { Workbook, type WorkbookChange } from '../engine';
 import { cellValue, parseSheet, type SheetCell } from '../format';
+import { ExternalSheets } from './noteRefs';
 import { noteFormulas } from './noteText';
 import { linkWorkbook, workbookContext } from './recalc';
 import { linkContext, linkStore, resetLinkStore } from './store';
@@ -214,6 +215,32 @@ describe('notes reading spreadsheets', () => {
     expect(results.inline('=Budget.sheet!B2')?.text).toBe('$1,450.00');
     expect(results.inline('=Budget.sheet!A2')?.text).toBe('Rent');
     expect(results.reads.has('sheet:Finance/Budget.sheet')).toBe(true);
+  });
+
+  it('reads a spreadsheet with a far-away cell', async () => {
+    const far = sheetText({ B2: { v: 5 }, C2: { v: 3 }, C3: { v: 4 }, AZ50000: { v: 'x' } });
+    useTestLinkHost({ 'Log.sheet': far, 'Note.md': '' });
+    const text = '| A | B |\n|---|---|\n| =Log.sheet!B2 | =SUM(Log.sheet!C:C) |\n';
+    noteResults('Note.md', text);
+    await settle();
+    const results = noteResults('Note.md', text);
+    expect(results.cell(0, 1, 0)?.text).toBe('5');
+    expect(results.cell(0, 1, 1)?.text).toBe('7');
+    expect(results.inline('=Log.sheet!AZ50000')?.text).toBe('x');
+  });
+
+  it('says when a spreadsheet holds too many values for a note to read', async () => {
+    const largest = ExternalSheets.largestRead;
+    ExternalSheets.largestRead = 3;
+    try {
+      useTestLinkHost({ 'Log.sheet': sheetText({ A1: { v: 1 }, A2: { v: 2 }, A3: { v: 3 }, A4: { v: 4 } }), 'Note.md': '' });
+      noteResults('Note.md', '');
+      noteResults('Note.md', '').inline('=Log.sheet!A1');
+      await settle();
+      expect(noteResults('Note.md', '').inline('=Log.sheet!A1')).toMatchObject({ text: '#REF!', hint: expect.stringMatching(/too large/) });
+    } finally {
+      ExternalSheets.largestRead = largest;
+    }
   });
 
   it('prefers a workbook open on this device, before it is saved', async () => {

@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { Workbook } from '../../sheets/engine';
 import { cellValue, parseSheet, type SheetCell } from '../../sheets/format';
 import type { FindMatch } from '../../sheets/find';
+import { useToasts } from '../../state/toasts';
 import { FindPanel } from './FindPanel';
 
 function open(cells: Record<string, SheetCell>): Workbook {
@@ -84,5 +85,19 @@ describe('FindPanel: Replace (DESIGN §6.21.14)', () => {
     expect(active()).toBe('0,3');
     replace();
     expect(value(wb, 'A4')).toBe('y');
+  });
+
+  it('says why a value that matched only as it shows is not replaced, and a formula’s result likewise', () => {
+    useToasts.setState({ toasts: [] });
+    const wb = open({ A1: { v: 1450, fmt: '$#,##0.00' }, A2: { f: '=A1', fmt: '$#,##0.00' } });
+    const { panel, next, replace } = setUp(wb, { sheet: 's1', col: 3, row: 9 });
+    fireEvent.change(within(panel).getByRole('searchbox', { name: 'Find' }), { target: { value: '1,4' } });
+    next();
+    replace();
+    expect(value(wb, 'A1')).toBe(1450);
+    expect(useToasts.getState().toasts.at(-1)?.message).toMatch(/number format/);
+    // Replace went on to the next match, the formula.
+    replace();
+    expect(useToasts.getState().toasts.at(-1)?.message).toMatch(/formula’s result/);
   });
 });

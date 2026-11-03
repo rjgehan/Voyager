@@ -48,7 +48,7 @@ vi.mock('@glideapps/glide-data-grid', async (importOriginal) => {
 const BUDGET = {
   type: 'notesapp-sheet',
   version: 1,
-  engine: 'hyperformula@3.5.0',
+  engine: 'hyperformula@3.5.0+3',
   sheets: [
     {
       id: 's1',
@@ -1001,6 +1001,17 @@ describe('sorting and filters (DESIGN §6.21.11)', () => {
     // Removing the filter shows every row again.
     fireEvent.click(screen.getByRole('button', { name: 'Remove filter' }));
     expect(screen.getByTestId('cell-A0')).toHaveTextContent('Rent');
+  });
+
+  it('shows Bold rows pressed for the sheet row the selected cell shows, while a filter sorts the rows', async () => {
+    const sheet = { ...BUDGET.sheets[0], rows: { '1': { bold: true }, '2': { bold: true } }, filter: { range: 'A1:C3', sort: { col: 'A' }, cols: {} } };
+    await openGrid({ ...BUDGET, version: 2, sheets: [sheet, BUDGET.sheets[1]] });
+    // Sorted A → Z, grid row 0 shows sheet row 3 (Food) and grid row 1 sheet row 2 (Rent, bold).
+    expect(screen.getByTestId('cell-A0')).toHaveTextContent('Food');
+    select(0, 0);
+    expect(screen.getByRole('button', { name: 'Bold rows' })).toHaveAttribute('aria-pressed', 'false');
+    select(0, 1);
+    expect(screen.getByRole('button', { name: 'Bold rows' })).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('sorts the view from a column’s menu without moving any cell', async () => {

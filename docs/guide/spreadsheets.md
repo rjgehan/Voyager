@@ -15,7 +15,7 @@ You can also start from a file: **Import spreadsheet from CSV or Excel…** in t
 - **Computer**: click a cell and start typing, or double-click it (or press `Enter` or `F2`) to change what is there. `Enter` saves and moves down, `Tab` moves right, `Esc` cancels. `Alt+Enter` starts a new line inside the cell.
 - **Phone**: tap a cell to select it, and tap it again to type. You type in the **formula bar** above the grid; `Enter` saves and moves to the next cell with the keyboard still up.
 - **Delete** clears the selected cells.
-- Typing `$1,450`, `12%` or a date such as `2026-10-17` or `10/17/2026` stores the number and gives the cell the matching format. Dates are read month first, in formulas too: `=COUNTIF(A:A, ">=10/1/2026")` counts from October 1.
+- Typing `$1,450`, `12%`, a date such as `2026-10-17` or `10/17/2026`, a time such as `14:30`, or a duration of 24 hours or more such as `25:30` stores the number and gives the cell the matching format. Dates are read month first, in formulas too: `=COUNTIF(A:A, ">=10/1/2026")` counts from October 1.
 
 Select a range by dragging (or `Shift`+click); click a column letter or a row number to select the whole column or row. `Ctrl+A` selects everything, `Ctrl+Space` whole columns and `Shift+Space` whole rows. `Ctrl+Arrow` jumps to the end of the data, and `Ctrl+Shift+Arrow` selects up to it.
 
@@ -140,5 +140,7 @@ Notes can read a spreadsheet's cells too: see [Use a spreadsheet's cells in a no
 
 - Spreadsheets save as you type, keep their [history](history-and-trash.md) and show changes from your other devices live. Two devices changing different cells at the same time never conflict, except when one of them inserts or deletes rows or columns, sorts, or cuts and pastes cells: cells moved, so you choose which version to keep.
 - Search finds the text and numbers in cells, and `[[links]]` in cells count as backlinks.
+- `SPLIT` spills its parts across cells when the text is written in the formula, `=SPLIT("a,b", ",")`. For text in a cell, take one part at a time: `=INDEX(SPLIT(A2, ","), 1, 2)` is the second.
+- Lookups (`MATCH`, `VLOOKUP`, `XLOOKUP`) treat `é` and `e` as the same letter; comparisons, `COUNTIF` and `UNIQUE` keep them apart, as Google Sheets does.
 - On Excel files: number formats, column widths and row heights carry over both ways; colours, borders, merged cells, comments, filters, conditional formatting, drop-down lists and Excel's charts do not (an import says what it left out).
 - A spreadsheet with a filter, conditional formatting, checkboxes or drop-down lists can only be changed by this version of Voyager or a later one; an older one (a phone that has not updated yet) shows it read-only until it updates.

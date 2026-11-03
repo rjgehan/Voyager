@@ -53,4 +53,16 @@ describe('find', () => {
     expect(replaceEdit(FILE, at('s1', 0, 0), { query: 'Rent' }, 'R$1')).toEqual({ sheet: 's1', ref: 'A1', content: { v: 'R$1' } });
     expect(replaceEdit(FILE, at('s1', 0, 1), { query: '(rent) (deposit)', regex: true }, '$2 $1')).toEqual({ sheet: 's1', ref: 'A2', content: { v: 'deposit rent' } });
   });
+
+  it('replaces in text that looks like a number, keeping it text, with Match entire cell or an anchored expression', () => {
+    const file: SheetFile = { ...FILE, sheets: [{ ...emptySheet('s1', 'Zip'), cells: { A1: { v: '02139' }, A2: { v: 'TRUE' }, A3: { v: '10%' }, A4: { v: '1/2' } } }] };
+    const at = (row: number) => ({ sheet: 's1', col: 0, row });
+    expect(refs(findMatches(file, 's1', { query: '02139', wholeCell: true }))).toEqual(['s1:A1']);
+    expect(replaceEdit(file, at(0), { query: '02139', wholeCell: true }, '02140')).toEqual({ sheet: 's1', ref: 'A1', content: { v: '02140' } });
+    expect(replaceEdit(file, at(0), { query: '^0', regex: true }, '1')).toEqual({ sheet: 's1', ref: 'A1', content: { v: '12139' } });
+    expect(replaceEdit(file, at(0), { query: '021' }, '031')).toEqual({ sheet: 's1', ref: 'A1', content: { v: '03139' } });
+    expect(replaceEdit(file, at(1), { query: 'TRUE', wholeCell: true }, 'FALSE')).toEqual({ sheet: 's1', ref: 'A2', content: { v: 'FALSE' } });
+    expect(replaceEdit(file, at(2), { query: '10%', wholeCell: true }, '20%')).toEqual({ sheet: 's1', ref: 'A3', content: { v: '20%' } });
+    expect(replaceEdit(file, at(3), { query: '^1/', regex: true }, '3/')).toEqual({ sheet: 's1', ref: 'A4', content: { v: '3/2' } });
+  });
 });

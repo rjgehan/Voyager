@@ -84,14 +84,19 @@ export function replaceEdit(file: SheetFile, match: FindMatch, opts: FindOptions
   if (!cell || (cell.f === undefined && cell.v === undefined)) return null;
   if (cell.f !== undefined && !opts.formulas) return null;
   const fmt = effectiveFormat(sheet, match.col, match.row);
-  const before = cell.f ?? cellText(cell, fmt);
+  // Text is searched as it is: the formula bar's leading ' on text that looks like a number
+  // ('02139, '10%) is no part of it, so Match entire cell and ^ find it.
+  const text = cell.f === undefined && typeof cell.v === 'string' ? cell.v : null;
+  const before = cell.f ?? text ?? cellText(cell, fmt);
   if (!test(re, before)) return null;
   re.lastIndex = 0;
   const literal = opts.regex ? replacement : replacement.replace(/\$/g, '$$$$');
   const after = before.replace(re, literal);
   if (after === before) return null;
   if (cell.f !== undefined) return after.startsWith('=') ? { sheet: sheet.id, ref, content: { f: after } } : { sheet: sheet.id, ref, content: typedInput(after).content };
-  // A value is typed again, so `1500` stays a number; a plain-text cell keeps text.
-  const typed = typedInput(after, { plainText: fmt === '@' });
+  // A value is typed again, so `1500` stays a number; a plain-text cell keeps text, and so does text
+  // that looks like a number (02139 stays text with its zero).
+  const keepText = fmt === '@' || (text !== null && cellText(cell, fmt).startsWith("'"));
+  const typed = typedInput(after, { plainText: keepText });
   return { sheet: sheet.id, ref, content: typed.content };
 }

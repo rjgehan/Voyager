@@ -126,7 +126,7 @@ A formula in a note's table, or in a sentence, can read a [spreadsheet](spreadsh
 - The value follows the spreadsheet as it changes, even before it is saved when it is open on this device, and when another device saves it.
 - A formula that is just one cell (`=Budget.sheet!B10`) shows in that cell's number format, such as `$1,450.00`.
 - Filling a column or `Ctrl+D` moves these references like any other (`Budget.sheet!B2` becomes `B3`).
-- `#REF!` means no such spreadsheet or sheet, `#NAME?` no such named range. `#CYCLE!` means the spreadsheet reads this note's values back (with `NOTETABLE`), so neither can use the other's.
+- `#REF!` means no such spreadsheet or sheet, or a sheet with more than 2,000,000 values, too large for a note to read (the hover says which). `#NAME?` means no such named range. `#CYCLE!` means the spreadsheet reads this note's values back (with `NOTETABLE`), so neither can use the other's.
 - Reading a spreadsheet does not make a link: to see the note among the spreadsheet's backlinks, link it too (`[[Budget.sheet]]`).
 - In a note shared with family, these read the spreadsheets shared with it (in the same shared folder). `NOTEPROP`, `NOTECOUNT` and `NOTEQUERY` need your whole vault, so on the shared page they say *Not available in a shared note*.
 

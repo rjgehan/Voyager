@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { signatureParts } from './formulaText';
 import { friendlyError, functionCatalog } from './functions';
+// The engine registers these before the formula help lists its functions.
+import './sheetsFunctions';
 
 const signature = (name: string) => {
   const info = functionCatalog().find((f) => f.name === name)!;
@@ -21,6 +23,8 @@ describe('the engine’s functions for the formula help', () => {
     expect(signature('COUNTIFS')).toBe('COUNTIFS(criteria_range1, criterion1, [criteria_range2, criterion2, …])');
     // Functions without names of their own take names from their parameters' types.
     expect(signature('ATAN2')).toBe('ATAN2(number1, number2)');
+    // SPLIT has Google Sheets' parameters, not HyperFormula's (text, number).
+    expect(signature('SPLIT')).toBe('SPLIT(text, delimiter, [split_by_each], [remove_empty_text])');
   });
 
   it('explains #NAME? for a function written without its brackets', () => {

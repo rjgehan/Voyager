@@ -2,7 +2,7 @@ import { HyperFormula } from 'hyperformula';
 import { describe, expect, it, vi } from 'vitest';
 import { shownCell } from './display';
 import { typedEdit } from './edits';
-import { ENGINE_ID, Workbook, type WorkbookChange } from './engine';
+import { ENGINE_ID, ENGINE_REVISION, Workbook, type WorkbookChange } from './engine';
 import { cellValue, parseSheet, serializeSheet, SHEET_ENGINE, type SheetFile } from './format';
 import { loadSheetEngine } from './loadEngine';
 import { mergeSheetText } from './merge';
@@ -45,9 +45,87 @@ const BUDGET = {
   named: { Total: 'Budget!$B$10' },
 };
 
+describe('functions with Google Sheets’ meaning', () => {
+  it('formats TEXT with Google Sheets’ format codes', () => {
+    const cases: Array<[string, string]> = [
+      ['=TEXT(1234.5,"#,##0.00")', '1,234.50'],
+      ['=TEXT(0.25,"0%")', '25%'],
+      ['=TEXT(0.125,"0.0%")', '12.5%'],
+      ['=TEXT(1234,"$#,##0")', '$1,234'],
+      ['=TEXT(DATE(2026,10,17),"mmm d, yyyy")', 'Oct 17, 2026'],
+      ['=TEXT(DATE(2026,10,17),"mmmm")', 'October'],
+      ['=TEXT(DATE(2026,10,17),"dddd")', 'Saturday'],
+      ['=TEXT(DATE(2026,10,17),"yyyy-mm-dd")', '2026-10-17'],
+      ['=TEXT(-5,"0;(0)")', '(5)'],
+      ['=TEXT("12","0.0")', '12.0'],
+      ['=TEXT("abc","0")', 'abc'],
+      ['=TEXT(A20,"0.00")', '42.00'],
+    ];
+    const cells: Record<string, unknown> = { A20: { v: 42 } };
+    cases.forEach(([f], i) => (cells[`A${i + 1}`] = { f }));
+    const wb = workbook([{ name: 'S', cells }]);
+    cases.forEach(([, want], i) => expect(value(wb, `A${i + 1}`)).toBe(want));
+  });
+});
+
+describe('SPLIT with Google Sheets’ meaning', () => {
+  it('splits by each character of the delimiter into a spilled row, without empty parts, numbers as numbers', () => {
+    const wb = workbook([
+      {
+        name: 'S',
+        cells: {
+          A1: { f: '=SPLIT("a,b", ",")' },
+          A2: { f: '=SPLIT("a b c", 1)' },
+          A3: { f: '=SPLIT("1, 2;;3", ", ;")' },
+          A4: { f: '=SPLIT("a--b-c", "--", FALSE)' },
+          A5: { f: '=SPLIT("a,,b", ",", TRUE, FALSE)' },
+          A6: { v: 'x,y,z' },
+          B6: { f: '=INDEX(SPLIT(A6, ","), 1, 2)' },
+          C6: { f: '=SPLIT(A6, ",")' },
+          D6: { f: '=COUNTA(SPLIT(A6, ","))' },
+          A7: { v: 'solo' },
+          B7: { f: '=SPLIT(A7, ",")' },
+          A8: { f: '=SPLIT("a", "")' },
+        },
+      },
+    ]);
+    expect([value(wb, 'A1'), value(wb, 'B1')]).toEqual(['a', 'b']);
+    expect(value(wb, 'A2')).toBe('a b c');
+    expect([value(wb, 'A3'), value(wb, 'B3'), value(wb, 'C3')]).toEqual([1, 2, 3]);
+    expect([value(wb, 'A4'), value(wb, 'B4')]).toEqual(['a', 'b-c']);
+    expect([value(wb, 'A5'), value(wb, 'B5'), value(wb, 'C5')]).toEqual(['a', null, 'b']);
+    expect(value(wb, 'B6')).toBe('y');
+    expect(value(wb, 'D6')).toBe(3);
+    expect(value(wb, 'B7')).toBe('solo');
+    // A cell's text cannot spill (the engine sizes a spill before it runs); the error says what works.
+    expect(wb.errorMessage('s1', 'C6')).toMatch(/INDEX\(SPLIT\(A2/);
+    expect(value(wb, 'A8')).toMatchObject({ e: '#VALUE!' });
+  });
+});
+
+describe('text comparison', () => {
+  it('keeps accents apart, as Google Sheets does, and ignores case', () => {
+    const wb = workbook([
+      {
+        name: 'S',
+        cells: {
+          A1: { v: 'é' },
+          A2: { v: 'e' },
+          B1: { f: '=A1=A2' },
+          B2: { f: '=COUNTIF(A1:A2,"e")' },
+          B3: { f: '=ROWS(UNIQUE(A1:A2))' },
+          B4: { f: '="E"="e"' },
+          B5: { f: '=COUNTIF(A1:A2,"café")' },
+        },
+      },
+    ]);
+    expect([value(wb, 'B1'), value(wb, 'B2'), value(wb, 'B3'), value(wb, 'B4'), value(wb, 'B5')]).toEqual([false, 1, 2, true, 0]);
+  });
+});
+
 describe('engine identity', () => {
   it('is the pinned HyperFormula, which new files name', () => {
-    expect(ENGINE_ID).toBe(`hyperformula@${HyperFormula.version}`);
+    expect(ENGINE_ID).toBe(`hyperformula@${HyperFormula.version}+${ENGINE_REVISION}`);
     // An engine upgrade recalculates every sheet; update SHEET_ENGINE deliberately with it.
     expect(SHEET_ENGINE).toBe(ENGINE_ID);
   });

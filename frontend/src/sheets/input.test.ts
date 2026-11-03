@@ -56,11 +56,19 @@ describe('typedInput', () => {
     expect(typedInput('6:05:30')).toEqual({ content: { v: (6 * 3600 + 5 * 60 + 30) / 86400 }, fmt: 'h:mm:ss' });
   });
 
+  it('reads 24 hours or more as a duration, as Google Sheets does', () => {
+    expect(typedInput('25:00')).toEqual({ content: { v: 25 / 24 }, fmt: '[h]:mm:ss' });
+    expect(typedInput('25:30')).toEqual({ content: { v: 25.5 / 24 }, fmt: '[h]:mm:ss' });
+    expect(typedInput('100:00:00')).toEqual({ content: { v: 100 / 24 }, fmt: '[h]:mm:ss' });
+    expect(typedInput('37:00:30')).toEqual({ content: { v: (37 * 3600 + 30) / 86400 }, fmt: '[h]:mm:ss' });
+  });
+
   it('keeps what is no date or time as text', () => {
     expect(typedInput('2026-02-30')).toEqual({ content: { v: '2026-02-30' } });
     expect(typedInput('13/17/2026')).toEqual({ content: { v: '13/17/2026' } });
     expect(typedInput('1850-01-01')).toEqual({ content: { v: '1850-01-01' } });
-    expect(typedInput('25:00')).toEqual({ content: { v: '25:00' } });
+    expect(typedInput('25:00 PM')).toEqual({ content: { v: '25:00 PM' } });
+    expect(typedInput('25:75')).toEqual({ content: { v: '25:75' } });
     expect(typedInput('13:00 PM')).toEqual({ content: { v: '13:00 PM' } });
     expect(typedInput('10:75')).toEqual({ content: { v: '10:75' } });
   });
@@ -85,6 +93,13 @@ describe('numberText and cellText', () => {
     }
     // A date format on a value with a time keeps the time when edited.
     expect(numberText(46312.5625, 'm/d/yyyy')).toBe('2026-10-17 13:30');
+  });
+
+  it('shows durations as elapsed time that reads back as the same value', () => {
+    expect(numberText(1.5, '[h]:mm:ss')).toBe('36:00:00');
+    expect(numberText(0.5, '[h]:mm:ss')).toBe('12:00:00');
+    expect(cellText({ v: 1.5 }, '[h]:mm:ss')).toBe('36:00:00');
+    for (const v of [1.5, 25.5 / 24, 100 / 24]) expect(typedInput(numberText(v, '[h]:mm:ss')).content?.v).toBeCloseTo(v, 10);
   });
 
   it('shows percentages as percentages and other numbers as digits', () => {

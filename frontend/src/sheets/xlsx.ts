@@ -11,7 +11,7 @@ import * as XLSX from 'xlsx';
 import { columnIndex, columnLetters, parseA1, toA1, MAX_COLUMNS, MAX_ROWS } from './a1';
 import { effectiveFormat } from './display';
 import { cellValue, freeSheetName, isCellError, type CachedValue, type ColumnProps, type RowProps, type SheetCell, type SheetFile } from './format';
-import { isGeneral } from './numfmt';
+import { formatKind, isGeneral } from './numfmt';
 import { renameSheetsInFormula } from './refs';
 
 export interface ImportedSheet {
@@ -152,6 +152,14 @@ export function readWorkbook(data: Uint8Array): ImportedBook {
   const wb = XLSX.read(data, { type: 'array', cellFormula: true, cellNF: true, cellStyles: true, cellDates: false, dense: false });
   const skipped = new Set<string>();
   const sheets: ImportedSheet[] = [];
+  // A workbook on the 1904 date system counts days from 1904-01-01, 1462 days after this app's day 0
+  // (1899-12-30): its dates move by that much. Times and durations have no epoch, so they stay.
+  const date1904 = Boolean(wb.Workbook?.WBProps?.date1904);
+  const fromEpoch = (n: CachedValue | undefined, z: unknown): CachedValue | undefined => {
+    if (!date1904 || typeof n !== 'number' || typeof z !== 'string') return n;
+    const kind = formatKind(z);
+    return kind === 'date' || kind === 'datetime' ? n + 1462 : n;
+  };
   for (const sheetName of wb.SheetNames) {
     const ws = wb.Sheets[sheetName];
     const sheet: ImportedSheet = { name: freeSheetName(sheetName, sheets), cells: {}, cols: {}, rows: {} };
@@ -167,17 +175,17 @@ export function readWorkbook(data: Uint8Array): ImportedBook {
         // arrays, which the engine does inside ARRAYFORMULA (Google Sheets imports them the same way).
         const f = fromExcelFormula(cell.f);
         out.f = cell.F && !/^=\s*ARRAYFORMULA\s*\(/i.test(f) ? `=ARRAYFORMULA(${f.slice(1)})` : f;
-        const c = cachedFrom(cell);
+        const c = fromEpoch(cachedFrom(cell), cell.z);
         if (c !== undefined) out.c = c;
       } else if (cell.F) {
         // A value inside an array formula's range: the formula spills into it.
-        const c = cachedFrom(cell);
+        const c = fromEpoch(cachedFrom(cell), cell.z);
         if (c !== undefined) out.c = c;
       } else if (cell.t === 'e') {
         // A literal error has no place in the format; it reads as text.
         out.v = cell.w ?? '#VALUE!';
       } else {
-        const v = cachedFrom(cell);
+        const v = fromEpoch(cachedFrom(cell), cell.z);
         if (v !== undefined && !isCellError(v) && v !== null && v !== '') out.v = v;
       }
       if (cell.z !== undefined && typeof cell.z === 'string' && !isGeneral(cell.z) && (out.v !== undefined || out.f !== undefined || out.c !== undefined)) out.fmt = cell.z;
