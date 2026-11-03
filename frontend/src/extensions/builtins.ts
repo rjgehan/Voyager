@@ -68,7 +68,8 @@ import { registerWorkspace } from '../workspace/register';
 import { navigateHistory } from '../workspace/store';
 import { registerProperties } from '../properties/register';
 import { registerCanvasView } from '../views/canvas/register';
-import { registerKanban } from '../views/kanban/register';
+import { showsKanbanAsMarkdown } from '../views/kanban/detect';
+import { isOpenBoard, registerKanban } from '../views/kanban/register';
 import { registerEncryption } from '../views/encrypted/register';
 import { registerDrawingViews } from '../views/excalidraw/register';
 import { registerPdfView } from '../views/pdf/register';
@@ -120,6 +121,9 @@ function editorCommand(id: string, name: string, run: (kit: EditorKit, view: Edi
 const hasFile = (c: { activePath: string | null }) => c.activePath !== null && currentTree().byPath.has(c.activePath);
 // A note another view shows (an `.excalidraw.md` drawing) has no text to insert into.
 const hasNote = (c: { activePath: string | null }) => c.activePath !== null && isMarkdownViewPath(c.activePath) && currentTree().byPath.has(c.activePath);
+// A note whose text is shown by an editor: a Kanban board shown as a board has none, and text put
+// at its end would land in its settings block, never shown (DESIGN §6.8.4).
+const hasTextNote = (c: { activePath: string | null }) => hasNote(c) && !(isOpenBoard(c.activePath) && !showsKanbanAsMarkdown(c.activePath));
 
 /**
  * Views that can create files add "Create new <label>" to the palette (DESIGN §6.8), also those
@@ -324,7 +328,7 @@ export function registerBuiltins(): void {
     id: 'voice.record',
     name: 'Record voice note',
     icon: Mic,
-    when: hasNote,
+    when: hasTextNote,
     run: (c) => {
       const session = documents.get(c.activePath!);
       if (session) startVoiceNote(session);
@@ -333,7 +337,7 @@ export function registerBuiltins(): void {
   registerCommand({
     id: 'voice.transcribe',
     name: 'Transcribe recording on this line',
-    when: hasNote,
+    when: hasTextNote,
     run: async (c) => {
       const session = documents.get(c.activePath!);
       if (session) await transcribeAtCursor(session);
@@ -342,7 +346,7 @@ export function registerBuiltins(): void {
   registerCommand({
     id: 'editor.insertAttachment',
     name: 'Insert attachment…',
-    when: hasNote,
+    when: hasTextNote,
     run: (c) => {
       const session = documents.get(c.activePath!);
       if (session) pickAndInsertAttachments(session);
@@ -370,7 +374,7 @@ export function registerBuiltins(): void {
   });
   registerCommand({ id: 'daily.prev', name: 'Open previous daily note', when: (c) => isDailyNote(c.activePath), run: (c) => openAdjacentDailyNote(c.activePath!, -1) });
   registerCommand({ id: 'daily.next', name: 'Open next daily note', when: (c) => isDailyNote(c.activePath), run: (c) => openAdjacentDailyNote(c.activePath!, 1) });
-  registerCommand({ id: 'templates.insert', name: 'Insert template', icon: LayoutTemplate, when: hasNote, run: () => useUi.getState().setOverlay('templates') });
+  registerCommand({ id: 'templates.insert', name: 'Insert template', icon: LayoutTemplate, when: hasTextNote, run: () => useUi.getState().setOverlay('templates') });
 
   // ---------- bookmarks (ROADMAP item 12) ----------
   const bookmarked = (c: { activePath: string | null }) => c.activePath !== null && isFileBookmarked(currentBookmarks(), c.activePath);

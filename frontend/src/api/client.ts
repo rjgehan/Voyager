@@ -191,6 +191,9 @@ const FRIENDLY: Partial<Record<ErrorCode, string>> = {
   'block-not-found': 'That block changed in the meantime. Type the link again to pick it.',
 };
 
+/** What a transient failure says (DESIGN §6.20). */
+export const UNREACHABLE_MESSAGE = "Can't reach the server. Try again when the connection returns.";
+
 /** User-facing text for an error (DESIGN §6.20). */
 export function errorMessage(e: unknown): string {
   if (e instanceof ApiError) {
@@ -201,6 +204,8 @@ export function errorMessage(e: unknown): string {
     if (p.status >= 500 && p.incidentId) text += ` · incident ${p.incidentId}`;
     return text;
   }
-  if (e instanceof TransientError) return 'Offline: changes kept on this device';
+  // Neutral: most actions keep nothing on a transient failure. A note's save says itself that its
+  // changes are kept (DocumentSession, the save status).
+  if (e instanceof TransientError) return UNREACHABLE_MESSAGE;
   return e instanceof Error ? e.message : String(e);
 }

@@ -103,6 +103,12 @@ describe('apiFetch', () => {
     expect(errorMessage(e)).toContain('incident abc');
   });
 
+  it('says the server cannot be reached for a transient failure, never that changes were kept', () => {
+    const text = errorMessage(new TransientError('Failed to fetch'));
+    expect(text).toBe("Can't reach the server. Try again when the connection returns.");
+    expect(text).not.toMatch(/kept/);
+  });
+
   it('goes offline after three consecutive transient failures', async () => {
     vi.stubGlobal('fetch', respond(502, ''));
     for (let i = 0; i < 3; i++) await failure(apiFetch('/api/tree'));

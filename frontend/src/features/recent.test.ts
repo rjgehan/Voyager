@@ -45,6 +45,18 @@ describe('recent files', () => {
     expect(recentPaths()).toEqual(['D.md']);
   });
 
+  it('keeps the last opened note when its folder is renamed, so the start page still opens it', () => {
+    recordOpened('Projects/Plan.md', 1);
+    renameRecent('Projects', 'Work');
+    expect(lastOpenedPath()).toBe('Work/Plan.md');
+    recordOpened('A/B/C.md', 2);
+    renameRecent('A', 'Z');
+    expect(lastOpenedPath()).toBe('Z/B/C.md');
+    recordOpened('Projects2/N.md', 3);
+    renameRecent('Projects', 'Elsewhere');
+    expect(lastOpenedPath()).toBe('Projects2/N.md');
+  });
+
   it('removes one entry, or clears the list', () => {
     recordOpened('A.md', 1);
     recordOpened('A.md/x', 2);

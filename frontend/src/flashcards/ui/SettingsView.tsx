@@ -2,9 +2,9 @@
 // way. Only the fields changed here are sent; a field left as it was keeps whatever another device
 // set meanwhile.
 import { useId, useState, type ReactNode } from 'react';
-import { errorMessage } from '../../api/client';
 import { queryClient } from '../../api/queryClient';
 import type { FlashcardConfig, FlashcardsResponse } from '../../api/types';
+import { toastError } from '../../features/errors';
 import { toast } from '../../state/toasts';
 import { flashcardApi } from '../api';
 import { changedFields, configOf, draftOf, type Draft } from '../configForm';
@@ -44,7 +44,7 @@ export function SettingsView({ config, onDone }: { config: FlashcardConfig; onDo
       toast('Flashcard settings saved');
       onDone();
     } catch (e) {
-      toast(errorMessage(e), { kind: 'error' });
+      toastError(e);
     } finally {
       setSaving(false);
     }

@@ -5,7 +5,7 @@ import { MockVault } from '../../api/mock/vault';
 import { queryClient } from '../../api/queryClient';
 import { queryKeys } from '../../api/queryKeys';
 import type { AttachmentResult, FileEntry, TranscriptionResult } from '../../api/types';
-import { ApiError } from '../../api/client';
+import { ApiError, TransientError } from '../../api/client';
 import { pendingUploads } from '../../editor/uploads';
 import { useToasts } from '../../state/toasts';
 import { DocumentSession } from '../../sync/DocumentSession';
@@ -156,6 +156,19 @@ describe('insertRecording', () => {
     toast.action!.run();
     await vi.waitFor(() => expect(session.getText()).toBe('![[Recording 1.m4a]]'));
     expect(upload).toHaveBeenCalledTimes(2);
+    session.dispose();
+  });
+
+  it('an unreachable server is a notice with Retry that does not claim the recording was kept', async () => {
+    const session = await open('');
+    vi.spyOn(api, 'uploadAttachment').mockRejectedValueOnce(new TransientError('Failed to fetch'));
+    await insertRecording(session, new File(['abc'], 'rec.m4a', { type: 'audio/mp4' }), { from: 0, to: 0 }, false);
+    const toast = useToasts.getState().toasts.at(-1)!;
+    expect(toast.kind).not.toBe('error');
+    expect(toast.message).not.toMatch(/kept/);
+    expect(toast.message).toMatch(/^rec.m4a was not uploaded/);
+    expect(toast.timeout).toBe(0);
+    expect(toast.action?.label).toBe('Retry');
     session.dispose();
   });
 

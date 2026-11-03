@@ -21,7 +21,7 @@ The row above the note shows its tabs. Opening a note normally replaces the note
 | Reorder tabs | Drag them |
 | Keep a tab | **Pin** it from its menu (right-click the tab). A pinned tab shows a pin instead of **×**, is not closed by Close tab, Close others or Close tabs to the right, and the notes you open from it open in a new tab. |
 
-Each tab remembers its own back and forward history (the arrows at the top left of the note, or `Ctrl+Alt+←` and `Ctrl+Alt+→`). Your tabs are kept per device and come back when you reopen the app, with their history: the arrows still go back through the notes you had opened in that tab.
+Each tab remembers its own back and forward history (the arrows at the top left of the note, or `Ctrl+Alt+←` and `Ctrl+Alt+→`). Your tabs are kept per device and come back when you reopen the app, with their history: the arrows still go back through the notes you had opened in that tab. The tab you were on comes back on the page it showed (Tasks, the calendar, Settings or a note), unless you asked for today's note on startup.
 
 > [!NOTE]
 > In a web browser, `Ctrl+Shift+T` reopens the browser's own last closed tab, not Voyager's. Use the palette, or give **Reopen closed tab** another key under Settings › Hotkeys.

@@ -1,6 +1,7 @@
 import { QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { TransientError } from '../../api/client';
 import { api } from '../../api/endpoints';
 import { queryClient } from '../../api/queryClient';
 import type { VaultInfo, VaultsResponse } from '../../api/types';
@@ -78,6 +79,15 @@ describe('multiple vaults (ROADMAP item 37)', () => {
     expect((input as HTMLInputElement).value).toBe('work');
     fireEvent.click(button);
     await waitFor(() => expect(create).toHaveBeenCalledWith({ name: 'work' }));
+  });
+
+  it('a create that cannot reach the server says so, without claiming anything was kept', async () => {
+    vi.spyOn(api, 'listVaults').mockResolvedValue(list([main]));
+    vi.spyOn(api, 'createVault').mockRejectedValue(new TransientError('Failed to fetch'));
+    wrap(<VaultsSettings />);
+    fireEvent.change(await screen.findByRole('textbox', { name: 'New vault name' }), { target: { value: 'work' } });
+    fireEvent.click(screen.getByRole('button', { name: /Create/ }));
+    expect(await screen.findByText("Can't reach the server. Try again when the connection returns.")).toBeInTheDocument();
   });
 
   it('says when the server does not create vaults', async () => {

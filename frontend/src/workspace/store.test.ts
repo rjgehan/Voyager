@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { navigateTo, setNavigator, setNewTabOpener } from '../features/navigation';
 import { installTabGestures, wantsNewTab } from './gesture';
 import { installDesktopBridge, type DesktopCommand, type NotesDesktop } from '../desktop/bridge';
-import { activePaneOf, activeTab, allTabs, createWorkspace, split } from './model';
+import { activePaneOf, activeTab, allTabs, createWorkspace, openTab, split } from './model';
 import {
   closeActiveTab,
   focusPaneById,
@@ -14,6 +14,7 @@ import {
   resetWorkspace,
   routerNavigated,
   saveWorkspaceNow,
+  startedAtHome,
   WORKSPACE_KEY,
   workspace,
 } from './store';
@@ -256,6 +257,32 @@ describe('back and forward after the app is reopened', () => {
     expect(activeTab(workspace()).back).toEqual(['/n/a.md', '/n/b.md']);
     navigateHistory('back');
     expect(url()).toBe('/n/b.md');
+  });
+
+  it('starting at "/" brings back the active tab as it was, even a page that is not a note', () => {
+    let saved = createWorkspace('/n/a.md');
+    saved = openTab(saved, '/x/tasks');
+    const pane = activePaneOf(saved);
+    pane.tabs[1] = { ...pane.tabs[1], back: ['/n/b.md'], pinned: true };
+    localStorage.setItem(WORKSPACE_KEY, JSON.stringify(saved));
+    window.history.replaceState({ idx: 0 }, '', '/');
+    resetWorkspace(loadWorkspace());
+    expect(url()).toBe('/x/tasks');
+    expect(window.history.state).toEqual({ idx: 0 });
+    expect(startedAtHome()).toBe(true);
+    // The router then starts on the restored page: nothing changes.
+    routerNavigated('/x/tasks', 'POP');
+    expect(activePaneOf(workspace()).tabs.map((t) => t.route)).toEqual(['/n/a.md', '/x/tasks']);
+    expect(activeTab(workspace())).toMatchObject({ route: '/x/tasks', back: ['/n/b.md'], pinned: true });
+  });
+
+  it('starting at "/" with no saved tabs, or with "/" itself saved, still shows the start page', () => {
+    window.history.replaceState({ idx: 0 }, '', '/');
+    expect(activeTab(loadWorkspace()).route).toBe('/');
+    localStorage.setItem(WORKSPACE_KEY, JSON.stringify(createWorkspace('/')));
+    expect(activeTab(loadWorkspace()).route).toBe('/');
+    expect(url()).toBe('/');
+    expect(startedAtHome()).toBe(false);
   });
 
   it('within a session, the browser’s own history is used as before', () => {

@@ -3,7 +3,7 @@
 // The star keeps a search as a search bookmark (item 12), the one way to save a search.
 import { ArrowDownWideNarrow, FileText, FileType, Search, Star, X } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { errorMessage } from '../../api/client';
+import { errorMessage, isTransient } from '../../api/client';
 import { useSearch } from '../../api/hooks';
 import type { SearchHit, SearchResponse, SearchSort } from '../../api/types';
 import { findSearchBookmarks } from '../../features/bookmarks';
@@ -138,7 +138,8 @@ export function SearchView({ query, onQuery, autoFocus }: Props) {
   }, [focusRequest]);
 
   // Offline the fetch pauses rather than fails: say so, and never show the last query's results as this one's.
-  const offline = search.fetchStatus === 'paused' && (search.isPlaceholderData || search.data === undefined);
+  // Online but the server out of reach (Tailscale off) fails with a transient error: the same case.
+  const offline = (search.fetchStatus === 'paused' && (search.isPlaceholderData || search.data === undefined)) || (search.isError && isTransient(search.error));
   const data = offline ? undefined : search.data;
   const failed = search.isError || offline;
   const empty = trimmed === '';

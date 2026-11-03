@@ -9,8 +9,8 @@ import { queryKeys } from '../api/queryKeys';
 import { dispatchExtensionEvent, eventHandlerNames, onExtensionsChanged } from '../extensions';
 import { prefetchBookmarks } from '../features/bookmarkStore';
 import { announceOrphanDrafts } from '../features/draftRecovery';
-import { activePath, openPath } from '../features/navigation';
-import { rebasePath } from '../features/paths';
+import { activePath, navigateTo } from '../features/navigation';
+import { noteRoute, rebasePath } from '../features/paths';
 import { renameRecent } from '../features/recent';
 import { reportServerBuild } from '../state/buildCheck';
 import { clientId } from '../state/clientId';
@@ -37,8 +37,9 @@ export const syncTarget: SyncTarget = {
     useUi.getState().rekeyNoteModes(from, to);
     const current = activePath();
     const next = current === null ? null : type === 'file' ? (current === from ? to : null) : rebasePath(current, from, to);
-    // A remote move of the open note replaces the stale URL (DESIGN §6.4).
-    if (next !== null && next !== current) openPath(next, null, { replace: true });
+    // A move of the open note replaces the stale URL (DESIGN §6.4). Only the address changes:
+    // the query and anchor stay, and the phone drawer stays open (openPath would close it).
+    if (next !== null && next !== current) navigateTo(noteRoute(next) + window.location.search + window.location.hash, { replace: true });
   },
   onDraftFailure() {
     useUi.getState().setDraftsFailing(true);

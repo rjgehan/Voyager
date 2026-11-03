@@ -29,7 +29,15 @@ function TabButton({ pane, tab, active, paneActive, onDropAt }: { pane: Pane; ta
       selectTabById(pane.id, tab.id);
     } else if (e.key === 'Delete') {
       e.preventDefault();
+      // The focused tab unmounts: keep the focus in this strip, on the tab now shown, or in the
+      // pane's content when the strip went away with its pane (WCAG 2.4.3).
+      const strip = e.currentTarget.parentElement;
       closeTabById(pane.id, tab.id);
+      requestAnimationFrame(() => {
+        if (document.activeElement !== document.body && document.activeElement !== null) return;
+        const selected = strip?.isConnected ? strip.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]') : null;
+        (selected ?? document.getElementById('workspace-scroll'))?.focus();
+      });
     } else if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) {
       e.preventDefault();
       const r = e.currentTarget.getBoundingClientRect();

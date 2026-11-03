@@ -137,9 +137,10 @@ export function renameRecent(from: string, to: string): void {
         }),
     );
   }
-  if (lastOpenedPath() === from) {
+  const last = lastOpenedPath();
+  if (last !== null && rebase(last) !== last) {
     try {
-      localStorage.setItem(vaultKey(LAST_PATH_KEY), to);
+      localStorage.setItem(vaultKey(LAST_PATH_KEY), rebase(last));
     } catch {
       // ignore
     }
