@@ -5,9 +5,12 @@
 // usable meanwhile; Esc closes the panel.
 import { ChevronDown, ChevronUp, X } from 'lucide-react';
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { toA1 } from '../../sheets/a1';
 import type { Workbook } from '../../sheets/engine';
 import { findMatches, findPattern, replaceEdit, type FindMatch, type FindOptions } from '../../sheets/find';
 import { toast } from '../../state/toasts';
+
+const isFormulaAt = (workbook: Workbook, m: FindMatch) => workbook.file.sheets.find((s) => s.id === m.sheet)?.cells[toA1(m.col, m.row)]?.f !== undefined;
 
 interface Props {
   workbook: Workbook;
@@ -96,7 +99,8 @@ export function FindPanel({ workbook, version, sheetId, active, editable, replac
     const replaced = position(order, matches[index]);
     const edit = replaceEdit(workbook.file, matches[index], options, replacement);
     if (edit) workbook.setCells([edit]);
-    else toast('This cell shows a formula’s result: search within formulas to replace in its formula.');
+    else if (isFormulaAt(workbook, matches[index])) toast('This cell shows a formula’s result: search within formulas to replace in its formula.');
+    else toast('This cell shows its value in a number format: what it holds does not contain the text, so nothing was replaced.');
     // On to the first match after the replaced cell among the matches that are left, wrapping around.
     const left = findMatches(workbook.file, sheetId, options);
     if (left.length === 0) {
