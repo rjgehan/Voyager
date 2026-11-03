@@ -6,6 +6,7 @@ import { DocumentSession } from '../../sync/DocumentSession';
 import { CanvasController, FIT_MIN_ZOOM, MIN_ZOOM } from './controller';
 import { OBSIDIAN_SAMPLE } from './fixtures.test-data';
 import { parseCanvas, serializeCanvas } from './format';
+import { mergeCanvas } from './merge';
 import { moveNodes, updateNode } from './ops';
 
 const PATH = 'Board.canvas';
@@ -113,6 +114,49 @@ describe('CanvasController and the document session', () => {
     expect(doc.nodes.find((n) => n.id === PLAN)?.x).toBe(-180);
     expect(controller.getState().doc?.nodes.find((n) => n.id === TEXT)?.text).toBe('From the phone');
     expect(useToasts.getState().toasts.map((t) => t.message)).toContain('Merged changes from another device');
+  });
+
+  it('keeps typing not yet written when another device’s save arrives (clean session)', async () => {
+    const { vault, session, controller } = await setup();
+    controller.startEditing(TEXT);
+    controller.setNodeText(TEXT, 'Typed on the PC');
+    // Within the 250 ms pause: nothing written, the session is clean.
+    expect(session.getSnapshot().status).toBe('clean');
+    const theirs = serializeCanvas(moveNodes(parseCanvas(OBSIDIAN_SAMPLE), new Set([PLAN]), 100, 0));
+    vault.externalWrite(PATH, theirs);
+    await session.onRemoteChanged({ version: version(vault) });
+    const node = (id: string) => controller.getState().doc?.nodes.find((n) => n.id === id);
+    expect(node(TEXT)?.text).toBe('Typed on the PC');
+    expect(node(PLAN)?.x).toBe(-180);
+    expect(controller.getState().editing).toBe(TEXT);
+    await vi.advanceTimersByTimeAsync(2000);
+    const doc = parseCanvas(saved(vault));
+    expect(doc.nodes.find((n) => n.id === TEXT)?.text).toBe('Typed on the PC');
+    expect(doc.nodes.find((n) => n.id === PLAN)?.x).toBe(-180);
+    expect(session.getSnapshot().status).toBe('clean');
+  });
+
+  it('keeps typing not yet written when a save arrives while earlier typing is unsaved (merged)', async () => {
+    const vault = new MockVault(false);
+    vault.createFile({ path: PATH, content: OBSIDIAN_SAMPLE }, 'other-device-1');
+    const fake = fakeApi(vault);
+    const session = new DocumentSession(PATH, sessionDeps(fake.api, { mergeFor: () => mergeCanvas }));
+    await session.ready;
+    const controller = new CanvasController();
+    controller.bind(session);
+    controller.startEditing(TEXT);
+    controller.setNodeText(TEXT, 'a');
+    await vi.advanceTimersByTimeAsync(250);
+    expect(session.getSnapshot().status).toBe('dirty');
+    controller.setNodeText(TEXT, 'ab');
+    const theirs = serializeCanvas(moveNodes(parseCanvas(OBSIDIAN_SAMPLE), new Set([PLAN]), 100, 0));
+    vault.externalWrite(PATH, theirs);
+    await session.onRemoteChanged({ version: version(vault) });
+    expect(controller.getState().doc?.nodes.find((n) => n.id === TEXT)?.text).toBe('ab');
+    await vi.advanceTimersByTimeAsync(2000);
+    const doc = parseCanvas(saved(vault));
+    expect(doc.nodes.find((n) => n.id === TEXT)?.text).toBe('ab');
+    expect(doc.nodes.find((n) => n.id === PLAN)?.x).toBe(-180);
   });
 
   it('leaves a real conflict to the banner, and Take theirs replaces the board', async () => {
