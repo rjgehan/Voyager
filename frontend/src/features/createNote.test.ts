@@ -74,6 +74,24 @@ describe('createNote for files without an inline title (a new drawing, DESIGN §
     expect(usePendingNote.getState()).toMatchObject({ pending: { id, opening: 'Architecture.excalidraw' }, handoff: null });
   });
 
+  it('names a drawing whose title was committed before the user went elsewhere', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const create = api.createFile;
+    const spy = vi.spyOn(api, 'createFile').mockImplementation(async (...args) => {
+      await gate;
+      return create(...args);
+    });
+    onTestFinished(() => spy.mockRestore());
+    createNote('', newDrawingContent(), 'excalidraw');
+    const id = usePendingNote.getState().pending!.id;
+    updatePendingTitle(id, 'Architecture', true);
+    clearPendingNote();
+    release();
+    await vi.waitFor(() => expect(vault.getTree().files.map((f) => f.path)).toEqual(['Architecture.excalidraw']));
+    expect(routes).toEqual([]);
+  });
+
   it('keeps the free name when the title is committed untouched', async () => {
     createNote('', newDrawingContent(), 'excalidraw');
     const id = usePendingNote.getState().pending!.id;
@@ -181,6 +199,51 @@ describe('writing typed into a new note before it exists (DESIGN §6.15)', () =>
     await vi.waitFor(() => expect(vault.readFile('Untitled.md').content).toBe('half a thought'));
     sessionOf('Untitled.md');
     expect(routes).toEqual([]);
+  });
+
+  it('renames to a committed title even when the user went elsewhere meanwhile', async () => {
+    const release = gateCreate();
+    createNote('', '', 'md');
+    const id = usePendingNote.getState().pending!.id;
+    // Enter in the title (its blur commits), writing, then a tap on another note.
+    updatePendingTitle(id, 'Groceries', true);
+    setPendingBody(id, { text: 'milk', selectionStart: 4, selectionEnd: 4 });
+    clearPendingNote();
+    release();
+    await vi.waitFor(() => expect(vault.readFile('Groceries.md').content).toBe('milk'));
+    sessionOf('Groceries.md');
+    expect(vault.getTree().files.map((f) => f.path)).toEqual(['Groceries.md']);
+    // The note is not opened: the user stays where they went.
+    expect(routes).toEqual([]);
+  });
+
+  it('renames to a committed title without a body when the user went elsewhere', async () => {
+    const release = gateCreate();
+    createNote('', '', 'md');
+    const id = usePendingNote.getState().pending!.id;
+    updatePendingTitle(id, 'Groceries', true);
+    clearPendingNote();
+    release();
+    await vi.waitFor(() => expect(vault.getTree().files.map((f) => f.path)).toEqual(['Groceries.md']));
+    expect(vault.readFile('Groceries.md').content).toBe('');
+    expect(routes).toEqual([]);
+  });
+
+  it('renames to a title committed while the note was being read', async () => {
+    const release = gateRead('Untitled.md');
+    createNote('', '', 'md');
+    const id = usePendingNote.getState().pending!.id;
+    updatePendingTitle(id, 'Groceries', false);
+    await settle();
+    // Enter in the title once the note exists but is still being read; then writing.
+    updatePendingTitle(id, 'Groceries', true);
+    setPendingBody(id, { text: 'milk', selectionStart: 4, selectionEnd: 4 });
+    release();
+    await vi.waitFor(() => expect(routes).toEqual(['/n/Groceries.md']));
+    const session = sessionOf('Groceries.md');
+    expect(session.getText()).toBe('milk');
+    expect(vault.getTree().files.map((f) => f.path)).toEqual(['Groceries.md']);
+    expect(usePendingNote.getState().handoff).toBeNull();
   });
 
   it('opens a note without a body once it has loaded, with what was typed into the body meanwhile', async () => {

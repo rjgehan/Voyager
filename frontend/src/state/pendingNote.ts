@@ -51,6 +51,12 @@ export const usePendingNote = create<PendingState>()(() => ({ pending: null, han
  */
 const bodies = new Map<number, PendingBody>();
 
+/**
+ * The titles committed in pending views, by pending id, kept like the bodies: a title committed
+ * before the user went elsewhere still names the note (DESIGN §6.15).
+ */
+const committedTitles = new Map<number, string>();
+
 /** A new pending note (or other file) whose whole title is selected, so typing replaces it. */
 export function startPendingNote(id: number, folder: string, title: string, file: { extension: string; label: string } = { extension: 'md', label: 'note' }): void {
   usePendingNote.setState({
@@ -68,6 +74,8 @@ function followingHandoff(pending: PendingNote, handoff: TitleHandoff | null): T
 export function updatePendingTitle(id: number, title: string, committed: boolean): void {
   const { pending, handoff } = usePendingNote.getState();
   if (pending?.id !== id) return;
+  if (committed) committedTitles.set(id, title);
+  else committedTitles.delete(id);
   const next = { ...pending, title, committed };
   usePendingNote.setState({ pending: next, handoff: followingHandoff(next, handoff) });
 }
@@ -101,6 +109,18 @@ export function setPendingBody(id: number, body: PendingBody): void {
 
 export function hasPendingBody(id: number): boolean {
   return bodies.has(id);
+}
+
+/** The title committed for pending note `id`, or null. */
+export function committedTitle(id: number): string | null {
+  return committedTitles.get(id) ?? null;
+}
+
+/** The title committed for pending note `id` (consumed once, by the note it became), or null. */
+export function takeCommittedTitle(id: number): string | null {
+  const title = committedTitles.get(id) ?? null;
+  committedTitles.delete(id);
+  return title;
 }
 
 /** Consumed once, by the note that pending note `id` became. */
