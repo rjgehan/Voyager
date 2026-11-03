@@ -4,6 +4,7 @@
 import { EditorSelection, Prec, type Extension } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { inCode } from './linkAt';
+import { tableCellHost } from './livePreview/table/facets';
 
 const MARKUP = new Set(['*', '_', '~', '=', '`', '$']);
 
@@ -14,6 +15,9 @@ export const markupPairs: Extension = Prec.high(
     const ranges = state.selection.ranges;
     // Every range selects text on one line, outside code (where the character is just typed).
     if (ranges.some((r) => r.empty || state.doc.lineAt(r.from).number !== state.doc.lineAt(r.to).number || inCode(state, r.from + 1))) return false;
+    // A table cell selected whole (Tab, the toolbar's Next cell, select all) is replaced by what is
+    // typed, as in Google Sheets, so a formula (`=B2*2`) or an amount (`$5`) can be typed over it.
+    if (state.facet(tableCellHost) !== null && ranges.some((r) => r.from === 0 && r.to === state.doc.length)) return false;
     view.dispatch(
       state.changeByRange((r) => ({
         changes: [

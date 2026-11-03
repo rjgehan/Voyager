@@ -143,7 +143,7 @@ function DrawingEditor({ session, snapshot, props }: { session: DocumentSession;
   const theme = useAppTheme();
   const apiRef = useRef<ExcalidrawImperativeAPI | null>(null);
   // Opened from the keyboard (quick switcher, palette): Excalidraw takes the focus, so its keys work at once.
-  const [autoFocus] = useState(() => wantsNoteFocus());
+  const [autoFocus] = useState(() => wantsNoteFocus(session.path));
   const readOnly = snapshot.status === 'readonly' || snapshot.lossy;
 
   // Text the session puts into its buffer (remote changes, merges, Take theirs) reaches the scene

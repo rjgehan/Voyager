@@ -11,6 +11,7 @@ import { noteContext } from './context';
 import { insertHorizontalRule, toggleCheckbox } from './editorCommands';
 import { setHeading, toggleBulletList, toggleLink, toggleNumberedList, toggleQuote } from './formatting';
 import { insertTable } from './livePreview/table';
+import { isBlankForBlock } from './blankLine';
 import type { SlashItem } from './slashRegistry';
 
 /**
@@ -22,7 +23,7 @@ export function insertBlock(view: EditorView, text: string, cursor: number = tex
   const { state } = view;
   if (state.readOnly) return false;
   const line = state.doc.lineAt(state.selection.main.head);
-  const blank = line.text.trim() === '';
+  const blank = isBlankForBlock(line.text);
   const previous = line.number > 1 ? state.doc.line(line.number - 1) : null;
   const next = line.number < state.doc.lines ? state.doc.line(line.number + 1) : null;
   const before = blank ? (previous && previous.text.trim() !== '' ? '\n' : '') : '\n\n';

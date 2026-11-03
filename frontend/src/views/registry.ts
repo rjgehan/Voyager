@@ -73,6 +73,22 @@ export function registerView(d: FileViewDescriptor): void {
   for (const l of listeners) l();
 }
 
+const loadedViews = new WeakMap<FileViewDescriptor, { default: ComponentType<FileViewProps> }>();
+
+/** The view module of `d` once `preloadView` has loaded it. */
+export function loadedView(d: FileViewDescriptor): { default: ComponentType<FileViewProps> } | undefined {
+  return loadedViews.get(d);
+}
+
+/**
+ * Loads the view chunk of `entry` ahead of its first render, which then shows the view in the same
+ * commit instead of a fallback first (a new note replacing its pending view, DESIGN §6.15).
+ */
+export async function preloadView(entry: FileEntry): Promise<void> {
+  const d = viewFor(entry);
+  if (!loadedViews.has(d)) loadedViews.set(d, await d.load());
+}
+
 /** Never null once the built-ins are registered: 'unsupported' matches everything with 1. */
 export function viewFor(entry: FileEntry): FileViewDescriptor {
   let best: FileViewDescriptor | null = null;

@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { queryClient } from '../../api/queryClient';
 import { queryKeys } from '../../api/queryKeys';
 import { DEFAULT_SETTINGS } from '../../features/settings';
-import { startPendingNote, takePendingBody, updatePendingTitle, usePendingNote } from '../../state/pendingNote';
+import { setPendingProblem, startPendingNote, takePendingBody, updatePendingTitle, usePendingNote, whenRetryAsked } from '../../state/pendingNote';
 import { PendingNoteView } from './PendingNoteView';
 
 function view() {
@@ -57,6 +57,35 @@ describe('PendingNoteView', () => {
     expect(screen.getByText('Creating the note…')).toBeInTheDocument();
     fireEvent.change(body, { target: { value: 'milk\neggs' } });
     expect(takePendingBody(5)).toEqual({ text: 'milk\neggs', selectionStart: 9, selectionEnd: 9 });
+  });
+
+  it('keeps the title’s selection with the text it belongs to', () => {
+    queryClient.setQueryData(queryKeys.settings(), { settings: DEFAULT_SETTINGS, version: 'v1', readOnly: false });
+    startPendingNote(7, '', 'Untitled');
+    render(view());
+    const title = screen.getByLabelText<HTMLTextAreaElement>('Note title');
+    // "I" typed over the selected "Untitled": the input event comes before any selectionchange, and
+    // the note may be handed over in between.
+    fireEvent.change(title, { target: { value: 'I', selectionStart: 1, selectionEnd: 1 } });
+    expect(usePendingNote.getState().pending).toMatchObject({ title: 'I', selectionStart: 1, selectionEnd: 1 });
+  });
+
+  it('says when it waits for the server, and offers Try again when the server refused the note', async () => {
+    queryClient.setQueryData(queryKeys.settings(), { settings: DEFAULT_SETTINGS, version: 'v1', readOnly: false });
+    startPendingNote(8, '', 'Untitled');
+    updatePendingTitle(8, 'Groceries', true);
+    setPendingProblem(8, { message: "Can't reach the server.", retry: 'auto' });
+    const { rerender } = render(view());
+    expect(screen.getByRole('status')).toHaveTextContent("Can't reach the server.");
+    expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
+    setPendingProblem(8, { message: 'The note could not be created: The folder name is not allowed', retry: 'manual' });
+    rerender(view());
+    expect(screen.getByRole('alert')).toHaveTextContent('The folder name is not allowed');
+    // The title stays, and Try again asks the flow to create the note again.
+    expect(screen.getByLabelText('Note title')).toHaveValue('Groceries');
+    const asked = whenRetryAsked(8);
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    await expect(asked).resolves.toBe(true);
   });
 
   it('a tap in the body commits the title the same way', () => {

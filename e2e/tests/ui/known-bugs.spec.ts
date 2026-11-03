@@ -11,7 +11,6 @@ import { editor, newNote, noteTitle, openNote } from '../../lib/ui.ts';
 
 // On the PC every time; on the phone (the drawer's New note) only sometimes, so not tested there.
 test('New note pressed while the app is still opening keeps what is typed into its title @desktop', async ({ page }) => {
-  test.fail(true, 'KNOWN BUG (FINDINGS F2): before the tree has loaded, New note does not focus the title, so typing is lost; or the start page then replaces the new note');
   // A slow tailnet on a phone's cold start: the tree takes a while.
   await page.route('**/api/tree', async (route) => {
     await new Promise((r) => setTimeout(r, 1500));

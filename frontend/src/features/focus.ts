@@ -7,28 +7,37 @@ import { displayName } from './paths';
 /** A request expires, so a view that mounts much later (a slow lazy chunk) does not steal focus. */
 const REQUEST_TTL_MS = 5000;
 let focusUntil = 0;
+/** The file the request was made for; null for whichever view mounts next. */
+let focusPath: string | null = null;
 let clearScheduled = false;
 
-/** The next note view to mount takes the keyboard focus. */
-export function requestNoteFocus(): void {
+/**
+ * The next note view to mount takes the keyboard focus: the view of `path` when given, so a view
+ * of another file mounting first (the pane's previous file on the way) cannot take it.
+ */
+export function requestNoteFocus(path?: string): void {
   focusUntil = Date.now() + REQUEST_TTL_MS;
+  focusPath = path ?? null;
 }
 
 /** Withdraws a pending request (the navigation it was made for did not happen). */
 export function cancelNoteFocus(): void {
   focusUntil = 0;
+  focusPath = null;
 }
 
 /**
- * True when a note view mounting now should take the focus. The request stays valid until the
- * current task ends, so a StrictMode remount (which recreates the editor) focuses too.
+ * True when the view of `path` mounting now should take the focus. The request stays valid until
+ * the current task ends, so a StrictMode remount (which recreates the editor) focuses too.
  */
-export function wantsNoteFocus(): boolean {
+export function wantsNoteFocus(path?: string): boolean {
   if (Date.now() >= focusUntil) return false;
+  if (focusPath !== null && path !== undefined && path !== focusPath) return false;
   if (!clearScheduled) {
     clearScheduled = true;
     setTimeout(() => {
       focusUntil = 0;
+      focusPath = null;
       clearScheduled = false;
     }, 0);
   }
@@ -53,7 +62,7 @@ export function announce(message: string): void {
 /** After opening `path`: focus for keyboard users, an announcement for pointer users. */
 export function afterOpen(path: string, viaKeyboard: boolean): void {
   if (viaKeyboard) {
-    requestNoteFocus();
+    requestNoteFocus(path);
     return;
   }
   announce(`Opened ${displayName(path)}`);

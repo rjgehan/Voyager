@@ -16,7 +16,7 @@ Click or tap a cell and type. Each change is saved in the note as you go, and `C
 
 | Key | Moves to |
 |---|---|
-| `Tab`, `Shift+Tab` | The next or previous cell. `Tab` in the last cell adds a row. |
+| `Tab`, `Shift+Tab` | The next or previous cell, with its text selected so that typing replaces it (as in Google Sheets, `=` starts a formula). `Tab` in the last cell adds a row. |
 | `Enter`, `Shift+Enter` | The cell below or above. `Enter` in the last row adds a row. |
 | Arrow keys | The next cell, once the cursor reaches the edge of the text |
 | `Esc` | Back to the note, under the table |

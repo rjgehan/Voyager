@@ -18,6 +18,7 @@ import { tableEdit } from './facets';
 import { gridOf, type TableGrid } from './grid';
 import { insertTable, moveToCell, refreshTables, tableBlocks, tableCellFormatters, tables, type TableCellFormatter } from './index';
 import { sourceFiles } from '../../../test/sources';
+import { typeText } from '../../../test/noteEditor';
 
 const views: EditorView[] = [];
 
@@ -335,6 +336,33 @@ describe('moving between cells', () => {
     expect(grid(view).activeCell()).toMatchObject({ row: 2, column: 0 });
     type(cellEditor(view), 'e');
     expect(view.state.doc.toString()).toBe('| a | b |\n|---|---|\n| c | d |\n| e |   |\n\nnext');
+  });
+
+  it('typing over the cell Tab selected replaces it, = and $ included (a formula typed the Sheets way)', () => {
+    const doc = '| Item | Qty | Cost |\n| --- | --- | --- |\n| Pen | 3 | 450 |';
+    for (const typed of ['=B2*2', '$5', '*2', '_x', '~x', '`x']) {
+      const view = editor(doc);
+      grid(view).activate(1, 1, 'end');
+      press(cellEditor(view), 'Tab');
+      expect(cellEditor(view).state.selection.main).toMatchObject({ from: 0, to: 3 });
+      typeText(cellEditor(view), typed);
+      expect(cellEditor(view).state.doc.toString()).toBe(typed);
+    }
+    // The phone toolbar's Next cell selects the same way.
+    const view = editor(doc);
+    grid(view).activate(1, 1, 'end');
+    moveToCell(cellEditor(view), 1);
+    typeText(cellEditor(view), '=B2*2');
+    expect(view.state.doc.toString()).toBe('| Item | Qty | Cost |\n| --- | --- | --- |\n| Pen | 3 | =B2*2 |');
+  });
+
+  it('typing a formatting character over part of a cell still wraps it', () => {
+    const view = editor('| a |\n|---|\n| some words |');
+    grid(view).activate(1, 0, 'end');
+    const cell = cellEditor(view);
+    cell.dispatch({ selection: EditorSelection.range(0, 4) });
+    typeText(cell, '*');
+    expect(cell.state.doc.toString()).toBe('*some* words');
   });
 
   it('Enter moves down, adding a row at the end; Shift-Enter moves up', () => {
@@ -733,6 +761,12 @@ describe('inserting a table', () => {
     expect(view.state.doc.toString()).toBe('Some text\n\n|     |     |\n| --- | --- |\n|     |     |\n|     |     |');
   });
 
+  it('replaces an empty list item (the phone toolbar and the palette on a fresh bullet)', () => {
+    const view = editor('- one\n- ‸');
+    insertTable(view);
+    expect(view.state.doc.toString()).toBe('- one\n\n|     |     |\n| --- | --- |\n|     |     |\n|     |     |');
+  });
+
   it('inserts the text in source mode, with the caret in the first cell', () => {
     const view = editor('‸', { config: null });
     insertTable(view);
@@ -746,6 +780,18 @@ describe('inserting a table', () => {
     const before = view.state.doc.toString();
     expect(insertTable(cellEditor(view))).toBe(true);
     expect(view.state.doc.toString()).toBe(before);
+  });
+});
+
+describe('the formula bar', () => {
+  it('shows over the note, above the table, so showing or hiding it never moves the grid (a quick second tap lands where it was aimed)', async () => {
+    const css = (await sourceFiles('.css'))['styles/editor.css'].replace(/\/\*[\s\S]*?\*\//g, '');
+    const bar = /\.cm-lp-formula-bar\s*\{([^}]*)\}/.exec(css)?.[1] ?? '';
+    expect(bar).toMatch(/position:\s*absolute/);
+    expect(bar).toMatch(/bottom:\s*100%/);
+    // Its table is the containing block.
+    const table = [...css.matchAll(/(?:^|\})\s*\.cm-lp-table\s*\{([^}]*)\}/g)].map((m) => m[1]).join(';');
+    expect(table).toMatch(/position:\s*relative/);
   });
 });
 

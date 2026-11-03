@@ -1,7 +1,7 @@
 // The routes of DESIGN §6.4, rendered once per pane (§6.40): each pane passes the location of its
 // shown tab, so an inactive pane renders its own route while the URL shows the active pane's.
 import { lazy, Suspense, type ComponentType } from 'react';
-import { Route, Routes, type Location } from 'react-router';
+import { Route, Routes, useLocation, type Location } from 'react-router';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { HomePage } from './components/pages/HomePage';
 import { NotFoundPage } from './components/pages/NotFoundPage';
@@ -9,6 +9,7 @@ import { PendingNoteView } from './components/pages/PendingNoteView';
 import { SearchPage } from './components/pages/SearchPage';
 import { TrashPage } from './components/pages/TrashPage';
 import { registeredPages, useExtensionsVersion, type PageDescriptor } from './extensions';
+import { pathFromLocation } from './features/paths';
 import { usePendingNote } from './state/pendingNote';
 import { FileView } from './views/FileView';
 
@@ -30,9 +31,12 @@ const pageFallback = <div className="view-loading" aria-busy="true" />;
 export function AppRoutes({ location, active = true }: { location?: Location; active?: boolean }) {
   useExtensionsVersion();
   const pending = usePendingNote((s) => s.pending);
+  const routerLocation = useLocation();
   const pages = registeredPages().map((p) => ({ route: p.route, Page: pageComponent(p) }));
-  // A note being created shows in the active pane, where New note was asked for.
-  if (pending && active) return <PendingNoteView key={pending.id} pending={pending} />;
+  // A note being created shows in the active pane, where New note was asked for, until the pane
+  // shows the note it became (never the pane's previous route in between).
+  const opened = pending?.opening != null && pathFromLocation((location ?? routerLocation).pathname) === pending.opening;
+  if (pending && active && !opened) return <PendingNoteView key={pending.id} pending={pending} />;
   return (
     <Routes location={location}>
       <Route path="/" element={<HomePage />} />
