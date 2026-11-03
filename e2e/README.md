@@ -19,11 +19,15 @@ npm run test:scripts       # the tooling's own tests (no server needed)
 ```
 
 - **Production mode.** `npm run reset -- --prod` serves the *built* frontend from the jar on :18570,
-  as the Docker image does (the frontend is built first when `frontend/src` changed). CI uses it.
+  as the Docker image does (the frontend is built first when anything its build reads changed:
+  `frontend/src`, `public/`, the files at the top of `frontend/` such as `index.html`, `share.html`,
+  `vite.config.ts` and its plugins, and the user guide in `docs/guide`). CI uses it.
   Some bugs only exist in the built app (lazy chunks, see "Known bugs" below).
-- **Rebuilds.** `reset` rebuilds the jar when `backend/src/main` or `pom.xml` is newer than
-  `backend/target/classes` (`--build` forces it). Run `npm ci` in `frontend/` once before the first
-  reset.
+- **Rebuilds.** `reset` rebuilds the jar when `backend/src/main`, `pom.xml` or `backend/target/classes`
+  is newer than the jar's last packaging (the time of `notesapp-*.jar.original`: the jar's own is
+  fixed by the reproducible build), so a `mvnw test`, a failed `verify` or an IDE compile after an
+  edit no longer passes for a current jar. `--build` forces both rebuilds. Run `npm ci` in
+  `frontend/` once before the first reset.
 - **Ports and processes.** Only :18570 and :5153 (`E2E_API_PORT`, `E2E_WEB_PORT` to change them).
   `reset` refuses to start when something else listens there, and stops only the processes it
   recorded in `.run/pids.json`, by PID, after checking each is still the java or node it started
@@ -64,7 +68,7 @@ for it, as for the unit tests: a change that renames a button or label a test us
 | `tests/ui/layout.spec.ts` | Layout regressions jsdom cannot see: the note header in a narrow split pane, Dataview tables on a phone |
 | `tests/ui/known-bugs.spec.ts` | Bugs found and not fixed yet (below) |
 | `tests/screens/inventory.spec.ts` | Not a test: captures every page, panel and sheet for the PDF |
-| `scripts/*.test.mjs` | The suite's own tooling, with `npm run test:scripts` (no server, no browser; CI runs it before the suite): each project lists only its own folder wherever the checkout lives; `stop` stops what was recorded on Windows, Linux and macOS, and never forgets a process it could not check |
+| `scripts/*.test.mjs` | The suite's own tooling, with `npm run test:scripts` (no server, no browser; CI runs it before the suite): each project lists only its own folder wherever the checkout lives; `reset` rebuilds a jar or frontend older than what it is built from; `stop` stops what was recorded on Windows, Linux and macOS, and never forgets a process it could not check |
 
 UI tests run on both devices (`desktop`, 1366 × 860, and `iphone`, 390 × 844 with touch, no hover
 and an iPhone user agent, so the app takes its iOS paths); a title with `@desktop` or `@phone` keeps

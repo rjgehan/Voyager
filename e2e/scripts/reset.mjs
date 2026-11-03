@@ -6,12 +6,14 @@
 //   npm run reset -- --prod    the jar serving the BUILT frontend on :18570, as in production
 //   npm run reset -- --build   rebuild the jar (and, with --prod, the frontend) even if it looks current
 //
-// The jar is rebuilt by itself when backend/src or backend/pom.xml is newer than it, the frontend
-// build (--prod) when frontend/src, index.html or the lockfile is.
+// The jar is rebuilt by itself when backend/src/main, pom.xml or target/classes is newer than its
+// last packaging, the frontend build (--prod) when anything `npm run build` reads is newer than it
+// (scripts/builds.mjs).
 import { execFileSync, execSync, spawn } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, openSync, readFileSync, rmSync } from 'node:fs';
 import { connect } from 'node:net';
 import { join } from 'node:path';
+import { findJar, frontendIsStale, jarIsStale } from './builds.mjs';
 import { API_PORT, E2E_LOGIN, ROOT, RUN, WEB_PORT, recordPids, stopRecorded, writeEnv } from './stack.mjs';
 
 const args = new Set(process.argv.slice(2));
@@ -26,26 +28,6 @@ const WEB_URL = prod ? `http://localhost:${API_PORT}` : `http://localhost:${WEB_
 // origin must be allowed too.
 const ALLOWED_HOSTS = [`localhost:${WEB_PORT}`, `127.0.0.1:${WEB_PORT}`, `localhost:${API_PORT}`, `127.0.0.1:${API_PORT}`];
 
-/** Newest modification time under a path (a file, or a folder walked recursively). */
-function newest(path) {
-  if (!existsSync(path)) return 0;
-  const st = statSync(path);
-  if (!st.isDirectory()) return st.mtimeMs;
-  let max = st.mtimeMs;
-  for (const d of readdirSync(path, { withFileTypes: true })) {
-    if (d.name === 'node_modules' || d.name === 'dist') continue;
-    max = Math.max(max, newest(join(path, d.name)));
-  }
-  return max;
-}
-
-function findJar() {
-  const target = join(ROOT, 'backend', 'target');
-  if (!existsSync(target)) return null;
-  const jar = readdirSync(target).find((f) => /^notesapp-.*\.jar$/.test(f) && !f.endsWith('-plain.jar'));
-  return jar ? join(target, jar) : null;
-}
-
 function run(cmd, cmdArgs, cwd, env = {}) {
   console.log(`> ${cmd} ${cmdArgs.join(' ')}   (in ${cwd})`);
   const opts = { cwd, stdio: 'inherit', env: { ...process.env, ...env } };
@@ -58,19 +40,16 @@ function run(cmd, cmdArgs, cwd, env = {}) {
 }
 
 function ensureJar() {
-  let jar = findJar();
   const backend = join(ROOT, 'backend');
-  // The jar's own timestamp is fixed (reproducible builds), so compare with the compiled classes.
-  const built = newest(join(backend, 'target', 'classes'));
-  const stale = !jar || Math.max(newest(join(backend, 'src', 'main')), newest(join(backend, 'pom.xml'))) > built;
-  if (forceBuild || stale) {
-    console.log(jar ? 'Rebuilding the backend jar (sources changed)...' : 'Building the backend jar...');
+  let jar = findJar(backend);
+  if (forceBuild || jarIsStale(backend)) {
+    console.log(jar ? 'Rebuilding the backend jar (sources or classes changed since it was packaged)...' : 'Building the backend jar...');
     // Offline locally (the user's Maven cache has everything); CI downloads what it needs.
     const mvnArgs = ['-B', '-q', '-DskipTests', 'package', ...(process.env.CI ? ['-ntp'] : ['-o'])];
     // By its full path: cmd.exe may be set not to look in the current folder.
     if (win) run(join(backend, 'mvnw.cmd'), mvnArgs, backend);
     else run('sh', ['./mvnw', ...mvnArgs], backend);
-    jar = findJar();
+    jar = findJar(backend);
   }
   if (!jar) throw new Error('No backend/target/notesapp-*.jar after the build.');
   return jar;
@@ -78,9 +57,7 @@ function ensureJar() {
 
 function ensureFrontendBuild() {
   const fe = join(ROOT, 'frontend');
-  const dist = join(fe, 'dist', 'index.html');
-  const src = Math.max(newest(join(fe, 'src')), newest(join(fe, 'index.html')), newest(join(fe, 'package-lock.json')));
-  if (forceBuild || !existsSync(dist) || src > statSync(dist).mtimeMs) {
+  if (forceBuild || frontendIsStale(fe)) {
     console.log('Building the frontend...');
     run('npm', ['run', 'build'], fe);
   }
