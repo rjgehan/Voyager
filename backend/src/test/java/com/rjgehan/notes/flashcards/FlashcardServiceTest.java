@@ -139,4 +139,28 @@ class FlashcardServiceTest {
 		assertThat(retried.version()).isEqualTo(Hashing.blobId(Files.readAllBytes(file())));
 	}
 
+	@Test
+	void anUnreadableAnswerLineIsKeptBesideTheFile() throws IOException {
+		byte[] broken = seedAndBreak("\"2026-10-14T09:00:00.000Z good\"", "\"2026-10-14 09:00 good\"");
+
+		this.service.review(List.of(review("c3", "2026-10-15T10:00:00.000Z", "good")), TestVault.ALICE, null);
+
+		List<Path> backups = backups();
+		assertThat(backups).hasSize(1);
+		assertThat(Files.readAllBytes(backups.get(0))).isEqualTo(broken);
+	}
+
+	@Test
+	void answersThatAreNotAListAreKeptBesideTheFile() throws IOException {
+		String bad = "{\"schemaVersion\": 1, \"cards\": {\"a1\": {\"reviews\": \"2026-10-14T09:00:00.000Z good\"}}}";
+		Files.createDirectories(file().getParent());
+		Files.writeString(file(), bad);
+
+		this.service.review(List.of(review("c3", "2026-10-15T10:00:00.000Z", "good")), TestVault.ALICE, null);
+
+		List<Path> backups = backups();
+		assertThat(backups).hasSize(1);
+		assertThat(Files.readString(backups.get(0))).isEqualTo(bad);
+	}
+
 }
