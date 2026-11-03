@@ -15,6 +15,7 @@ How to run, test and change NotesApp locally, how the repository is laid out, an
 | `.github/` | CI, image publishing, the GitHub Pages demo, Dependabot |
 | `Dockerfile` | Three stages: frontend build, backend build (JDK 21), JDK 25 runtime with an AOT cache |
 | `docs/` | Design, API contract, deployment runbooks, roadmap, feature list, screenshots (`images/`) |
+| `perf/` | The load-test kit: a large generated vault, and measurements of the production jar and of the app in a browser ([PERFORMANCE.md](PERFORMANCE.md)) |
 | `scripts/` | `third-party-notices.mjs`, which regenerates `THIRD_PARTY_NOTICES.md` |
 
 ## Local development (Windows)

@@ -47,6 +47,8 @@ export function GraphCanvas({ view, groupColors, display, forces, focusId, onOpe
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const layoutRef = useRef<LayoutClient | null>(null);
+  /** The links' layer at CSS-pixel resolution (renderer `bulkLinkWidth`); null where 2D canvases are unavailable. */
+  const linkLayerRef = useRef<CanvasRenderingContext2D | null>(null);
   const s = useRef({
     transform: { x: 0, y: 0, k: 1 } as Transform,
     positions: null as Float32Array | null,
@@ -101,6 +103,7 @@ export function GraphCanvas({ view, groupColors, display, forces, focusId, onOpe
       hover: st.hover,
       highlighted: st.highlighted,
       focus: st.focus,
+      linkLayer: linkLayerRef.current,
     });
   }, []);
 
@@ -249,6 +252,12 @@ export function GraphCanvas({ view, groupColors, display, forces, focusId, onOpe
       st.dpr = dpr;
       canvas.width = Math.max(1, Math.round(rect.width * dpr));
       canvas.height = Math.max(1, Math.round(rect.height * dpr));
+      if (!linkLayerRef.current) linkLayerRef.current = document.createElement('canvas').getContext('2d');
+      const layer = linkLayerRef.current?.canvas;
+      if (layer) {
+        layer.width = Math.max(1, Math.round(rect.width));
+        layer.height = Math.max(1, Math.round(rect.height));
+      }
       if (changed && !st.userMoved) fit();
       requestDraw();
     };

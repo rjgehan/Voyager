@@ -140,6 +140,7 @@ Or run the frontend alone on the in-memory mock (`$env:VITE_MOCK_API = "1"; npm 
 | [DESKTOP.md](docs/DESKTOP.md) | The Windows and macOS desktop app |
 | [CLIPPER.md](docs/CLIPPER.md) | The web clipper: browser extension, bookmarklet, iPhone Shortcut |
 | [ACCESSIBILITY.md](docs/ACCESSIBILITY.md) | WCAG 2.2 AA status, how it is tested, known gaps |
+| [PERFORMANCE.md](docs/PERFORMANCE.md) | Performance at scale: the load-test kit, results before and after, known limits |
 | [SECURITY.md](docs/SECURITY.md) | Threat model, the trust boundaries of each deployment layout, the security audit's findings, residual risks and hardening advice ([SECURITY.md](SECURITY.md): how to report a vulnerability) |
 | [ROADMAP.md](docs/ROADMAP.md) | Every roadmap item, what each one became, and the proposals still open |
 

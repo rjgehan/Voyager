@@ -8,6 +8,7 @@ import java.util.regex.Pattern;
 
 import com.rjgehan.notes.api.dto.SearchMatch;
 import com.rjgehan.notes.api.dto.TextRange;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Search snippets (DESIGN §5.5.10): up to three matching body lines per hit, each clipped to 200 characters around
@@ -47,7 +48,21 @@ public final class SnippetBuilder {
 	 */
 	public static Snippets build(String basename, String text, NoteParse parse, List<TermPattern> patterns,
 			List<Pattern> regexes, SearchRegex.Budget budget, boolean paged) {
+		return build(basename, text, parse, patterns, regexes, budget, paged, null);
+	}
+
+	/**
+	 * {@link #build(String, String, NoteParse, List, List, SearchRegex.Budget, boolean)} for a document whose kept
+	 * token sequence {@code body} the index gave along with it ({@link VaultIndex#bodies}), or null. With one, the
+	 * matching lines are found in the sequence, so only the lines that become snippets are tokenized again: without
+	 * it, building the snippets of a 5 MB note means tokenizing all of it, for every search that finds it.
+	 */
+	public static Snippets build(String basename, String text, NoteParse parse, List<TermPattern> patterns,
+			List<Pattern> regexes, SearchRegex.Budget budget, boolean paged, SearchIndex.@Nullable Body body) {
 		List<TextRange> titleRanges = ranges(Tokenizer.tokenize(basename), patterns, 0);
+		if (regexes.isEmpty() && !patterns.isEmpty() && fitsSequence(body, parse, patterns)) {
+			return fromSequence(titleRanges, text, parse, patterns, paged, body);
+		}
 		List<SearchMatch> matches = new ArrayList<>();
 		int more = 0;
 		if (!patterns.isEmpty() || !regexes.isEmpty()) {
@@ -82,6 +97,77 @@ public final class SnippetBuilder {
 				Clipped clipped = clip(text.substring(start, end), found, MATCH_WIDTH);
 				matches.add(new SearchMatch(line, clipped.text(), clipped.ranges(), paged ? page : null));
 			}
+		}
+		return new Snippets(titleRanges, matches, more);
+	}
+
+	/** True when {@code body} describes {@code parse}'s lines and every pattern can be checked against it. */
+	private static boolean fitsSequence(SearchIndex.@Nullable Body body, NoteParse parse,
+			List<TermPattern> patterns) {
+		if (body == null || body.lineTokens().length != parse.lineStarts().length + 1) {
+			return false;
+		}
+		for (TermPattern pattern : patterns) {
+			if (pattern.terms().isEmpty() || pattern.terms().size() > SearchIndex.maxSequencePattern()) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/**
+	 * The snippets of the patterns alone, found through the kept body: a line matches when some pattern occurs in its
+	 * tokens, exactly as when the line is tokenized ({@link TermPattern#matches} decides for each distinct term once).
+	 * The lines shown are tokenized again for their highlight ranges; the others are only counted.
+	 */
+	private static Snippets fromSequence(List<TextRange> titleRanges, String text, NoteParse parse,
+			List<TermPattern> patterns, boolean paged, SearchIndex.Body body) {
+		String[] terms = body.terms();
+		long[][] masks = new long[patterns.size()][];
+		for (int p = 0; p < patterns.size(); p++) {
+			TermPattern pattern = patterns.get(p);
+			long[] mask = new long[terms.length];
+			for (int j = 0; j < terms.length; j++) {
+				for (int k = 0; k < pattern.terms().size(); k++) {
+					if (pattern.matches(k, terms[j])) {
+						mask[j] |= 1L << k;
+					}
+				}
+			}
+			masks[p] = mask;
+		}
+		char[] sequence = body.sequence();
+		int[] lineTokens = body.lineTokens();
+		int[] lineStarts = parse.lineStarts();
+		Frontmatter frontmatter = parse.frontmatter();
+		int firstLine = (frontmatter != null) ? frontmatter.closingLine() + 1 : 0;
+		List<SearchMatch> matches = new ArrayList<>();
+		int more = 0;
+		int page = 1;
+		for (int line = firstLine; line < lineStarts.length; line++) {
+			int start = lineStarts[line];
+			if (paged && start < text.length() && text.charAt(start) == '\f') {
+				page++;
+			}
+			boolean occurs = false;
+			for (int p = 0; p < patterns.size() && !occurs; p++) {
+				occurs = SearchIndex.occurs(sequence, masks[p], patterns.get(p).terms().size(), lineTokens[line],
+						lineTokens[line + 1]);
+			}
+			if (!occurs) {
+				continue;
+			}
+			if (matches.size() == MAX_LINES) {
+				more++;
+				continue;
+			}
+			int end = MarkdownScanner.contentEnd(text, lineStarts, line);
+			List<TextRange> found = ranges(Tokenizer.tokenize(text, start, end), patterns, start);
+			if (found.isEmpty()) {
+				continue;
+			}
+			Clipped clipped = clip(text.substring(start, end), found, MATCH_WIDTH);
+			matches.add(new SearchMatch(line, clipped.text(), clipped.ranges(), paged ? page : null));
 		}
 		return new Snippets(titleRanges, matches, more);
 	}

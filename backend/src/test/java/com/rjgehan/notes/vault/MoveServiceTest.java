@@ -473,6 +473,39 @@ class MoveServiceTest {
 	}
 
 	@Test
+	void manyLinkingNotesAreRewrittenTogetherAndReportedInPlanOrder() throws Exception {
+		// Enough notes, in several folders, for the rewrites to be written several at a time.
+		write("Target.md", "t\n");
+		List<String> linkers = new java.util.ArrayList<>();
+		for (int i = 0; i < 40; i++) {
+			String path = "Folder " + (i % 4) + "/Linker " + String.format("%02d", i) + ".md";
+			write(path, "# Linker " + i + "\n\nSee [[Target]] and [[Target|the target]].\n");
+			linkers.add(path);
+		}
+		byte[] lossy = { '[', '[', 'T', 'a', 'r', 'g', 'e', 't', ']', ']', ' ', (byte) 0xC3, (byte) 0x28, '\n' };
+		write("Broken.md", lossy);
+		write("Props.md", "---\nlink: \"[[Tar\\x67et]]\"\n---\n[[Target]]\n");
+		start();
+		MoveResult result = move("Target.md", "Renamed.md");
+		List<String> expected = new java.util.ArrayList<>(linkers);
+		expected.add("Props.md");
+		expected.sort(null);
+		assertThat(result.linkUpdates()).extracting((update) -> update.path()).containsExactlyElementsOf(expected);
+		assertThat(result.failed()).extracting((failed) -> failed.path() + " " + failed.reason())
+			.containsExactly("Broken.md " + FailedReason.NOT_UTF8, "Props.md " + FailedReason.NOT_REWRITABLE);
+		for (String linker : linkers) {
+			assertThat(read(linker)).endsWith("See [[Renamed]] and [[Renamed|the target]].\n");
+			assertThat(this.vault.index.file(linker).version())
+				.isEqualTo(Hashing.blobId(Files.readAllBytes(this.dir.resolve(linker))));
+		}
+		assertThat(Files.readAllBytes(this.dir.resolve("Broken.md"))).isEqualTo(lossy);
+		assertThat(this.vault.index.backlinkSources("Renamed.md")).containsAll(linkers).contains("Props.md");
+		try (Stream<Path> temp = Files.list(this.dir.resolve(".notesapp/tmp"))) {
+			assertThat(temp).isEmpty();
+		}
+	}
+
+	@Test
 	void updateLinksFalseOnlyMoves() throws Exception {
 		write("Target.md", "t\n");
 		write("Linker.md", "[[Target]]\n");

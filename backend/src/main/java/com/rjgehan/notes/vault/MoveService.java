@@ -2,10 +2,19 @@ package com.rjgehan.notes.vault;
 
 import java.io.IOException;
 import java.nio.file.FileAlreadyExistsException;
+import java.nio.file.NoSuchFileException;
+import java.nio.file.Path;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import com.rjgehan.notes.api.dto.EntryType;
@@ -127,10 +136,12 @@ public class MoveService {
 			if (dryRun) {
 				return dryRunResult(type, from, to, moved, plan);
 			}
+			long planned = System.nanoTime();
 			flushPending();
 			if (rewrite && reconcileStaleSources(plan)) {
 				plan = plan(moved, current);
 			}
+			long flushed = System.nanoTime();
 			List<String> createdFolders = this.files.ensureParentFolders(to);
 			try {
 				moveOnDisk(from, to, type);
@@ -141,13 +152,16 @@ public class MoveService {
 			}
 			this.index.move(from.nfc(), to.nfc(), to.disk(), reindexed(from, to, type));
 			moved.forEach(this.moveLog::record);
+			long movedOnDisk = System.nanoTime();
 			Author author = Author.of(identity);
 			boolean sameFolder = PathNames.lower(from.parent()).equals(PathNames.lower(to.parent()));
 			String description = from.nfc() + " → " + to.nfc();
 			GitStore.Commit renameCommit = this.batcher.commitNow((sameFolder ? "Rename " : "Move ") + description,
 					null, author, List.of(from, to));
+			long renamed = System.nanoTime();
 
 			Rewritten rewritten = applyRewrites(plan);
+			long rewrote = System.nanoTime();
 			GitStore.Commit linksCommit = null;
 			if (!rewritten.paths().isEmpty()) {
 				int count = rewritten.paths().size();
@@ -156,6 +170,7 @@ public class MoveService {
 				String body = rewritten.paths().stream().map(ApiPath::nfc).collect(Collectors.joining("\n"));
 				linksCommit = this.batcher.commitNow(subject, body, author, rewritten.paths());
 			}
+			long linked = System.nanoTime();
 
 			this.files.publishFolders(createdFolders, origin);
 			this.hub.publish(new MovedEvent(from.nfc(), to.nfc(), type, origin));
@@ -169,9 +184,19 @@ public class MoveService {
 			GitStore.Commit last = (linksCommit != null) ? linksCommit : renameCommit;
 			logger.info("MOVE {} links={} client={} user={} {}ms", description, rewritten.updates().size(), origin,
 					identity.login(), (System.nanoTime() - started) / 1_000_000);
+			if (logger.isDebugEnabled()) {
+				logger.debug("MOVE phases: plan {}ms, flush {}ms, disk and index {}ms, rename commit {}ms, rewrites {}ms, "
+						+ "links commit {}ms, events {}ms", millis(started, planned), millis(planned, flushed),
+						millis(flushed, movedOnDisk), millis(movedOnDisk, renamed), millis(renamed, rewrote),
+						millis(rewrote, linked), millis(linked, System.nanoTime()));
+			}
 			return new MoveResult(false, type, from.nfc(), to.nfc(), movedFiles(moved), createdFolders,
 					rewritten.updates(), rewritten.failed(), (last != null) ? last.id() : null);
 		}
+	}
+
+	private static long millis(long from, long to) {
+		return (to - from) / 1_000_000;
 	}
 
 	private EntryType entryType(ApiPath from) {
@@ -413,85 +438,219 @@ public class MoveService {
 			List<ApiPath> paths) {
 	}
 
+	/** A rewrite ready to be written: the file, its new bytes and how many links changed. */
+	private record Prepared(ApiPath file, byte[] bytes, int links) {
+	}
+
+	/** What one planned rewrite came to: failures (a note can be both partly refused and written), and a write. */
+	private static final class Outcome {
+
+		final List<FailedUpdate> failed = new ArrayList<>();
+
+		@Nullable Prepared prepared;
+
+		/** The new bytes, written and synced in the vault temp folder. */
+		@Nullable Path staged;
+
+		@Nullable IndexedFile indexed;
+
+		@Nullable IOException error;
+
+	}
+
+	/** At most this many rewritten files are written and synced at the same time. */
+	private static final int PARALLEL_WRITES = 8;
+
 	/**
 	 * Writes each planned note from its bytes on disk, splicing edits from the end backwards. A note whose bytes are not
-	 * valid UTF-8 is never rewritten; one whose link spans no longer match the plan is skipped.
+	 * valid UTF-8 is never rewritten; one whose link spans no longer match the plan is skipped. The new texts are made
+	 * first; then they are written to temp files and synced several at a time (a rename with hundreds of linking notes
+	 * used to wait for hundreds of syncs in a row) and parsed for the index; then each is renamed into place, the index
+	 * and the result take it, in plan order, and each folder is synced once.
 	 */
 	private Rewritten applyRewrites(MovePlan plan) {
+		long started = System.nanoTime();
+		List<Outcome> outcomes = new ArrayList<>(plan.rewrites().size());
+		for (MovePlan.NoteRewrite rewrite : plan.rewrites()) {
+			outcomes.add(prepare(rewrite));
+		}
+		long preparedAt = System.nanoTime();
+		writeAll(outcomes.stream().filter((o) -> o.prepared != null).toList());
+		long wroteAt = System.nanoTime();
 		List<LinkUpdate> updates = new ArrayList<>();
 		List<FailedUpdate> failed = new ArrayList<>();
 		List<FileEntry> entries = new ArrayList<>();
 		List<ApiPath> written = new ArrayList<>();
-		for (MovePlan.NoteRewrite rewrite : plan.rewrites()) {
-			if (rewrite.lossy()) {
-				failed.add(new FailedUpdate(rewrite.target(), FailedReason.NOT_UTF8));
+		for (Outcome outcome : outcomes) {
+			failed.addAll(outcome.failed);
+			Prepared prepared = outcome.prepared;
+			if (prepared == null) {
 				continue;
 			}
-			if (rewrite.notRewritable()) {
-				failed.add(new FailedUpdate(rewrite.target(), FailedReason.NOT_REWRITABLE));
-			}
-			if (rewrite.document() != null) {
-				applyDocument(rewrite, rewrite.document(), updates, failed, entries, written);
+			IndexedFile indexed = outcome.indexed;
+			if (indexed == null) {
+				logger.warn("Could not update links in {}: {}", prepared.file().nfc(), String.valueOf(outcome.error));
+				failed.add(new FailedUpdate(prepared.file().nfc(), FailedReason.IO_ERROR));
 				continue;
 			}
-			if (rewrite.edits().isEmpty()) {
-				continue;
-			}
-			ApiPath note = existing(rewrite.target());
-			try {
-				byte[] bytes = this.fs.readBytes(note.disk());
-				TextCodec.Decoded decoded = TextCodec.decode(bytes);
-				if (decoded.lossy()) {
-					failed.add(new FailedUpdate(rewrite.target(), FailedReason.NOT_UTF8));
-					continue;
-				}
-				String text = splice(decoded.text(), rewrite.edits());
-				if (text == null) {
-					logger.warn("Links in {} changed since the move was planned; not rewritten", note.nfc());
-					failed.add(new FailedUpdate(rewrite.target(), FailedReason.SPAN_MISMATCH));
-					continue;
-				}
-				if (!frontmatterSurvives(decoded.text(), text)) {
-					logger.warn("Rewriting the links in {} would change its frontmatter; not rewritten", note.nfc());
-					failed.add(new FailedUpdate(rewrite.target(), FailedReason.NOT_REWRITABLE));
-					continue;
-				}
-				byte[] updated = TextCodec.encode(text, decoded.hadBom());
-				this.fs.atomicWrite(note.disk(), updated);
-				FileEntry entry = this.files.indexWritten(note, updated);
-				updates.add(new LinkUpdate(entry.path(), rewrite.edits().size(), entry.version()));
-				entries.add(entry);
-				written.add(note);
-			}
-			catch (IOException ex) {
-				logger.warn("Could not update links in {}: {}", note.nfc(), ex.toString());
-				failed.add(new FailedUpdate(rewrite.target(), FailedReason.IO_ERROR));
-			}
+			FileEntry entry = this.index.put(indexed);
+			updates.add(new LinkUpdate(entry.path(), prepared.links(), entry.version()));
+			entries.add(entry);
+			written.add(prepared.file());
 		}
+		logger.debug("MOVE rewrites: prepare {}ms, write {}ms, index {}ms ({} files)", millis(started, preparedAt),
+				millis(preparedAt, wroteAt), millis(wroteAt, System.nanoTime()), written.size());
 		return new Rewritten(updates, failed, entries, written);
 	}
 
-	/** Writes a document its indexer rewrote, unless it changed since the plan was made. */
-	private void applyDocument(MovePlan.NoteRewrite rewrite, DocumentIndexer.Rewritten document,
-			List<LinkUpdate> updates, List<FailedUpdate> failed, List<FileEntry> entries, List<ApiPath> written) {
+	/** The new bytes of one planned rewrite, or why it is not made. */
+	private Outcome prepare(MovePlan.NoteRewrite rewrite) {
+		Outcome outcome = new Outcome();
+		if (rewrite.lossy()) {
+			outcome.failed.add(new FailedUpdate(rewrite.target(), FailedReason.NOT_UTF8));
+			return outcome;
+		}
+		if (rewrite.notRewritable()) {
+			outcome.failed.add(new FailedUpdate(rewrite.target(), FailedReason.NOT_REWRITABLE));
+		}
+		DocumentIndexer.Rewritten document = rewrite.document();
+		if (document != null) {
+			prepareDocument(rewrite, document, outcome);
+			return outcome;
+		}
+		if (rewrite.edits().isEmpty()) {
+			return outcome;
+		}
+		ApiPath note = existing(rewrite.target());
+		try {
+			byte[] bytes = this.fs.readBytes(note.disk());
+			TextCodec.Decoded decoded = TextCodec.decode(bytes);
+			if (decoded.lossy()) {
+				outcome.failed.add(new FailedUpdate(rewrite.target(), FailedReason.NOT_UTF8));
+				return outcome;
+			}
+			String text = splice(decoded.text(), rewrite.edits());
+			if (text == null) {
+				logger.warn("Links in {} changed since the move was planned; not rewritten", note.nfc());
+				outcome.failed.add(new FailedUpdate(rewrite.target(), FailedReason.SPAN_MISMATCH));
+				return outcome;
+			}
+			if (!frontmatterSurvives(decoded.text(), text)) {
+				logger.warn("Rewriting the links in {} would change its frontmatter; not rewritten", note.nfc());
+				outcome.failed.add(new FailedUpdate(rewrite.target(), FailedReason.NOT_REWRITABLE));
+				return outcome;
+			}
+			outcome.prepared = new Prepared(note, TextCodec.encode(text, decoded.hadBom()), rewrite.edits().size());
+		}
+		catch (IOException ex) {
+			logger.warn("Could not update links in {}: {}", note.nfc(), ex.toString());
+			outcome.failed.add(new FailedUpdate(rewrite.target(), FailedReason.IO_ERROR));
+		}
+		return outcome;
+	}
+
+	/** A document its indexer rewrote, unless it changed since the plan was made. */
+	private void prepareDocument(MovePlan.NoteRewrite rewrite, DocumentIndexer.Rewritten document, Outcome outcome) {
 		ApiPath file = existing(rewrite.target());
 		try {
 			byte[] bytes = this.fs.readBytes(file.disk());
 			if (!Hashing.blobId(bytes).equals(rewrite.version())) {
 				logger.warn("{} changed since the move was planned; links not rewritten", file.nfc());
-				failed.add(new FailedUpdate(rewrite.target(), FailedReason.SPAN_MISMATCH));
+				outcome.failed.add(new FailedUpdate(rewrite.target(), FailedReason.SPAN_MISMATCH));
 				return;
 			}
-			byte[] updated = TextCodec.encode(document.text(), TextCodec.decode(bytes).hadBom());
-			this.fs.atomicWrite(file.disk(), updated);
-			FileEntry entry = this.files.indexWritten(file, updated);
-			updates.add(new LinkUpdate(entry.path(), document.links(), entry.version()));
-			entries.add(entry);
-			written.add(file);
+			outcome.prepared = new Prepared(file, TextCodec.encode(document.text(), TextCodec.decode(bytes).hadBom()),
+					document.links());
 		}
 		catch (IOException ex) {
 			logger.warn("Could not update links in {}: {}", file.nfc(), ex.toString());
-			failed.add(new FailedUpdate(rewrite.target(), FailedReason.IO_ERROR));
+			outcome.failed.add(new FailedUpdate(rewrite.target(), FailedReason.IO_ERROR));
+		}
+	}
+
+	/**
+	 * Writes the prepared files: their temp files are written, synced and parsed for the index up to
+	 * {@link #PARALLEL_WRITES} at a time, on threads of their own; then each is renamed into place, in order (renames
+	 * into one folder from several threads are slower than one after another), and every folder is synced once.
+	 */
+	private void writeAll(List<Outcome> outcomes) {
+		if (outcomes.isEmpty()) {
+			return;
+		}
+		int threads = Math.min(PARALLEL_WRITES, outcomes.size());
+		if (threads == 1) {
+			outcomes.forEach(this::stage);
+		}
+		else {
+			AtomicInteger next = new AtomicInteger();
+			ExecutorService pool = Executors.newFixedThreadPool(threads, (task) -> {
+				Thread thread = new Thread(task, "move-write-" + next.incrementAndGet());
+				thread.setDaemon(true);
+				return thread;
+			});
+			try {
+				List<Future<?>> futures = new ArrayList<>(outcomes.size());
+				for (Outcome outcome : outcomes) {
+					futures.add(pool.submit(() -> stage(outcome)));
+				}
+				for (Future<?> future : futures) {
+					try {
+						future.get();
+					}
+					catch (ExecutionException ex) {
+						// stage keeps its I/O failures; anything else leaves the file unwritten.
+						logger.warn("A link rewrite failed unexpectedly: {}", String.valueOf(ex.getCause()));
+					}
+				}
+			}
+			catch (InterruptedException ex) {
+				Thread.currentThread().interrupt();
+			}
+			finally {
+				pool.shutdownNow();
+			}
+		}
+		List<String> placed = new ArrayList<>();
+		for (Outcome outcome : outcomes) {
+			Path staged = outcome.staged;
+			Prepared prepared = Objects.requireNonNull(outcome.prepared);
+			if (staged == null) {
+				outcome.indexed = null;
+				continue;
+			}
+			try {
+				if (outcome.indexed != null) {
+					this.fs.placeStaged(staged, prepared.file().disk());
+					placed.add(prepared.file().disk());
+				}
+			}
+			catch (IOException ex) {
+				outcome.error = ex;
+				outcome.indexed = null;
+			}
+			finally {
+				this.fs.discardStaged(staged);
+			}
+		}
+		this.fs.syncParents(placed);
+	}
+
+	/** Writes and syncs one prepared file to a temp file, and parses it for the index (several run at once). */
+	private void stage(Outcome outcome) {
+		Prepared prepared = Objects.requireNonNull(outcome.prepared);
+		ApiPath file = prepared.file();
+		try {
+			Path staged = this.fs.stage(prepared.bytes());
+			outcome.staged = staged;
+			// A rename keeps the modification time: the temp file's is the one the file will have.
+			BasicFileAttributes attributes = VaultFs.attributes(staged);
+			if (attributes == null) {
+				throw new NoSuchFileException(staged.toString());
+			}
+			outcome.indexed = this.indexer.fromBytes(file.nfc(), file.disk(), prepared.bytes(), attributes);
+		}
+		catch (IOException ex) {
+			outcome.error = ex;
 		}
 	}
 

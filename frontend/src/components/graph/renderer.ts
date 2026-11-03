@@ -142,6 +142,23 @@ export interface Frame {
   highlighted: Uint8Array | null;
   /** The open note (local graph center or the active note), or -1. */
   focus: number;
+  /**
+   * A canvas of `width` × `height` CSS pixels for the bulk of the links (null: they go on the frame's canvas). See
+   * `bulkLinkWidth`.
+   */
+  linkLayer?: CanvasRenderingContext2D | null;
+}
+
+/**
+ * The width, in CSS pixels of a surface with `pixelRatio` device pixels per CSS pixel, of the links that are not
+ * highlighted: at most one device pixel. A thinner line is a hairline, which the rasterizer draws directly; a wider
+ * one is stroked into a polygon per segment, and tens of thousands of those overlapping polygons are an order of
+ * magnitude slower to fill (a zoomed-in 10,000-note graph took 3.4 s per frame instead of 0.2 s). The links are
+ * drawn on a layer at CSS-pixel resolution (`Frame.linkLayer`) that is scaled onto the canvas, so on a high-density
+ * screen they stay as wide as one CSS pixel instead of one device pixel.
+ */
+export function bulkLinkWidth(lineScreen: number, pixelRatio: number): number {
+  return Math.min(lineScreen * pixelRatio, 1) / pixelRatio;
 }
 
 const MAX_LABELS = 600;
@@ -179,7 +196,6 @@ export function drawFrame(ctx: CanvasRenderingContext2D, f: Frame): void {
 
   // ---------- links ----------
   const lineScreen = display.lineSizeMultiplier * Math.min(1.6, Math.max(0.5, Math.sqrt(k)));
-  ctx.lineWidth = lineScreen / k;
   const links = view.links;
   const linkVisible = (a: number, b: number) => {
     const ax = positions[a * 2]!;
@@ -188,32 +204,46 @@ export function drawFrame(ctx: CanvasRenderingContext2D, f: Frame): void {
     const by = positions[b * 2 + 1]!;
     return !((ax < minX && bx < minX) || (ax > maxX && bx > maxX) || (ay < minY && by < minY) || (ay > maxY && by > maxY));
   };
-  const strokeLinks = (want: (a: number, b: number) => boolean, color: string, alpha: number) => {
-    ctx.beginPath();
+  const strokeLinks = (c: CanvasRenderingContext2D, want: (a: number, b: number) => boolean, color: string, alpha: number) => {
+    c.beginPath();
     let any = false;
     for (let j = 0; j < links.length; j += 3) {
       const a = links[j]!;
       const b = links[j + 1]!;
       if (!want(a, b) || !linkVisible(a, b)) continue;
-      ctx.moveTo(positions[a * 2]!, positions[a * 2 + 1]!);
-      ctx.lineTo(positions[b * 2]!, positions[b * 2 + 1]!);
+      c.moveTo(positions[a * 2]!, positions[a * 2 + 1]!);
+      c.lineTo(positions[b * 2]!, positions[b * 2 + 1]!);
       any = true;
     }
     if (!any) return;
-    ctx.globalAlpha = alpha;
-    ctx.strokeStyle = color;
-    ctx.stroke();
-    ctx.globalAlpha = 1;
+    c.globalAlpha = alpha;
+    c.strokeStyle = color;
+    c.stroke();
+    c.globalAlpha = 1;
   };
-  if (hovering) {
-    const h = f.hover;
-    strokeLinks((a, b) => a !== h && b !== h, theme.line, 0.35);
-    ctx.lineWidth = (lineScreen * 1.6) / k;
-    strokeLinks((a, b) => a === h || b === h, theme.lineHighlight, 1);
-    ctx.lineWidth = lineScreen / k;
-  } else {
-    strokeLinks(() => true, theme.line, 1);
+  // The bulk of the links, as hairlines: on the CSS-pixel layer when there is one, scaled onto the canvas.
+  const layer = f.linkLayer ?? null;
+  const bulk = layer ?? ctx;
+  if (layer) {
+    layer.setTransform(1, 0, 0, 1, 0, 0);
+    layer.clearRect(0, 0, width, height);
+    layer.setTransform(k, 0, 0, k, t.x, t.y);
   }
+  bulk.lineWidth = bulkLinkWidth(lineScreen, layer ? 1 : dpr) / k;
+  const h = f.hover;
+  if (hovering) strokeLinks(bulk, (a, b) => a !== h && b !== h, theme.line, 0.35);
+  else strokeLinks(bulk, () => true, theme.line, 1);
+  if (layer) {
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.drawImage(layer.canvas, 0, 0, width, height);
+    ctx.setTransform(dpr * k, 0, 0, dpr * k, dpr * t.x, dpr * t.y);
+  }
+  // A hovered node's links are few: they keep their full width.
+  if (hovering) {
+    ctx.lineWidth = (lineScreen * 1.6) / k;
+    strokeLinks(ctx, (a, b) => a === h || b === h, theme.lineHighlight, 1);
+  }
+  ctx.lineWidth = lineScreen / k;
 
   // ---------- arrows ----------
   if (display.showArrow && k > 0.25) {

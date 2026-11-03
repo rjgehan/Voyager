@@ -24,13 +24,19 @@ interface LinkItem {
   alias: string | null;
 }
 
+const linkItemsCache = new WeakMap<object, LinkItem[]>();
+
+/** One array per tree, so the fuzzy ranking reuses its snapshots of it (features/fuzzy.ts). */
 function linkItems(ctx: NoteContext): LinkItem[] {
   const tree = ctx.tree();
+  const cached = linkItemsCache.get(tree);
+  if (cached) return cached;
   const items: LinkItem[] = [];
   for (const entry of tree.files) {
     items.push({ label: entry.kind === 'note' ? entry.basename : entry.name, path: entry.path, entry, alias: null });
   }
   for (const { alias, entry } of tree.aliasItems) items.push({ label: alias, path: entry.path, entry, alias });
+  linkItemsCache.set(tree, items);
   return items;
 }
 
