@@ -274,6 +274,37 @@ class WebPushTest {
 	}
 
 	@Test
+	void notificationsOpenTheAddressTheAppIsServedOn() {
+		// CasaOS: tailscale serve on :8443 (another app has 443), the name listed with and without the port.
+		List<String> casaOs = List.of("homeserver.example.ts.net", "homeserver.example.ts.net:8443");
+		assertThat(ReminderScheduler.baseUrl(casaOs)).isEqualTo("https://homeserver.example.ts.net:8443");
+		assertThat(ReminderScheduler.baseUrl(List.of("homeserver.example.ts.net:8443", "homeserver.example.ts.net")))
+			.isEqualTo("https://homeserver.example.ts.net:8443");
+		// The sidecar and "serve on 443": the name alone; the container's own name and loopback are never used.
+		assertThat(ReminderScheduler.baseUrl(List.of("notes.example.ts.net"))).isEqualTo("https://notes.example.ts.net");
+		assertThat(ReminderScheduler.baseUrl(List.of("notes.example.ts.net", "notesapp:8080")))
+			.isEqualTo("https://notes.example.ts.net");
+		assertThat(ReminderScheduler.baseUrl(List.of("localhost:8080", "127.0.0.1:8080", "notes.example.ts.net")))
+			.isEqualTo("https://notes.example.ts.net");
+		assertThat(ReminderScheduler.baseUrl(List.of("localhost:8080"))).isNull();
+		// A tapped ntfy reminder or daily nudge opens it.
+		List<com.rjgehan.notes.notify.NtfyClient.Message> sent = new CopyOnWriteArrayList<>();
+		com.rjgehan.notes.notify.NtfyConfig config = new com.rjgehan.notes.notify.NtfyConfig(
+				java.net.URI.create("https://ntfy.sh"), "default", null,
+				new com.rjgehan.notes.notify.NtfyConfig.Alerts(true, "default"), "remind");
+		NtfyRoute route = new NtfyRoute(() -> new com.rjgehan.notes.notify.NtfyConfigFile.Loaded(config, null),
+				(c, topic, message) -> sent.add(message), ReminderScheduler.baseUrl(casaOs));
+		RemindersSettings ntfy = new RemindersSettings(false, true, true, false, false, "09:00");
+		route.deliver(new ReminderMessage("task:t1:2026-11-02T09:00", "task", "t1", "2026-11-02T09:00", "Water",
+				"Due 09:00", "/x/tasks/today?task=t1"), ntfy);
+		route.deliver(new ReminderMessage("daily:2026-11-02", "daily", null, null, "Daily note", "Write today's note",
+				"/?open=daily"), new RemindersSettings(false, true, false, false, false, "09:00"));
+		assertThat(sent).extracting((m) -> String.valueOf(m.click()))
+			.containsExactly("https://homeserver.example.ts.net:8443/x/tasks/today?task=t1",
+					"https://homeserver.example.ts.net:8443/?open=daily");
+	}
+
+	@Test
 	void theNtfyRouteSendsTheTitleOnlyUnlessToldOtherwise() {
 		List<com.rjgehan.notes.notify.NtfyClient.Message> sent = new CopyOnWriteArrayList<>();
 		List<String> topics = new CopyOnWriteArrayList<>();
