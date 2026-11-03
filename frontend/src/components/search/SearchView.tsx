@@ -12,6 +12,7 @@ import { afterOpen, isKeyboardClick } from '../../features/focus';
 import { navigateTo } from '../../features/navigation';
 import { folderOf } from '../../features/paths';
 import { hitRoute } from '../../features/searchLinks';
+import { displaySnippet } from '../../features/snippetText';
 import { useUi } from '../../state/ui';
 import { HighlightedText } from '../HighlightedText';
 
@@ -50,7 +51,7 @@ function Hit({ hit, highlight }: { hit: SearchHit; highlight: string }) {
             <li key={m.line}>
               <button type="button" className="search-match" onClick={(e) => open(m, e)}>
                 {m.page !== null && <span className="search-match-page">p. {m.page}</span>}
-                <HighlightedText text={m.text} ranges={m.ranges} />
+                <HighlightedText {...displaySnippet(m.text, m.ranges)} />
               </button>
             </li>
           ))}

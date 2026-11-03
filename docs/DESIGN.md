@@ -1587,7 +1587,7 @@ A real task manager whose data lives in the vault as JSON, not as `- [ ]` lines.
 
 **Events.** `task.created`, `task.changed`, `task.deleted` and `list.changed` are content events (`origin`, echo suppression, replay; §5.10). Changes made outside the task API produce only `file.*` events, so clients refetch task views on `file.*` events touching `.tasks` paths (API.md §20.8); the server needs no hook in the reconciler, the move or the restores, and every route that changes a file is covered.
 
-**Search, backlinks and tags** (`TaskDocumentIndexer`, §6.8). The list's name is a heading block; each usable task contributes its title, a block with its `#tags` and `[name](/path)` links for `links`, and its notes. A malformed file is not content-indexed. When a note moves, the links to it in titles, notes and `links` are rewritten with the move (`rewriteLinks`, §5.6, §6.8).
+**Search, backlinks and tags** (`TaskDocumentIndexer`, §6.8). The list's name is a heading block; each usable task contributes its title, a block with its `#tags` and `[name](/path)` links for `links`, and its notes. A malformed file is not content-indexed. When a note moves, the links to it in titles, notes and `links` are rewritten with the move (`rewriteLinks`, §5.6, §6.8). Search matches and backlink contexts are lines of this indexed text, so the client shows each Markdown link in them as its label (`features/snippetText.ts`, also for notes’ own lines): a task’s related note reads "Home renovation", not `[Home renovation](/Projects/Home%20renovation.md)` (QA finding F9). The highlight moves with the text; one inside a destination moves onto its label. The API values stay the indexed text.
 
 ### 5.21 Bookmarks (ROADMAP item 12)
 
