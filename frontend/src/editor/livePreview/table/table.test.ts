@@ -777,6 +777,18 @@ describe('inserting a table', () => {
   });
 });
 
+describe('the formula bar', () => {
+  it('shows over the note, above the table, so showing or hiding it never moves the grid (a quick second tap lands where it was aimed)', async () => {
+    const css = (await sourceFiles('.css'))['styles/editor.css'].replace(/\/\*[\s\S]*?\*\//g, '');
+    const bar = /\.cm-lp-formula-bar\s*\{([^}]*)\}/.exec(css)?.[1] ?? '';
+    expect(bar).toMatch(/position:\s*absolute/);
+    expect(bar).toMatch(/bottom:\s*100%/);
+    // Its table is the containing block.
+    const table = [...css.matchAll(/(?:^|\})\s*\.cm-lp-table\s*\{([^}]*)\}/g)].map((m) => m[1]).join(';');
+    expect(table).toMatch(/position:\s*relative/);
+  });
+});
+
 describe('the grid’s scroller', () => {
   it('scrolls sideways only: the grips’ touch targets reach past the last row (pointer: coarse)', async () => {
     const css = (await sourceFiles('.css'))['styles/editor.css'];
