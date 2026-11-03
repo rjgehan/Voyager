@@ -264,7 +264,9 @@ public class VaultRegistry implements DisposableBean {
 
 	/**
 	 * The dispatcher of a ready extra vault. Throws {@code 404 vault-not-found} for a name the server does not serve
-	 * and {@code 503 vault-unavailable} while its context starts or after it failed to start.
+	 * and {@code 503 vault-unavailable} while its context starts, after it failed to start, or once the server is
+	 * shutting down (its context closes before the web server stops taking requests). Starting and stopping carry
+	 * {@code Retry-After}: clients retry those, while a failed vault stays failed until the next restart.
 	 */
 	public DispatcherServlet dispatcher(String name) {
 		Entry entry = this.extras.get(name);
@@ -274,11 +276,13 @@ public class VaultRegistry implements DisposableBean {
 		}
 		DispatcherServlet servlet = entry.servlet;
 		if (entry.state != State.READY || servlet == null) {
-			boolean starting = entry.state == State.STARTING;
-			NotesException ex = new NotesException(ErrorCode.VAULT_UNAVAILABLE,
-					starting ? "The vault is starting; retry shortly" : "The vault could not be started; see the server log",
-					Map.of("vault", name, "reason", entry.state.json()));
-			if (starting) {
+			boolean stopping = this.closed;
+			boolean starting = !stopping && entry.state == State.STARTING;
+			String detail = stopping ? "The server is restarting; retry shortly"
+					: starting ? "The vault is starting; retry shortly" : "The vault could not be started; see the server log";
+			NotesException ex = new NotesException(ErrorCode.VAULT_UNAVAILABLE, detail,
+					Map.of("vault", name, "reason", stopping ? "stopping" : entry.state.json()));
+			if (starting || stopping) {
 				ex.getHeaders().set("Retry-After", "2");
 			}
 			throw ex;

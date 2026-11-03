@@ -75,6 +75,20 @@ describe('apiFetch', () => {
     expect(e.retryAfterMs).toBe(2000);
   });
 
+  it.each(['starting', 'stopping'])('treats a vault that is %s as transient and honours Retry-After', async (reason) => {
+    vi.stubGlobal('fetch', respond(503, problem('vault-unavailable', 503, { vault: 'work', reason }), { 'Content-Type': 'application/problem+json', 'Retry-After': '2' }));
+    const e = (await failure(apiFetch('/api/v/work/files'))) as TransientError;
+    expect(e).toBeInstanceOf(TransientError);
+    expect(e.retryAfterMs).toBe(2000);
+  });
+
+  it('keeps a vault that failed to start an ApiError', async () => {
+    vi.stubGlobal('fetch', respond(503, problem('vault-unavailable', 503, { vault: 'work', reason: 'failed' }), { 'Content-Type': 'application/problem+json' }));
+    const e = (await failure(apiFetch('/api/v/work/files'))) as ApiError;
+    expect(e).toBeInstanceOf(ApiError);
+    expect(e.problem.code).toBe('vault-unavailable');
+  });
+
   it('turns other problems into ApiError', async () => {
     vi.stubGlobal('fetch', respond(409, problem('version-conflict', 409, { currentVersion: 'v2' }), { 'Content-Type': 'application/problem+json' }));
     const e = (await failure(apiFetch('/api/files'))) as ApiError;

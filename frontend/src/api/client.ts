@@ -159,6 +159,12 @@ export async function apiFetch<T>(url: string, opts: RequestOptions = {}): Promi
     noteTransientFailure();
     throw new TransientError(problem.detail || 'Server busy', res.status, retryAfter ?? 1000);
   }
+  // An extra vault that is starting or shutting down with the server (a deploy) answers again
+  // shortly; one that failed to start stays failed until a restart (API.md §3, §41).
+  if (problem.code === 'vault-unavailable' && (problem.reason === 'starting' || problem.reason === 'stopping')) {
+    noteTransientFailure();
+    throw new TransientError(problem.detail || 'The vault is not available yet', res.status, retryAfter ?? 2000);
+  }
   noteServerAnswer();
   throw new ApiError(problem);
 }

@@ -199,7 +199,7 @@ Every error response is RFC 9457 `application/problem+json` with an extra `code`
 | `funnel-request` | 403 | Not available through Funnel | The request carries `Tailscale-Funnel-Request`: it came from the internet through Tailscale Funnel. Every path, health included (§26) | |
 | `publishing-off` | 409 | Public publishing is off | §26.2: `NOTES_PUBLISH_ENABLED` is not `true` on the server | |
 | `vault-not-found` | 404 | No such vault | §41: a `/api/v/<name>/` request for a name this server does not serve | `vault` |
-| `vault-unavailable` | 503 | Vault not available | §41: the vault's context is starting (`reason: "starting"`, with `Retry-After: 2`) or could not be started (`reason: "failed"`) | `vault`, `reason` |
+| `vault-unavailable` | 503 | Vault not available | §41: the vault's context is starting (`reason: "starting"`, with `Retry-After: 2`), is closing because the server is shutting down (`reason: "stopping"`, with `Retry-After: 2`), or could not be started (`reason: "failed"`) | `vault`, `reason` |
 | `vaults-off` | 409 | Creating vaults is off | §41.2: `NOTES_VAULTS_DIR` is empty or `NOTES_VAULTS_ALLOW_CREATE=false` | |
 | `share-not-found` | 404 | Share not found | §42: a guest endpoint's key names no share, a revoked or expired one, or a share id used by someone who is not one of its recipients (the same answer in every case) | |
 | `outside-share` | 403 | Outside the share | §42: the path is not in the share (the same answer whether the file exists or not), or a guest's text adds an embed of a file outside the share (§42.8) | `path` |
@@ -215,7 +215,7 @@ export interface FieldError { field: string; message: string }   // e.g. {"field
 
 | Class | Responses | Client behaviour |
 |---|---|---|
-| Transient | A network error; `502`; `504`; a `503` that is not problem+json; `503 busy`; any response whose `Content-Type` is neither `application/json` nor `application/problem+json` (during a deploy, `tailscale serve` answers an empty `502` for 10–30 s) | Keep the data, go offline, retry with backoff, honour `Retry-After` |
+| Transient | A network error; `502`; `504`; a `503` that is not problem+json; `503 busy`; `503 vault-unavailable` with `reason` `starting` or `stopping` (an extra vault during a restart, §41); any response whose `Content-Type` is neither `application/json` nor `application/problem+json` (during a deploy, `tailscale serve` answers an empty `502` for 10–30 s) | Keep the data, go offline, retry with backoff, honour `Retry-After` |
 | Server storage | `io-error`, `internal-error`, `permission-denied`, `insufficient-storage` | Keep the data and the draft, retry with the same backoff, show a storage error |
 | Terminal | Every other problem code | Handled by the flow that made the request; not retried automatically |
 
@@ -1908,7 +1908,7 @@ export interface Problem {
   line?: number;                  // block-not-found: the line the request named (§37)
   from?: VaultPath;
   to?: VaultPath;
-  reason?: string;                // e.g. vault-unavailable: starting | failed (§41)
+  reason?: string;                // e.g. vault-unavailable: starting | stopping | failed (§41)
   vault?: string;                 // vault-not-found, vault-unavailable: the vault name (§41)
   retryAfter?: number;            // too-many-attempts: seconds until the next try, as Retry-After (§42)
   incidentId?: string;
@@ -3944,7 +3944,7 @@ It may compile WebAssembly (QuickJS, inlined in the worker: it fetches nothing) 
 One server can serve several independent vaults (DESIGN §5.39). The **default vault** is the one at `NOTES_VAULT_DIR`; every endpoint of this document is its endpoint, unchanged. An **extra vault** has exactly the same API under a prefix: **`/api/v/<name>/...`** is the extra vault's `/api/...` (for example `GET /api/v/work/tree`, `PUT /api/v/work/files?path=…`, `GET /api/v/work/events?clientId=…`). The default vault also answers under its own name (`/api/v/main/...`). Each vault has its own versions, event ids, idempotency keys, trash ids, task ids and commit ids: nothing returned by one vault means anything to another.
 
 - **Names.** 1 to 32 lowercase letters, digits and dashes, starting and ending with a letter or digit. Only the literal prefix is routed: a percent-encoded, upper-case or `;`-parameterized name, or a path with a `.` or `..` segment, is not a vault path and gets `404`.
-- **Errors.** `404 vault-not-found` (`vault`) for a name the server does not serve; `503 vault-unavailable` (`vault`, `reason`: `starting` with `Retry-After: 2`, or `failed`). Admission, CSRF and size rules (§2, §3) apply to prefixed requests exactly as to unprefixed ones. A problem's `instance` is the path within the vault (`/api/tree`).
+- **Errors.** `404 vault-not-found` (`vault`) for a name the server does not serve; `503 vault-unavailable` (`vault`, `reason`: `starting` with `Retry-After: 2`; `stopping` with `Retry-After: 2` while the server shuts down, because the extra vaults close when it starts to, before the web server stops taking requests; or `failed`). Clients retry `starting` and `stopping` like a network error (§3), so a save during a deploy is saved once the vault is back. Admission, CSRF and size rules (§2, §3) apply to prefixed requests exactly as to unprefixed ones. A problem's `instance` is the path within the vault (`/api/tree`).
 - **Server-wide endpoints** are only unprefixed: `GET` and `POST /api/vaults` (`/api/v/<name>/vaults` is `404`). Every other endpoint exists in every vault; in an extra vault, `GET /api/publish` reports `enabled: false` and `POST /api/publish` answers `409 publishing-off`, and `POST /api/mirror/push` has no mirror (§6.4), since publishing and the mirror belong to the default vault. `/api/status/details` and `/api/alerts/test` report the server's alerts and backups from any vault. Push subscriptions (§28) are server-wide: subscribing from any vault subscribes the device for every vault's reminders.
 - **The app** of an extra vault is served at `/v/<name>/` and `/v/<name>/**` (the same `index.html`, §18).
 
