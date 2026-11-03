@@ -12,6 +12,7 @@ import type { FileEntry } from '../../../api/types';
 import { formulaEngineForTests } from '../../../formulas/load';
 import { documents } from '../../../sync/instance';
 import { fakeApi } from '../../../test/fakes';
+import { axeViolations } from '../../../test/axe';
 import { useTestLinkHost } from '../../../test/linkHost';
 import { clearSheetBindings } from '../../../views/sheet/useSheetDocument';
 import { parseSheet } from '../../format';
@@ -225,6 +226,23 @@ describe('a spreadsheet embedded in a note that can be written', () => {
     } finally {
       spy.mockRestore();
     }
+  });
+
+  it('is a grid to assistive technology, with its selected and active cells, and passes axe', async () => {
+    const path = newFile();
+    const { container } = show(path);
+    await waitFor(() => expect(cell(container, 'B2').textContent).toBe('$1,450.00'));
+    const table = container.querySelector('table.sheet-live-table.is-editable')!;
+    expect(table.getAttribute('role')).toBe('grid');
+    expect(table.getAttribute('aria-multiselectable')).toBe('true');
+    fireEvent.mouseDown(cell(container, 'B3'));
+    fireEvent.mouseDown(cell(container, 'B4'), { shiftKey: true });
+    expect(cell(container, 'B3').getAttribute('aria-selected')).toBe('true');
+    expect(cell(container, 'A3').getAttribute('aria-selected')).toBe('false');
+    expect(table.getAttribute('aria-activedescendant')).toBe(container.querySelector('td.is-active')!.id);
+    fireEvent.mouseDown(cell(container, 'A2'));
+    expect(table.getAttribute('aria-activedescendant')).toBe(cell(container, 'A2').id);
+    expect((await axeViolations(container)).filter((l) => !l.startsWith('color-contrast'))).toEqual([]);
   });
 
   it('types over a selected cell, cancels with Escape, and undoes from the toolbar', async () => {

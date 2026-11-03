@@ -9,7 +9,7 @@
 // format, so formulas move as in the view. Every change goes through the workbook: one undo step,
 // saved and synced like an edit in the spreadsheet.
 import { ArrowDownToLine, Bold, ExternalLink, FileSpreadsheet, Redo2, Rows3, Trash2, Undo2 } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent, type MouseEvent, type ReactNode, type RefObject, type TouchEvent } from 'react';
+import { useCallback, useEffect, useId, useRef, useState, type ClipboardEvent, type KeyboardEvent, type MouseEvent, type ReactNode, type RefObject, type TouchEvent } from 'react';
 import { openPath } from '../../../features/navigation';
 import { keyLabel } from '../../../features/platform';
 import { noteRoute } from '../../../features/paths';
@@ -81,6 +81,8 @@ function shownRange(sheet: Sheet, range: CellRange | null, editable: boolean): {
 export function EmbedGrid(props: Props) {
   const { path, subpath, caption, model, workbook, editable, version } = props;
   const frame = useRef<HTMLDivElement>(null);
+  /** Prefix of the cells' ids, which the grid's aria-activedescendant names. */
+  const cellIds = useId();
   const scroller = useRef<HTMLDivElement>(null);
   const table = useRef<HTMLTableElement>(null);
   /** The cell editor: a one-row textarea, so a cell's line breaks survive an edit. */
@@ -431,6 +433,11 @@ export function EmbedGrid(props: Props) {
           className={`sheet-embed-table sheet-live-table${editable ? ' is-editable' : ''}`}
           tabIndex={editable ? 0 : undefined}
           aria-label={caption}
+          // Editable, it is a grid whose cells can be selected (a plain table's cells cannot);
+          // the active cell is announced as the focused grid's active descendant.
+          role={editable ? 'grid' : undefined}
+          aria-multiselectable={editable ? true : undefined}
+          aria-activedescendant={editable ? `${cellIds}-${active.col}-${active.row}` : undefined}
           onKeyDown={onTableKeyDown}
           onMouseDown={onMouseDown}
           onDoubleClick={onDoubleClick}
@@ -496,7 +503,14 @@ export function EmbedGrid(props: Props) {
                         }
                       : undefined;
                     return (
-                      <td key={col} data-cell={`${col}:${row}`} className={classes} style={css} aria-selected={editable ? inSel(col, row) : undefined}>
+                      <td
+                        key={col}
+                        id={editable ? `${cellIds}-${col}-${row}` : undefined}
+                        data-cell={`${col}:${row}`}
+                        className={classes}
+                        style={css}
+                        aria-selected={editable ? inSel(col, row) : undefined}
+                      >
                         {shown.text}
                       </td>
                     );
