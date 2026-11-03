@@ -775,6 +775,10 @@ export class Workbook {
       const next = moveReferences('=' + expression, { from: null, to: null }, move).slice(1);
       if (next !== expression) patch.push({ kind: 'named', name, before: expression, after: next });
     }
+    // Cells moved, which a merge per cell cannot follow (another device's new formula over the old
+    // place would keep pointing there): a new structure marker on both sheets lets the banner decide.
+    const sheetsAfter = new Map<string, SheetMeta>([[src.id, { ...meta(src), structure: newStructureId() }]]);
+    if (dest.id !== src.id) sheetsAfter.set(dest.id, { ...meta(dest), structure: newStructureId() });
     if (src.id === dest.id) {
       // Charts, conditional formatting and validation of a range that moved within its sheet follow it.
       const movedRange = (text: string | undefined): string | null => {
@@ -795,9 +799,10 @@ export class Workbook {
         const shiftColumn = (letters: string) => columnLetters(columnIndex(letters) + move.dCol);
         const filter: SheetFilter = { ...src.filter, range: filterRange, cols: Object.fromEntries(Object.entries(src.filter.cols).map(([k, v]) => [shiftColumn(k), v])) };
         if (src.filter.sort) filter.sort = { ...src.filter.sort, col: shiftColumn(src.filter.sort.col) };
-        patch.push({ kind: 'sheet', id: src.id, before: meta(src), after: { ...meta(src), filter } });
+        sheetsAfter.set(src.id, { ...sheetsAfter.get(src.id)!, filter });
       }
     }
+    for (const [id, next] of sheetsAfter) patch.push({ kind: 'sheet', id, before: meta(this.requireSheet(id)), after: next });
     // Dropdowns from a range that moved follow it, as formulas do.
     for (const s of this.model.sheets) {
       for (const [key, v] of Object.entries(itemsOf(s, 'validation') as Record<string, Validation>)) {

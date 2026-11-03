@@ -5,6 +5,7 @@ import { typedEdit } from './edits';
 import { ENGINE_ID, Workbook, type WorkbookChange } from './engine';
 import { cellValue, parseSheet, serializeSheet, SHEET_ENGINE, type SheetFile } from './format';
 import { loadSheetEngine } from './loadEngine';
+import { mergeSheetText } from './merge';
 
 function file(value: unknown): SheetFile {
   const result = parseSheet(JSON.stringify(value));
@@ -732,6 +733,29 @@ describe('moving cells (cut and paste)', () => {
     expect(wb.file.named).toEqual({ Doubled: 'Data!$B$1' });
     wb.redo();
     expect(wb.file.sheets[0].cells.C1).toEqual({ f: '=B5+1', c: 21 });
+  });
+
+  it('changes the structure marker of the sheets cells move on and off, so a merge cannot misplace them', () => {
+    const cells = Object.fromEntries(Array.from({ length: 9 }, (_, i) => [`A${i + 2}`, { v: i + 2 }]));
+    const base = workbook([{ name: 'Data', cells: { A1: { v: 'Amount' }, ...cells } }, { name: 'Other' }]);
+    const baseText = base.serialize();
+    const mine = Workbook.open(file(JSON.parse(baseText)));
+    mine.moveCells({ sheet: 's1', range: { col: 0, row: 1, width: 1, height: 9 } }, { sheet: 's1', col: 2, row: 1 });
+    expect(mine.file.sheets[0].structure).toMatch(/^[0-9a-z]{8}$/);
+    expect(mine.file.sheets[1].structure).toBeUndefined();
+    // The other device adds a formula over the cells that moved: the banner decides.
+    const theirs = Workbook.open(file(JSON.parse(baseText)));
+    theirs.setCell('s1', 'E1', { f: '=SUM(A2:A10)' });
+    expect(mergeSheetText(baseText, mine.serialize(), theirs.serialize())).toBeNull();
+    expect(mergeSheetText(baseText, theirs.serialize(), mine.serialize())).toBeNull();
+    // One undo step restores the marker.
+    mine.undo();
+    expect(mine.file.sheets[0].structure).toBeUndefined();
+    // Across sheets, both sheets change.
+    mine.moveCells({ sheet: 's1', range: { col: 0, row: 1, width: 1, height: 9 } }, { sheet: 's2', col: 0, row: 0 });
+    expect(mine.file.sheets[0].structure).toMatch(/^[0-9a-z]{8}$/);
+    expect(mine.file.sheets[1].structure).toMatch(/^[0-9a-z]{8}$/);
+    expect(mergeSheetText(baseText, mine.serialize(), theirs.serialize())).toBeNull();
   });
 
   it('keeps the curly apostrophe of a sheet renamed on an iPhone (Mom’s) when its formula is edited', () => {
