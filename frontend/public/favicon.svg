@@ -1,6 +1,36 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="14" fill="#1e1e1e"/>
-  <path d="M20 14h18l10 10v26a4 4 0 0 1-4 4H20a4 4 0 0 1-4-4V18a4 4 0 0 1 4-4z" fill="#8a5cf5"/>
-  <path d="M38 14v8a2 2 0 0 0 2 2h8z" fill="#b9a2fb"/>
-  <path d="M23 33h18M23 40h18M23 47h11" stroke="#1e1e1e" stroke-width="3.2" stroke-linecap="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Voyager's icon (BRAND.md), made by scripts/brand/render-icons.mjs from voyager-small.svg: edit that file. -->
+  <defs>
+    <clipPath id="tile"><rect width="64" height="64" rx="14.40"/></clipPath>
+    <linearGradient id="space" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#08061f"/>
+      <stop offset="0.45" stop-color="#16104a"/>
+      <stop offset="1" stop-color="#4b2bb5"/>
+    </linearGradient>
+    <linearGradient id="beamAcross" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ffeedd" stop-opacity="0"/>
+      <stop offset="0.25" stop-color="#fff1e2" stop-opacity="0.16"/>
+      <stop offset="0.5" stop-color="#fff6ec" stop-opacity="0.34"/>
+      <stop offset="0.75" stop-color="#fff1e2" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#ffeedd" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="halo">
+      <stop offset="0" stop-color="#cfe9ff" stop-opacity="0.7"/>
+      <stop offset="0.5" stop-color="#a9d6ff" stop-opacity="0.2"/>
+      <stop offset="1" stop-color="#9ccfff" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="dot" cx="0.42" cy="0.4" r="0.62">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="0.5" stop-color="#e6f4ff"/>
+      <stop offset="1" stop-color="#a8d8ff"/>
+    </radialGradient>
+  </defs>
+  <g clip-path="url(#tile)">
+  <rect width="64" height="64" fill="url(#space)"/>
+  <g transform="rotate(25 39 37.5)">
+    <rect x="25" y="-40" width="28" height="160" fill="url(#beamAcross)"/>
+  </g>
+  <circle cx="39" cy="37.5" r="11" fill="url(#halo)"/>
+  <circle cx="39" cy="37.5" r="5.6" fill="url(#dot)"/>
+</g>
 </svg>

@@ -757,11 +757,77 @@ function launchCanvas(): string {
 
 // ---------- the vault ----------
 
-const LOGO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="128" height="128">
-  <rect width="64" height="64" rx="14" fill="#1e1e1e"/>
-  <path d="M20 14h18l10 10v26a4 4 0 0 1-4 4H20a4 4 0 0 1-4-4V18a4 4 0 0 1 4-4z" fill="#8a5cf5"/>
-  <path d="M38 14v8a2 2 0 0 0 2 2h8z" fill="#b9a2fb"/>
-  <path d="M23 33h18M23 40h18M23 47h11" stroke="#1e1e1e" stroke-width="3.2" stroke-linecap="round"/>
+const LOGO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="128" height="128">
+  <defs>
+    <clipPath id="tile"><rect width="1024" height="1024" rx="230.40"/></clipPath>
+    <linearGradient id="space" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#06051a"/>
+      <stop offset="0.42" stop-color="#110c36"/>
+      <stop offset="0.78" stop-color="#2a1872"/>
+      <stop offset="1" stop-color="#4b2bb5"/>
+    </linearGradient>
+    <radialGradient id="glowPurple" cx="1" cy="1" r="0.9">
+      <stop offset="0" stop-color="#8a5cf5" stop-opacity="0.55"/>
+      <stop offset="0.55" stop-color="#8a5cf5" stop-opacity="0.12"/>
+      <stop offset="1" stop-color="#8a5cf5" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="beamAcross" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ffeedd" stop-opacity="0"/>
+      <stop offset="0.15" stop-color="#ffeedd" stop-opacity="0.02"/>
+      <stop offset="0.3" stop-color="#ffefdf" stop-opacity="0.08"/>
+      <stop offset="0.4" stop-color="#fff1e2" stop-opacity="0.16"/>
+      <stop offset="0.46" stop-color="#fff5ea" stop-opacity="0.215"/>
+      <stop offset="0.5" stop-color="#fff6ec" stop-opacity="0.23"/>
+      <stop offset="0.54" stop-color="#fff5ea" stop-opacity="0.215"/>
+      <stop offset="0.6" stop-color="#fff1e2" stop-opacity="0.16"/>
+      <stop offset="0.7" stop-color="#ffefdf" stop-opacity="0.08"/>
+      <stop offset="0.85" stop-color="#ffeedd" stop-opacity="0.02"/>
+      <stop offset="1" stop-color="#ffeedd" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="streakAcross" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#e4d8ff" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#e4d8ff" stop-opacity="0.08"/>
+      <stop offset="1" stop-color="#e4d8ff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="beamAlong" gradientUnits="userSpaceOnUse" x1="0" y1="-420" x2="0" y2="1500">
+      <stop offset="0" stop-color="#fff" stop-opacity="1"/>
+      <stop offset="0.5" stop-color="#fff" stop-opacity="0.8"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0.15"/>
+    </linearGradient>
+    <mask id="fade" maskUnits="userSpaceOnUse" x="-1000" y="-1000" width="3000" height="3000">
+      <rect x="-1000" y="-420" width="3000" height="1920" fill="url(#beamAlong)"/>
+    </mask>
+    <radialGradient id="halo">
+      <stop offset="0" stop-color="#cfe9ff" stop-opacity="0.6"/>
+      <stop offset="0.3" stop-color="#a9d6ff" stop-opacity="0.22"/>
+      <stop offset="0.65" stop-color="#9ccfff" stop-opacity="0.06"/>
+      <stop offset="1" stop-color="#9ccfff" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="dot" cx="0.42" cy="0.4" r="0.62">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="0.45" stop-color="#e6f4ff"/>
+      <stop offset="1" stop-color="#9fd2ff"/>
+    </radialGradient>
+  </defs>
+  <g clip-path="url(#tile)">
+
+  <rect width="1024" height="1024" fill="url(#space)"/>
+  <rect width="1024" height="1024" fill="url(#glowPurple)"/>
+  <g fill="#e9e4ff">
+    <circle cx="168" cy="214" r="3" opacity="0.45"/>
+    <circle cx="300" cy="610" r="2.2" opacity="0.3"/>
+    <circle cx="214" cy="838" r="2.6" opacity="0.32"/>
+    <circle cx="436" cy="126" r="2" opacity="0.35"/>
+    <circle cx="884" cy="770" r="2.4" opacity="0.28"/>
+    <circle cx="112" cy="470" r="1.8" opacity="0.3"/>
+  </g>
+  <g transform="rotate(25 628 600)" mask="url(#fade)">
+    <rect x="463" y="-420" width="330" height="1920" fill="url(#beamAcross)"/>
+    <rect x="360" y="-420" width="70" height="1920" fill="url(#streakAcross)"/>
+  </g>
+  <circle cx="628" cy="600" r="110" fill="url(#halo)"/>
+  <circle cx="628" cy="600" r="23" fill="url(#dot)"/>
+</g>
 </svg>
 `;
 
@@ -798,7 +864,7 @@ export function demoSeedFiles(): SeedFile[] {
     { path: 'Habits/Meditate.md', content: habitNote('Meditate', '#ae3ec9', 'weekdays', 'meditate', habitDays('meditate'), created), age: 1 * DAY_MIN },
     { path: 'Templates/Daily note.md', content: DAILY_TEMPLATE, age: 30 * DAY_MIN },
     { path: 'Templates/Meeting.md', content: MEETING_TEMPLATE, age: 30 * DAY_MIN },
-    { path: 'Attachments/notesapp-logo.svg', content: LOGO_SVG, age: 30 * DAY_MIN },
+    { path: 'Attachments/voyager-logo.svg', content: LOGO_SVG, age: 30 * DAY_MIN },
     ...taskFiles(),
     ...Array.from({ length: 21 }, (_, i) => daily(-i)),
   ];

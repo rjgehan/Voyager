@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { isClipRequest, runClip } from '../src/extension/background';
 import type { Browser, Tab } from '../src/extension/browser';
@@ -73,6 +75,18 @@ describe('manifest', () => {
       expect(m).not.toHaveProperty('content_scripts');
       expect(m.permissions).toEqual(['activeTab', 'scripting', 'storage', 'contextMenus']);
       expect(m.optional_host_permissions).toEqual(['https://*/*', 'http://*/*']);
+    }
+  });
+
+  it('is Voyager clipper, with an icon of each size it names, and keeps its Firefox id', () => {
+    const m = manifest('chrome', '1.0.0');
+    expect(m).toMatchObject({ name: 'Voyager clipper', short_name: 'Clip to Voyager', action: { default_title: 'Clip to Voyager' } });
+    expect(GECKO_ID).toBe('clipper@notesapp.rjgehan.github.io');
+    const icons = m.icons as Record<string, string>;
+    expect(Object.keys(icons)).toEqual(['16', '32', '48', '128']);
+    for (const [size, file] of Object.entries(icons)) {
+      const png = readFileSync(join(import.meta.dirname, '..', file));
+      expect([png.readUInt32BE(16), png.readUInt32BE(20)], file).toEqual([Number(size), Number(size)]);
     }
   });
 });

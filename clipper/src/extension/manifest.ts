@@ -7,7 +7,7 @@ export type Target = 'chrome' | 'firefox';
 export const GECKO_ID = 'clipper@notesapp.rjgehan.github.io';
 
 export function manifest(target: Target, version: string): Record<string, unknown> {
-  const icons = { '16': 'icons/icon-128.png', '32': 'icons/icon-128.png', '48': 'icons/icon-128.png', '128': 'icons/icon-128.png' };
+  const icons = { '16': 'icons/icon-16.png', '32': 'icons/icon-32.png', '48': 'icons/icon-48.png', '128': 'icons/icon-128.png' };
   const base: Record<string, unknown> = {
     manifest_version: 3,
     name: 'Voyager clipper',

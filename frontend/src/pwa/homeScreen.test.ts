@@ -30,10 +30,12 @@ describe('the Home Screen app', () => {
     expect(meta('apple-mobile-web-app-title')).toBe('Voyager');
   });
 
-  it('has a 180 px icon that fills its square (iOS rounds the corners itself)', () => {
+  it('has a 180 px opaque icon that fills its square (iOS rounds the corners itself and paints transparency black)', () => {
     expect(html).toContain('<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />');
     expect([...icon.slice(1, 4)].map((c) => String.fromCharCode(c)).join('')).toBe('PNG');
     expect(uint32(icon, 16)).toBe(180);
     expect(uint32(icon, 20)).toBe(180);
+    // Colour type 2: RGB, no alpha channel.
+    expect(icon[25]).toBe(2);
   });
 });
