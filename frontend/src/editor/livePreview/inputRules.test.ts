@@ -2,6 +2,7 @@ import { completionStatus } from '@codemirror/autocomplete';
 import { redo, undo } from '@codemirror/commands';
 import { EditorView } from '@codemirror/view';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { markdownLanguage } from '@codemirror/lang-markdown';
 import { destroyEditors, marked, noteEditor, parsed, press, typeText } from '../../test/noteEditor';
 import { editProperties } from './blocks';
 import { collectElements } from './model';
@@ -188,6 +189,30 @@ describe('Enter shortcuts (ROADMAP 10a)', () => {
     typeText(view, '```');
     expect(enter(view)).toBe(true);
     expect(view.state.doc.toString()).toBe('```\n\n```\n\n```py\nb\n```');
+  });
+
+  it('telling a closed block apart parses only up to its closing fence, not the rest of a long note', () => {
+    const filler = 'Paragraph text here.\n\n'.repeat(20_000);
+    const parse = vi.spyOn(markdownLanguage.parser, 'parse');
+    try {
+      const view = noteEditor('```js‸\ncode\n```\n' + filler);
+      parsed(view);
+      parse.mockClear();
+      enter(view);
+      expect(view.state.doc.sliceString(0, 20)).toBe('```js\n\ncode\n```\nPara');
+      expect(parse).toHaveBeenCalled();
+      for (const [text] of parse.mock.calls) expect(String(text).length).toBeLessThan(50);
+
+      const above = noteEditor('‸\n\n```py\nb\n```\n' + filler);
+      parsed(above);
+      typeText(above, '```');
+      parse.mockClear();
+      expect(enter(above)).toBe(true);
+      expect(above.state.doc.sliceString(0, 26)).toBe('```\n\n```\n\n```py\nb\n```\nPara');
+      for (const [text] of parse.mock.calls) expect(String(text).length).toBeLessThan(50);
+    } finally {
+      parse.mockRestore();
+    }
   });
 
   it('a `|` header line then Enter makes a table and opens its first empty cell', () => {
