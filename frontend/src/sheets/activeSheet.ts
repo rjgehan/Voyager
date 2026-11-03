@@ -1,6 +1,7 @@
-// The open spreadsheet's actions, for the palette commands its view descriptor contributes
-// (DESIGN §6.21.5). The lazy view sets them while it is mounted; the commands live in the main
-// bundle and never load the view or the engine themselves.
+// The open spreadsheets' actions, for the palette commands their view descriptor contributes
+// (DESIGN §6.21.5). Each lazy view registers them while it is mounted, by its file, so with two
+// panes showing two spreadsheets the commands act on the active pane's one; the commands live in
+// the main bundle and never load the view or the engine themselves.
 
 export interface SheetActions {
   path: string;
@@ -43,17 +44,21 @@ export interface SheetActions {
   createPivotTable(): void;
 }
 
-let active: SheetActions | null = null;
+/** The mounted views' actions, the latest last. */
+const mounted: SheetActions[] = [];
 
-/** Registers the mounted view's actions; returns the matching cleanup. */
+/** Registers a mounted view's actions; returns the matching cleanup, which removes only them. */
 export function setActiveSheet(actions: SheetActions): () => void {
-  active = actions;
+  mounted.push(actions);
   return () => {
-    if (active === actions) active = null;
+    const i = mounted.indexOf(actions);
+    if (i >= 0) mounted.splice(i, 1);
   };
 }
 
-/** The actions of the spreadsheet showing `path`, if one is mounted. */
+/** The actions of the spreadsheet showing `path` (the latest mounted, if two do), if one is mounted. */
 export function activeSheet(path: string | null): SheetActions | null {
-  return active && path !== null && active.path === path ? active : null;
+  if (path === null) return null;
+  for (let i = mounted.length - 1; i >= 0; i--) if (mounted[i].path === path) return mounted[i];
+  return null;
 }
