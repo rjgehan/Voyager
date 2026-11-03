@@ -2259,7 +2259,7 @@ Per-device preferences (theme, spellcheck, autocorrect, remote images, syntax vi
 
 | Route | View |
 |---|---|
-| `/` | `HomePage`. If `dailyNotes.openOnStartup`, open today's note. Otherwise open the last-opened path (`localStorage notesapp:lastPath`) if it still exists, then `Welcome.md`, then an empty state with "New note", "Today" and "Help". |
+| `/` | `HomePage`. If `dailyNotes.openOnStartup`, open today's note. Otherwise open the last-opened path (`localStorage notesapp:lastPath`, which follows a rename of the note or of any folder above it) if it still exists, then `Welcome.md`, then an empty state with "New note", "Today" and "Help". |
 | `/n/<path>` | `FileView`. The registry picks the view. `#<heading text>` scrolls to the heading. `?line=N` scrolls to 0-based line `N` (a search hit), flashes it, and highlights the terms of `&q=` (words, phrases and regular expressions). For a PDF, `?page=N` opens the viewer at that page. `?mode=read` forces the reading view (a locked note). The other modes (Live Preview, source, locked) are chosen per note, §6.6.1. |
 | `/search?q=…` | Search page, **phones only**. On desktop the search panel keeps its query in zustand and never changes the route, so typing in it never navigates away from the open note. |
 | `/trash` | Trash page |
