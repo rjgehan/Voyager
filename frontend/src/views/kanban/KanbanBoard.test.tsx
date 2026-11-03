@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { EditorView } from '@codemirror/view';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MockVault } from '../../api/mock/vault';
@@ -130,5 +131,62 @@ describe('KanbanBoard', () => {
     expect(session.getText()).toBe(before);
     fireEvent.click(screen.getByRole('button', { name: /Open as Markdown/ }));
     expect(onShowMarkdown).toHaveBeenCalled();
+  });
+});
+
+// An open card edit is kept when another device changes the board under it (DESIGN §6.8.4).
+describe('KanbanBoard: a card edit while the board changes', () => {
+  const editorIn = (el: Element) => EditorView.findFromDOM(el.querySelector<HTMLElement>('.kanban-card-editor .cm-editor')!)!;
+  const second = () => [...lane('To do').querySelectorAll<HTMLElement>('[data-board-card]')].find((c) => c.textContent?.includes('Second'))!;
+
+  async function typing(session: DocumentSession) {
+    fireEvent.click(within(second()).getByText('Second'));
+    const view = editorIn(second());
+    act(() => view.dispatch({ changes: { from: view.state.doc.length, insert: ' and brushes' }, userEvent: 'input.type' }));
+    expect(session.getText()).not.toContain('and brushes');
+  }
+
+  const replaceLine = (session: DocumentSession, line: string, by: string) => {
+    const from = session.getText().indexOf(line);
+    act(() => session.applyEdit({ from, to: from + line.length, insert: by }));
+  };
+
+  it('keeps the typed text as a new card when the card was changed elsewhere', async () => {
+    const { session } = await setup();
+    await typing(session);
+    replaceLine(session, '- [ ] Second', '- [ ] Second (phone)');
+    await act(() => vi.advanceTimersByTimeAsync(50));
+    // Opening another card afterwards does not drop it either.
+    fireEvent.click(within(lane('To do')).getByText('Call'));
+    fireEvent.keyDown(lane('To do').querySelector('.kanban-card-editor .cm-content')!, { key: 'Escape' });
+    await act(() => vi.advanceTimersByTimeAsync(50));
+    const text = session.getText();
+    expect(text).toContain('- [ ] Second (phone)\n');
+    expect(text).toContain('- [ ] Second and brushes\n');
+  });
+
+  it('keeps the typed text as a new card when the card was deleted elsewhere', async () => {
+    const { session } = await setup();
+    await typing(session);
+    replaceLine(session, '- [ ] Second\n', '');
+    await act(() => vi.advanceTimersByTimeAsync(50));
+    expect(session.getText()).toContain('## To do\n\n- [ ] Call [[Bob]] @{2020-01-02}\n- [ ] Second and brushes\n');
+  });
+
+  it('a card moved to another lane elsewhere keeps the text being typed in its editor', async () => {
+    const { session } = await setup();
+    await typing(session);
+    // One save from the other device: the line leaves To do and arrives in Done.
+    const text = session.getText();
+    const from = text.indexOf('- [ ] Second\n');
+    const to = text.indexOf('**Complete**\n') + '**Complete**\n'.length;
+    act(() => session.applyEdit([{ from, to: from + '- [ ] Second\n'.length, insert: '' }, { from: to, insert: '- [x] Second\n' }]));
+    await act(() => vi.advanceTimersByTimeAsync(50));
+    const card = lane('Done').querySelector<HTMLElement>('[data-board-card]')!;
+    const view = editorIn(card);
+    expect(view.state.doc.toString()).toBe('Second and brushes');
+    act(() => view.dispatch({ changes: { from: view.state.doc.length, insert: '!' }, userEvent: 'input.type' }));
+    fireEvent.keyDown(card.querySelector('.cm-content')!, { key: 'Escape' });
+    expect(session.getText()).toContain('**Complete**\n- [x] Second and brushes!\n');
   });
 });
