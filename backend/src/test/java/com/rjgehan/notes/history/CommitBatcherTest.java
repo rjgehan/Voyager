@@ -12,6 +12,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.rjgehan.notes.api.dto.OnConflict;
 import com.rjgehan.notes.events.HistoryCommittedEvent;
@@ -158,6 +159,105 @@ class CommitBatcherTest {
 		this.vault.git.failing = false;
 		GitStore.Commit retried = this.vault.flush();
 		assertThat(retried.author().name()).isEqualTo("Alice");
+	}
+
+	private String committedText(String path) throws Exception {
+		return new String(this.vault.git.readAt(commits(path).get(0).name(), path).bytes(), StandardCharsets.UTF_8);
+	}
+
+	@Test
+	void twoAuthorsWritingAtOnceAreEachCommittedUnderTheirOwnName() throws Exception {
+		write("A.md", "a0");
+		write("G.md", "g0");
+		this.vault.flush();
+		// Two request threads on different path stripes: both see an empty batch, then Bob's write lands first.
+		this.batcher.prepareWrite(Author.of(TestVault.ALICE));
+		this.batcher.prepareWrite(Author.of(TestVault.BOB));
+		Files.writeString(this.dir.resolve("G.md"), "bob edit");
+		this.batcher.markDirty(this.vault.path("G.md"), Author.of(TestVault.BOB));
+		Files.writeString(this.dir.resolve("A.md"), "alice edit");
+		this.batcher.markDirty(this.vault.path("A.md"), Author.of(TestVault.ALICE));
+		this.vault.flush();
+
+		assertThat(commits("A.md").get(0).getAuthorIdent().getName()).isEqualTo("Alice");
+		assertThat(committedText("A.md")).isEqualTo("alice edit");
+		assertThat(commits("G.md").get(0).getAuthorIdent().getName()).isEqualTo("Bob");
+		assertThat(committedText("G.md")).isEqualTo("bob edit");
+		assertThat(commits("A.md").get(0).name()).isNotEqualTo(commits("G.md").get(0).name());
+	}
+
+	@Test
+	void aWriteWaitsWhileAnotherAuthorsPartOfTheBatchIsStillToBeCommitted() throws Exception {
+		write("A.md", "a0");
+		write("G.md", "g0");
+		this.vault.flush();
+		Files.writeString(this.dir.resolve("A.md"), "alice edit");
+		this.batcher.markDirty(this.vault.path("A.md"), Author.of(TestVault.ALICE));
+		Files.writeString(this.dir.resolve("G.md"), "bob edit");
+		this.batcher.markDirty(this.vault.path("G.md"), Author.of(TestVault.BOB));
+		AtomicBoolean aliceMayWrite = new AtomicBoolean();
+		ExecutorService threads = Executors.newSingleThreadExecutor();
+		try {
+			// Alice's commit comes first; Bob's G.md is still to be committed (its git add reads the disk).
+			this.vault.git.beforeCommit = () -> {
+				this.vault.git.beforeCommit = () -> {
+				};
+				threads.submit(() -> {
+					this.batcher.prepareWrite(Author.of(TestVault.ALICE));
+					aliceMayWrite.set(true);
+				});
+				try {
+					Thread.sleep(300);
+				}
+				catch (InterruptedException ex) {
+					Thread.currentThread().interrupt();
+				}
+				assertThat(aliceMayWrite).as("Alice waits until Bob's part is committed").isFalse();
+			};
+			this.vault.flush();
+			threads.shutdown();
+			assertThat(threads.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
+			assertThat(aliceMayWrite).isTrue();
+		}
+		finally {
+			threads.shutdownNow();
+		}
+		assertThat(commits("G.md").get(0).getAuthorIdent().getName()).isEqualTo("Bob");
+		assertThat(committedText("G.md")).isEqualTo("bob edit");
+	}
+
+	@Test
+	void anAppEditNeverJoinsABatchOfExternalChanges() throws Exception {
+		write("A.md", "a0");
+		write("X.md", "x0");
+		this.vault.flush();
+		Files.writeString(this.dir.resolve("X.md"), "edited elsewhere");
+		this.batcher.markDirty(this.vault.path("X.md"), Author.EXTERNAL);
+		Files.writeString(this.dir.resolve("A.md"), "alice edit");
+		this.batcher.markDirty(this.vault.path("A.md"), Author.of(TestVault.ALICE));
+		this.vault.flush();
+
+		assertThat(commits("A.md").get(0).getAuthorIdent().getName()).isEqualTo("Alice");
+		assertThat(commits("X.md").get(0).getAuthorIdent().getName()).isEqualTo("External");
+	}
+
+	@Test
+	void aFailedCommitNeverMergesTwoAuthors() throws Exception {
+		write("A.md", "a0");
+		write("G.md", "g0");
+		this.vault.flush();
+		Files.writeString(this.dir.resolve("G.md"), "bob edit");
+		this.batcher.markDirty(this.vault.path("G.md"), Author.of(TestVault.BOB));
+		this.vault.git.failing = true;
+		// Alice's write: prepareWrite cannot commit Bob's batch, which stays pending.
+		this.batcher.prepareWrite(Author.of(TestVault.ALICE));
+		Files.writeString(this.dir.resolve("A.md"), "alice edit");
+		this.batcher.markDirty(this.vault.path("A.md"), Author.of(TestVault.ALICE));
+		this.vault.git.failing = false;
+		this.vault.flush();
+
+		assertThat(commits("A.md").get(0).getAuthorIdent().getName()).isEqualTo("Alice");
+		assertThat(commits("G.md").get(0).getAuthorIdent().getName()).isEqualTo("Bob");
 	}
 
 	@Test
@@ -310,6 +410,26 @@ class CommitBatcherTest {
 		assertThat(CommitBatcher.batchMessage(List.of(change("M", "a.md"), change("M", "b.md")), Author.EXTERNAL)
 			.subject()).isEqualTo("External changes: 2 files");
 		assertThat(GitStore.truncate("x".repeat(200))).hasSize(120);
+	}
+
+	@Test
+	void batchSubjectsNameVisibleFilesBeforeHiddenOnes() {
+		Author alice = Author.of(TestVault.ALICE);
+		GitStore.Message three = CommitBatcher.batchMessage(
+				List.of(change("M", ".notesapp/bookmarks.json"), change("M", "Ideas.md"), change("M", "Plan.md")), alice);
+		assertThat(three.subject()).isEqualTo("Update 3 files: Ideas.md, Plan.md, .notesapp/bookmarks.json");
+		assertThat(three.body()).isEqualTo("M .notesapp/bookmarks.json\nM Ideas.md\nM Plan.md");
+		assertThat(CommitBatcher
+			.batchMessage(List.of(change("M", ".notesapp/bookmarks.json"), change("M", ".notesapp/srs.json"),
+					change("M", "A.md"), change("M", "B.md"), change("M", "C.md")), alice)
+			.subject()).isEqualTo("Update 5 files: A.md, B.md, C.md (+2 more)");
+		assertThat(CommitBatcher
+			.batchMessage(List.of(change("M", ".notesapp/bookmarks.json"), change("M", ".notesapp/settings.json")),
+					alice)
+			.subject()).isEqualTo("Update 2 files: .notesapp/bookmarks.json, .notesapp/settings.json");
+		assertThat(CommitBatcher.batchMessage(List.of(change("M", "Projects/.obsidian/x.json"), change("M", "z.md")),
+				alice)
+			.subject()).isEqualTo("Update 2 files: z.md, Projects/.obsidian/x.json");
 	}
 
 	private static GitStore.Change change(String letter, String path) {

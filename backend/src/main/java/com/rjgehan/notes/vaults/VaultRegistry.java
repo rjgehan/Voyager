@@ -264,7 +264,9 @@ public class VaultRegistry implements DisposableBean {
 
 	/**
 	 * The dispatcher of a ready extra vault. Throws {@code 404 vault-not-found} for a name the server does not serve
-	 * and {@code 503 vault-unavailable} while its context starts or after it failed to start.
+	 * and {@code 503 vault-unavailable} while its context starts, after it failed to start, or once the server is
+	 * shutting down (its context closes before the web server stops taking requests). Starting and stopping carry
+	 * {@code Retry-After}: clients retry those, while a failed vault stays failed until the next restart.
 	 */
 	public DispatcherServlet dispatcher(String name) {
 		Entry entry = this.extras.get(name);
@@ -274,11 +276,13 @@ public class VaultRegistry implements DisposableBean {
 		}
 		DispatcherServlet servlet = entry.servlet;
 		if (entry.state != State.READY || servlet == null) {
-			boolean starting = entry.state == State.STARTING;
-			NotesException ex = new NotesException(ErrorCode.VAULT_UNAVAILABLE,
-					starting ? "The vault is starting; retry shortly" : "The vault could not be started; see the server log",
-					Map.of("vault", name, "reason", entry.state.json()));
-			if (starting) {
+			boolean stopping = this.closed;
+			boolean starting = !stopping && entry.state == State.STARTING;
+			String detail = stopping ? "The server is restarting; retry shortly"
+					: starting ? "The vault is starting; retry shortly" : "The vault could not be started; see the server log";
+			NotesException ex = new NotesException(ErrorCode.VAULT_UNAVAILABLE, detail,
+					Map.of("vault", name, "reason", stopping ? "stopping" : entry.state.json()));
+			if (starting || stopping) {
 				ex.getHeaders().set("Retry-After", "2");
 			}
 			throw ex;
@@ -303,8 +307,8 @@ public class VaultRegistry implements DisposableBean {
 				throw new IllegalStateException("The main application has no servlet context");
 			}
 			ConfigurableApplicationContext context = application(entry, servletContext).run();
-			DispatcherServlet servlet = context.getBean(DispatcherServlet.class);
-			servlet.init(new VaultServletConfig("notesapp-vault-" + entry.name, servletContext));
+			DispatcherServlet servlet = initDispatcher(context,
+					new VaultServletConfig("notesapp-vault-" + entry.name, servletContext));
 			synchronized (this) {
 				if (this.closed) {
 					servlet.destroy();
@@ -318,9 +322,36 @@ public class VaultRegistry implements DisposableBean {
 			logger.info("Vault {} ready in {} ms ({})", entry.name,
 					TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started), entry.dir);
 		}
-		catch (RuntimeException | ServletException ex) {
+		catch (RuntimeException | ServletException | Error ex) {
+			// An Error too: a vault left STARTING would answer "retry shortly" for good.
 			entry.state = State.FAILED;
 			logger.error("VAULT_START_FAILED: vault {} at {} could not be started", entry.name, entry.dir, ex);
+			if (ex instanceof Error error) {
+				throw error;
+			}
+		}
+	}
+
+	/**
+	 * Sets up the dispatcher of a vault context that has started. On any failure the context is closed before the
+	 * failure is rethrown: it runs the vault's watcher, commit batcher and scheduled tasks, and nothing else would
+	 * ever close it (only a ready vault's context is kept, for {@link #destroy}).
+	 */
+	static DispatcherServlet initDispatcher(ConfigurableApplicationContext context, ServletConfig config)
+			throws ServletException {
+		try {
+			DispatcherServlet servlet = context.getBean(DispatcherServlet.class);
+			servlet.init(config);
+			return servlet;
+		}
+		catch (Throwable ex) {
+			try {
+				context.close();
+			}
+			catch (RuntimeException closing) {
+				ex.addSuppressed(closing);
+			}
+			throw ex;
 		}
 	}
 

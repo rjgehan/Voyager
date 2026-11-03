@@ -199,4 +199,18 @@ class TimelineServiceTest {
 		assertThat(unavailable.code()).isEqualTo(ErrorCode.HISTORY_UNAVAILABLE);
 	}
 
+
+	@Test
+	void aDeletedFileWhoseNameExistsInAnotherCaseIsNotListed() throws Exception {
+		create("Plan.md", "old\n");
+		create("Ideas/x.md", "x\n");
+		commit();
+		delete("Plan.md");
+		delete("Ideas/x.md");
+		create("plan.md", "new\n");
+		commit();
+		assertThat(this.timeline.deleted(null, 50, 0).entries()).extracting(DeletedFile::path)
+			.containsExactly("Ideas/x.md");
+	}
+
 }

@@ -6,6 +6,8 @@ import java.nio.file.NoSuchFileException;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -69,6 +71,9 @@ public class FlashcardService {
 	public static final String FILE = ".notesapp/srs.json";
 
 	private static final ApiPath PATH = ApiPath.of(FILE);
+
+	private static final DateTimeFormatter BACKUP_STAMP = DateTimeFormatter.ofPattern("uuuuMMdd'T'HHmmss'Z'")
+		.withZone(ZoneOffset.UTC);
 
 	static final Set<String> CONFIG_FIELDS = Set.of("tags", "foldersAsDecks", "newPerDay", "reviewsPerDay",
 			"retention", "maximumInterval", "learningSteps", "relearningSteps", "fuzz", "dayStartsAt");
@@ -405,7 +410,11 @@ public class FlashcardService {
 				this.batcher.prepareWrite(author);
 				try {
 					Files.createDirectories(this.fs.resolve(FILE).getParent());
+					if (file.lossy) {
+						keepBackup();
+					}
 					this.fs.atomicWrite(FILE, bytes);
+					file.lossy = false;
 				}
 				catch (IOException | RuntimeException ex) {
 					// The model was changed in place; the disk is the truth again.
@@ -425,6 +434,23 @@ public class FlashcardService {
 				this.lock.unlock();
 			}
 		}
+	}
+
+	/**
+	 * Keeps the file on disk beside it ({@code srs.json.bak-<stamp>}) before a write would drop what reading left out,
+	 * as settings and bookmarks do, so a hand edit or a sync tool's broken copy is never lost.
+	 */
+	private void keepBackup() throws IOException {
+		byte[] disk;
+		try {
+			disk = this.fs.readBytes(FILE);
+		}
+		catch (NoSuchFileException ex) {
+			return;
+		}
+		String backup = FILE + ".bak-" + BACKUP_STAMP.format(this.clock.instant());
+		this.fs.atomicWrite(backup, disk);
+		logger.warn("{} could not be read in full; kept it as {} before writing", FILE, backup);
 	}
 
 	/** The file as it is on disk now: re-read when its bytes changed (a hand edit, a history restore). */

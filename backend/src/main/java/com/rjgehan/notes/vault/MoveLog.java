@@ -52,7 +52,8 @@ public class MoveLog {
 			}
 			current = next;
 		}
-		return PathNames.lower(current).equals(PathNames.lower(path)) ? null : current;
+		// Exact: a case-only rename (meeting notes.md → Meeting notes.md) is a move a device must follow.
+		return current.equals(path) ? null : current;
 	}
 
 }

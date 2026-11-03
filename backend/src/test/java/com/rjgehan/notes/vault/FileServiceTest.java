@@ -348,4 +348,37 @@ class FileServiceTest {
 		assertThat(ex.getBody().getProperties()).containsEntry("movedTo", "New.md").containsEntry("currentVersion", null);
 	}
 
+
+	private List<String> rootNames() throws Exception {
+		try (var listing = Files.list(this.dir)) {
+			return listing.map((path) -> path.getFileName().toString()).filter((name) -> !name.startsWith(".")).toList();
+		}
+	}
+
+	@Test
+	void recreatingRefusesANameThatDiffersOnlyByCase() throws Exception {
+		create("Plan.md", "a\n");
+		assertThatThrownBy(() -> this.files.saveText("plan.md", "b\n", null, true, TestVault.ALICE, "client-a1"))
+			.isInstanceOfSatisfying(NotesException.class, (ex) -> {
+				assertThat(ex.code()).isEqualTo(ErrorCode.CASE_COLLISION);
+				assertThat(ex.getBody().getProperties()).containsEntry("path", "plan.md")
+					.containsEntry("existingPath", "Plan.md");
+			});
+		assertThat(rootNames()).containsExactly("Plan.md");
+		assertThat(Files.readString(this.dir.resolve("Plan.md"))).isEqualTo("a\n");
+	}
+
+	@Test
+	void recreatingUnderAParentThatDiffersOnlyByCaseUsesTheExistingFolder() throws Exception {
+		create("projects/A.md", "");
+		FileService.Saved saved = this.files.saveText("Projects/B.md", "x\n", null, false, TestVault.ALICE,
+				"client-a1");
+		assertThat(saved.created()).isTrue();
+		assertThat(saved.result().file().path()).isEqualTo("projects/B.md");
+		assertThat(saved.result().createdFolders()).isEmpty();
+		assertThat(rootNames()).containsExactly("projects");
+		assertThat(this.vault.index.isFolder("Projects")).isFalse();
+		assertThat(Files.readString(this.dir.resolve("projects/B.md"))).isEqualTo("x\n");
+	}
+
 }

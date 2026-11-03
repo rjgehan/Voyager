@@ -7,7 +7,9 @@ import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
 import java.nio.channels.SeekableByteChannel;
+import java.nio.file.AccessDeniedException;
 import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.CopyOption;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.FileSystemException;
 import java.nio.file.FileVisitResult;
@@ -46,6 +48,11 @@ public class VaultFs {
 	private static final LinkOption[] NOFOLLOW = { LinkOption.NOFOLLOW_LINKS };
 
 	private static final String SIBLING_TEMP_PREFIX = ".notesapp-";
+
+	private static final boolean WINDOWS = VaultPaths.isWindows();
+
+	/** The pauses between attempts to replace a file another process holds open (Windows only). */
+	private static final long[] REPLACE_RETRY_MILLIS = { 10, 20, 40, 80, 160 };
 
 	private final Path root;
 
@@ -399,7 +406,7 @@ public class VaultFs {
 
 	private void replace(Path source, Path target) throws IOException {
 		try {
-			Files.move(source, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+			moveReplacing(source, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
 		}
 		catch (AtomicMoveNotSupportedException ex) {
 			// The target folder is a separate mount: stage a sibling dot-file (ignored by the watcher) instead.
@@ -410,17 +417,43 @@ public class VaultFs {
 					channel.force(true);
 				}
 				try {
-					Files.move(sibling, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+					moveReplacing(sibling, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
 				}
 				catch (AtomicMoveNotSupportedException again) {
 					if (this.warnedNonAtomic.compareAndSet(false, true)) {
 						logger.warn("The vault filesystem does not support atomic renames; writes are not atomic");
 					}
-					Files.move(sibling, target, StandardCopyOption.REPLACE_EXISTING);
+					moveReplacing(sibling, target, StandardCopyOption.REPLACE_EXISTING);
 				}
 			}
 			finally {
 				Files.deleteIfExists(sibling);
+			}
+		}
+	}
+
+	/**
+	 * {@link Files#move} over an existing file. On Windows a file that another process holds open without delete
+	 * sharing (JGit reading it for a commit, an antivirus or the search indexer) cannot be replaced while it is open:
+	 * the move is retried for up to about a third of a second, as Git for Windows does, instead of failing the save.
+	 */
+	private static void moveReplacing(Path source, Path target, CopyOption... options) throws IOException {
+		for (int attempt = 0;; attempt++) {
+			try {
+				Files.move(source, target, options);
+				return;
+			}
+			catch (AccessDeniedException ex) {
+				if (!WINDOWS || attempt >= REPLACE_RETRY_MILLIS.length) {
+					throw ex;
+				}
+				try {
+					Thread.sleep(REPLACE_RETRY_MILLIS[attempt]);
+				}
+				catch (InterruptedException interrupted) {
+					Thread.currentThread().interrupt();
+					throw ex;
+				}
 			}
 		}
 	}

@@ -396,8 +396,9 @@ public class FileService {
 	}
 
 	/** "Recreate with my text": the name existed, so neither the name nor its parents get the new-name rules. */
-	private WriteResult recreate(ApiPath path, byte[] bytes, Author author, @Nullable String origin)
+	private WriteResult recreate(ApiPath requested, byte[] bytes, Author author, @Nullable String origin)
 			throws IOException {
+		ApiPath path = recreateTarget(requested);
 		List<String> folders = ensureParentFolders(path);
 		this.batcher.prepareWrite(author);
 		try {
@@ -415,6 +416,22 @@ public class FileService {
 		this.hub.publish(FileEvent.created(entry, origin));
 		logger.info("RECREATE {} client={}", entry.path(), origin);
 		return new WriteResult(entry, true, folders);
+	}
+
+	/**
+	 * Where a file that is absent at exactly {@code path} is written again ("Recreate with my text", a history
+	 * restore). The name existed, so the new-name rules do not apply; but the parents resolve ignoring case, like a
+	 * trash restore, and a name that differs from an existing file or folder only by case is refused with
+	 * {@code case-collision}, so the vault stays case-insensitively unique (DESIGN §4.4). The path stripes of
+	 * {@code path} cover the target: they are keyed by the lower-cased path.
+	 */
+	public ApiPath recreateTarget(ApiPath path) {
+		ApiPath target = this.paths.resolve(path.nfc(), Mode.RESTORE);
+		List<String> variants = this.index.caseVariants(target.nfc());
+		if (!variants.isEmpty()) {
+			throw NotesException.caseCollision(path.nfc(), variants.get(0));
+		}
+		return target;
 	}
 
 	private VersionConflictException conflict(ApiPath path, byte[] disk, String current) {

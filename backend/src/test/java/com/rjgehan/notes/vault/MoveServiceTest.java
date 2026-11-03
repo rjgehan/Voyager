@@ -388,6 +388,30 @@ class MoveServiceTest {
 	}
 
 	@Test
+	void aSaveToTheOldSpellingLearnsOfACaseOnlyRename() throws Exception {
+		write("plan.md", "t\n");
+		write("Projects/Goal.md", "g\n");
+		start();
+		String version = this.vault.index.file("plan.md").version();
+		String goal = this.vault.index.file("Projects/Goal.md").version();
+		move("plan.md", "Plan.md");
+		move("Projects", "projects");
+		assertThatThrownBy(() -> this.vault.files.saveText("plan.md", "mine", version, false, TestVault.BOB,
+				"client-b1"))
+			.isInstanceOfSatisfying(VersionConflictException.class,
+					(ex) -> assertThat(ex.getBody().getProperties()).containsEntry("movedTo", "Plan.md"));
+		assertThatThrownBy(() -> this.vault.files.saveText("Projects/Goal.md", "mine", goal, false, TestVault.BOB,
+				"client-b1"))
+			.isInstanceOfSatisfying(VersionConflictException.class,
+					(ex) -> assertThat(ex.getBody().getProperties()).containsEntry("movedTo", "projects/Goal.md"));
+		// Following it works: a pure rename keeps the blob id.
+		assertThat(this.vault.files.saveText("Plan.md", "mine", version, false, TestVault.BOB, "client-b1")
+			.result()
+			.file()
+			.path()).isEqualTo("Plan.md");
+	}
+
+	@Test
 	void aRenameThatChangesTheExtensionIndexesTheFileForItsNewKind() throws Exception {
 		write("Target.md", "t\n");
 		write("Draft.txt", "#drafttag and [[Target]]\n");

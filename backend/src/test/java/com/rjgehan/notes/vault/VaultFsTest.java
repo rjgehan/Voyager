@@ -1,6 +1,7 @@
 package com.rjgehan.notes.vault;
 
 import java.io.ByteArrayInputStream;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileAlreadyExistsException;
@@ -12,12 +13,16 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 import com.rjgehan.notes.api.error.ErrorCode;
 import com.rjgehan.notes.api.error.NotesException;
 import com.rjgehan.notes.support.TestProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -132,6 +137,32 @@ class VaultFsTest {
 		assertThat(this.fs.createDirectory("Folder")).isFalse();
 		this.fs.createExclusive("file.md", new byte[0]);
 		assertThatThrownBy(() -> this.fs.createDirectory("file.md")).isInstanceOf(FileAlreadyExistsException.class);
+	}
+
+	/**
+	 * Windows: a reader that opened the file without delete sharing (JGit's git add, an antivirus, the indexer)
+	 * makes a replace fail with access denied while it reads; the save waits for it briefly instead of failing.
+	 */
+	@Test
+	@EnabledOnOs(OS.WINDOWS)
+	void aSaveWaitsBrieflyForAReaderThatHoldsTheFileOpen() throws Exception {
+		Path note = this.vault.resolve("Note.md");
+		Files.writeString(note, "old");
+		FileInputStream reader = new FileInputStream(note.toFile());
+		ScheduledExecutorService closer = Executors.newSingleThreadScheduledExecutor();
+		try {
+			closer.schedule(() -> {
+				reader.close();
+				return null;
+			}, 80, TimeUnit.MILLISECONDS);
+			this.fs.atomicWrite("Note.md", "new".getBytes(StandardCharsets.UTF_8));
+			assertThat(note).hasContent("new");
+			assertThat(tempFiles()).isEmpty();
+		}
+		finally {
+			closer.shutdownNow();
+			reader.close();
+		}
 	}
 
 	@Test
