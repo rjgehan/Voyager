@@ -94,4 +94,18 @@ describe('WorkspaceLayout', () => {
     expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['/zzz-a']);
     expect(navigate).toHaveBeenCalledWith('/zzz-a', { replace: true });
   });
+
+  it('Delete closes the focused tab and keeps the focus in the tab strip, on the newly selected tab', async () => {
+    let ws = createWorkspace('/zzz-a');
+    ws = openTab(ws, '/zzz-b');
+    resetWorkspace(ws);
+    renderAt('/zzz-b');
+    const tab = screen.getByRole('tab', { name: '/zzz-b' });
+    tab.focus();
+    act(() => {
+      fireEvent.keyDown(tab, { key: 'Delete' });
+    });
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['/zzz-a']);
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('tab', { name: '/zzz-a' })));
+  });
 });
