@@ -167,13 +167,27 @@ public class ShareAccess {
 		return path;
 	}
 
-	/** A new note the grant may create: an edit share of a folder, inside it, a Markdown note. */
+	/**
+	 * A new note the grant may create: an edit share of a folder, inside it, a Markdown note. The folders a new file's
+	 * parents resolve to are matched without regard to case, so the path is also checked where it would land: with the
+	 * shared folder gone, a private folder spelled in another case must not take the guest's note.
+	 */
 	public String creatable(Grant grant, @Nullable String raw) {
 		String path = normalized(grant, raw);
 		if (grant.share().kind() != ShareKind.FOLDER || !grant.share().contains(path)) {
 			throw outside(grant, path);
 		}
 		requireEditableNote(grant, path);
+		String target;
+		try {
+			target = this.paths.resolve(path, VaultPaths.Mode.NEW).nfc();
+		}
+		catch (NotesException ex) {
+			throw refuse(grant.identity(), grant.owner(), ex);
+		}
+		if (!grant.share().contains(target)) {
+			throw outside(grant, path);
+		}
 		return path;
 	}
 

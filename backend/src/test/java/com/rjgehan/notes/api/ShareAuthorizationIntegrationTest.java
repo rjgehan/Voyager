@@ -477,6 +477,28 @@ class ShareAuthorizationIntegrationTest {
 	}
 
 	@Test
+	void aGuestsNewNoteNeverLandsInAPrivateFolderSpelledLikeAMissingSharedOne() {
+		create("Clan/List.md", "# List\n");
+		String clan = owner()
+			.postJson("/api/shares", Map.of("path", "Clan", "mode", "edit", "recipients", List.of(MOM)), LOGIN, OWNER)
+			.ok(201)
+			.get("share")
+			.get("id")
+			.asString();
+		// The shared folder goes; a private one spelled in another case takes its place.
+		owner().delete("/api/folders?path=" + Api.enc("Clan"), LOGIN, OWNER).ok(200);
+		create("clan/Secret.md", "# Secret\n");
+		for (String onConflict : List.of("fail", "rename")) {
+			Reply reply = this.api.postJson("/api/s/" + clan + "/files",
+					Map.of("path", "Clan/Groceries.md", "content", "milk\n", "onConflict", onConflict), LOGIN, MOM);
+			assertThat(reply.status()).as(onConflict).isNotEqualTo(201);
+			assertThat(reply.text()).as(onConflict).doesNotContain("clan/");
+		}
+		assertThat(paths(owner().get("/api/tree", LOGIN, OWNER).ok(200).get("files")))
+			.noneMatch((path) -> path.endsWith("Groceries.md") && path.toLowerCase(Locale.ROOT).startsWith("clan/"));
+	}
+
+	@Test
 	void aGuestsConflictTellsWhereAMovedNoteWentOnlyInsideTheShare() {
 		String edit = "/api/s/" + editFolderShare;
 		create("Family/Recipes/Stew.md", "# Stew\n");
@@ -710,6 +732,63 @@ class ShareAuthorizationIntegrationTest {
 			stream.awaitEvent("share.changed");
 			assertThat(stream.frames().stream().map(SseRecorder.Frame::event)).doesNotContain("entry.moved");
 			assertThat(stream.frames().toString()).doesNotContain("Private/Soup.md").doesNotContain("Later.md");
+		}
+	}
+
+	@Test
+	void aGuestNeverSeesTheOwnersClientIdAndCannotHideItsEditsFromTheOwnersTab() throws Exception {
+		String ownerTab = "owner-tab-0001";
+		create("Family/Recipes/Tea.md", "# Tea\n");
+		try (SseRecorder ownerStream = SseRecorder.openPath(this.port, "/api/events?clientId=" + ownerTab,
+				Map.of(LOGIN, OWNER));
+				SseRecorder guestStream = SseRecorder.openPath(this.port,
+						"/api/s/" + editFolderShare + "/events?clientId=mom-client-003", Map.of(LOGIN, MOM))) {
+			ownerStream.awaitEvent("hello");
+			guestStream.awaitEvent("hello");
+			// The owner's save, folder and move reach the guest without the owner tab's id.
+			JsonNode tea = this.api.get("/api/files?path=" + Api.enc("Family/Recipes/Tea.md"), LOGIN, OWNER).ok(200);
+			this.api.putJson("/api/files?path=" + Api.enc("Family/Recipes/Tea.md"),
+					Map.of("content", "# Tea\ngreen\n", "baseVersion", tea.get("version").asString()), LOGIN, OWNER,
+					"X-Client-Id", ownerTab)
+				.ok(200);
+			this.api.postJson("/api/folders", Map.of("path", "Family/Recipes/Drinks"), LOGIN, OWNER, "X-Client-Id",
+					ownerTab)
+				.ok(201);
+			guestStream.awaitFrames((frames) -> frames.stream().anyMatch((f) -> f.event().equals("file.changed"))
+					&& frames.stream().anyMatch((f) -> f.event().equals("folder.created")));
+			for (SseRecorder.Frame frame : guestStream.frames()) {
+				assertThat(frame.data().toString()).as(frame.event()).doesNotContain(ownerTab);
+			}
+			// Even a guest that names the owner's id does not keep its edit from the owner's open tab.
+			String version = this.api.get("/api/s/" + editFolderShare + "/files?path=" + Api.enc("Family/Recipes/Tea.md"),
+					LOGIN, MOM)
+				.ok(200)
+				.get("version")
+				.asString();
+			this.api.putJson("/api/s/" + editFolderShare + "/files?path=" + Api.enc("Family/Recipes/Tea.md"),
+					Map.of("content", "# Tea\nmint\n", "baseVersion", version), LOGIN, MOM, "X-Client-Id", ownerTab)
+				.ok(200);
+			ownerStream.awaitFrames((frames) -> frames.stream()
+				.anyMatch((f) -> f.event().equals("file.changed")
+						&& f.data().get("file").get("path").asString().equals("Family/Recipes/Tea.md")
+						&& !f.data().toString().contains("\"origin\":\"" + ownerTab + "\"")));
+			// The guest's own save is still not echoed back to its own tab.
+			String mine = this.api
+				.get("/api/s/" + editFolderShare + "/files?path=" + Api.enc("Family/Recipes/Tea.md"), LOGIN, MOM)
+				.ok(200)
+				.get("version")
+				.asString();
+			int before = guestStream.frames().size();
+			this.api.putJson("/api/s/" + editFolderShare + "/files?path=" + Api.enc("Family/Recipes/Tea.md"),
+					Map.of("content", "# Tea\nmint, lemon\n", "baseVersion", mine), LOGIN, MOM, "X-Client-Id",
+					"mom-client-003")
+				.ok(200);
+			create("Family/Recipes/Marker.md", "# Marker\n");
+			guestStream.awaitFrames((frames) -> frames.stream()
+				.anyMatch((f) -> f.event().equals("file.created")
+						&& f.data().get("file").get("path").asString().equals("Family/Recipes/Marker.md")));
+			assertThat(guestStream.frames().subList(before, guestStream.frames().size()).stream()
+				.filter((f) -> f.event().equals("file.changed"))).isEmpty();
 		}
 	}
 

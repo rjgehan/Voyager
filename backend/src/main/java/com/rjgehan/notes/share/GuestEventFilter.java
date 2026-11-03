@@ -23,6 +23,10 @@ import org.jspecify.annotations.Nullable;
  * because the move's event can be mapped before or after {@link ShareService#moved} re-keys the share. A move onto the
  * path of a share whose note or folder is missing is not one it followed: the guest gets {@code share.changed} and
  * never the {@code from} path, which can be private.
+ * <p>
+ * Events reach a guest without their {@code origin}: it is the client id of the tab that wrote, often the owner's, and
+ * a guest that knew it could send it back to keep its own saves from that tab (API.md §16). The guest's own echo is
+ * dropped by the hub before this filter runs.
  */
 public final class GuestEventFilter implements EventHub.ConnectionFilter {
 
@@ -56,12 +60,15 @@ public final class GuestEventFilter implements EventHub.ConnectionFilter {
 		String seen = this.lastPath;
 		this.lastPath = share.path();
 		return switch (event) {
-			case FileEvent file -> visible(share, file.file().path()) ? file : null;
-			case FileDeletedEvent deleted -> share.contains(deleted.path()) ? deleted : null;
+			case FileEvent file -> visible(share, file.file().path())
+					? new FileEvent(file.change(), file.file(), null) : null;
+			case FileDeletedEvent deleted -> share.contains(deleted.path())
+					? new FileDeletedEvent(deleted.path(), deleted.trashed(), deleted.trashId(), null) : null;
 			case MovedEvent moved -> moved(share, seen, moved);
-			case FolderEvent folder -> (share.kind() == ShareKind.FOLDER && share.contains(folder.path())) ? folder
-					: null;
-			case FolderDeletedEvent folder -> share.contains(folder.path()) ? folder
+			case FolderEvent folder -> (share.kind() == ShareKind.FOLDER && share.contains(folder.path()))
+					? new FolderEvent(folder.path(), null) : null;
+			case FolderDeletedEvent folder -> share.contains(folder.path())
+					? new FolderDeletedEvent(folder.path(), folder.trashed(), folder.trashId(), null)
 					: ShareScope.isRootOrAbove(share.path(), folder.path()) ? new ShareChangedEvent() : null;
 			case ResyncEvent resync -> resync;
 			default -> null;
@@ -78,7 +85,7 @@ public final class GuestEventFilter implements EventHub.ConnectionFilter {
 		if (followed(share.path(), moved) || (followed(seen, moved)
 				&& share.path().equals(ShareScope.moved(seen, moved.from(), moved.to())))
 				|| (share.contains(moved.from()) && share.contains(moved.to()))) {
-			return moved;
+			return new MovedEvent(moved.from(), moved.to(), moved.type(), null);
 		}
 		if (share.contains(moved.from()) || share.contains(moved.to())
 				|| ShareScope.isRootOrAbove(share.path(), moved.from())
