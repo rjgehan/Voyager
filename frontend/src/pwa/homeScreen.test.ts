@@ -27,7 +27,7 @@ describe('the Home Screen app', () => {
     expect(meta('apple-mobile-web-app-capable')).toBe('yes');
     // The page draws under the status bar; iOS picks the status bar's text colour for the page.
     expect(meta('apple-mobile-web-app-status-bar-style')).toBe('black-translucent');
-    expect(meta('apple-mobile-web-app-title')).toBe('Notes');
+    expect(meta('apple-mobile-web-app-title')).toBe('Voyager');
   });
 
   it('has a 180 px icon that fills its square (iOS rounds the corners itself)', () => {

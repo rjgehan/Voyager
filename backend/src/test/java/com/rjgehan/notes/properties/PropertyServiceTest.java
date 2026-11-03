@@ -89,7 +89,7 @@ class PropertyServiceTest {
 	}
 
 	@Test
-	void typesAreReadFromObsidianUntilTheFirstChangeThenKeptInNotesApp() throws Exception {
+	void typesAreReadFromObsidianUntilTheFirstChangeThenKeptInVoyager() throws Exception {
 		write(".obsidian/types.json", "{\n  \"types\": {\n    \"due\": \"date\",\n    \"odd\": 3\n  }\n}");
 		start();
 		PropertyTypesResponse initial = this.types.get();

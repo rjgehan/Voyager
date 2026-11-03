@@ -1,5 +1,5 @@
-// options.html: NotesApp's address and the switches. Saving asks for the host permissions it needs
-// (NotesApp's origin, plus every site when images are downloaded); permissions.request must run
+// options.html: Voyager's address and the switches. Saving asks for the host permissions it needs
+// (Voyager's origin, plus every site when images are downloaded); permissions.request must run
 // in the click itself, before anything is awaited.
 import { ext, type Browser } from './browser';
 import { ALL_SITES, appPattern, normalizeAppUrl, readSettings } from './settings';
@@ -28,7 +28,7 @@ function setup(): void {
     e.preventDefault();
     const appUrl = normalizeAppUrl(input('appUrl').value);
     if (!appUrl) {
-      status.textContent = 'Enter NotesApp’s https:// address.';
+      status.textContent = 'Enter Voyager’s https:// address.';
       return;
     }
     const downloadImages = input('downloadImages').checked;

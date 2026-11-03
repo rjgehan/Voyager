@@ -250,7 +250,7 @@ class TaskWrites {
 				throw malformed(path.nfc(), ex.getMessage());
 			}
 			if (file.formatVersion() > TaskFile.FORMAT_VERSION) {
-				throw malformed(path.nfc(), "written by a newer version of NotesApp; this version only reads it");
+				throw malformed(path.nfc(), "written by a newer version of Voyager; this version only reads it");
 			}
 			this.open.put(path.nfc(), new Open(path, file, bytes));
 			return file;

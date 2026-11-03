@@ -14,7 +14,7 @@ describe('reminder notifications in the service worker', () => {
   it('shows something for a test or a malformed message, and never opens another site', () => {
     expect(reminderNotification({ title: 'Test', kind: 'test', url: '/settings/reminders', tag: 'test:1' }).options.actions).toBeUndefined();
     const odd = reminderNotification('nonsense');
-    expect(odd.title).toBe('NotesApp reminder');
+    expect(odd.title).toBe('Voyager reminder');
     expect(odd.options.data.url).toBe('/');
     expect(reminderNotification({ url: 'https://evil.example/x' }).options.data.url).toBe('/');
     expect(safeAppPath('//evil.example')).toBe('/');

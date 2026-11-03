@@ -1,5 +1,5 @@
 // `/x/compat` (ROADMAP item 24, DESIGN §6.29): how this vault, typically an imported Obsidian vault,
-// works in NotesApp. Obsidian's settings next to NotesApp's (with "Apply"), its graph settings
+// works in Voyager. Obsidian's settings next to Voyager's (with "Apply"), its graph settings
 // (for this device), the plugins it uses, then every finding by category, each occurrence opening
 // the note at its line.
 import { CircleAlert, CircleCheck, Info, RefreshCw, TriangleAlert } from 'lucide-react';
@@ -152,8 +152,8 @@ function ObsidianSettings({ report }: { report: CompatReport }) {
     <Section title="Obsidian settings" id="compat-settings">
       <p className="compat-text">
         {different === 0
-          ? 'NotesApp already uses every Obsidian setting it supports.'
-          : `${plural(different, 'setting')} of .obsidian/ ${different === 1 ? 'differs' : 'differ'} from NotesApp's. A new installation takes them at its first start; apply them here to use them now.`}
+          ? 'Voyager already uses every Obsidian setting it supports.'
+          : `${plural(different, 'setting')} of .obsidian/ ${different === 1 ? 'differs' : 'differ'} from Voyager's. A new installation takes them at its first start; apply them here to use them now.`}
       </p>
       {report.settings.length > 0 && (
         <div className="compat-table-wrap">
@@ -161,7 +161,7 @@ function ObsidianSettings({ report }: { report: CompatReport }) {
             <thead>
               <tr>
                 <th scope="col">Obsidian</th>
-                <th scope="col">NotesApp setting</th>
+                <th scope="col">Voyager setting</th>
                 <th scope="col">Now</th>
                 <th scope="col">With Obsidian's</th>
               </tr>
@@ -193,7 +193,7 @@ function GraphSettings({ graph }: { graph: Record<string, unknown> }) {
     <Section title="Graph view" id="compat-graph">
       <p className="compat-text">
         .obsidian/graph.json has Obsidian's graph settings{groups > 0 ? `, with ${plural(groups, 'color group')}` : ''}. Graph settings are kept per device in
-        NotesApp.
+        Voyager.
       </p>
       <div className="compat-actions">
         <button
@@ -214,7 +214,7 @@ function GraphSettings({ graph }: { graph: Record<string, unknown> }) {
 function Plugins({ plugins }: { plugins: CompatPlugin[] }) {
   return (
     <Section title="Plugins" id="compat-plugins">
-      <p className="compat-text">NotesApp does not run Obsidian plugins. This is what it offers for the ones this vault has turned on.</p>
+      <p className="compat-text">Voyager does not run Obsidian plugins. This is what it offers for the ones this vault has turned on.</p>
       <ul className="compat-plugins">
         {plugins.map((p) => (
           <li key={`${p.kind}:${p.id}`} className={`compat-plugin is-${p.status}`}>
@@ -266,7 +266,7 @@ export default function CompatPage() {
         </ul>
         <p className="compat-text">
           {data.obsidian.found
-            ? `This vault has Obsidian's settings folder (.obsidian/: ${data.obsidian.configFiles.join(', ') || 'nothing NotesApp reads'}). NotesApp reads it but never changes it, so the vault stays usable in Obsidian.`
+            ? `This vault has Obsidian's settings folder (.obsidian/: ${data.obsidian.configFiles.join(', ') || 'nothing Voyager reads'}). Voyager reads it but never changes it, so the vault stays usable in Obsidian.`
             : 'This vault has no .obsidian/ folder, so there are no Obsidian settings to take over.'}
         </p>
         {data.obsidian.problems.length > 0 && (
@@ -283,7 +283,7 @@ export default function CompatPage() {
         {data.plugins.length > 0 && <Plugins plugins={data.plugins} />}
         {clean ? (
           <p className="compat-clean">
-            <CircleCheck size={16} aria-hidden /> Nothing to report: every note in this vault works in NotesApp.
+            <CircleCheck size={16} aria-hidden /> Nothing to report: every note in this vault works in Voyager.
           </p>
         ) : (
           CATEGORIES.map(({ id, title }) => {

@@ -84,7 +84,7 @@ public class SheetDocumentIndexer implements DocumentIndexer {
 		JsonNode version = root.get("version");
 		if (version != null && !(version.isIntegralNumber() && version.canConvertToInt() && version.intValue() >= 1
 				&& version.intValue() <= VERSION)) {
-			// A newer format is shown read-only by the frontend until NotesApp is updated; its layout is unknown.
+			// A newer format is shown read-only by the frontend until Voyager is updated; its layout is unknown.
 			return null;
 		}
 		List<String> blocks = new ArrayList<>();

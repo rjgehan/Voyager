@@ -1,13 +1,16 @@
 # Phone tips
 
-NotesApp is made to work well on an iPhone. These tips are for the iPhone; other phones work much the same.
+Voyager is made to work well on an iPhone. These tips are for the iPhone; other phones work much the same.
 
-## Add NotesApp to the Home Screen
+## Add Voyager to the Home Screen
 
-1. Open NotesApp in **Safari**.
+1. Open Voyager in **Safari**.
 2. Tap the **Share** button, then **Add to Home Screen**, then **Add**.
 
-NotesApp then opens from its own icon, full screen like an app, and it can show notes you opened recently even without a connection. Reminders by notification on an iPhone (Web Push, iOS 16.4 or later) also need the Home Screen app: subscribe it under **Settings › Reminders**.
+Voyager then opens from its own icon, full screen like an app, and it can show notes you opened recently even without a connection. Reminders by notification on an iPhone (Web Push, iOS 16.4 or later) also need the Home Screen app: subscribe it under **Settings › Reminders**.
+
+> [!NOTE]
+> **Added before the app was called Voyager?** It was called NotesApp until November 2026, and iOS never changes a Home Screen app's name or icon, so an icon added before then still says **Notes** with the old picture. To get the new ones, first check that the app says everything is saved, then press and hold the icon, choose **Remove App › Delete from Home Screen**, and add it again as above. Your notes are on the server and stay where they are. The new icon starts with this device's own settings (**Hotkeys** and **This device** in Settings) at their defaults and without offline copies, which it keeps again as you open notes; if the old one received reminders by Web Push, subscribe the new one under **Settings › Reminders**.
 
 ## Getting around
 

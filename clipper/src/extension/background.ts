@@ -19,10 +19,10 @@ export function isClipRequest(m: unknown): m is ClipRequest {
 async function badge(b: Browser, tab: Tab | undefined, outcome: ClipOutcome | Error): Promise<void> {
   const tabId = tab?.id;
   const ok = !(outcome instanceof Error) && outcome.status !== 'failed' && outcome.status !== 'timeout';
-  const title = outcome instanceof Error ? outcome.message : outcome.status === 'saved' ? `Saved to ${outcome.path ?? 'NotesApp'}` : outcome.status === 'delivered' ? 'Opened in NotesApp' : (outcome.error ?? 'The clip was not saved');
+  const title = outcome instanceof Error ? outcome.message : outcome.status === 'saved' ? `Saved to ${outcome.path ?? 'Voyager'}` : outcome.status === 'delivered' ? 'Opened in Voyager' : (outcome.error ?? 'The clip was not saved');
   await b.action.setBadgeBackgroundColor({ color: ok ? '#2f9e44' : '#c92a2a', tabId }).catch(() => undefined);
   await b.action.setBadgeText({ text: ok ? '✓' : '!', tabId }).catch(() => undefined);
-  await b.action.setTitle({ title: `NotesApp clipper: ${title}`, tabId }).catch(() => undefined);
+  await b.action.setTitle({ title: `Voyager clipper: ${title}`, tabId }).catch(() => undefined);
 }
 
 export async function runClip(b: Browser, tab: Tab | undefined, selection: boolean): Promise<ClipOutcome> {
@@ -41,8 +41,8 @@ export async function runClip(b: Browser, tab: Tab | undefined, selection: boole
 export function install(b: Browser): void {
   b.runtime.onInstalled.addListener(() => {
     void b.contextMenus.removeAll().then(() => {
-      b.contextMenus.create({ id: MENU_PAGE, title: 'Clip this page to NotesApp', contexts: ['page'] });
-      b.contextMenus.create({ id: MENU_SELECTION, title: 'Clip the selection to NotesApp', contexts: ['selection'] });
+      b.contextMenus.create({ id: MENU_PAGE, title: 'Clip this page to Voyager', contexts: ['page'] });
+      b.contextMenus.create({ id: MENU_SELECTION, title: 'Clip the selection to Voyager', contexts: ['selection'] });
     });
   });
   b.contextMenus.onClicked.addListener((info, tab) => {

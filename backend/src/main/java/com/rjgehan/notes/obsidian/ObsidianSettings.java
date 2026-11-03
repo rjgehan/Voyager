@@ -32,10 +32,10 @@ import tools.jackson.databind.node.ObjectNode;
 import org.springframework.stereotype.Component;
 
 /**
- * Obsidian's settings in NotesApp terms (ROADMAP item 24, DESIGN §5.23): {@code app.json} (attachments, new notes,
+ * Obsidian's settings in Voyager terms (ROADMAP item 24, DESIGN §5.23): {@code app.json} (attachments, new notes,
  * links, excluded files, editor), {@code daily-notes.json} and {@code templates.json}. A vault that has no
  * {@code .notesapp/settings.json} yet starts with them ({@link SettingsSeed}); the compatibility report shows each
- * mapping and proposes the result for an existing installation. Values NotesApp cannot use are reported, never
+ * mapping and proposes the result for an existing installation. Values Voyager cannot use are reported, never
  * applied.
  */
 @Component
@@ -99,13 +99,13 @@ public class ObsidianSettings implements SettingsSeed {
 			// Every value is checked on its own, so this cannot happen; never propose invalid settings anyway.
 			return new Mapping(current, b.rows.stream()
 				.map((row) -> new CompatSetting(row.source(), row.obsidianValue(), row.setting(), row.current(),
-						row.current(), Status.UNSUPPORTED, "NotesApp cannot use this value"))
+						row.current(), Status.UNSUPPORTED, "Voyager cannot use this value"))
 				.toList());
 		}
 		return new Mapping(proposed, List.copyOf(b.rows));
 	}
 
-	/** A folder path as NotesApp stores it: NFC, no leading or trailing slashes; null when it is not a valid path. */
+	/** A folder path as Voyager stores it: NFC, no leading or trailing slashes; null when it is not a valid path. */
 	static @Nullable String folder(String value) {
 		String folder = Normalizer.normalize(value.strip(), Normalizer.Form.NFC);
 		while (folder.startsWith("/")) {
@@ -276,7 +276,7 @@ public class ObsidianSettings implements SettingsSeed {
 				if (sub.isEmpty() || sub.contains("/") || NameRules.newNameViolation(sub) != null
 						|| VaultPaths.safetyViolation(sub) != null) {
 					unsupported(APP + "attachmentFolderPath", value, setting, before,
-							"NotesApp's attachment subfolder is a single folder name next to the note");
+							"Voyager's attachment subfolder is a single folder name next to the note");
 					return;
 				}
 				this.attachmentLocation = AttachmentLocation.SUBFOLDER;
@@ -285,7 +285,7 @@ public class ObsidianSettings implements SettingsSeed {
 			else {
 				String folder = folder(v);
 				if (folder == null) {
-					unsupported(APP + "attachmentFolderPath", value, setting, before, "Not a folder NotesApp can use");
+					unsupported(APP + "attachmentFolderPath", value, setting, before, "Not a folder Voyager can use");
 					return;
 				}
 				this.attachmentLocation = folder.isEmpty() ? AttachmentLocation.ROOT : AttachmentLocation.FOLDER;
@@ -318,7 +318,7 @@ public class ObsidianSettings implements SettingsSeed {
 				String folder = (text(folderValue) != null) ? folder(text(folderValue)) : "";
 				if (folder == null) {
 					unsupported(APP + "newFileFolderPath", folderValue, "files.newNoteFolder", before,
-							"Not a folder NotesApp can use");
+							"Not a folder Voyager can use");
 					return;
 				}
 				this.newNoteFolder = folder;
@@ -368,7 +368,7 @@ public class ObsidianSettings implements SettingsSeed {
 			else {
 				this.rows.add(new CompatSetting(APP + "alwaysUpdateLinks", value.toString(), "files.autoUpdateLinks",
 						String.valueOf(this.autoUpdateLinks), String.valueOf(this.autoUpdateLinks), Status.SAME,
-						"Obsidian asks every time; NotesApp's Move dialog lists the links it will update, with a switch"));
+						"Obsidian asks every time; Voyager's Move dialog lists the links it will update, with a switch"));
 			}
 		}
 
@@ -384,7 +384,7 @@ public class ObsidianSettings implements SettingsSeed {
 					continue;
 				}
 				String path = raw.strip();
-				// Obsidian also takes regular expressions (/.../); NotesApp only path prefixes.
+				// Obsidian also takes regular expressions (/.../); Voyager only path prefixes.
 				String folder = (path.length() > 1 && path.startsWith("/") && path.endsWith("/")) ? null : folder(path);
 				if (folder == null || folder.isEmpty() || paths.size() >= 100) {
 					skipped.add(raw);
@@ -398,7 +398,7 @@ public class ObsidianSettings implements SettingsSeed {
 			row(APP + "userIgnoreFilters", value, "files.excludedPaths", before, String.join(", ", paths),
 					skipped.isEmpty() ? null
 							: "Not used: " + String.join(", ", skipped)
-									+ " (NotesApp excludes folders and files by path, not by regular expression)");
+									+ " (Voyager excludes folders and files by path, not by regular expression)");
 		}
 
 		void strictLineBreaks(@Nullable JsonNode value) {
@@ -470,7 +470,7 @@ public class ObsidianSettings implements SettingsSeed {
 			String folder = folder(raw);
 			if (folder == null) {
 				unsupported(DAILY + "folder", value, "dailyNotes.folder", this.dailyFolder,
-						"Not a folder NotesApp can use");
+						"Not a folder Voyager can use");
 				return;
 			}
 			String before = this.dailyFolder;
@@ -486,7 +486,7 @@ public class ObsidianSettings implements SettingsSeed {
 			String template = folder(raw);
 			if (template == null) {
 				unsupported(DAILY + "template", value, "dailyNotes.template", this.dailyTemplate,
-						"Not a path NotesApp can use");
+						"Not a path Voyager can use");
 				return;
 			}
 			// Obsidian names the template without ".md".
@@ -516,7 +516,7 @@ public class ObsidianSettings implements SettingsSeed {
 			String folder = folder(raw);
 			if (folder == null) {
 				unsupported(TEMPLATES + "folder", value, "templates.folder", this.templatesFolder,
-						"Not a folder NotesApp can use");
+						"Not a folder Voyager can use");
 				return;
 			}
 			String before = this.templatesFolder;

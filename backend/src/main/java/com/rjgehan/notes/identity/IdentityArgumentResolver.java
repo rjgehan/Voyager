@@ -37,7 +37,7 @@ public class IdentityArgumentResolver implements HandlerMethodArgumentResolver {
 		}
 		Identity identity = (request != null) ? this.resolver.resolve(request) : null;
 		if (identity == null) {
-			throw new NotesException(ErrorCode.IDENTITY_NOT_ALLOWED, "This identity may not use NotesApp");
+			throw new NotesException(ErrorCode.IDENTITY_NOT_ALLOWED, "This identity may not use Voyager");
 		}
 		return identity;
 	}

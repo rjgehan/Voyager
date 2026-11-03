@@ -35,7 +35,7 @@ class ObsidianConfigReaderTest {
 		assertThat(config.problems()).isEmpty();
 		assertThat(config.app().get("attachmentFolderPath").asString()).isEqualTo("./assets");
 		assertThat(config.corePlugins()).containsEntry("graph", true).containsEntry("sync", false);
-		// Names come from the plugin's manifest, then from what NotesApp knows, then the id.
+		// Names come from the plugin's manifest, then from what Voyager knows, then the id.
 		assertThat(config.communityPlugins()).containsExactly(Map.entry("dataview", "Dataview"),
 				Map.entry("templater-obsidian", "Templater"), Map.entry("obsidian-kanban", "Kanban"),
 				Map.entry("some-unknown-plugin", "some-unknown-plugin"));

@@ -1,5 +1,5 @@
 /**
- * A thin client for the NotesApp API (docs/API.md), used to arrange state quickly so UI tests
+ * A thin client for the Voyager API (docs/API.md), used to arrange state quickly so UI tests
  * click only through the part they are about, and by the API specs themselves.
  *
  * Plain, erasable TypeScript, so `node scripts/seed.ts` runs it as well as Playwright does.

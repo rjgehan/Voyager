@@ -17,7 +17,7 @@ export function runBookmarklet(win: Window, origin: string): void {
   const target = `${origin}/clip?via=bookmarklet#${encodeURIComponent(JSON.stringify({ url, title }))}`;
   const popup = win.open(target, '_blank');
   if (!popup) {
-    win.alert('NotesApp could not open its clip window. Allow pop-ups for this site, then click the bookmarklet again.');
+    win.alert('Voyager could not open its clip window. Allow pop-ups for this site, then click the bookmarklet again.');
     return;
   }
   const message: HtmlClipMessage = {

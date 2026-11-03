@@ -180,8 +180,8 @@ const FRIENDLY: Partial<Record<ErrorCode, string>> = {
   'history-unavailable': 'History is not available on the server',
   'permission-denied': 'The server cannot write to this folder. It may have been created as another user over SSH.',
   'insufficient-storage': 'The server is low on disk space.',
-  'identity-not-allowed': "This device's Tailscale login is not allowed to use NotesApp.",
-  'settings-read-only': 'Settings were written by a newer version of NotesApp and are read-only here.',
+  'identity-not-allowed': "This device's Tailscale login is not allowed to use Voyager.",
+  'settings-read-only': 'Settings were written by a newer version of Voyager and are read-only here.',
   'block-not-found': 'That block changed in the meantime. Type the link again to pick it.',
 };
 

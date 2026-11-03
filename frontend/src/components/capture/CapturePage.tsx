@@ -95,7 +95,7 @@ export function CapturePage() {
               </button>
             )}
             <button type="button" className="button" onClick={() => navigateTo('/')}>
-              Open NotesApp
+              Open Voyager
             </button>
           </div>
         </div>

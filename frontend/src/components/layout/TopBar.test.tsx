@@ -53,9 +53,9 @@ describe('TopBar (phone and tablet, DESIGN §6.16)', () => {
     expect(title()).toBe('Search');
   });
 
-  it('falls back to Notes for an unknown page', () => {
+  it('falls back to Voyager for an unknown page', () => {
     renderAt('/x/no-such-page');
-    expect(title()).toBe('Notes');
+    expect(title()).toBe('Voyager');
   });
 
   it('warns about a mirror whose settings cannot be used, without offering a push', () => {

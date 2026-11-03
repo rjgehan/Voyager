@@ -113,4 +113,4 @@ Open **Settings › Hotkeys**. Find the command (type in the filter), click **Ch
 - If the key belongs to another command, you can take it over (**Use it here instead**); that command then has no key.
 - Keys the browser keeps for itself (`Ctrl+N`, `Ctrl+T`, `Ctrl+W`, `Ctrl+Q`, `Ctrl+R`, and with `Shift`) and editing keys (`Ctrl+Z`, `Ctrl+Y`, `Ctrl+C`, `Ctrl+V`, `Ctrl+X`, `Ctrl+A`) cannot be used.
 
-Two keys are outside NotesApp's settings: the desktop app's capture key (`Ctrl+Shift+Space`, changed from its tray icon's **Settings…**) and the browser extension's clip key (`Alt+Shift+K`).
+Two keys are outside Voyager's settings: the desktop app's capture key (`Ctrl+Shift+Space`, changed from its tray icon's **Settings…**) and the browser extension's clip key (`Alt+Shift+K`).

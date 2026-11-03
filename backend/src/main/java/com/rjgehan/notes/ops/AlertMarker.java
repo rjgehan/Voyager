@@ -11,29 +11,29 @@ public enum AlertMarker {
 
 	GIT_COMMIT_FAILED(4, "History is not being saved",
 			"Git commits are failing, so new versions of your notes are not being recorded. The notes themselves are "
-					+ "saved, and NotesApp keeps retrying."),
+					+ "saved, and Voyager keeps retrying."),
 
 	GIT_MIRROR_FAILED(3, "The history mirror is not being updated",
 			"Pushing the history to the mirror failed, the mirror's settings cannot be used, or the mirror has "
-					+ "commits this vault does not. NotesApp retries failed pushes, and never force-pushes."),
+					+ "commits this vault does not. Voyager retries failed pushes, and never force-pushes."),
 
-	WATCHER_DEGRADED(3, "Changes made outside NotesApp appear late",
+	WATCHER_DEGRADED(3, "Changes made outside Voyager appear late",
 			"The file watcher failed, so changes made on the server outside the app are only found by the "
 					+ "rescan every few minutes."),
 
 	TAILSCALE_WATCHDOG_EXIT(4, "Restarted to rejoin the Tailscale network",
-			"NotesApp could not reach the Tailscale container and restarted itself to rejoin its network. After 3 "
+			"Voyager could not reach the Tailscale container and restarted itself to rejoin its network. After 3 "
 					+ "restarts in 10 minutes it stops trying; then run docker compose up -d."),
 
 	STORAGE_LOW(4, "The vault's disk is almost full",
 			"Free space on the vault's disk is below the minimum, so uploads are refused until space is freed."),
 
 	SETTINGS_READ_ONLY(3, "Settings are read-only",
-			"The settings file was written by a newer NotesApp or is invalid, so settings cannot be changed until "
+			"The settings file was written by a newer Voyager or is invalid, so settings cannot be changed until "
 					+ "it is fixed or the newer version runs again."),
 
 	SHARE_RATE_LIMITED(3, "Someone is trying share addresses",
-			"A Tailscale login made many requests for shares or files it may not open, so NotesApp refuses its "
+			"A Tailscale login made many requests for shares or files it may not open, so Voyager refuses its "
 					+ "guest requests for up to 15 minutes. Check Settings, Sharing, and who is on your tailnet.");
 
 	private final int priority;

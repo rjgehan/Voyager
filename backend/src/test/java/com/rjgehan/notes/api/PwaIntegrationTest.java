@@ -54,7 +54,7 @@ class PwaIntegrationTest {
 	void theServiceWorkerIsAlwaysRevalidatedAndMayControlTheOrigin() {
 		Reply sw = this.api.get("/sw.js", "X-Client-Id", null);
 		assertThat(sw.status()).isEqualTo(200);
-		assertThat(sw.text()).contains("NotesApp test service worker");
+		assertThat(sw.text()).contains("Voyager test service worker");
 		assertThat(sw.header("Content-Type")).startsWith("text/javascript");
 		assertThat(sw.headers().get("Cache-Control")).containsExactly("no-cache");
 		assertThat(sw.header("Service-Worker-Allowed")).isEqualTo("/");

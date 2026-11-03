@@ -20,7 +20,7 @@ import { usePageTitle } from './usePageTitle';
 import { toastError } from '../../features/errors';
 
 const isForeign = (e: TrashEntry) => e.id.startsWith('x-');
-const NEVER_SEEN = 'This item was put in the trash outside NotesApp and may not be in history. Deleting it cannot be undone.';
+const NEVER_SEEN = 'This item was put in the trash outside Voyager and may not be in history. Deleting it cannot be undone.';
 
 function invalidateTrash(): void {
   void queryClient.invalidateQueries({ queryKey: queryKeys.trash() });
@@ -85,7 +85,7 @@ function TrashRow({ entry }: { entry: TrashEntry }) {
           </time>
           {entry.deletedBy !== 'unknown' && <span> · {entry.deletedBy}</span>}
           <span> · {entry.type === 'folder' ? `${entry.fileCount} ${entry.fileCount === 1 ? 'file' : 'files'}, ` : ''}{formatBytes(entry.size)}</span>
-          {isForeign(entry) && <span className="trash-foreign"> · not from NotesApp</span>}
+          {isForeign(entry) && <span className="trash-foreign"> · not from Voyager</span>}
         </span>
       </span>
       <span className="trash-actions">
@@ -117,7 +117,7 @@ export function TrashPage() {
       title: 'Empty the trash?',
       message:
         `${entries.length} ${entries.length === 1 ? 'item' : 'items'} will be deleted for good.` +
-        (foreign ? ` ${foreign} of them ${foreign === 1 ? 'was' : 'were'} put there outside NotesApp and may not be in history.` : ' Their last versions stay in history.'),
+        (foreign ? ` ${foreign} of them ${foreign === 1 ? 'was' : 'were'} put there outside Voyager and may not be in history.` : ' Their last versions stay in history.'),
       confirmLabel: 'Empty trash',
       danger: true,
     });

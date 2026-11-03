@@ -1,4 +1,4 @@
-# NotesApp on homeserver: tailscale + notes + watchtower, plus the optional backup sidecars. Runbook: docs/DEPLOY.md
+# Voyager on homeserver: tailscale + notes + watchtower, plus the optional backup sidecars. Runbook: docs/DEPLOY.md
 # Run every docker compose command from this directory (deploy/), next to .env.
 name: notes
 

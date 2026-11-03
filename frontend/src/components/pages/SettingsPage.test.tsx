@@ -171,7 +171,7 @@ describe('Settings and the user guide (DESIGN §6.45)', () => {
     );
     const nav = screen.getByRole('navigation', { name: 'Settings sections' });
     expect(within(nav).getByRole('link', { name: 'Help and user guide' })).toHaveAttribute('href', '/x/help');
-    expect(await screen.findByRole('link', { name: /How to use NotesApp, page by page/ })).toHaveAttribute('href', '/x/help');
+    expect(await screen.findByRole('link', { name: /How to use Voyager, page by page/ })).toHaveAttribute('href', '/x/help');
     queryClient.clear();
   });
 });

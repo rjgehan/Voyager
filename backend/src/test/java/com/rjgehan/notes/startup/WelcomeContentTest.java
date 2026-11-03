@@ -33,7 +33,7 @@ class WelcomeContentTest {
 	@Test
 	void pointsToTheBuiltInGuide() throws Exception {
 		String text = welcome();
-		assertThat(text).startsWith("---\ntags: [welcome]\n---\n# Welcome to NotesApp\n");
+		assertThat(text).startsWith("---\ntags: [welcome]\n---\n# Welcome to Voyager\n");
 		assertThat(text).contains("**Help**", "☰ › Help", "⋯ › Help", "Help › **Writing**");
 	}
 

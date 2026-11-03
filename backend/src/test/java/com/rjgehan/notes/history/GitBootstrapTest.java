@@ -69,7 +69,7 @@ class GitBootstrapTest {
 		try (TestVault vault = TestVault.start(this.dir)) {
 			run(vault, false);
 			RevCommit head = head(vault);
-			assertThat(head.getShortMessage()).isEqualTo("Changes made while NotesApp was stopped");
+			assertThat(head.getShortMessage()).isEqualTo("Changes made while Voyager was stopped");
 			assertThat(head.getAuthorIdent().getName()).isEqualTo("External");
 		}
 	}

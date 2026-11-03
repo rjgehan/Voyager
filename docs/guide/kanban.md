@@ -1,6 +1,6 @@
 # Kanban boards
 
-A Kanban board shows cards in columns (lanes), such as To do, Doing and Done, and you drag the cards from lane to lane. NotesApp has two kinds:
+A Kanban board shows cards in columns (lanes), such as To do, Doing and Done, and you drag the cards from lane to lane. Voyager has two kinds:
 
 - **A board note**: a note shown as a board, in the format of Obsidian's Kanban plugin. Good for anything: projects, reading lists, ideas.
 - **A task list as a board**: any [task list](tasks-and-reminders.md) can show its sections or its statuses as columns.

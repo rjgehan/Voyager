@@ -60,7 +60,7 @@ class StartupIntegrationTest {
 			Api api = app.api();
 			assertThat(api.get("/api/tree").ok(200).get("files").isEmpty()).isTrue();
 			JsonNode deleted = history(api, "Welcome.md").get(0);
-			assertThat(deleted.get("message").asString()).isEqualTo("Changes made while NotesApp was stopped");
+			assertThat(deleted.get("message").asString()).isEqualTo("Changes made while Voyager was stopped");
 			assertThat(deleted.get("change").asString()).isEqualTo("deleted");
 			assertThat(deleted.get("authorName").asString()).isEqualTo("External");
 		}
@@ -111,7 +111,7 @@ class StartupIntegrationTest {
 		try (RunningApp app = RunningApp.start(this.vault).awaitGitBootstrap()) {
 			Api api = app.api();
 			List<JsonNode> journal = history(api, "Journal.md");
-			assertThat(journal.get(0).get("message").asString()).isEqualTo("Changes made while NotesApp was stopped");
+			assertThat(journal.get(0).get("message").asString()).isEqualTo("Changes made while Voyager was stopped");
 			assertThat(journal.get(0).get("authorName").asString()).isEqualTo("External");
 			assertThat(journal.get(0).get("change").asString()).isEqualTo("modified");
 			assertThat(journal.get(1).get("message").asString()).isEqualTo("Create Journal.md");
@@ -122,7 +122,7 @@ class StartupIntegrationTest {
 		}
 		try (RunningApp app = RunningApp.start(this.vault).awaitGitBootstrap()) {
 			assertThat(history(app.api(), "Journal.md").get(0).get("message").asString())
-				.isEqualTo("Changes made while NotesApp was stopped");
+				.isEqualTo("Changes made while Voyager was stopped");
 			assertThat(history(app.api(), "Journal.md")).hasSize(2);
 		}
 	}

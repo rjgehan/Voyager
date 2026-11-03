@@ -3,6 +3,6 @@
 // secure key (rich/mermaid.ts), so this is never constructed; if it were, the diagram shows the error.
 export default class ELK {
   constructor() {
-    throw new Error('The ELK layout is not available in NotesApp; diagrams use the dagre layout.');
+    throw new Error('The ELK layout is not available in Voyager; diagrams use the dagre layout.');
   }
 }

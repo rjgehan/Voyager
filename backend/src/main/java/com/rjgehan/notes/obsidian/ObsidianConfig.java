@@ -7,7 +7,7 @@ import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
- * What a vault's {@code .obsidian/} folder says, as far as NotesApp uses it. Each JSON file is null when it is absent
+ * What a vault's {@code .obsidian/} folder says, as far as Voyager uses it. Each JSON file is null when it is absent
  * or unreadable ({@code problems} then says why). {@code corePlugins} maps every core plugin the vault lists to
  * whether it is on; {@code communityPlugins} lists the enabled community plugins with their display names.
  */

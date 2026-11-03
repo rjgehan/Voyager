@@ -209,7 +209,7 @@ export class GuestSync {
       this.setState({ status: 'limited', retryAfterS: typeof retry === 'number' ? retry : null });
       this.stream?.stop();
     } else if (this.state.status !== 'ready') {
-      this.setState({ status: 'error', message: isTransient(e) ? 'Can’t reach NotesApp. Is Tailscale connected?' : e instanceof Error ? e.message : String(e) });
+      this.setState({ status: 'error', message: isTransient(e) ? 'Can’t reach Voyager. Is Tailscale connected?' : e instanceof Error ? e.message : String(e) });
     }
   }
 

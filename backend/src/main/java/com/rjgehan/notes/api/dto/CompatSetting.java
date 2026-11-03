@@ -4,8 +4,8 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import org.jspecify.annotations.Nullable;
 
 /**
- * One Obsidian setting and its NotesApp counterpart. {@code source} is {@code file › key}; {@code setting} the
- * NotesApp setting (null when there is none), with its {@code current} and {@code proposed} values as shown to the
+ * One Obsidian setting and its Voyager counterpart. {@code source} is {@code file › key}; {@code setting} the
+ * Voyager setting (null when there is none), with its {@code current} and {@code proposed} values as shown to the
  * user.
  */
 public record CompatSetting(String source, String obsidianValue, @Nullable String setting, @Nullable String current,

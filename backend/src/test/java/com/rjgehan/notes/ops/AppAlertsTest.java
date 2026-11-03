@@ -61,7 +61,7 @@ class AppAlertsTest {
 		assertThat(this.sent).hasSize(1);
 		Sent first = this.sent.get(0);
 		assertThat(first.topic()).isEqualTo("ops");
-		assertThat(first.message().title()).isEqualTo("NotesApp: History is not being saved");
+		assertThat(first.message().title()).isEqualTo("Voyager: History is not being saved");
 		assertThat(first.message().body()).startsWith(AlertMarker.GIT_COMMIT_FAILED.text()).contains("GIT_COMMIT_FAILED");
 		assertThat(first.message().priority()).isEqualTo(4);
 		assertThat(first.message().click()).isEqualTo(URI.create("https://notes.example.ts.net/x/status"));
@@ -109,7 +109,7 @@ class AppAlertsTest {
 		alerts.raise(AlertMarker.GIT_MIRROR_FAILED, this.clock.instant());
 		alerts.tick();
 		assertThat(this.sent).extracting((s) -> s.message().title())
-			.containsExactly("NotesApp: History is not being saved", "NotesApp: The history mirror is not being updated");
+			.containsExactly("Voyager: History is not being saved", "Voyager: The history mirror is not being updated");
 	}
 
 	@Test
@@ -192,7 +192,7 @@ class AppAlertsTest {
 		alerts.checkWatchdogRestart(start.minusSeconds(20), start);
 		alerts.tick();
 		assertThat(this.sent).singleElement()
-			.satisfies((s) -> assertThat(s.message().title()).isEqualTo("NotesApp: Restarted to rejoin the Tailscale network"));
+			.satisfies((s) -> assertThat(s.message().title()).isEqualTo("Voyager: Restarted to rejoin the Tailscale network"));
 		assertThat(alerts.status().recent().get(0).lastAt()).isEqualTo(start.minusSeconds(20));
 	}
 
@@ -202,7 +202,7 @@ class AppAlertsTest {
 		assertThat(alerts.sendTest()).isEqualTo(new AlertTestResult(true, null));
 		assertThat(this.sent).singleElement().satisfies((s) -> {
 			assertThat(s.topic()).isEqualTo("ops");
-			assertThat(s.message().title()).isEqualTo("NotesApp: test alert");
+			assertThat(s.message().title()).isEqualTo("Voyager: test alert");
 			assertThat(s.message().click()).isEqualTo(URI.create("https://notes.example.ts.net/x/status"));
 		});
 		this.failuresToCome = 1;

@@ -33,7 +33,7 @@ describe('vault addresses (ROADMAP item 37, DESIGN §6.44)', () => {
     expect(appUrl('/n/a.md')).toBe('/n/a.md');
     expect(appPathname('/n/a.md')).toBe('/n/a.md');
     expect(vaultKey('notesapp:workspace')).toBe('notesapp:workspace');
-    expect(appTitle('Plan')).toBe('Plan · Notes');
+    expect(appTitle('Plan')).toBe('Plan · Voyager');
     expect(routeOfAppUrl('/x/tasks/today?task=1')).toBe('/x/tasks/today?task=1');
     expect(routeOfAppUrl('/v/work/x/tasks')).toBeNull();
   });
@@ -51,7 +51,7 @@ describe('vault addresses (ROADMAP item 37, DESIGN §6.44)', () => {
     expect(appPathname('/v/work')).toBe('/');
     expect(appPathname('/v/workshop/n/a.md')).toBe('/v/workshop/n/a.md');
     expect(vaultKey('notesapp:workspace')).toBe('notesapp:workspace@work');
-    expect(appTitle('Plan')).toBe('Plan · work · Notes');
+    expect(appTitle('Plan')).toBe('Plan · work · Voyager');
     expect(routeOfAppUrl('/v/work/x/tasks/today?task=1')).toBe('/x/tasks/today?task=1');
     expect(routeOfAppUrl('/v/work/?open=daily')).toBe('/?open=daily');
     expect(routeOfAppUrl('/x/tasks')).toBeNull();

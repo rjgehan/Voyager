@@ -85,10 +85,10 @@ function sameKey(a: ArrayBuffer | null | undefined, b: Uint8Array): boolean {
 /** Subscribes this device and registers it with the server. Throws with a message to show. */
 export async function subscribeThisDevice(name: string = defaultDeviceName()): Promise<string> {
   const support = pushSupport();
-  if (support === 'ios-needs-install') throw new Error('On iPhone and iPad, add NotesApp to the Home Screen (Share › Add to Home Screen), open it from there, then turn this on.');
+  if (support === 'ios-needs-install') throw new Error('On iPhone and iPad, add Voyager to the Home Screen (Share › Add to Home Screen), open it from there, then turn this on.');
   if (support !== 'supported') throw new Error('This browser cannot receive Web Push.');
   const permission = await Notification.requestPermission();
-  if (permission !== 'granted') throw new Error('Notifications are blocked for NotesApp in this browser’s settings.');
+  if (permission !== 'granted') throw new Error('Notifications are blocked for Voyager in this browser’s settings.');
   const reg = await registration();
   const { publicKey } = await remindersApi.pushKey();
   const key = keyBytes(publicKey);

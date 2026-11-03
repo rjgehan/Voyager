@@ -585,7 +585,7 @@ public class ReminderScheduler implements DisposableBean {
 		}
 		Instant now = this.clock.instant();
 		ReminderMessage message = new ReminderMessage("test:" + now.toEpochMilli(), "test", null, null,
-				"NotesApp test reminder", "Reminders reach this device. Task reminders arrive the same way.",
+				"Voyager test reminder", "Reminders reach this device. Task reminders arrive the same way.",
 				"/settings/reminders").withUrlPrefix(this.urlPrefix);
 		Settings settings = this.sources.settings();
 		try {

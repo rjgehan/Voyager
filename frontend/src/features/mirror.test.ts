@@ -63,7 +63,7 @@ describe('mirror warning (DESIGN §6.18)', () => {
     expect(mirrorConfigured(status(ssh))).toBe(false);
   });
 
-  it('explains a diverged mirror and that NotesApp never forces', () => {
+  it('explains a diverged mirror and that Voyager never forces', () => {
     const diverged: MirrorStatus = { ...READY, state: 'diverged', lastError: "the mirror has commits that are not in the vault's history" };
     expect(mirrorWarning(diverged, NOW)).toBe('Mirror stopped: it has commits this vault does not');
     expect(mirrorWarningDetail(diverged)).toContain('never force-pushes');

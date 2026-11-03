@@ -63,7 +63,7 @@ function BookmarkletLink({ href }: { href: string }) {
   }, [href]);
   return (
     <a ref={ref} className="clip-bookmarklet" onClick={(e) => e.preventDefault()} draggable title="Drag me to the bookmarks bar">
-      <Scissors size={14} aria-hidden /> Clip to Notes
+      <Scissors size={14} aria-hidden /> Clip to Voyager
     </a>
   );
 }
@@ -92,7 +92,7 @@ export function ClipperSettings() {
             Drag this button to the bookmarks bar: <BookmarkletLink href={href} />
           </p>
           <p className="setting-note setting-prose">
-            On a page, click it: NotesApp opens in a new window with a preview, where you choose the name and folder and press <strong>Save</strong>.
+            On a page, click it: Voyager opens in a new window with a preview, where you choose the name and folder and press <strong>Save</strong>.
             Select text first to clip only that. Allow pop-ups for the site if the browser blocks the window. A few sites keep other windows from
             talking to them; the window then asks you to copy and paste what you want to keep. Images stay links to the web.
           </p>
@@ -101,7 +101,7 @@ export function ClipperSettings() {
 
       <h2 className="settings-subtitle">Browser extension (Chrome, Edge, Firefox)</h2>
       <p className="setting-note setting-prose">
-        The extension adds a toolbar button and <em>Clip this page / the selection to NotesApp</em> to the right-click menu, works on every site,
+        The extension adds a toolbar button and <em>Clip this page / the selection to Voyager</em> to the right-click menu, works on every site,
         can save the article&rsquo;s images as attachments, and can save without the preview. It is not in a store: build it from the repository
         (<code>clipper/</code>, see <code>docs/CLIPPER.md</code>), then load <code>clipper/dist/chrome</code> (chrome://extensions or
         edge://extensions, Developer mode, <em>Load unpacked</em>) or <code>clipper/dist/firefox</code> (about:debugging, <em>Load Temporary
@@ -113,7 +113,7 @@ export function ClipperSettings() {
       {script.state === 'missing' && <p className="field-warning">{MISSING}</p>}
       <ol className="capture-steps">
         <li>
-          In the Shortcuts app, create a shortcut named <strong>Clip to Notes</strong>. In its details, turn on <em>Show in Share Sheet</em> and let
+          In the Shortcuts app, create a shortcut named <strong>Clip to Voyager</strong>. In its details, turn on <em>Show in Share Sheet</em> and let
           it receive <em>Safari web pages</em> only.
         </li>
         <li>
@@ -137,7 +137,7 @@ export function ClipperSettings() {
         <li>Optionally end with <em>Show Notification</em> (&ldquo;Clipped&rdquo;).</li>
       </ol>
       <p className="setting-note setting-prose">
-        Share a page from Safari and pick <strong>Clip to Notes</strong>. Select text first to clip only that. The note goes to{' '}
+        Share a page from Safari and pick <strong>Clip to Voyager</strong>. Select text first to clip only that. The note goes to{' '}
         <code>Clippings/</code> under the article&rsquo;s title (a number is added when the name is taken); images stay links to the web.
       </p>
     </>

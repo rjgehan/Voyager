@@ -1,8 +1,8 @@
-// The extension's options (storage.sync): where NotesApp is, the folder, and the two switches.
+// The extension's options (storage.sync): where Voyager is, the folder, and the two switches.
 import { cleanFolder, DEFAULT_FOLDER } from '../core/note';
 
 export interface ClipperSettings {
-  /** NotesApp's origin, for example `https://notes.example-tailnet.ts.net`; `''` until set. */
+  /** Voyager's origin, for example `https://notes.example-tailnet.ts.net`; `''` until set. */
   appUrl: string;
   folder: string;
   /** Download the article's images and store them as attachments (needs access to all sites). */
@@ -17,7 +17,7 @@ export const DEFAULTS: ClipperSettings = { appUrl: '', folder: DEFAULT_FOLDER, d
 export const ALL_SITES = ['https://*/*', 'http://*/*'];
 
 /**
- * The origin of a NotesApp address the user typed, or null. HTTPS only, except plain HTTP to
+ * The origin of a Voyager address the user typed, or null. HTTPS only, except plain HTTP to
  * this machine (`localhost`, `127.0.0.1`) for development. A bare host gets `https://`.
  */
 export function normalizeAppUrl(input: string): string | null {
@@ -36,7 +36,7 @@ export function normalizeAppUrl(input: string): string | null {
   return u.origin;
 }
 
-/** The host-permission pattern for NotesApp's origin. */
+/** The host-permission pattern for Voyager's origin. */
 export function appPattern(origin: string): string {
   const u = new URL(origin);
   // Match patterns take no port: the host pattern covers every port.

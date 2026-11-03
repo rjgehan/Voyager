@@ -304,7 +304,7 @@ test('capture every screen', async ({ page, browser }, testInfo) => {
     ['graph', 'Graph', ''],
     ['history', 'Vault history', 'Every commit, filterable by note and author.'],
     ['status', 'Status', 'Problems first, then version, history, vault, disk, backups and alerts.'],
-    ['compat', 'Compatibility report', 'What an Obsidian vault uses that NotesApp does not.'],
+    ['compat', 'Compatibility report', 'What an Obsidian vault uses that Voyager does not.'],
     ['ask', 'Ask your vault', 'Off until switched on in Settings.'],
   ] as const) {
     await step(route, async () => {

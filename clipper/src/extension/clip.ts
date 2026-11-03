@@ -26,7 +26,7 @@ export async function loadSettings(b: Browser): Promise<ClipperSettings> {
 /** Resolves once `tabId` has finished loading. */
 export function waitForLoad(b: Browser, tabId: number, timeoutMs = 30_000): Promise<void> {
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => done(new ClipError('NotesApp did not load in time. Is Tailscale connected?')), timeoutMs);
+    const timer = setTimeout(() => done(new ClipError('Voyager did not load in time. Is Tailscale connected?')), timeoutMs);
     const onUpdated = (id: number, change: { status?: string }) => {
       if (id === tabId && change.status === 'complete') done();
     };
@@ -69,25 +69,25 @@ export async function clipTab(b: Browser, tab: Tab, selection: boolean): Promise
   const settings = await loadSettings(b);
   if (!settings.appUrl) {
     await b.runtime.openOptionsPage();
-    throw new ClipError('Set NotesApp’s address in the clipper’s options first.');
+    throw new ClipError('Set Voyager’s address in the clipper’s options first.');
   }
   if (tab.id === undefined || !isClippable(tab.url)) throw new ClipError('This page cannot be clipped.');
   if (!(await b.permissions.contains({ origins: [appPattern(settings.appUrl)] }))) {
     await b.runtime.openOptionsPage();
-    throw new ClipError('Allow the clipper to open NotesApp (Options › Save).');
+    throw new ClipError('Allow the clipper to open Voyager (Options › Save).');
   }
   const clip = await extractInTab(b, tab.id, selection);
   const images = settings.downloadImages && clip.images.length > 0 && (await b.permissions.contains({ origins: ALL_SITES })) ? await downloadImages(clip.images) : [];
   const message: ExtractedClipMessage = { type: CLIP_MESSAGE, v: PROTOCOL_VERSION, kind: 'clip', clip, images, folder: settings.folder, autoSave: settings.autoSave };
   const appTab = await b.tabs.create({ url: `${settings.appUrl}/clip?via=extension`, active: !settings.autoSave, openerTabId: tab.id });
-  if (appTab.id === undefined) throw new ClipError('NotesApp could not be opened.');
+  if (appTab.id === undefined) throw new ClipError('Voyager could not be opened.');
   await waitForLoad(b, appTab.id);
   const [delivered] = await b.scripting.executeScript<ClipOutcome>({
     target: { tabId: appTab.id },
     func: deliverClip as unknown as (...args: never[]) => unknown,
     args: [message, AUTO_SAVE_WAIT_MS, new URL(settings.appUrl).origin],
   });
-  const outcome = delivered?.result ?? { status: 'failed', error: 'NotesApp did not answer.' };
+  const outcome = delivered?.result ?? { status: 'failed', error: 'Voyager did not answer.' };
   if (settings.autoSave && outcome.status === 'saved') await b.tabs.remove(appTab.id).catch(() => undefined);
   // A clip that should have saved itself but did not: show its tab, where the error is.
   else if (settings.autoSave) await b.tabs.update(appTab.id, { active: true }).catch(() => undefined);

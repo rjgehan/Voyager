@@ -6,7 +6,7 @@ import { bigBoard, CANVAS_NOTE, PROJECT_BOARD } from './canvasSeed';
 const WELCOME = `---
 tags: [welcome]
 ---
-# Welcome to NotesApp
+# Welcome to Voyager
 
 Your notes are plain Markdown files on your own server. They save as you type, keep every version, and show on all your devices. This note is a five-minute tour: try each step right here, then delete the note whenever you like.
 
@@ -60,7 +60,7 @@ More in Help › **Tasks and reminders** and **Calendar and daily notes**.
 - Every change goes into the note's **History**, and deleted notes go to the **Trash**.
 - If two devices change the same note at once, nothing is overwritten: you choose what to keep.
 
-On a Mac, press \`Cmd\` where this note says \`Ctrl\`. On an iPhone, add NotesApp to the Home Screen (Safari › Share › Add to Home Screen) to use it like an app; see Help › **Phone tips**.
+On a Mac, press \`Cmd\` where this note says \`Ctrl\`. On an iPhone, add Voyager to the Home Screen (Safari › Share › Add to Home Screen) to use it like an app; see Help › **Phone tips**.
 `;
 
 // Every element Live Preview renders, for trying the editor against the mock.

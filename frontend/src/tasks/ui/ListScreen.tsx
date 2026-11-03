@@ -599,7 +599,7 @@ export function ListScreen({ listId: id, headerExtra, highlight = null, asFile =
           </button>
         </div>
       </header>
-      {readOnly && <p className="banner banner-warning">This list was written by a newer version of NotesApp; it is shown here but cannot be changed.</p>}
+      {readOnly && <p className="banner banner-warning">This list was written by a newer version of Voyager; it is shown here but cannot be changed.</p>}
       <TaskProblems problems={query.data?.problems ?? []} only={list.path} />
       {query.isPending && own.length === 0 ? (
         <Loading />

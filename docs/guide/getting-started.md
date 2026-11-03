@@ -1,6 +1,6 @@
 # Getting started
 
-NotesApp is a notes app that runs on your own server. Your notes are ordinary Markdown files in a folder on that server, called the **vault**. Every device opens the same vault, everything you type is saved as you type, and every change is kept in the note's [history](history-and-trash.md).
+Voyager is a notes app that runs on your own server. Your notes are ordinary Markdown files in a folder on that server, called the **vault**. Every device opens the same vault, everything you type is saved as you type, and every change is kept in the note's [history](history-and-trash.md).
 
 ## The screen on a computer
 
@@ -58,11 +58,11 @@ Deleted notes go to the [trash](history-and-trash.md#the-trash), so nothing is l
 
 ## Working on several devices
 
-Open the app on your phone and your PC at the same time and a change on one shows on the other within a second or two. The dot next to the connection status is green while the app is connected (**Live**). If two devices change the same note at the same time, NotesApp never quietly overwrites either version: it asks you which to keep (see [When two devices disagree](history-and-trash.md#when-two-devices-disagree)).
+Open the app on your phone and your PC at the same time and a change on one shows on the other within a second or two. The dot next to the connection status is green while the app is connected (**Live**). If two devices change the same note at the same time, Voyager never quietly overwrites either version: it asks you which to keep (see [When two devices disagree](history-and-trash.md#when-two-devices-disagree)).
 
 ## Where to go next
 
 - [Writing](writing.md): headings, lists, checkboxes, code, callouts and images.
 - [Links, backlinks and tags](links-and-tags.md): the heart of a notes vault.
-- [Phone tips](phone.md): add NotesApp to your iPhone's Home Screen.
+- [Phone tips](phone.md): add Voyager to your iPhone's Home Screen.
 - [Keyboard shortcuts](keyboard-shortcuts.md): every key on one page.

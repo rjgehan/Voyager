@@ -74,7 +74,7 @@ public class ShareController {
 
 	private void requireOwner(Identity identity) {
 		if (!this.identities.isOwner(identity)) {
-			throw new NotesException(ErrorCode.IDENTITY_NOT_ALLOWED, "This identity may not use NotesApp");
+			throw new NotesException(ErrorCode.IDENTITY_NOT_ALLOWED, "This identity may not use Voyager");
 		}
 	}
 

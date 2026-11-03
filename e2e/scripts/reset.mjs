@@ -1,4 +1,4 @@
-// Starts NotesApp on a FRESH scratch vault for the e2e suite, stopping the stack the last reset
+// Starts Voyager on a FRESH scratch vault for the e2e suite, stopping the stack the last reset
 // started first. It only ever touches e2e/.run/ (the scratch vaults, logs and PIDs); the dev
 // vault, the user's vault and every other process on the machine are left alone.
 //

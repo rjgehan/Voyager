@@ -85,5 +85,5 @@ export function vaultKey(key: string): string {
 
 /** A browser tab title: an extra vault's name is part of it, so tabs of two vaults tell apart. */
 export function appTitle(title: string): string {
-  return current === null ? `${title} · Notes` : `${title} · ${current} · Notes`;
+  return current === null ? `${title} · Voyager` : `${title} · ${current} · Voyager`;
 }

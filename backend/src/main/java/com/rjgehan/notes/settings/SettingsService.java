@@ -129,7 +129,7 @@ public class SettingsService {
 		Integer schemaVersion = SettingsCodec.schemaVersion(raw);
 		String reason = null;
 		if (schemaVersion != null && schemaVersion > Settings.SCHEMA_VERSION) {
-			reason = "The settings were written by a newer version of NotesApp (schemaVersion " + schemaVersion + ")";
+			reason = "The settings were written by a newer version of Voyager (schemaVersion " + schemaVersion + ")";
 		}
 		else if (!parsed.errors().isEmpty()) {
 			reason = "The settings file is invalid: " + describe(parsed.errors());

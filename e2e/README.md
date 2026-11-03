@@ -1,6 +1,6 @@
 # End-to-end tests
 
-NotesApp driven the way it is used: the real backend on a scratch vault, and Chrome as the
+Voyager driven the way it is used: the real backend on a scratch vault, and Chrome as the
 Windows PC and as the iPhone's Home-Screen app. Nothing here touches a real vault: every file the
 suite makes lives in `e2e/.run/`, which `npm run reset` wipes.
 

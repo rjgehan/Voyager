@@ -11,7 +11,7 @@ Links turn separate notes into a web you can walk through. A link to a note that
 The link shows as the note's name. To show other words instead, write them after a `|`: `[[Plan|the plan]]`.
 
 - **A heading of a note**: after the name, type `#` and pick the heading: `[[Plan#Risks]]`. In the same note, start with `[[#`.
-- **One paragraph or list item**: type `[[Plan#^` and pick the block from the list. NotesApp gives that block a short id (like `^a1b2c3`) so the link keeps finding it.
+- **One paragraph or list item**: type `[[Plan#^` and pick the block from the list. Voyager gives that block a short id (like `^a1b2c3`) so the link keeps finding it.
 - **A note that does not exist yet**: just type its name. The link shows dimmed until the note exists.
 
 ## Follow a link
@@ -34,7 +34,7 @@ An embedded note is shown, not copied: change the original and every embed follo
 
 Rename a note (click its title) or move it to another folder, and every link to it in the vault is updated. The **Move to…** dialog says how many notes will change before you confirm; a drag-and-drop move shows a message with **Undo**.
 
-If you change a heading's text, NotesApp offers to update the links that pointed at the old heading. You can also do it on purpose: put the cursor in the heading and run **Rename heading and update links to it…** from the palette.
+If you change a heading's text, Voyager offers to update the links that pointed at the old heading. You can also do it on purpose: put the cursor in the heading and run **Rename heading and update links to it…** from the palette.
 
 ## Backlinks: what links here
 

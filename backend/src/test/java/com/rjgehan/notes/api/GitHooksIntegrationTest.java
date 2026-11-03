@@ -55,7 +55,7 @@ class GitHooksIntegrationTest {
 			git.add().addFilepattern("Seed.md").call();
 			PersonIdent someone = new PersonIdent("Someone", "someone@example.com");
 			git.commit().setMessage("Seed").setAuthor(someone).setCommitter(someone).call();
-			Files.writeString(vault.resolve("Uncommitted.md"), "added before NotesApp\n");
+			Files.writeString(vault.resolve("Uncommitted.md"), "added before Voyager\n");
 			Path hooks = vault.resolve(".git/hooks");
 			Files.createDirectories(hooks);
 			String marker = marker().toAbsolutePath().toString().replace('\\', '/');
@@ -97,7 +97,7 @@ class GitHooksIntegrationTest {
 	@Test
 	void hooksNeverRunForTheAppsCommits() throws IOException {
 		JsonNode imported = this.api.get("/api/history?path=Uncommitted.md").ok(200).get("entries").get(0);
-		assertThat(imported.get("message").asString()).isEqualTo("Changes made while NotesApp was stopped");
+		assertThat(imported.get("message").asString()).isEqualTo("Changes made while Voyager was stopped");
 		assertThat(this.api.get("/api/history?path=Seed.md").ok(200).get("entries").get(0).get("message").asString())
 			.isEqualTo("Seed");
 

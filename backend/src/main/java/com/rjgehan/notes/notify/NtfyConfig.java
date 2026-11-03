@@ -5,7 +5,7 @@ import java.net.URI;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Where NotesApp posts ntfy notifications: the server, the default topic and an optional access token, read from
+ * Where Voyager posts ntfy notifications: the server, the default topic and an optional access token, read from
  * {@code ntfy.json} in the secrets directory ({@link NtfyConfigFile}, DESIGN §4.1). The file is shared by every sender:
  * the app-error alerts of ROADMAP item 38 use {@link #alerts()}, and the reminders of item 9 use
  * {@link #remindersTopic()} (the default topic unless {@code "reminders": {"topic": …}} names its own). On a public

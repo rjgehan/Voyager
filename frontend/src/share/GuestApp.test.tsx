@@ -132,7 +132,7 @@ describe('a shared note', () => {
     expect(screen.getByText('Can edit')).toBeInTheDocument();
     await waitFor(() => expect(container.querySelector('.cm-content')?.textContent).toContain('milk'));
     expect(container.querySelector('.cm-content')).toHaveAttribute('contenteditable', 'true');
-    expect(document.title).toBe('Groceries · Shared · Notes');
+    expect(document.title).toBe('Groceries · Shared · Voyager');
     // The share's own event stream, never the owner's.
     await waitFor(() => expect(QuietEventSource.instances.map((s) => s.url.split('?')[0])).toEqual([`/api/s/${ID}/events`]));
     // An edit autosaves through the share's endpoint.

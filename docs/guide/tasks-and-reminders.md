@@ -1,6 +1,6 @@
 # Tasks and reminders
 
-NotesApp has a real task manager: lists, due dates, priorities, repeating tasks, subtasks and reminders, with **Today** and **Upcoming** views. Tasks are kept in your vault as files in the `Tasks` folder (one file per list), so they sync, have history and can be linked from notes.
+Voyager has a real task manager: lists, due dates, priorities, repeating tasks, subtasks and reminders, with **Today** and **Upcoming** views. Tasks are kept in your vault as files in the `Tasks` folder (one file per list), so they sync, have history and can be linked from notes.
 
 > [!NOTE]
 > A checkbox in a note (`- [ ]`) is just part of the note: tick it and nothing else happens. A **task** has a date, can repeat and can remind you. You can turn a checkbox into a task at any time (see [Tasks in notes](#tasks-in-notes)).
@@ -56,8 +56,8 @@ Reminders reach you only through the ways switched on in **Settings › Reminder
 
 | Way | What you get | Needs |
 |---|---|---|
-| **In the app** | A message in every open NotesApp tab, and a system notification where the browser allows | NotesApp open somewhere. In the [desktop app](desktop-app.md) these are native Windows or macOS notifications, even with the window closed to the tray. |
-| **Web Push** | A notification on the device, even with NotesApp closed | On an iPhone or iPad: iOS 16.4 or later and NotesApp [added to the Home Screen](phone.md#add-notesapp-to-the-home-screen). Then **Subscribe this device** in Settings › Reminders. |
+| **In the app** | A message in every open Voyager tab, and a system notification where the browser allows | Voyager open somewhere. In the [desktop app](desktop-app.md) these are native Windows or macOS notifications, even with the window closed to the tray. |
+| **Web Push** | A notification on the device, even with Voyager closed | On an iPhone or iPad: iOS 16.4 or later and Voyager [added to the Home Screen](phone.md#add-voyager-to-the-home-screen). Then **Subscribe this device** in Settings › Reminders. |
 | **ntfy** | A notification from the ntfy app | Set up on the server (ask whoever runs it) |
 
 Each way has a **test** button in Settings › Reminders. On a computer, a notification has **Snooze 10 min** and **Done** buttons; on the iPhone, tapping it opens the task.

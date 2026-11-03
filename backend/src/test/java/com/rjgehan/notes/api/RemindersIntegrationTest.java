@@ -90,7 +90,7 @@ class RemindersIntegrationTest {
 
 		JsonNode test = this.api.postJson("/api/reminders/test", Map.of("route", "inApp")).ok(200);
 		assertThat(test.get("sent").asBoolean()).isFalse();
-		assertThat(test.get("error").asString()).isEqualTo("no NotesApp tab is open");
+		assertThat(test.get("error").asString()).isEqualTo("no Voyager tab is open");
 		assertThat(this.api.postJson("/api/reminders/test", Map.of("route", "pigeon")).problem(400))
 			.isEqualTo("bad-request");
 	}

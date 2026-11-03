@@ -17,7 +17,7 @@ export type SheetDocument =
   | { kind: 'loading' }
   /** The engine chunk could not be loaded (offline, a deploy). */
   | { kind: 'failed'; message: string }
-  /** The parser refused the file: it stays untouched, to be fixed as text (read-only when a newer NotesApp wrote it). */
+  /** The parser refused the file: it stays untouched, to be fixed as text (read-only when a newer Voyager wrote it). */
   | { kind: 'refused'; message: string; newer?: boolean }
   /** `version` changes with every change of the workbook. */
   | { kind: 'ready'; workbook: Workbook; version: number };

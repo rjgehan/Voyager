@@ -1,5 +1,5 @@
 #!/bin/sh
-# One NotesApp backup run (ROADMAP item 1, DESIGN §7.10, DEPLOY.md "Backups"). backup-scheduler runs it every
+# One Voyager backup run (ROADMAP item 1, DESIGN §7.10, DEPLOY.md "Backups"). backup-scheduler runs it every
 # night; run it by hand with `docker compose exec backup-scheduler sh /backup/nightly.sh`, or from host cron
 # (DEPLOY.md). The restic work happens in the backup container (restic-job.sh, through docker exec).
 #
@@ -154,12 +154,12 @@ recover() {
 	log "WARN $1 while $APP was stopped; starting it again"
 	stop_restic
 	if start_app 30; then
-		notify "NotesApp backup interrupted" high warning \
-			"$1 while NotesApp was stopped for the snapshot. NotesApp is running again; the next run takes a new snapshot."
+		notify "Voyager backup interrupted" high warning \
+			"$1 while Voyager was stopped for the snapshot. Voyager is running again; the next run takes a new snapshot."
 	else
 		log "ERROR could not start $APP"
-		notify "NotesApp is down" urgent rotating_light \
-			"$1 while NotesApp was stopped for the snapshot, and it could not be started again. On $HOST_LABEL: $UP_HINT"
+		notify "Voyager is down" urgent rotating_light \
+			"$1 while Voyager was stopped for the snapshot, and it could not be started again. On $HOST_LABEL: $UP_HINT"
 	fi
 }
 
@@ -185,7 +185,7 @@ lock() {
 # claiming that another run is in progress.
 state_unwritable() {
 	log "ERROR the state directory $STATE cannot be written by $(id -un 2>/dev/null || id -u)"
-	notify "NotesApp backup failed" high warning \
+	notify "Voyager backup failed" high warning \
 		"The backup run on $HOST_LABEL could not start: its state directory $STATE cannot be written. No backup is taken until that is fixed."
 	exit 1
 }
@@ -220,9 +220,9 @@ finish() {
 		alert=$(printf 'The backup run on %s failed:\n%sDetails: the Backups card of the status page, and the backup log.' \
 			"$HOST_LABEL" "$FAILED_STEPS")
 		if [ -n "$URGENT" ]; then
-			notify "NotesApp is down after the backup" urgent rotating_light "$alert"
+			notify "Voyager is down after the backup" urgent rotating_light "$alert"
 		else
-			notify "NotesApp backup failed" high warning "$alert"
+			notify "Voyager backup failed" high warning "$alert"
 		fi
 		exit 1
 	fi
@@ -231,7 +231,7 @@ finish() {
 	log "backup run finished in $(($(date +%s) - STARTED)) s: snapshot ${SNAPSHOT:-none}, off-site ${OFFSITE_RESULT:-?}"
 	ping_heartbeat
 	if [ "$CHECKED" = ok ]; then
-		notify "NotesApp backups OK" low white_check_mark \
+		notify "Voyager backups OK" low white_check_mark \
 			"Weekly report from $HOST_LABEL: last snapshot $SNAPSHOT, off-site copy $OFFSITE_RESULT, repository check passed."
 	fi
 	exit 0
@@ -312,7 +312,7 @@ run() {
 	0) ;;
 	1)
 		log "ERROR another backup run is in progress (lock $LOCK)"
-		notify "NotesApp backup skipped" high warning \
+		notify "Voyager backup skipped" high warning \
 			"Another backup run on $HOST_LABEL was still in progress, so this one was skipped."
 		exit 1
 		;;

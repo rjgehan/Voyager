@@ -1,7 +1,7 @@
 # Third-party notices
 
-NotesApp is licensed under the GNU General Public License, version 3 only (`GPL-3.0-only`, see [LICENSE](LICENSE)).
-The NotesApp image ships the third-party software listed below, each under its own licence. Where an entry names several
+Voyager is licensed under the GNU General Public License, version 3 only (`GPL-3.0-only`, see [LICENSE](LICENSE)).
+The Voyager image ships the third-party software listed below, each under its own licence. Where an entry names several
 licences, they are the alternatives or the combination its project declares. Each package's full licence text is in its
 source distribution: `frontend/node_modules/<package>/` for the web app, `clipper/node_modules/<package>/` for the web
 clipper, and the `META-INF` folder of each jar inside the server's Spring Boot jar.

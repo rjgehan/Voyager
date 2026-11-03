@@ -83,7 +83,7 @@ class CompatScannerTest {
 	}
 
 	@Test
-	void findsFilesNotesAppCannotUseFully() {
+	void findsFilesVoyagerCannotUseFully() {
 		Map<String, CompatIssue> issues = scanFixture();
 		assertThat(where(issues.get("frontmatter"))).containsExactly("Broken.md:0");
 		// A drawing named .excalidraw.md opens in the drawing editor (ROADMAP item 5).

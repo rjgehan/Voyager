@@ -55,7 +55,7 @@ export default function SheetView(props: FileViewProps) {
       );
     case 'refused':
       if (doc.newer) {
-        // Written by a later NotesApp: this version cannot judge an edit, so the text is only shown.
+        // Written by a later Voyager: this version cannot judge an edit, so the text is only shown.
         return (
           <div className="sheet-refused">
             <div className="note-warning sheet-refused-notice" role="alert">

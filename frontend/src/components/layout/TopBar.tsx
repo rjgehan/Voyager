@@ -174,7 +174,7 @@ export function TopBar() {
           ? 'Trash'
           : location.pathname === '/search'
             ? 'Search'
-            : (page?.title ?? 'Notes');
+            : (page?.title ?? 'Voyager');
 
   return (
     <header className="top-bar">

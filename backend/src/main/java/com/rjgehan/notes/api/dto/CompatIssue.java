@@ -25,7 +25,7 @@ public record CompatIssue(String id, Category category, Severity severity, Strin
 
 	}
 
-	/** {@code info}: works, differently; {@code warning}: shown wrong or not at all; {@code error}: data NotesApp cannot use. */
+	/** {@code info}: works, differently; {@code warning}: shown wrong or not at all; {@code error}: data Voyager cannot use. */
 	public enum Severity {
 
 		@JsonProperty("info") INFO,

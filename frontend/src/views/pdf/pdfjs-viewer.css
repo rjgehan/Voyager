@@ -13,7 +13,7 @@
  * limitations under the License.
  */
 
-/* The parts of pdfjs-dist 6.4.299's web/pdf_viewer.css that NotesApp's PDF view uses (DESIGN §6.8.3):
+/* The parts of pdfjs-dist 6.4.299's web/pdf_viewer.css that Voyager's PDF view uses (DESIGN §6.8.3):
    the page, canvas, text and annotation layers. The whole file is not imported, because it also
    styles generic class names the app uses (.dialog, .sidebar) and the viewer app's editor UI.
    Copied unchanged except: the :root variables live on .pdfViewer, the rotation rules are scoped

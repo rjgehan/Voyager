@@ -8,7 +8,7 @@ import com.rjgehan.notes.api.dto.CompatPlugin.Support;
 import org.jspecify.annotations.Nullable;
 
 /**
- * What NotesApp offers in place of Obsidian's core plugins and the most common community plugins (ROADMAP item 24).
+ * What Voyager offers in place of Obsidian's core plugins and the most common community plugins (ROADMAP item 24).
  * Roadmap items that change an answer update this table.
  */
 final class ObsidianPlugins {
@@ -16,7 +16,7 @@ final class ObsidianPlugins {
 	private ObsidianPlugins() {
 	}
 
-	/** A known plugin: its display name, NotesApp's support, a short note and the roadmap item that adds it. */
+	/** A known plugin: its display name, Voyager's support, a short note and the roadmap item that adds it. */
 	record Known(String name, Support support, String note, @Nullable Integer item) {
 	}
 
@@ -45,7 +45,7 @@ final class ObsidianPlugins {
 			Map.entry("command-palette", k("Command palette", Support.SUPPORTED, "Mod-P.")),
 			Map.entry("slash-command", k("Slash commands", Support.SUPPORTED, "Type / at a line start or after a space: blocks, callouts, code, math, links, dates and the app's commands, with fuzzy filtering.")),
 			Map.entry("editor-status", k("Editor status", Support.SUPPORTED, "The status bar.")),
-			Map.entry("bookmarks", k("Bookmarks", Support.SUPPORTED, "Obsidian's bookmarks.json is shown until the first change; NotesApp then keeps its own copy in the same format.")),
+			Map.entry("bookmarks", k("Bookmarks", Support.SUPPORTED, "Obsidian's bookmarks.json is shown until the first change; Voyager then keeps its own copy in the same format.")),
 			Map.entry("markdown-importer", k("Format converter", Support.UNSUPPORTED, "Not offered.")),
 			Map.entry("zk-prefixer", k("Unique note creator", Support.UNSUPPORTED, "Not offered.")),
 			Map.entry("random-note", k("Random note", Support.UNSUPPORTED, "Not offered.")),
@@ -68,7 +68,7 @@ final class ObsidianPlugins {
 			Map.entry("obsidian-kanban", k("Kanban", Support.PARTIAL, "Notes with kanban-plugin in their properties open as boards: drag cards between lanes, edit cards, add, rename and reorder lanes, archive; the file stays in the plugin's format and its settings block is kept as is. The plugin's settings, date picker and lane options are not offered.")),
 			Map.entry("obsidian-tasks-plugin", k("Tasks", Support.PARTIAL, "Checkboxes work, and Convert checkbox to task brings a line's emoji dates and priorities into a structured task; task queries are not interpreted.")),
 			Map.entry("calendar", k("Calendar", Support.SUPPORTED, "The Calendar panel shows a month with each day's daily note, tasks and dated notes; a tap opens or creates the day's note. A full calendar page has month and week views.", 14)),
-			Map.entry("obsidian-git", k("Git", Support.SUPPORTED, "Not needed: NotesApp keeps the vault's history in git itself. Turn the plugin off for this vault.")),
+			Map.entry("obsidian-git", k("Git", Support.SUPPORTED, "Not needed: Voyager keeps the vault's history in git itself. Turn the plugin off for this vault.")),
 			Map.entry("periodic-notes", k("Periodic Notes", Support.PARTIAL, "Daily notes work; weekly and monthly notes are not created.")),
 			Map.entry("obsidian-admonition", k("Admonition", Support.UNSUPPORTED, "ad- blocks show as code blocks; Obsidian callouts replace them.")),
 			Map.entry("quickadd", k("QuickAdd", Support.PARTIAL, "Quick capture appends to Inbox.md or today's note from anywhere; macros and templates of QuickAdd are not offered.")),
@@ -106,7 +106,7 @@ final class ObsidianPlugins {
 		Known known = CORE.get(id);
 		if (known == null) {
 			return new CompatPlugin(id, id, Kind.CORE, Support.UNKNOWN,
-					"A core plugin this version of NotesApp does not know.", null);
+					"A core plugin this version of Voyager does not know.", null);
 		}
 		return new CompatPlugin(id, known.name(), Kind.CORE, known.support(), known.note(), known.item());
 	}
@@ -115,7 +115,7 @@ final class ObsidianPlugins {
 		Known known = COMMUNITY.get(id);
 		if (known == null) {
 			return new CompatPlugin(id, name, Kind.COMMUNITY, Support.UNKNOWN,
-					"NotesApp does not run Obsidian plugins; anything this one adds to notes shows as plain text.",
+					"Voyager does not run Obsidian plugins; anything this one adds to notes shows as plain text.",
 					null);
 		}
 		return new CompatPlugin(id, name, Kind.COMMUNITY, known.support(), known.note(), known.item());

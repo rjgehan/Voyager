@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "license": "GPL-3.0-only",
-  "description": "NotesApp web clipper: a browser extension (Chrome, Edge, Firefox), a bookmarklet and an iOS Shortcut script (ROADMAP item 19, DESIGN §6.27.1)",
+  "description": "Voyager web clipper: a browser extension (Chrome, Edge, Firefox), a bookmarklet and an iOS Shortcut script (ROADMAP item 19, DESIGN §6.27.1)",
   "type": "module",
   "scripts": {
     "build": "node build.mjs",

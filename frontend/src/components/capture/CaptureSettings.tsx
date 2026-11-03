@@ -92,17 +92,17 @@ export function CaptureSettings() {
         </li>
         <li>On the phone: the <strong>+</strong> button at the top, or <em>Capture</em> in the sidebar.</li>
         <li>
-          Installed as an app on Android or Windows (Chrome or Edge), NotesApp appears in the share sheet for text, links and pictures, and its
+          Installed as an app on Android or Windows (Chrome or Edge), Voyager appears in the share sheet for text, links and pictures, and its
           icon&rsquo;s menu has <em>Quick capture</em>.
         </li>
       </ul>
       <h2 className="settings-subtitle">iPhone Share Sheet</h2>
       <p className="setting-note">
-        iOS does not let web apps receive shares, so a Shortcut sends them. It talks to NotesApp over the tailnet, so Tailscale must be connected.
+        iOS does not let web apps receive shares, so a Shortcut sends them. It talks to Voyager over the tailnet, so Tailscale must be connected.
       </p>
       <ol className="capture-steps">
         <li>
-          In the Shortcuts app, create a shortcut named <strong>Add to Notes</strong>. In its details, turn on <em>Show in Share Sheet</em> and let
+          In the Shortcuts app, create a shortcut named <strong>Add to Voyager</strong>. In its details, turn on <em>Show in Share Sheet</em> and let
           it receive <em>Text</em>, <em>URLs</em> and <em>Safari web pages</em>.
         </li>
         <li>

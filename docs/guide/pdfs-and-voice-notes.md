@@ -29,7 +29,7 @@ Record audio straight into a note:
 2. **Phone**: tap the microphone on the keyboard bar. **Computer**: run **Record voice note** from the palette, or `/voice` in the note.
 3. A small panel shows the time and the sound level. **Pause** and **Resume** as needed, then **Done**. **Discard** throws the recording away.
 
-The recording is saved as an audio file in your vault (named like `Recording 20261102143005.m4a`) and plays right in the note. The first time, the browser asks to use the microphone; allow it for NotesApp.
+The recording is saved as an audio file in your vault (named like `Recording 20261102143005.m4a`) and plays right in the note. The first time, the browser asks to use the microphone; allow it for Voyager.
 
 ### Getting the words written out
 

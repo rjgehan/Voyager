@@ -136,7 +136,7 @@ class TaskIndexingTest {
 
 	@Test
 	void aTaskFileThatCannotBeRewrittenIsReportedAndLeftAlone() throws Exception {
-		// A file written by a newer version of NotesApp is never changed.
+		// A file written by a newer version of Voyager is never changed.
 		String newer = """
 				{"type": "notesapp-tasks", "version": 2, "list": {"id": "NEWER", "name": "Newer", "order": "b0"},
 				 "tasks": [{"id": "N1", "title": "Ask the [[Plumber]]", "status": "open", "priority": 0}]}

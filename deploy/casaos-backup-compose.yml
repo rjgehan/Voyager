@@ -1,5 +1,5 @@
-# NotesApp Backup for CasaOS (optional): nightly restic snapshots of NotesApp to a second disk and,
-# optionally, off site (ROADMAP item 1, DESIGN §7.10). A SECOND custom app next to NotesApp
+# Voyager Backup for CasaOS (optional): nightly restic snapshots of Voyager to a second disk and,
+# optionally, off site (ROADMAP item 1, DESIGN §7.10). A SECOND custom app next to Voyager
 # (casaos-compose.yml): paste it into App Store → Custom Install → Import only after the setup in
 # docs/CASAOS.md "Nightly backups" (a second disk, the scripts, the password file). It refuses to
 # install while the repository directory or the scripts are missing.
@@ -9,7 +9,7 @@
 #   scripts/         nightly.sh, restic-job.sh and scheduler.sh from the repository's deploy/backup/
 #   secrets/         restic-password (keep a copy in your password manager) and
 #                    backup-offsite-credentials (S3 API keys; may be empty)
-#   state/           status.json, which NotesApp's status page shows
+#   state/           status.json, which Voyager's status page shows
 #   cache/           restic's cache; disposable
 # Replace the CHANGE-ME path (the repository on the second disk) before installing.
 name: notesapp-backup
@@ -73,7 +73,7 @@ services:
       NOTES_BACKUP_STATE_DIR: /state
       NOTES_BACKUP_APP_CONTAINER: notesapp      # the container names of casaos-compose.yml
       NOTES_BACKUP_CONTAINER: notesapp-backup
-      NOTES_BACKUP_UP_HINT: docker start notesapp   # or restart NotesApp in CasaOS
+      NOTES_BACKUP_UP_HINT: docker start notesapp   # or restart Voyager in CasaOS
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock   # docker stop/start notesapp, docker exec into notesapp-backup
       - type: bind
@@ -101,9 +101,9 @@ x-casaos:
   author: rjgehan
   category: Backup
   title:
-    en_us: NotesApp Backup
+    en_us: Voyager Backup
   tagline:
-    en_us: Nightly encrypted backups of NotesApp
+    en_us: Nightly encrypted backups of Voyager
   description:
-    en_us: restic snapshots of the NotesApp vault, its history and its Tailscale identity to a second disk and off site, with ntfy alerts. Needs the setup in docs/CASAOS.md first.
+    en_us: restic snapshots of the Voyager vault, its history and its Tailscale identity to a second disk and off site, with ntfy alerts. Needs the setup in docs/CASAOS.md first.
   icon: https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/obsidian.png

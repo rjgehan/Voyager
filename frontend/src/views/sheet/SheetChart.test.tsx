@@ -99,7 +99,7 @@ describe('SheetChart', () => {
     draw({ type: 'bar', range: 'A1:A3' });
     expect(screen.getByText('A1:A3 holds no numbers to chart.')).toBeInTheDocument();
     draw({ range: 'A1:B3', extra: { type: 'radar' } });
-    expect(screen.getByText('This kind of chart needs a newer NotesApp.')).toBeInTheDocument();
+    expect(screen.getByText('This kind of chart needs a newer Voyager.')).toBeInTheDocument();
     draw({ type: 'pie', range: 'C3:C3' });
     expect(screen.getByText('The pie has no positive values to show.')).toBeInTheDocument();
   });

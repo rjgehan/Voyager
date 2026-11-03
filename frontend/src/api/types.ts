@@ -356,7 +356,7 @@ export interface ObsidianInfo { found: boolean; configFiles: string[]; problems:
 export interface CompatSetting {
   source: string;               // 'app.json › attachmentFolderPath'
   obsidianValue: string;        // the value as JSON text
-  setting: string | null;       // 'files.attachmentLocation'; null when NotesApp has none
+  setting: string | null;       // 'files.attachmentLocation'; null when Voyager has none
   current: string | null;
   proposed: string | null;
   status: 'same' | 'different' | 'unsupported';
@@ -706,7 +706,7 @@ export interface TaskList {
   archived: boolean;              // left out of Today, Upcoming and the all-lists view
   sections: TaskSection[];        // in order
   path: VaultPath;                // the list's .tasks file
-  writable: boolean;              // false: written by a newer NotesApp, so this version only reads it
+  writable: boolean;              // false: written by a newer Voyager, so this version only reads it
 }
 export interface Task {
   id: string;

@@ -5,11 +5,11 @@ import type { ClipOutcome } from './clip';
 export function describe(outcome: ClipOutcome): string {
   switch (outcome.status) {
     case 'saved':
-      return `Saved to ${outcome.path ?? 'NotesApp'}.`;
+      return `Saved to ${outcome.path ?? 'Voyager'}.`;
     case 'delivered':
-      return 'Opened in NotesApp: check it there and press Save.';
+      return 'Opened in Voyager: check it there and press Save.';
     case 'timeout':
-      return 'NotesApp did not confirm the save. Check the NotesApp tab.';
+      return 'Voyager did not confirm the save. Check the Voyager tab.';
     default:
       return outcome.error ?? 'The clip was not saved.';
   }

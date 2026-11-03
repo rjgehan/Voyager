@@ -1,6 +1,6 @@
-# NotesApp user guide
+# Voyager user guide
 
-NotesApp keeps your notes as plain Markdown files on your own server and shows them on every device you use: your PC, your iPhone and the desktop app. This guide shows how to do things, one task at a time. You never need to know Markdown to use it.
+Voyager keeps your notes as plain Markdown files on your own server and shows them on every device you use: your PC, your iPhone and the desktop app. This guide shows how to do things, one task at a time. You never need to know Markdown to use it.
 
 > [!TIP]
 > In the app, open this guide with **Help**: the **?** button near the bottom of the ribbon on the left (computer), **☰ › Help** or **⋯ › Help** (phone), or type `help` in the command palette (`Ctrl+P`). The search box at the top of every Help page searches the whole guide.
@@ -51,7 +51,7 @@ Keys are written for Windows. On a Mac, press **Cmd** where the guide says **Ctr
 ## Your devices
 
 - [Phone tips](phone.md): the iPhone layout, the Home Screen app and working offline.
-- [Desktop app](desktop-app.md): NotesApp in its own window on Windows and macOS.
+- [Desktop app](desktop-app.md): Voyager in its own window on Windows and macOS.
 - [Quick capture and the web clipper](capture-and-clipper.md): save a thought, a photo or a web page in seconds.
 
 ## Reference

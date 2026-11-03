@@ -27,7 +27,7 @@ import com.rjgehan.notes.vault.PathNames;
 import org.jspecify.annotations.Nullable;
 
 /**
- * The findings of the compatibility report (ROADMAP item 24, DESIGN §5.23): syntax NotesApp does not render yet,
+ * The findings of the compatibility report (ROADMAP item 24, DESIGN §5.23): syntax Voyager does not render yet,
  * links that lead nowhere, and files it cannot use. Pure: it works on a snapshot of the index, outside its lock.
  * Roadmap items that add rendering remove their rule here.
  */
@@ -72,7 +72,7 @@ public final class CompatScanner {
 				"As in Obsidian, following such a link creates the note.", null),
 
 		// ---------- files ----------
-		SKIPPED("skipped", Category.FILES, Severity.ERROR, "Files NotesApp cannot show",
+		SKIPPED("skipped", Category.FILES, Severity.ERROR, "Files Voyager cannot show",
 				"Names with a backslash or a control character, or two names that differ only in Unicode normalization. "
 						+ "Rename them over SSH.",
 				null),
@@ -80,7 +80,7 @@ public final class CompatScanner {
 				"Notes over the text size limit can be downloaded but not edited, searched or linked from.", null),
 		NOT_UTF8("not-utf8", Category.FILES, Severity.WARNING, "Notes that are not valid UTF-8",
 				"They open read-only, so the damaged characters are never written back.", null),
-		FRONTMATTER("frontmatter", Category.FILES, Severity.WARNING, "Properties NotesApp cannot read",
+		FRONTMATTER("frontmatter", Category.FILES, Severity.WARNING, "Properties Voyager cannot read",
 				"The YAML between the --- lines does not parse: aliases and tags there are ignored.", null),
 		EXCALIDRAW("excalidraw", Category.FILES, Severity.INFO, "Excalidraw notes without the drawing name",
 				"Notes with excalidraw-plugin in their properties open as drawings when their name ends in .excalidraw.md; "

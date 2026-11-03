@@ -412,7 +412,7 @@ export default function TaskDetail({ id }: { id: string }) {
             </span>
           )}
         </nav>
-        {list?.writable === false && <p className="field-warning">This list was written by a newer version of NotesApp and is read-only here.</p>}
+        {list?.writable === false && <p className="field-warning">This list was written by a newer version of Voyager and is read-only here.</p>}
         {task.archived && <p className="field-warning">This task is archived. Reopen it to change it.</p>}
         {/[[#]/.test(task.title) && (
           <p className="task-title-preview">

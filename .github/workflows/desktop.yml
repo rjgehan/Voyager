@@ -25,7 +25,7 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 \
-            || gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "NotesApp desktop ${TAG#desktop-v}" \
+            || gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "Voyager desktop ${TAG#desktop-v}" \
                  --notes "Windows installer and macOS dmg (unsigned). Install steps: docs/DESKTOP.md."
 
   build:

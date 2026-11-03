@@ -1,5 +1,5 @@
 #!/bin/sh
-# NotesApp backup jobs (ROADMAP item 1, DESIGN §7.10, DEPLOY.md "Backups"). Runs inside the 'backup'
+# Voyager backup jobs (ROADMAP item 1, DESIGN §7.10, DEPLOY.md "Backups"). Runs inside the 'backup'
 # container (restic image): its main process is `idle`; nightly.sh runs the other steps with docker exec,
 # and you run setup and restores by hand:
 #   docker compose exec backup sh /backup/restic-job.sh <command>     (the sidecar is running)

@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "name": "NotesApp",
-  "short_name": "Notes",
-  "description": "Your notes vault, on every device of your tailnet.",
+  "name": "Voyager",
+  "short_name": "Voyager",
+  "description": "Your notes, sheets, drawings and tasks in one place: plain files with full history, on every device of your tailnet.",
   "lang": "en",
   "start_url": "/",
   "scope": "/",

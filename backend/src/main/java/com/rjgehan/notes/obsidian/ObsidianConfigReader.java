@@ -22,7 +22,7 @@ import tools.jackson.databind.node.ObjectNode;
 import org.springframework.stereotype.Component;
 
 /**
- * Reads the parts of {@code <vault>/.obsidian/} that NotesApp uses (ROADMAP item 24): {@code app.json},
+ * Reads the parts of {@code <vault>/.obsidian/} that Voyager uses (ROADMAP item 24): {@code app.json},
  * {@code daily-notes.json}, {@code templates.json}, {@code graph.json}, {@code core-plugins.json} and
  * {@code community-plugins.json} with each enabled plugin's {@code manifest.json}. Read-only: the folder is never
  * written, so the vault stays usable in Obsidian. Symbolic links are not followed, and files over 1 MiB are skipped.

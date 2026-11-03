@@ -2,7 +2,7 @@
 
 ## Flashcards
 
-Write questions and answers in any note, and NotesApp quizzes you on them, showing each card again just before you would forget it (spaced repetition). The cards stay in your notes, written the same way as for Obsidian's Spaced Repetition plugin.
+Write questions and answers in any note, and Voyager quizzes you on them, showing each card again just before you would forget it (spaced repetition). The cards stay in your notes, written the same way as for Obsidian's Spaced Repetition plugin.
 
 ### Write cards
 

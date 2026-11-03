@@ -1,4 +1,4 @@
-// The .sheet file format (ROADMAP item 6, DESIGN §6.21): JSON owned by NotesApp and independent of
+// The .sheet file format (ROADMAP item 6, DESIGN §6.21): JSON owned by Voyager and independent of
 // the formula engine. parseSheet() validates a file and repairs what it can without losing data
 // (anything it cannot place is refused, never dropped); serializeSheet() writes a stable layout,
 // sheets in order and cells in row-major order, one cell per line, so a one-cell edit is a
@@ -8,9 +8,9 @@ import { numberText, typedInput } from './input';
 
 export const SHEET_TYPE = 'notesapp-sheet';
 /**
- * The newest format version this NotesApp reads and writes. Version 2 adds filters, conditional
+ * The newest format version this Voyager reads and writes. Version 2 adds filters, conditional
  * formatting and data validation (DESIGN §6.21.1); a file is written as version 1 while it uses
- * none of them, so a NotesApp from before version 2 still edits it, and refuses (shows read-only)
+ * none of them, so a Voyager from before version 2 still edits it, and refuses (shows read-only)
  * one that does, rather than editing it without moving those ranges with inserted rows.
  */
 export const SHEET_VERSION = 2;
@@ -220,7 +220,7 @@ export interface SheetFile {
   extra?: Extra;
 }
 
-/** A refusal; `newer` when a later NotesApp wrote the file (it is shown read-only, never fixed here). */
+/** A refusal; `newer` when a later Voyager wrote the file (it is shown read-only, never fixed here). */
 export type ParseResult = { ok: true; file: SheetFile; repairs: string[] } | { ok: false; error: string; newer?: boolean };
 
 const FILE_KEYS = ['type', 'version', 'engine', 'sheets', 'named'];
@@ -236,7 +236,7 @@ const FILTER_KEYS = ['range', 'sort', 'cols'];
 const FILTER_COLUMN_KEYS = ['hide', ...CONDITION_KEYS];
 
 class Refusal extends Error {
-  /** A later NotesApp wrote the file. */
+  /** A later Voyager wrote the file. */
   readonly newer: boolean;
   constructor(message: string, newer = false) {
     super(message);
@@ -841,11 +841,11 @@ export function parseSheet(text: string): ParseResult {
   const repairs: string[] = [];
   try {
     checkKeys(body);
-    if (!isObject(raw)) throw new Refusal('This is not a NotesApp sheet: the file is not a JSON object.');
-    if (raw.type !== SHEET_TYPE) throw new Refusal(`This is not a NotesApp sheet: "type" is ${JSON.stringify(raw.type ?? null)}, not "${SHEET_TYPE}".`);
+    if (!isObject(raw)) throw new Refusal('This is not a Voyager sheet: the file is not a JSON object.');
+    if (raw.type !== SHEET_TYPE) throw new Refusal(`This is not a Voyager sheet: "type" is ${JSON.stringify(raw.type ?? null)}, not "${SHEET_TYPE}".`);
     if (raw.version === undefined) repairs.push('The format version was missing; it is 1.');
     else if (typeof raw.version === 'number' && Number.isInteger(raw.version) && raw.version > SHEET_VERSION) {
-      throw new Refusal(`This sheet was saved by a newer NotesApp (format version ${raw.version}); update NotesApp to edit it.`, true);
+      throw new Refusal(`This sheet was saved by a newer Voyager (format version ${raw.version}); update Voyager to edit it.`, true);
     } else if (raw.version !== 1 && raw.version !== 2) throw new Refusal(`Unknown format version ${JSON.stringify(raw.version)}.`);
     let engine = '';
     if (typeof raw.engine === 'string') engine = raw.engine;

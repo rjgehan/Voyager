@@ -124,7 +124,7 @@ final class TaskFile {
 					: "not valid JSON");
 		}
 		if (!(tree instanceof ObjectNode root) || !TYPE.equals(root.path("type").stringValue(null))) {
-			throw new MalformedException("not a NotesApp tasks file (\"type\" must be \"" + TYPE + "\")");
+			throw new MalformedException("not a Voyager tasks file (\"type\" must be \"" + TYPE + "\")");
 		}
 		JsonNode version = root.get("version");
 		if (version == null || !version.isIntegralNumber() || !version.canConvertToInt() || version.intValue() < 1) {

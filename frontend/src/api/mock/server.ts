@@ -101,9 +101,9 @@ export function createMockServer(vault: MockVault): (req: MockRequest) => MockRe
     ['PUT', /^\/reminders\/zone$/, () => ({ status: 204, body: null })],
     // Reminders are delivered by the server: a test reaches no route, and snoozing or finishing a
     // reminder changes nothing (the task itself is changed through the task API).
-    ['POST', /^\/reminders\/test$/, () => ({ sent: false, error: 'Reminders are sent by the NotesApp server; the in-memory mock has none' })],
+    ['POST', /^\/reminders\/test$/, () => ({ sent: false, error: 'Reminders are sent by the Voyager server; the in-memory mock has none' })],
     ['POST', /^\/reminders\/(snooze|done)$/, () => ({ changed: false, until: null })],
-    ['POST', /^\/push\/(key|subscriptions)$/, () => fail('bad-request', 'Web Push needs the NotesApp server')],
+    ['POST', /^\/push\/(key|subscriptions)$/, () => fail('bad-request', 'Web Push needs the Voyager server')],
     ['DELETE', /^\/push\/subscriptions\/([^/]+)$/, () => fail('not-found', 'No such device')],
   ];
 
@@ -116,7 +116,7 @@ export function createMockServer(vault: MockVault): (req: MockRequest) => MockRe
         const out = handler(req, m.slice(1).map(decodeURIComponent));
         return isResponse(out) ? out : { status: 200, body: out };
       }
-      return fail('not-found', 'This needs the NotesApp server; the in-memory mock does not have it');
+      return fail('not-found', 'This needs the Voyager server; the in-memory mock does not have it');
     } catch (e) {
       if (e instanceof ApiError) return { status: e.status, body: e.problem };
       const problem: Problem = { type: 'urn:notesapp:problem:internal-error', title: 'Internal error', status: 500, code: 'internal-error', detail: String(e), incidentId: 'mock' };

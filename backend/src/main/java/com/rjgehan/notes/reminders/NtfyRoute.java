@@ -18,7 +18,7 @@ import org.springframework.stereotype.Component;
 /**
  * Reminders through ntfy, with the server, token and topic of {@code /data/secrets/ntfy.json} (its
  * {@code reminders.topic}, or the default topic). With "title only" (the default) the message carries the task's
- * title and nothing else from the vault; tapping it opens the task in NotesApp on the first allowed host.
+ * title and nothing else from the vault; tapping it opens the task in Voyager on the first allowed host.
  */
 @Component
 public class NtfyRoute implements ReminderRoute {

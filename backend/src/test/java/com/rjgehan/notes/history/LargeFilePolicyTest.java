@@ -333,7 +333,7 @@ class LargeFilePolicyTest {
 				"/Attachments/download.mp4.part\n");
 		bootstrap();
 
-		assertThat(lastCommit().getShortMessage()).isEqualTo("Changes made while NotesApp was stopped");
+		assertThat(lastCommit().getShortMessage()).isEqualTo("Changes made while Voyager was stopped");
 		assertThat(inGit(visible)).isFalse();
 		assertThat(inGit(hidden)).as("a large file in a dot-folder").isFalse();
 		assertThat(inGit(partial)).as("a large file with an ignored name").isFalse();

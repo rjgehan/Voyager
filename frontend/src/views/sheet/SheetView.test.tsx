@@ -611,11 +611,11 @@ describe('the spreadsheet view', () => {
     expect(runCommand).toBeDefined();
   });
 
-  it('shows a file a newer NotesApp wrote read-only, without inviting a fix', async () => {
+  it('shows a file a newer Voyager wrote read-only, without inviting a fix', async () => {
     const text = '{"type": "notesapp-sheet", "version": 3, "sheets": []}';
     const path = await open(text);
     expect(await screen.findByText(/read-only here/, {}, { timeout: 5000 })).toBeInTheDocument();
-    expect(screen.getByText(/saved by a newer NotesApp/)).toBeInTheDocument();
+    expect(screen.getByText(/saved by a newer Voyager/)).toBeInTheDocument();
     expect(screen.queryByText(/Fix it as text/)).toBeNull();
     expect(screen.queryByRole('button', { name: 'Open as spreadsheet' })).toBeNull();
     await waitFor(() => expect(document.querySelector('.cm-content')).not.toBeNull());

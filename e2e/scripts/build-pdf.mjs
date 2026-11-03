@@ -3,7 +3,7 @@
 // screens one to a row.
 //
 //   SCREENS_INTRO=../qa/<date>/FINDINGS.md   Markdown (or .html) placed after the cover
-//   SCREENS_TITLE="NotesApp QA 2026-11-02"   the cover's title
+//   SCREENS_TITLE="Voyager QA 2026-11-02"   the cover's title
 //   SCREENS_PDF=path/to/out.pdf              where to write it (default screens-output/screens.pdf)
 import { chromium } from '@playwright/test';
 import MarkdownIt from 'markdown-it';
@@ -68,7 +68,7 @@ const html = `<!doctype html><html><head><meta charset="utf-8"><style>
   .intro hr { border: 0; border-top: 0.5pt solid #d1d1d6; margin: 14pt 0; }
 </style></head><body>
   <div class="cover">
-    <h1>${esc(process.env.SCREENS_TITLE ?? 'NotesApp — Screen Inventory')}</h1>
+    <h1>${esc(process.env.SCREENS_TITLE ?? 'Voyager — Screen Inventory')}</h1>
     <p>Every page, panel and sheet at iPhone size (390 × 844 pt), dark and light, then the PC (1366 × 860).</p>
     <p>Captured ${esc(new Date(manifest.capturedAt).toLocaleString('en-US'))} · ${manifest.shots.length} screens</p>
     <div class="toc">${groups.map((g) => `<div>${esc(g.name)} — ${g.shots.length}</div>`).join('')}</div>

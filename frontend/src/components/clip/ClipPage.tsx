@@ -172,7 +172,7 @@ export function ClipPage() {
   return (
     <main className="capture-page clip-page">
       <h1 className="dialog-title clip-title">
-        <Scissors size={18} aria-hidden /> Clip to NotesApp
+        <Scissors size={18} aria-hidden /> Clip to Voyager
       </h1>
       {loadError && (
         <p className="field-error" role="alert">
@@ -203,7 +203,7 @@ export function ClipPage() {
               <NotebookText size={15} aria-hidden /> Open the note
             </button>
             <button type="button" className="button" onClick={() => (window.opener ? window.close() : navigateTo('/'))}>
-              {window.opener ? 'Close' : 'Open NotesApp'}
+              {window.opener ? 'Close' : 'Open Voyager'}
             </button>
           </div>
         </div>

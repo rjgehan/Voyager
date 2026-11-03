@@ -396,7 +396,7 @@ export function SheetChart({ sheet, chart, height = 200, actions }: Props) {
         {actions}
       </figcaption>
       {!chart.type && chart.extra?.type !== undefined ? (
-        <p className="sheet-chart-empty">This kind of chart needs a newer NotesApp.</p>
+        <p className="sheet-chart-empty">This kind of chart needs a newer Voyager.</p>
       ) : !result.ok ? (
         <p className="sheet-chart-empty">{result.message}</p>
       ) : (

@@ -150,7 +150,7 @@ class StatusDetailsIntegrationTest {
 		assertThat(result.get("sent").asBoolean()).isTrue();
 		assertThat(result.get("error").isNull()).isTrue();
 		assertThat(received).anySatisfy((alert) -> {
-			assertThat(alert.get("title").asString()).isEqualTo("NotesApp: test alert");
+			assertThat(alert.get("title").asString()).isEqualTo("Voyager: test alert");
 			assertThat(alert.get("topic").asString()).isEqualTo("notes-ops");
 		});
 
@@ -171,7 +171,7 @@ class StatusDetailsIntegrationTest {
 	void aLoggedMarkerReachesNtfyAndIsCounted() {
 		LoggerFactory.getLogger(StatusDetailsIntegrationTest.class)
 			.error("STORAGE_LOW only {} bytes are free (a test)", 12345);
-		String title = "NotesApp: The vault's disk is almost full";
+		String title = "Voyager: The vault's disk is almost full";
 		await().atMost(Duration.ofSeconds(20))
 			.until(() -> received.stream().anyMatch((alert) -> title.equals(alert.get("title").asString())));
 		JsonNode alert = received.stream()

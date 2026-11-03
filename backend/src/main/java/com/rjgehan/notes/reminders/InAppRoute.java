@@ -38,7 +38,7 @@ public class InAppRoute implements ReminderRoute {
 	@Override
 	public Delivery deliver(ReminderMessage message, RemindersSettings settings) {
 		if (this.hub.connectionCount() == 0) {
-			return Delivery.failed("no NotesApp tab is open");
+			return Delivery.failed("no Voyager tab is open");
 		}
 		this.hub.publish(new ReminderDueEvent(message.key(), message.kind(), message.taskId(), message.at(),
 				message.title(), message.body(), message.url(), this.clock.instant()));

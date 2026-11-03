@@ -58,7 +58,7 @@ export function reminderNotification(json: unknown): NotificationSpec {
   const taskId = typeof p.taskId === 'string' ? p.taskId : null;
   const at = typeof p.at === 'string' ? p.at : null;
   const spec: NotificationSpec = {
-    title: text(p.title, 'NotesApp reminder') || 'NotesApp reminder',
+    title: text(p.title, 'Voyager reminder') || 'Voyager reminder',
     options: {
       body: text(p.body, ''),
       tag: text(p.tag, 'notesapp-reminder'),

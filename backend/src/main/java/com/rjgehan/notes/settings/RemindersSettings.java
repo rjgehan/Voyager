@@ -11,7 +11,7 @@ import java.util.regex.Pattern;
  * @param ntfy ntfy, through the server and topic of {@code /data/secrets/ntfy.json}
  * @param ntfyTitleOnly with ntfy, send the task's title only, never its notes or list (on by default, because with
  * ntfy.sh the text leaves the tailnet)
- * @param inApp a toast and a browser notification in every open NotesApp tab
+ * @param inApp a toast and a browser notification in every open Voyager tab
  * @param dailyNote a nudge at {@code dailyNoteTime} when today's daily note does not exist yet
  * @param dailyNoteTime the nudge's local time, {@code HH:mm}
  */

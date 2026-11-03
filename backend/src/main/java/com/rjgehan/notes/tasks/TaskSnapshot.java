@@ -28,7 +28,7 @@ record TaskSnapshot(String path, String version, @Nullable String listId, @Nulla
 		List<TaskFileProblem> problems = new ArrayList<>();
 		String blocked = null;
 		if (file.formatVersion() > TaskFile.FORMAT_VERSION) {
-			blocked = "written by a newer version of NotesApp (format version " + file.formatVersion()
+			blocked = "written by a newer version of Voyager (format version " + file.formatVersion()
 					+ "); this version only reads it";
 			problems.add(new TaskFileProblem(path, null, blocked));
 		}

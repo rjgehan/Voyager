@@ -1,6 +1,6 @@
-# NotesApp clipper: licences
+# Voyager clipper: licences
 
-The clipper is part of NotesApp (GPL-3.0-only). Its bundles include:
+The clipper is part of Voyager (GPL-3.0-only). Its bundles include:
 
 | Package | Version | Licence |
 |---|---|---|

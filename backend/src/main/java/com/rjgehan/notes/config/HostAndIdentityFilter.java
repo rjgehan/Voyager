@@ -88,7 +88,7 @@ public class HostAndIdentityFilter extends OncePerRequestFilter {
 		Identity identity = this.identityResolver.resolveAny(request);
 		if (identity == null) {
 			this.problems.write(request, response,
-					new NotesException(ErrorCode.IDENTITY_NOT_ALLOWED, "This identity may not use NotesApp"));
+					new NotesException(ErrorCode.IDENTITY_NOT_ALLOWED, "This identity may not use Voyager"));
 			return;
 		}
 		if (!this.identityResolver.isOwner(identity)) {
@@ -100,7 +100,7 @@ public class HostAndIdentityFilter extends OncePerRequestFilter {
 			}
 			if (access != GuestAccess.ALLOW) {
 				this.problems.write(request, response,
-						new NotesException(ErrorCode.IDENTITY_NOT_ALLOWED, "This identity may not use NotesApp"));
+						new NotesException(ErrorCode.IDENTITY_NOT_ALLOWED, "This identity may not use Voyager"));
 				return;
 			}
 		}

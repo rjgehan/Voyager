@@ -127,7 +127,7 @@ function clipperDevPlugin(): Plugin {
 // demo that saves nothing would only confuse), and a 404.html copy of index.html so that GitHub Pages
 // answers deep links with the app.
 const DEMO_MODE = 'demo'
-const DEMO_DESCRIPTION = 'A live demo of NotesApp, a self-hosted Obsidian-style notes app: Live Preview, formulas in tables, spreadsheets, drawings, canvases, tasks and more. Runs in your browser; nothing is saved.'
+const DEMO_DESCRIPTION = 'A live demo of Voyager, a self-hosted, Obsidian-style home for your notes, spreadsheets, drawings and tasks, kept as plain files with full history: Live Preview, formulas in tables, canvases, Kanban boards and more. Runs in your browser; nothing is saved.'
 
 /** Where the build is served: the root, or the demo's base path. */
 function baseFor(mode: string): string {
@@ -145,13 +145,13 @@ function demoPagesPlugin(base: string): Plugin {
     transformIndexHtml(html) {
       return html
         .replace(/\s*<link rel="manifest"[^>]*>/, '')
-        .replace('<title>Notes</title>', '<title>NotesApp demo</title>')
-        .replace('<meta name="application-name" content="Notes" />', '<meta name="application-name" content="NotesApp demo" />')
+        .replace('<title>Voyager</title>', '<title>Voyager demo</title>')
+        .replace('<meta name="application-name" content="Voyager" />', '<meta name="application-name" content="Voyager demo" />')
         .replace(
           '</title>',
           `</title>
     <meta name="description" content="${DEMO_DESCRIPTION}" />
-    <meta property="og:title" content="NotesApp — live demo" />
+    <meta property="og:title" content="Voyager — live demo" />
     <meta property="og:description" content="${DEMO_DESCRIPTION}" />
     <meta property="og:type" content="website" />
     <meta property="og:image" content="https://rjgehan.github.io${base}social-preview.png" />

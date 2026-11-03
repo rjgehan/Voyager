@@ -17,7 +17,7 @@ import tools.jackson.databind.node.ObjectNode;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** Obsidian's settings in NotesApp terms (ROADMAP item 24). */
+/** Obsidian's settings in Voyager terms (ROADMAP item 24). */
 class ObsidianSettingsTest {
 
 	private static ObsidianConfig app(String json) {
@@ -61,7 +61,7 @@ class ObsidianSettingsTest {
 		CompatSetting excluded = row(mapping, "app.json › userIgnoreFilters");
 		assertThat(excluded.note()).contains("/^Private.*$/");
 		assertThat(row(mapping, "templates.json › folder").status()).isEqualTo(Status.SAME);
-		// Settings NotesApp does not have produce no row.
+		// Settings Voyager does not have produce no row.
 		assertThat(mapping.rows()).noneMatch((r) -> r.source().contains("showLineNumber"));
 
 		// Applied once, the same config proposes nothing new.

@@ -658,10 +658,10 @@ function notificationPermission(): NotificationPermission | 'unsupported' {
 }
 
 function thisDeviceText(support: PushSupport, subscribed: boolean, permission: NotificationPermission | 'unsupported'): string {
-  if (support === 'ios-needs-install') return 'Add NotesApp to the Home Screen (Share › Add to Home Screen), open it from there, then come back here.';
+  if (support === 'ios-needs-install') return 'Add Voyager to the Home Screen (Share › Add to Home Screen), open it from there, then come back here.';
   if (support !== 'supported') return 'This browser cannot receive Web Push.';
   if (subscribed) return 'Subscribed: reminders arrive here.';
-  if (permission === 'denied') return 'Notifications are blocked for NotesApp in this browser’s settings.';
+  if (permission === 'denied') return 'Notifications are blocked for Voyager in this browser’s settings.';
   return 'Not subscribed.';
 }
 
@@ -705,7 +705,7 @@ export function RemindersSection({ settings: s, set, disabled, errors }: VaultSe
       </p>
 
       <h2 className="settings-subtitle">Web Push</h2>
-      <Row label="Send by Web Push" description="To the devices below, even with NotesApp closed. On iPhone and iPad this needs iOS 16.4 or later and NotesApp added to the Home Screen. Each message is encrypted for its device; Apple, Google or Mozilla only relay it.">
+      <Row label="Send by Web Push" description="To the devices below, even with Voyager closed. On iPhone and iPad this needs iOS 16.4 or later and Voyager added to the Home Screen. Each message is encrypted for its device; Apple, Google or Mozilla only relay it.">
         <Toggle label="Send reminders by Web Push" checked={r.webPush} disabled={disabled} onChange={(v) => rem({ webPush: v })} />
       </Row>
       {st && !st.webPush.available && <p className="field-error">{st.webPush.reason}</p>}
@@ -761,7 +761,7 @@ export function RemindersSection({ settings: s, set, disabled, errors }: VaultSe
       </Row>
 
       <h2 className="settings-subtitle">In the app</h2>
-      <Row label="Show in open tabs" description="A message in every open NotesApp tab, and a system notification where this browser allows it. Nothing arrives while every tab is closed.">
+      <Row label="Show in open tabs" description="A message in every open Voyager tab, and a system notification where this browser allows it. Nothing arrives while every tab is closed.">
         <Toggle label="Show reminders in open tabs" checked={r.inApp} disabled={disabled} onChange={(v) => rem({ inApp: v })} />
       </Row>
       <Row label="Browser notifications" description={permissionText(permission)}>
@@ -1098,7 +1098,7 @@ function AboutSection() {
           {status.vault.skipped.length > 0 && item('Skipped files', status.vault.skipped.map((s) => `${s.name} (${s.reason})`).join(', '))}
         </>
       )}
-      {item('User guide', <Link to="/x/help">How to use NotesApp, page by page (also in the palette: Open help)</Link>)}
+      {item('User guide', <Link to="/x/help">How to use Voyager, page by page (also in the palette: Open help)</Link>)}
       {item('Status page', <Link to="/x/status">Uptime, history, disk, backups and alerts</Link>)}
       {item('Compatibility report', <Link to="/x/compat">Obsidian settings, plugins and syntax this vault uses</Link>)}
     </dl>
@@ -1151,7 +1151,7 @@ export default function SettingsPage() {
             <>
               {readOnly && (
                 <div className="banner banner-warning" role="status">
-                  <Info size={14} aria-hidden /> Settings were written by a newer version of NotesApp and are read-only here.
+                  <Info size={14} aria-hidden /> Settings were written by a newer version of Voyager and are read-only here.
                 </div>
               )}
               {newBuild && (

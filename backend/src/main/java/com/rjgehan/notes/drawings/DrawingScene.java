@@ -21,7 +21,7 @@ public record DrawingScene(List<Element> elements, Map<String, String> attachmen
 
 	/**
 	 * One element. {@code text} is a text element's Markdown source ({@code rawText}, which the Obsidian plugin and
-	 * NotesApp keep for Markdown drawings), else its unwrapped text ({@code originalText}), else what it shows.
+	 * Voyager keep for Markdown drawings), else its unwrapped text ({@code originalText}), else what it shows.
 	 */
 	public record Element(String id, String type, boolean deleted, @Nullable String text, @Nullable String link,
 			@Nullable String name, @Nullable String fileId) {

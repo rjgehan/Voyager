@@ -1,6 +1,6 @@
 # History and trash
 
-NotesApp keeps every version of every note, so a change you regret, a deleted note or a mistake made on another device can always be undone.
+Voyager keeps every version of every note, so a change you regret, a deleted note or a mistake made on another device can always be undone.
 
 ## How saving and history work
 
@@ -38,7 +38,7 @@ Deleting a note (or a folder or any file) moves it to the trash; nothing is dele
 
 ## When two devices disagree
 
-If you edit a note on one device while it changed on another (for example, the phone was offline), NotesApp never silently throws either version away. A banner at the top of the note says the note was changed on another device, and offers:
+If you edit a note on one device while it changed on another (for example, the phone was offline), Voyager never silently throws either version away. A banner at the top of the note says the note was changed on another device, and offers:
 
 - **Keep mine**: save your version. The other one stays in the history.
 - **Take theirs**: replace your text with the other device's. Your text can be brought back with **Undo** or `Ctrl+Z`.

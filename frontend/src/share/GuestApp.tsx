@@ -58,7 +58,7 @@ function Landing() {
       </h1>
       {shares.length === 0 ? (
         <p className="guest-explain">
-          Nothing is shared with <strong>{login}</strong> yet. Ask the person who runs this NotesApp to share a note or folder with that Tailscale login, or
+          Nothing is shared with <strong>{login}</strong> yet. Ask the person who runs this Voyager server to share a note or folder with that Tailscale login, or
           to send you its link.
         </p>
       ) : (

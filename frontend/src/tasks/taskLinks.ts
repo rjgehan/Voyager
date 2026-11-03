@@ -1,6 +1,6 @@
 // Links to one task from a note (API.md §20.9): `[[Inbox.tasks#^<task id>]]`, the list's file with
 // the task's id written as an Obsidian block reference. Obsidian keeps it as a link to the file;
-// NotesApp opens the task (the `tasks` file view reads the subpath), wherever the task lives now.
+// Voyager opens the task (the `tasks` file view reads the subpath), wherever the task lives now.
 
 const TASK_ID = /^[A-Za-z0-9_-]{1,64}$/;
 

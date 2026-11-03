@@ -9,7 +9,7 @@ import tools.jackson.databind.node.ObjectNode;
 
 /**
  * {@code GET /api/compat} (API.md §11.5, ROADMAP item 24): how well this vault, typically an imported Obsidian vault,
- * works in NotesApp. {@code proposedSettings} are the current settings with what {@code .obsidian/} says applied, to be
+ * works in Voyager. {@code proposedSettings} are the current settings with what {@code .obsidian/} says applied, to be
  * saved with {@code PUT /api/settings} and {@code baseVersion: settingsVersion}; {@code graph} holds the graph view
  * options of {@code .obsidian/graph.json} that the client understands.
  */

@@ -102,13 +102,13 @@ jobs:
             npx playwright install --with-deps chromium
             echo "PW_CHANNEL=chromium" >> "$GITHUB_ENV"
           fi
-      - name: Start NotesApp on a scratch vault (port 18570)
+      - name: Start Voyager on a scratch vault (port 18570)
         working-directory: e2e
         run: npm run reset -- --prod
       - name: API, PC and iPhone tests
         working-directory: e2e
         run: npm test
-      - name: Stop NotesApp
+      - name: Stop Voyager
         if: always()
         working-directory: e2e
         run: npm run stop

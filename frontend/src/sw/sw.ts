@@ -227,7 +227,7 @@ self.addEventListener('push', (event) => {
   try {
     json = event.data?.json() ?? null;
   } catch {
-    json = { title: event.data?.text() ?? 'NotesApp reminder' };
+    json = { title: event.data?.text() ?? 'Voyager reminder' };
   }
   const spec = reminderNotification(json);
   event.waitUntil(self.registration.showNotification(spec.title, spec.options as NotificationOptions));

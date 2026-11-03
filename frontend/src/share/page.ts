@@ -2,7 +2,7 @@
 import { vaultBasename } from '../state/vault';
 
 export function setTitle(title: string): void {
-  document.title = `${title} · Shared · Notes`;
+  document.title = `${title} · Shared · Voyager`;
 }
 
 /** The landing page of this vault's guest page. */

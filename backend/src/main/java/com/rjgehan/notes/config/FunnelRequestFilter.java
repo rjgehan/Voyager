@@ -48,7 +48,7 @@ public class FunnelRequestFilter extends OncePerRequestFilter {
 			logger.warn("Refused a request that came through Tailscale Funnel: {} {}", request.getMethod(),
 					RequestPaths.of(request));
 			this.problems.write(request, response,
-					new NotesException(ErrorCode.FUNNEL_REQUEST, "NotesApp is not available through Funnel"));
+					new NotesException(ErrorCode.FUNNEL_REQUEST, "Voyager is not available through Funnel"));
 			return;
 		}
 		chain.doFilter(request, response);

@@ -91,7 +91,7 @@ class VaultStartupTest {
 		assertThat(root().resolve("Welcome.md")).exists();
 		assertThat(this.vault.index.file("Welcome.md")).isNotNull();
 		assertThat(this.vault.index.note("Welcome.md").parse().headings().get(0).text())
-			.isEqualTo("Welcome to NotesApp");
+			.isEqualTo("Welcome to Voyager");
 		assertThat(root().resolve(".notesapp/settings.json")).exists();
 		assertThat(lastMessage("Welcome.md")).isEqualTo("Initial commit");
 		assertThat(this.vault.git.diskPathAtHead(".notesapp/settings.json")).isNotNull();
@@ -123,7 +123,7 @@ class VaultStartupTest {
 		Files.writeString(root().resolve("Later.md"), "written while the app was down");
 		boot();
 		HistoryEntry entry = this.vault.history.list("Later.md", 1, 0).entries().get(0);
-		assertThat(entry.message()).isEqualTo("Changes made while NotesApp was stopped");
+		assertThat(entry.message()).isEqualTo("Changes made while Voyager was stopped");
 		assertThat(entry.authorName()).isEqualTo("External");
 	}
 

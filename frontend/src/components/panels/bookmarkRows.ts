@@ -51,11 +51,11 @@ export function describeBookmark(item: BookmarkItem, missing: boolean): string {
         : typeof item.url === 'string'
           ? item.url
           : '';
-  return missing ? `${where} (not found: deleted, or moved outside NotesApp)` : where;
+  return missing ? `${where} (not found: deleted, or moved outside Voyager)` : where;
 }
 
 function missingToast(item: BookmarkItem, path: ItemPath): void {
-  toast(`“${bookmarkLabel(item)}” is not in the vault: it was deleted, or moved outside NotesApp`, {
+  toast(`“${bookmarkLabel(item)}” is not in the vault: it was deleted, or moved outside Voyager`, {
     action: { label: 'Remove bookmark', run: () => void editBookmarks(onItem(item, path, removeAt)) },
   });
 }
@@ -91,7 +91,7 @@ export function openBookmark(item: BookmarkItem, tree: VaultTree | undefined, pa
       if (typeof item.url === 'string' && /^https?:\/\//i.test(item.url)) window.open(item.url, '_blank', 'noopener,noreferrer');
       return;
     default:
-      toast(`“${bookmarkLabel(item)}” bookmarks are not supported in NotesApp`);
+      toast(`“${bookmarkLabel(item)}” bookmarks are not supported in Voyager`);
   }
 }
 

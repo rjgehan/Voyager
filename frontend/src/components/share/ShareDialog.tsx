@@ -32,7 +32,7 @@ export function SharingUnavailableNotice() {
   return (
     <p className="share-unavailable">
       Sharing is off because the server has no owner list: with <code>NOTES_IDENTITY_ALLOWED_LOGINS</code> unset, everyone who can reach
-      NotesApp on your tailnet already has the whole vault. Set it to your own Tailscale login (CASAOS.md or DEPLOY.md, “Sharing with
+      Voyager on your tailnet already has the whole vault. Set it to your own Tailscale login (CASAOS.md or DEPLOY.md, “Sharing with
       family”), and everyone else sees only what you share with them.
     </p>
   );

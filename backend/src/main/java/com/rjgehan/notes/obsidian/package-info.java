@@ -1,5 +1,5 @@
 /**
- * Obsidian vault import (ROADMAP item 24): reading {@code .obsidian/} (never writing it), seeding NotesApp's settings
+ * Obsidian vault import (ROADMAP item 24): reading {@code .obsidian/} (never writing it), seeding Voyager's settings
  * from it, and the compatibility report.
  */
 @NullMarked

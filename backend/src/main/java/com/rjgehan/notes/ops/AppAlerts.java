@@ -227,7 +227,7 @@ public class AppAlerts implements DisposableBean {
 	}
 
 	private NtfyClient.Message alert(AlertMarker marker) {
-		return new NtfyClient.Message("NotesApp: " + marker.title(),
+		return new NtfyClient.Message("Voyager: " + marker.title(),
 				marker.text() + "\n\n" + marker.name() + ". Details: the status page, or docker compose logs notes.",
 				marker.priority(), List.of("warning"), this.statusPage);
 	}
@@ -235,7 +235,7 @@ public class AppAlerts implements DisposableBean {
 	private NtfyClient.Message repeated(AlertMarker marker, Tally tally) {
 		String since = (tally.repeatsSince != null) ? " since " + CLOCK_TIME.format(tally.repeatsSince) : "";
 		String times = (tally.repeats == 1) ? "once more" : tally.repeats + " more times";
-		return new NtfyClient.Message("NotesApp: " + marker.title() + " (still happening)",
+		return new NtfyClient.Message("Voyager: " + marker.title() + " (still happening)",
 				marker.name() + " was logged " + times + since + ". " + marker.text(), marker.priority(),
 				List.of("warning"), this.statusPage);
 	}
@@ -394,8 +394,8 @@ public class AppAlerts implements DisposableBean {
 			}
 			this.recentSends.addLast(now);
 		}
-		NtfyClient.Message message = new NtfyClient.Message("NotesApp: test alert",
-				"App alerts from NotesApp reach this topic. When something goes wrong, the alert arrives here the "
+		NtfyClient.Message message = new NtfyClient.Message("Voyager: test alert",
+				"App alerts from Voyager reach this topic. When something goes wrong, the alert arrives here the "
 						+ "same way.",
 				3, List.of("white_check_mark"), this.statusPage);
 		try {

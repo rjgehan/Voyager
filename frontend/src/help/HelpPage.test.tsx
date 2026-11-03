@@ -42,7 +42,7 @@ const article = () => document.querySelector<HTMLElement>('.help-article')!;
 describe('Help page', () => {
   it('shows the guide’s contents at /x/help, with links that stay in Help', () => {
     renderAt('/x/help');
-    expect(within(article()).getByRole('heading', { level: 1 })).toHaveTextContent('NotesApp user guide');
+    expect(within(article()).getByRole('heading', { level: 1 })).toHaveTextContent('Voyager user guide');
     expect(document.title).toMatch(/^Help/);
     const link = within(article()).getByRole('link', { name: 'Getting started' });
     expect(link).toHaveAttribute('href', '/x/help/getting-started');

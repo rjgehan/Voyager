@@ -22,7 +22,7 @@ function welcome(): string {
 aliases: [Start here]
 tags: [meta]
 ---
-# Welcome to NotesApp
+# Welcome to Voyager
 
 A self-hosted notes app modelled on Obsidian: your vault is a folder of plain Markdown files on your own server, and every device opens the same notes, live. This demo runs **entirely in your browser** on an in-memory copy of a small vault, so go ahead and edit, drag and delete. A reload starts over.
 
@@ -105,9 +105,9 @@ Plans for the week are on the [[${dayOffset(0)}|daily note]]; the trip is on the
 
 function architecture(): string {
   return `---
-tags: [engineering, notesapp]
+tags: [engineering, voyager]
 ---
-NotesApp is one Docker image: a **Spring Boot** backend that serves a **React** single-page app.
+Voyager is one Docker image: a **Spring Boot** backend that serves a **React** single-page app.
 
 ## Storage
 
@@ -704,7 +704,7 @@ function arrow(id: string, x1: number, y1: number, x2: number, y2: number, text?
 function systemSketch(): string {
   seedCounter = 1;
   const elements = [
-    label('title', 'NotesApp, end to end', 445, 10, 28),
+    label('title', 'Voyager, end to end', 445, 10, 28),
     ...box('phone', 'iPhone\n(PWA)', 0, 70, 150, 80, '#d0bfff'),
     ...box('pc', 'Windows\ndesktop app', 0, 220, 150, 80, '#d0bfff'),
     ...box('ts', 'Tailscale\nHTTPS', 215, 145, 140, 80, '#a5d8ff'),

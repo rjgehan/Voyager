@@ -58,7 +58,7 @@ The link's name did not match any note, so following it created one. Check the s
 
 ### The app says I am offline
 
-The dot next to the note's title (phone) or **Live** in the status bar (computer) shows the connection. NotesApp reaches your server through Tailscale, so check that **Tailscale is connected** on this device. While offline you can keep working in notes opened recently; your edits are saved when the connection returns.
+The dot next to the note's title (phone) or **Live** in the status bar (computer) shows the connection. Voyager reaches your server through Tailscale, so check that **Tailscale is connected** on this device. While offline you can keep working in notes opened recently; your edits are saved when the connection returns.
 
 ### A change I made on another device does not show
 
@@ -74,7 +74,7 @@ The server was updated. Click **Reload** in the banner when it suits you; your u
 
 ### "Unsaved changes are not protected on this device"
 
-The browser does not let NotesApp keep edits on the device until they are saved (often a private window, or storage turned off for the site). Notes still save to the server, but an edit made while offline could be lost. Use a normal window.
+The browser does not let Voyager keep edits on the device until they are saved (often a private window, or storage turned off for the site). Notes still save to the server, but an edit made while offline could be lost. Use a normal window.
 
 ## Keys
 
@@ -84,7 +84,7 @@ On a keyboard where AltGr+Q types a character (`@` on a German one, a backslash 
 
 ### `Ctrl+Shift+T` reopened a browser tab
 
-In a browser, that key belongs to the browser. Use **Reopen closed tab** from the palette, give it another key under Settings › Hotkeys, or use the [desktop app](desktop-app.md), where the key reaches NotesApp.
+In a browser, that key belongs to the browser. Use **Reopen closed tab** from the palette, give it another key under Settings › Hotkeys, or use the [desktop app](desktop-app.md), where the key reaches Voyager.
 
 ## Phone
 
@@ -94,7 +94,7 @@ That is on purpose, so scrolling a note never reloads it. Use **⋯ › Reload**
 
 ### Notifications do not arrive on the iPhone
 
-Web Push on the iPhone needs iOS 16.4 or later, NotesApp [added to the Home Screen](phone.md#add-notesapp-to-the-home-screen), and **Subscribe this device** under **Settings › Reminders** (opened from the Home Screen app), with **Send by Web Push** switched on. The test button there sends a test notification.
+Web Push on the iPhone needs iOS 16.4 or later, Voyager [added to the Home Screen](phone.md#add-voyager-to-the-home-screen), and **Subscribe this device** under **Settings › Reminders** (opened from the Home Screen app), with **Send by Web Push** switched on. The test button there sends a test notification.
 
 ## Other features
 
@@ -110,7 +110,7 @@ Turn on **Settings › This device › Load remote images**, or tap the placehol
 
 It must be switched on in **Settings › Ask and summaries**, and set up on the server by whoever runs it. The Ask view says which of the two is missing, or whether the month's budget is used up.
 
-### Can I use NotesApp and Obsidian on the same notes?
+### Can I use Voyager and Obsidian on the same notes?
 
 Yes. The vault is a folder of ordinary Markdown files in Obsidian's format: links, embeds, tags, properties, callouts, canvases, Kanban boards, Excalidraw drawings, bookmarks and encrypted notes all work in both. For a vault brought over from Obsidian, **Settings › About › Compatibility report** lists what carries over and what does not.
 

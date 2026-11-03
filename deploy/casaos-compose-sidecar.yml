@@ -1,4 +1,4 @@
-# NotesApp for CasaOS, ADVANCED variant with its own Tailscale container (docs/CASAOS.md, appendix).
+# Voyager for CasaOS, ADVANCED variant with its own Tailscale container (docs/CASAOS.md, appendix).
 # Most installs want deploy/casaos-compose.yml instead, which uses the host's Tailscale.
 # Paste into App Store → Custom Install → Import (Docker Compose).
 # Self-contained: no .env, no extra files on the server. Before installing, replace the
@@ -9,7 +9,7 @@
 #   data/secrets/    optional, outside the vault: ntfy.json (app alerts, reminders), mirror-token (GitHub mirror),
 #                    claude-token or anthropic-key (Ask your vault, Claude), push.json (Web Push, made by the app)
 #   tailscale/       Tailscale node identity + HTTPS certs (never delete)
-#   backup/          only with the optional NotesApp Backup app (casaos-backup-compose.yml)
+#   backup/          only with the optional Voyager Backup app (casaos-backup-compose.yml)
 #
 # The app is reachable ONLY over your tailnet at https://notes.<tailnet>.ts.net — no ports are
 # published on the LAN. Full runbook and troubleshooting: docs/DEPLOY.md and docs/CASAOS.md.
@@ -115,7 +115,7 @@ services:
       NOTES_MIRROR_URL: ""
       NOTES_MIRROR_TOKEN_FILE: /data/secrets/mirror-token
       # App alerts are on once /DATA/AppData/notesapp/data/secrets/ntfy.json exists (docs/CASAOS.md).
-      # Optional transcription of voice notes (docs/CASAOS.md "Voice note transcription"): with the NotesApp
+      # Optional transcription of voice notes (docs/CASAOS.md "Voice note transcription"): with the Voyager
       # Whisper app (casaos-whisper-compose.yml) installed, http://notesapp-whisper:9000. Empty = off.
       NOTES_TRANSCRIPTION_URL: ""
       # Ask your vault (Claude) runs Claude Code with your subscription, using the token (claude setup-token) in
@@ -134,7 +134,7 @@ services:
     volumes:
       - /DATA/AppData/notesapp/data:/data
       # The last nightly backup's status for the status page, read-only. Written by the optional
-      # NotesApp Backup app; until then the status page says no backup has reported.
+      # Voyager Backup app; until then the status page says no backup has reported.
       - /DATA/AppData/notesapp/backup/state:/backup-state:ro
     mem_limit: 1g
     stop_grace_period: 45s
@@ -171,7 +171,7 @@ x-casaos:
   author: rjgehan
   category: Productivity
   title:
-    en_us: NotesApp
+    en_us: Voyager
   tagline:
     en_us: Self-hosted Obsidian-style notes, tailnet only
   description:

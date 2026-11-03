@@ -34,8 +34,8 @@ export function mirrorWarning(mirror: MirrorStatus | undefined, now = Date.now()
 
 /** A tooltip for the warning: the server's error, and what clicking does. */
 export function mirrorWarningDetail(mirror: MirrorStatus): string {
-  if (mirrorMisconfigured(mirror)) return 'Nothing is pushed until the mirror settings on the server are fixed and NotesApp is restarted.';
-  const fix = mirror.state === 'diverged' ? 'NotesApp never force-pushes. Fix the mirror, then click to push again.' : 'Click to push now.';
+  if (mirrorMisconfigured(mirror)) return 'Nothing is pushed until the mirror settings on the server are fixed and Voyager is restarted.';
+  const fix = mirror.state === 'diverged' ? 'Voyager never force-pushes. Fix the mirror, then click to push again.' : 'Click to push now.';
   return [mirror.lastError, fix].filter(Boolean).join('\n');
 }
 

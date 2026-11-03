@@ -1,2 +1,2 @@
-// NotesApp test service worker
+// Voyager test service worker
 self.addEventListener("fetch", () => {});

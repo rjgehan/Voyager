@@ -1,6 +1,6 @@
 // manifest.json for each browser (Manifest V3). Chrome and Edge run the background as a service
 // worker; Firefox runs it as an event page and needs an add-on id. Host access is never asked for
-// at install: NotesApp's origin (and every site, for image downloads) is requested on the options
+// at install: Voyager's origin (and every site, for image downloads) is requested on the options
 // page, and the clipped tab is reached through activeTab, on the click.
 export type Target = 'chrome' | 'firefox';
 
@@ -10,12 +10,12 @@ export function manifest(target: Target, version: string): Record<string, unknow
   const icons = { '16': 'icons/icon-128.png', '32': 'icons/icon-128.png', '48': 'icons/icon-128.png', '128': 'icons/icon-128.png' };
   const base: Record<string, unknown> = {
     manifest_version: 3,
-    name: 'NotesApp clipper',
-    short_name: 'Clip to Notes',
+    name: 'Voyager clipper',
+    short_name: 'Clip to Voyager',
     version,
-    description: 'Save the article on this page, or the selection, as a Markdown note in your NotesApp.',
+    description: 'Save the article on this page, or the selection, as a Markdown note in Voyager.',
     icons,
-    action: { default_title: 'Clip to NotesApp', default_popup: 'popup.html', default_icon: icons },
+    action: { default_title: 'Clip to Voyager', default_popup: 'popup.html', default_icon: icons },
     permissions: ['activeTab', 'scripting', 'storage', 'contextMenus'],
     optional_host_permissions: ['https://*/*', 'http://*/*'],
     options_ui: { page: 'options.html', open_in_tab: true },

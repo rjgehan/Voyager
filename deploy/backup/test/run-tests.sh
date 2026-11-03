@@ -136,7 +136,7 @@ NOTES_BACKUP_CHECK_DAY=$(date +%u)
 nightly
 exit_is 0
 in_order "$JOB offsite" "$JOB check"
-called "Title: NotesApp backups OK"
+called "Title: Voyager backups OK"
 called "Priority: low"
 
 setup "a failed preflight stops nothing and alerts"
@@ -145,7 +145,7 @@ nightly
 exit_is 1
 not_called "stop -t"
 not_called "$JOB snapshot"
-called "Title: NotesApp backup failed"
+called "Title: Voyager backup failed"
 called "The backup run on homeserver failed:|- preflight|Details: the Backups card of the status page"
 not_called "Fatal:" # restic's output stays in status.json and the log
 not_called "hc.example"
@@ -311,7 +311,7 @@ echo $$ >"$NOTES_BACKUP_STATE_DIR/run.lock/pid"
 nightly
 exit_is 1
 not_called "stop -t"
-called "Title: NotesApp backup skipped"
+called "Title: Voyager backup skipped"
 present "$NOTES_BACKUP_STATE_DIR/run.lock"
 
 setup "the lock of a dead run is taken over"
@@ -329,7 +329,7 @@ echo stopped >"$FAKE_DIR/app"
 nightly
 exit_is 0
 in_order "start notes-notes-1" "$JOB preflight"
-called "Title: NotesApp backup interrupted"
+called "Title: Voyager backup interrupted"
 in_order "$JOB preflight" "stop -t 45 notes-notes-1"
 app_is running
 
@@ -341,7 +341,7 @@ export FAKE_RESTIC_RUNNING=1
 nightly --recover
 exit_is 0
 in_order "exec notes-backup-1 pkill -x restic" "start notes-notes-1"
-called "Title: NotesApp backup interrupted"
+called "Title: Voyager backup interrupted"
 app_is running
 absent "$NOTES_BACKUP_STATE_DIR/app-stopped"
 absent "$NOTES_BACKUP_STATE_DIR/run.lock"
@@ -357,7 +357,7 @@ mkdir -p "$NOTES_BACKUP_STATE_DIR"
 echo stopped >"$FAKE_DIR/app"
 export FAKE_START_FAIL=99
 nightly --recover
-called "Title: NotesApp is down"
+called "Title: Voyager is down"
 present "$NOTES_BACKUP_STATE_DIR/app-stopped"
 
 setup "a TERM during the snapshot cancels restic and starts the app"
@@ -388,7 +388,7 @@ called "https://ntfy.sh/notes-abc"
 setup "wget is used where curl is missing (the docker:cli image)"
 export NOTES_BACKUP_HTTP_CLIENT=wget FAKE_FAIL_preflight=1
 nightly
-called "wget -q -T 20 -O /dev/null --header Title: NotesApp backup failed"
+called "wget -q -T 20 -O /dev/null --header Title: Voyager backup failed"
 not_called "curl"
 
 setup "a failing ntfy server does not change the outcome"
@@ -441,7 +441,7 @@ else
 	exit_is 1
 	not_called "stop -t"
 	not_called "$JOB"
-	called "Title: NotesApp backup failed"
+	called "Title: Voyager backup failed"
 	called "its state directory $NOTES_BACKUP_STATE_DIR cannot be written"
 	not_called "still in progress"
 	output_has "ERROR the state directory"
@@ -454,11 +454,11 @@ export NOTES_BACKUP_STATE_DIR="$T/not-a-directory/state"
 nightly
 exit_is 1
 not_called "$JOB"
-called "Title: NotesApp backup failed"
+called "Title: Voyager backup failed"
 called "cannot be written. No backup is taken until that is fixed."
 nightly --recover # nothing to recover, and nothing to say
 exit_is 0
-not_called "Title: NotesApp backup interrupted"
+not_called "Title: Voyager backup interrupted"
 
 setup "no ntfy URL means no alert and no error"
 export FAKE_FAIL_preflight=1 NOTES_BACKUP_NTFY_URL=

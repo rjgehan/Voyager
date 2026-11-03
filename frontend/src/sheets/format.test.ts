@@ -85,9 +85,9 @@ describe('parseSheet', () => {
     it.each([
       ['invalid JSON', '{"type": "notesapp-sheet",', /not valid JSON/],
       ['a list', [], /not a JSON object/],
-      ['another type', { type: 'excalidraw' }, /not a NotesApp sheet/],
-      ['a missing type', { sheets: [] }, /not a NotesApp sheet/],
-      ['a newer format', { ...EXAMPLE, version: 3 }, /newer NotesApp \(format version 3\)/],
+      ['another type', { type: 'excalidraw' }, /not a Voyager sheet/],
+      ['a missing type', { sheets: [] }, /not a Voyager sheet/],
+      ['a newer format', { ...EXAMPLE, version: 3 }, /newer Voyager \(format version 3\)/],
       ['an unknown version', { ...EXAMPLE, version: '1' }, /Unknown format version/],
       ['sheets that are not a list', { ...EXAMPLE, sheets: {} }, /"sheets" is not a list/],
       ['a sheet that is not an object', { ...EXAMPLE, sheets: [1] }, /Sheet 1 is not an object/],

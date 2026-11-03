@@ -296,7 +296,7 @@ public class GitMirror implements SmartLifecycle {
 			this.lastError = error;
 		}
 		if (first) {
-			logger.error("GIT_MIRROR_FAILED the mirror {} has diverged: {}. NotesApp never force-pushes; pushing stops "
+			logger.error("GIT_MIRROR_FAILED the mirror {} has diverged: {}. Voyager never force-pushes; pushing stops "
 					+ "until the mirror is fixed and a push is requested", this.remote, error);
 		}
 		if (first || manual) {

@@ -26,7 +26,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Importing an Obsidian vault (ROADMAP item 24) with the fixture of {@code src/test/resources/vaults/obsidian}: the
  * first start takes its settings from {@code .obsidian/}, leaves that folder untouched and out of the tree, keeps
- * {@code workspace.json} out of history, and {@code GET /api/compat} reports what NotesApp does not handle.
+ * {@code workspace.json} out of history, and {@code GET /api/compat} reports what Voyager does not handle.
  */
 class ObsidianImportIntegrationTest {
 

@@ -9,7 +9,7 @@ export default function UnsupportedView({ entry }: FileViewProps) {
       <FileInfo entry={entry} />
       <div className="empty-state">
         <FileQuestionMark size={40} aria-hidden />
-        <p>NotesApp cannot display {entry.extension ? `.${entry.extension}` : 'this kind of'} files. Download it to open it elsewhere.</p>
+        <p>Voyager cannot display {entry.extension ? `.${entry.extension}` : 'this kind of'} files. Download it to open it elsewhere.</p>
       </div>
     </div>
   );

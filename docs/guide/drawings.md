@@ -1,6 +1,6 @@
 # Drawings
 
-Drawings are hand-drawn-looking diagrams and sketches, made with Excalidraw inside NotesApp. Each drawing is a file in your vault, so it saves, syncs and keeps its history like a note.
+Drawings are hand-drawn-looking diagrams and sketches, made with Excalidraw inside Voyager. Each drawing is a file in your vault, so it saves, syncs and keeps its history like a note.
 
 ## Make a drawing
 

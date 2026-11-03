@@ -24,7 +24,7 @@ The row above the note shows its tabs. Opening a note normally replaces the note
 Each tab remembers its own back and forward history (the arrows at the top left of the note, or `Ctrl+Alt+←` and `Ctrl+Alt+→`). Your tabs are kept per device and come back when you reopen the app.
 
 > [!NOTE]
-> In a web browser, `Ctrl+Shift+T` reopens the browser's own last closed tab, not NotesApp's. Use the palette, or give **Reopen closed tab** another key under Settings › Hotkeys.
+> In a web browser, `Ctrl+Shift+T` reopens the browser's own last closed tab, not Voyager's. Use the palette, or give **Reopen closed tab** another key under Settings › Hotkeys.
 
 ## Split panes
 

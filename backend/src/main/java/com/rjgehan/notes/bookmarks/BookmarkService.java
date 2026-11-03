@@ -60,7 +60,7 @@ import org.springframework.stereotype.Service;
  * <p>
  * The file is read from disk on every request (it is small), so a hand edit or a pull is seen at once. A vault without
  * the file shows the bookmarks Obsidian left in {@code .obsidian/bookmarks.json}, which is only ever read; the first
- * change writes NotesApp's own file.
+ * change writes Voyager's own file.
  */
 @Service
 public class BookmarkService {
