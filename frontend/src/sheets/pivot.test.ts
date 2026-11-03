@@ -76,6 +76,75 @@ describe('pivot tables', () => {
     expect(made({ range, rows: 0, values: 2, summary: 'MIN' })[3]).toEqual(['Grand total', 60]);
   });
 
+  it('matches groups exactly: comparison signs, wildcards and a text 1 beside a number 1 are plain values', () => {
+    const bands: Array<[string | number, number]> = [
+      ['<18', 10], ['<18', 5], ['18-64', 20], ['>65', 30], ['Misc*', 7], ['Misc stuff', 8], ['1', 1], [1, 2], ['=x', 4], ['Food?', 6], ['Food!', 9],
+    ];
+    const cells: Record<string, SheetCell> = { A1: { v: 'Band' }, B1: { v: 'Amount' } };
+    bands.forEach(([band, amount], i) => {
+      cells[`A${i + 2}`] = { v: band };
+      cells[`B${i + 2}`] = { v: amount };
+    });
+    const r = { col: 0, row: 0, width: 2, height: bands.length + 1 };
+    const of = (summary: 'SUM' | 'COUNT' | 'AVERAGE' | 'MIN' | 'MAX') => {
+      const rows = made({ range: r, rows: 0, values: 1, summary }, cells);
+      return new Map(rows.slice(1).map(([label, v]) => [`${typeof label}:${String(label)}`, v]));
+    };
+    // Groups a criterion would misread compare values; the others stay fast SUMIFS.
+    const formulas = pivotTable(workbook(cells).file.sheets[0], { range: r, rows: 0, values: 1, summary: 'SUM' }).cells;
+    const formulaOf = (group: string | number) => Object.entries(formulas).find(([ref, c]) => ref.startsWith('A') && c.v === group)![0].replace('A', 'B');
+    expect(formulas[formulaOf('Misc stuff')].f).toMatch(/^=SUMIFS\(/);
+    expect(formulas[formulaOf('18-64')].f).toMatch(/^=SUMIFS\(/);
+    for (const group of ['<18', '>65', 'Misc*', 'Food?', '=x', '1', 1]) expect(formulas[formulaOf(group)].f).toMatch(/^=ARRAYFORMULA\(/);
+    const sum = of('SUM');
+    expect(sum.get('string:<18')).toBe(15);
+    expect(sum.get('string:>65')).toBe(30);
+    expect(sum.get('string:Misc*')).toBe(7);
+    expect(sum.get('string:Misc stuff')).toBe(8);
+    expect(sum.get('string:Food?')).toBe(6);
+    expect(sum.get('string:=x')).toBe(4);
+    expect(sum.get('string:1')).toBe(1);
+    expect(sum.get('number:1')).toBe(2);
+    expect(sum.get('string:Grand total')).toBe(102);
+    // The groups add up to the grand total.
+    expect([...sum.entries()].filter(([k]) => k !== 'string:Grand total').reduce((a, [, v]) => a + (v as number), 0)).toBe(102);
+    const count = of('COUNT');
+    expect([count.get('string:<18'), count.get('string:>65'), count.get('string:Misc*'), count.get('string:1'), count.get('number:1')]).toEqual([2, 1, 1, 1, 1]);
+    expect(count.get('string:Grand total')).toBe(11);
+    const average = of('AVERAGE');
+    expect([average.get('string:<18'), average.get('string:>65'), average.get('string:=x')]).toEqual([7.5, 30, 4]);
+    expect([of('MIN').get('string:Misc*'), of('MAX').get('string:Misc*'), of('MIN').get('string:<18'), of('MAX').get('string:<18')]).toEqual([7, 7, 5, 10]);
+    // Across, too.
+    const cross = made({ range: { col: 0, row: 0, width: 3, height: 5 }, rows: 1, cols: 0, values: 2, summary: 'SUM' }, {
+      A1: { v: 'Band' }, B1: { v: 'Month' }, C1: { v: 'Cost' },
+      A2: { v: '<18' }, B2: { v: 'Jan' }, C2: { v: 10 },
+      A3: { v: 'Misc*' }, B3: { v: 'Jan' }, C3: { v: 7 },
+      A4: { v: 'Misc stuff' }, B4: { v: 'Jan' }, C4: { v: 8 },
+      A5: { v: '18' }, B5: { v: 'Feb' }, C5: { v: 3 },
+    });
+    const at = (row: number) => Object.fromEntries(cross[0].map((h, j) => [String(h), cross[row][j]]));
+    expect(cross.map((row) => row[0])).toEqual(['Month', 'Feb', 'Jan', 'Grand total']);
+    expect(at(2)).toEqual({ Month: 'Jan', '18': 0, '<18': 10, 'Misc stuff': 8, 'Misc*': 7, 'Grand total': 25 });
+    expect(at(3)).toEqual({ Month: 'Grand total', '18': 3, '<18': 10, 'Misc stuff': 8, 'Misc*': 7, 'Grand total': 28 });
+  });
+
+  it('leaves out empty and text values of a group, and averages to 0 when its values cancel out', () => {
+    const cells: Record<string, SheetCell> = {
+      A1: { v: 'Group' }, B1: { v: 'Value' },
+      A2: { v: 'a' }, B2: { v: -5 },
+      A3: { v: 'a' }, B3: { v: 5 },
+      A4: { v: 'b' }, B4: { v: 9 },
+      A5: { v: 'a' }, B5: { v: 0 },
+      A6: { v: 'b' },
+      A7: { v: 'b' }, B7: { v: 'n/a' },
+    };
+    const r = { col: 0, row: 0, width: 2, height: 7 };
+    expect(made({ range: r, rows: 0, values: 1, summary: 'AVERAGE' }, cells).slice(1)).toEqual([['a', 0], ['b', 9], ['Grand total', 2.25]]);
+    expect(made({ range: r, rows: 0, values: 1, summary: 'MIN' }, cells).slice(1, 3)).toEqual([['a', -5], ['b', 9]]);
+    expect(made({ range: r, rows: 0, values: 1, summary: 'SUM' }, cells).slice(1, 3)).toEqual([['a', 0], ['b', 9]]);
+    expect(made({ range: r, rows: 0, values: 1, summary: 'COUNT' }, cells).slice(1, 3)).toEqual([['a', 3], ['b', 3]]);
+  });
+
   it('shows group labels in the format of the cells they come from (dates as dates)', () => {
     const cells: Record<string, SheetCell> = {
       A1: { v: 'Date' }, B1: { v: 'Category' }, C1: { v: 'Cost' },
