@@ -1060,12 +1060,12 @@ This is `MoveService.move(from, to, updateLinks, dryRun, identity, origin)`. `up
 
 **`VaultWatcher`.**
 
-- Linux inotify through `WatchService`. Every directory is registered recursively, skipping the ignored directories.
+- Linux inotify through `WatchService`. Every directory is registered recursively, skipping hidden (dot) directories. Events for hidden entries are dropped; the ignored names of §4.5 (`x.tmp`, `a~`, `4913`) are dropped **for files only**, as in the vault walk, so a folder named `Drafts~` or `old.tmp` created or renamed at runtime is watched and indexed at once, and its delete or rename is seen (a deleted entry counts as a folder when the watcher watched it).
 - Each event re-arms a per-path debounce deadline (`notes.watcher.debounce`, 400 ms). A 100 ms ticker calls `VaultReconciler.reconcile(path)` once the deadline has passed.
 - `ENTRY_CREATE` of a directory registers the subtree and then reconciles it, which handles the race where files appear before the watch exists.
 - `ENTRY_DELETE` cancels every key at or under that path. A moved directory's watch otherwise keeps reporting events under its *old* path.
 - `OVERFLOW`, or an unknown key, calls `requestFullRescan()`.
-- If `register` fails (for example `User limit of inotify watches reached`), the watcher logs a warning, switches to `mode=polling`, and the app relies on the rescan.
+- If `register` fails (for example `User limit of inotify watches reached`), the watcher logs a warning, switches to `mode=polling`, and the app relies on the rescan. A folder that is gone or unreadable by the time it is registered (a tool that creates a folder and removes or renames it at once) is only skipped: that never drops the watcher to polling.
 
 **`VaultReconciler.reconcile(path)`.** It takes the vault read lock and the path lock, then runs `reconcileLocked(path)`, which services also call inline when they already hold the locks (§5.4). Existence is checked by exact name in the parent directory's listing (§4.4).
 

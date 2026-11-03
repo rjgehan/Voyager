@@ -91,10 +91,38 @@ class VaultWatcherTest {
 
 	@Test
 	void ignoredNamesNeverReachTheReconciler() {
-		assertThat(VaultWatcher.isIgnored(".git/index")).isTrue();
-		assertThat(VaultWatcher.isIgnored("Notes/.obsidian/workspace.json")).isTrue();
-		assertThat(VaultWatcher.isIgnored("Notes/draft.md.swp")).isTrue();
-		assertThat(VaultWatcher.isIgnored("Notes/Plan.md")).isFalse();
+		assertThat(VaultWatcher.isIgnored(".git/index", false)).isTrue();
+		assertThat(VaultWatcher.isIgnored("Notes/.obsidian/workspace.json", false)).isTrue();
+		assertThat(VaultWatcher.isIgnored("Notes/draft.md.swp", false)).isTrue();
+		assertThat(VaultWatcher.isIgnored("Notes/Plan.md", false)).isFalse();
+	}
+
+	/** The rescan the watcher asks for at start must not race a test into passing. */
+	private void awaitStartupRescan() {
+		await().atMost(Duration.ofSeconds(10)).until(() -> this.vault.reconciler.lastRescan() != null);
+	}
+
+	@Test
+	void aFolderWithAnIgnoredLookingNameCreatedAtRuntimeIsWatched() throws Exception {
+		awaitStartupRescan();
+		Files.createDirectories(this.dir.resolve("Drafts~"));
+		Files.writeString(this.dir.resolve("Drafts~/n.md"), "n");
+		await().atMost(Duration.ofSeconds(10))
+			.until(() -> this.vault.index.isFolder("Drafts~") && this.vault.index.file("Drafts~/n.md") != null);
+		Files.writeString(this.dir.resolve("Drafts~/later.md"), "later");
+		await().atMost(Duration.ofSeconds(10)).until(() -> this.vault.index.file("Drafts~/later.md") != null);
+	}
+
+	@Test
+	void aFolderRenamedToAndFromAnIgnoredLookingNameIsFollowed() throws Exception {
+		awaitStartupRescan();
+		Files.move(this.dir.resolve("A"), this.dir.resolve("A~"));
+		await().atMost(Duration.ofSeconds(10)).until(() -> this.vault.index.file("A~/B/x.md") != null);
+		await().atMost(Duration.ofSeconds(10)).until(() -> !this.vault.index.isFolder("A"));
+		Files.move(this.dir.resolve("A~"), this.dir.resolve("Renamed"));
+		await().atMost(Duration.ofSeconds(10)).until(() -> this.vault.index.file("Renamed/B/x.md") != null);
+		await().atMost(Duration.ofSeconds(10))
+			.until(() -> !this.vault.index.isFolder("A~") && this.vault.index.file("A~/B/x.md") == null);
 	}
 
 }
