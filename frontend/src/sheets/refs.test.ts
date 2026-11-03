@@ -57,6 +57,7 @@ describe('range text', () => {
     expect(rangeText({ col: 0, row: 0, width: 3, height: 10 })).toBe('A1:C10');
     expect(absoluteRangeText('Budget', { col: 1, row: 1, width: 1, height: 8 })).toBe('Budget!$B$2:$B$9');
     expect(absoluteRangeText('My sheet', { col: 0, row: 0, width: 1, height: 1 })).toBe("'My sheet'!$A$1");
+    expect(absoluteRangeText('Sales.2026', { col: 0, row: 0, width: 1, height: 1 })).toBe("'Sales.2026'!$A$1");
   });
 
   it('reads what is typed into the name box', () => {
@@ -85,6 +86,7 @@ describe('renameSheetsInFormula', () => {
     expect(renameSheetsInFormula('=A!A1+B!A1+"A!A1"', swap)).toBe('=B!A1+A!A1+"A!A1"');
     expect(renameSheetsInFormula('=A1+1', swap)).toBe('=A1+1');
     expect(renameSheetsInFormula('plain', swap)).toBe('plain');
+    expect(renameSheetsInFormula('=Sales!B1', [['Sales', 'Sales.2026']])).toBe("='Sales.2026'!B1");
   });
 });
 

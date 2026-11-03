@@ -401,6 +401,14 @@ describe('a sheet renamed on one device', () => {
     }
   });
 
+  it('quotes a new name with a dot in the other device’s formulas', () => {
+    const text = (...edits: Array<(f: SheetFile) => void>) => edited((f) => edits.forEach((e) => e(f)));
+    const mine = text((f) => (budget(f).name = 'Sales.2026'));
+    const theirs = text((f) => (notes(f).cells.B1 = { f: '=Budget!B2' }));
+    const merged = parseSheet(mergeSheetText(serializeSheet(base()), mine, theirs)!);
+    expect(merged.ok && notes(merged.file).cells.B1.f).toBe("='Sales.2026'!B2");
+  });
+
   it('takes the other device’s change to a formula the rename rewrote', () => {
     const text = (...edits: Array<(f: SheetFile) => void>) => edited((f) => edits.forEach((e) => e(f)));
     const b = text(withRef);

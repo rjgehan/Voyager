@@ -21,15 +21,15 @@ const DATA: Record<string, SheetCell> = {
   C5: { v: 60 },
 };
 
-function workbook(): Workbook {
-  const parsed = parseSheet(JSON.stringify({ type: 'notesapp-sheet', version: 1, engine: '', sheets: [{ id: 's1', name: 'My data', cells: DATA }], named: {} }));
+function workbook(cells: Record<string, SheetCell> = DATA, name = 'My data'): Workbook {
+  const parsed = parseSheet(JSON.stringify({ type: 'notesapp-sheet', version: 1, engine: '', sheets: [{ id: 's1', name, cells }], named: {} }));
   if (!parsed.ok) throw new Error(parsed.error);
   return Workbook.open(parsed.file);
 }
 
 /** Puts a pivot table on a new sheet and returns its shown values, row by row. */
-function made(opts: Parameters<typeof pivotTable>[1]): Array<Array<string | number | boolean | null>> {
-  const wb = workbook();
+function made(opts: Parameters<typeof pivotTable>[1], cells?: Record<string, SheetCell>, name?: string): Array<Array<string | number | boolean | null>> {
+  const wb = workbook(cells, name);
   const table = pivotTable(wb.file.sheets[0], opts);
   const id = wb.addSheet('Pivot');
   wb.setCells(Object.entries(table.cells).map(([ref, c]) => ({ sheet: id, ref, content: c.f !== undefined ? { f: c.f } : { v: c.v as string | number }, fmt: c.fmt })));
@@ -73,5 +73,9 @@ describe('pivot tables', () => {
     expect(made({ range, rows: 0, cols: 1, values: 2, summary: 'AVERAGE' })[2]).toEqual(['Living', 60, 300, 180]);
     expect(made({ range, rows: 0, values: 2, summary: 'MAX' })[2]).toEqual(['Living', 300]);
     expect(made({ range, rows: 0, values: 2, summary: 'MIN' })[3]).toEqual(['Grand total', 60]);
+  });
+
+  it('works on a sheet whose name has a dot', () => {
+    expect(made({ range, rows: 0, values: 2, summary: 'SUM' }, DATA, 'Sales.2026')[1]).toEqual(['Home', 1570]);
   });
 });

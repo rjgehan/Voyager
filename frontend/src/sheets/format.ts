@@ -346,9 +346,12 @@ export function freeSheetName(wanted: string, taken: ReadonlyArray<{ name: strin
   }
 }
 
-/** A sheet name as written in a formula: quoted unless it is a plain identifier. */
+/**
+ * A sheet name as written in a formula: quoted unless it is a plain identifier (letters, digits and
+ * `_`; the engine cannot read `Sales.2026!B1`, only `'Sales.2026'!B1`).
+ */
 export function formulaSheetName(name: string): string {
-  return /^[A-Za-z_][A-Za-z0-9_.]*$/.test(name) && !/^[A-Za-z]{1,3}[0-9]+$/.test(name) ? name : `'${name.replace(/'/g, "''")}'`;
+  return /^[A-Za-z_][A-Za-z0-9_]*$/.test(name) && !/^[A-Za-z]{1,3}[0-9]+$/.test(name) ? name : `'${name.replace(/'/g, "''")}'`;
 }
 
 // ---------- typed input ----------

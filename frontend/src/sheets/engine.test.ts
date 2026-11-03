@@ -733,6 +733,17 @@ describe('moving cells (cut and paste)', () => {
     expect(wb.file.sheets[0].cells.C1).toEqual({ f: '=B5+1', c: 21 });
   });
 
+  it('quotes a sheet name with a dot in the formulas a move rewrites', () => {
+    const wb = workbook([
+      { name: 'Sales.2026', cells: { B1: { v: 7 }, A1: { f: '=B1*2' } } },
+      { name: 'Other', cells: { A1: { v: 3 }, B1: { f: '=A1' } } },
+    ]);
+    wb.moveCells({ sheet: 's1', range: { col: 0, row: 0, width: 1, height: 1 } }, { sheet: 's2', col: 0, row: 4 });
+    expect(wb.file.sheets[1].cells.A5).toEqual({ f: "='Sales.2026'!B1*2", c: 14 });
+    wb.moveCells({ sheet: 's2', range: { col: 0, row: 0, width: 1, height: 1 } }, { sheet: 's1', col: 3, row: 0 });
+    expect(wb.file.sheets[1].cells.B1).toEqual({ f: "='Sales.2026'!D1", c: 3 });
+  });
+
   it('keeps a moved formula pointing at the cells outside the move', () => {
     const wb = workbook([{ name: 'S', cells: { A1: { v: 10 }, A2: { v: 20 }, C1: { f: '=SUM(A1:A2)' } } }]);
     wb.moveCells({ sheet: 's1', range: { col: 2, row: 0, width: 1, height: 1 } }, { sheet: 's1', col: 4, row: 5 });
