@@ -44,7 +44,7 @@ public final class CompatScanner {
 		DATAVIEW("dataview", Category.SYNTAX, Severity.WARNING, "Dataview queries",
 				"```dataview queries run with a subset of the query language (TABLE, LIST and TASK with FROM, WHERE, SORT "
 						+ "and LIMIT). These show as code: ```dataviewjs blocks (a ```script block does the same), inline "
-						+ "`= …` queries, and queries with GROUP BY, FLATTEN, CALENDAR, or OR and - between sources.",
+						+ "`= this.file…` and `$= …` queries, and queries with GROUP BY, FLATTEN, CALENDAR, or OR and - between sources.",
 				null),
 		TASKS_QUERY("tasks-query", Category.SYNTAX, Severity.WARNING, "Tasks plugin queries",
 				"```tasks blocks show as code. Checkboxes work, and Convert checkbox to task turns one into a structured task.",
@@ -124,7 +124,18 @@ public final class CompatScanner {
 	private static final Pattern HTML = Pattern
 		.compile("<(iframe|script|style|form|button|textarea|select|object|embed)\\b", Pattern.CASE_INSENSITIVE);
 
-	private static final Pattern DATAVIEW_INLINE = Pattern.compile("`\\$?=[^`\\n]+`");
+	/** An inline code span starting with {@code =} or {@code $=}: group 1 is the {@code $}, group 2 the expression. */
+	private static final Pattern DATAVIEW_INLINE = Pattern.compile("`(\\$?)=([^`\\n]+)`");
+
+	/**
+	 * A dotted name in an inline expression ({@code this.file.name}, {@code file.ctime}, {@code [[Note]].field}): what
+	 * Dataview reads and the formula engine cannot (DESIGN §6.42). A function ({@code STDEV.S(}) or a file reference
+	 * ({@code Budget.sheet!B10}) is not one.
+	 */
+	private static final Pattern DOTTED_NAME = Pattern
+		.compile("(?<![\\w.])[A-Za-z_]\\w*(?:\\.[A-Za-z_]\\w*)+(?!\\w*\\s*[(!#])|\\]\\]\\.\\w");
+
+	private static final Pattern QUOTED = Pattern.compile("\"[^\"]*\"|'[^']*'");
 
 	/**
 	 * What the ```dataview subset does not run (ROADMAP item 17, DESIGN §6.43): another query type (CALENDAR), GROUP
@@ -276,7 +287,7 @@ public final class CompatScanner {
 				continue;
 			}
 			String prose = stripCodeSpans(line);
-			if (DATAVIEW_INLINE.matcher(line).find()) {
+			if (hasDataviewInline(line)) {
 				add(Rule.DATAVIEW, path, i, line);
 			}
 			// A command over several lines counts once, where it starts.
@@ -321,6 +332,22 @@ public final class CompatScanner {
 		if (dataviewUnsupported(query.toString())) {
 			add(Rule.DATAVIEW, path, line, opening + " " + query.toString().strip().replace('\n', ' '));
 		}
+	}
+
+	/**
+	 * Whether {@code line} has a Dataview inline query: a {@code $=} span, or an {@code =} span that reads a dotted
+	 * name. Other {@code =} spans are the app's own inline formulas ({@code =costs!D5/12}, DESIGN §6.42), which show
+	 * their result.
+	 */
+	static boolean hasDataviewInline(String line) {
+		Matcher span = DATAVIEW_INLINE.matcher(line);
+		while (span.find()) {
+			String expression = QUOTED.matcher(span.group(2)).replaceAll("\"\"");
+			if (!span.group(1).isEmpty() || DOTTED_NAME.matcher(expression).find()) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	static boolean dataviewUnsupported(String query) {
