@@ -52,6 +52,15 @@ class WorkflowsTest {
 		}
 	}
 
+	@Test
+	void theDemoIsRedeployedWhenAnyOfItsBuildInputsChanges() throws Exception {
+		// The demo build reads the user guide from outside frontend/ (vite-plugin-guide.ts), like the server's.
+		assertThat(Files.readString(ROOT.resolve("frontend/vite-plugin-guide.ts"))).contains("'../docs/guide'");
+		Map<String, Object> push = map(map(workflow("pages.yml").get("on")).get("push"));
+		assertThat(list(push.get("branches"))).containsExactly("main");
+		assertThat(list(push.get("paths"))).contains("frontend/**", "docs/guide/**", "docs/images/social-preview.png");
+	}
+
 	/** Whether one of the shell words (literal paths or globs with {@code *}) names the file. */
 	private static boolean coveredBy(String words, String file) {
 		for (String word : words.strip().split("\\s+")) {
