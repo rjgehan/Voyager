@@ -39,7 +39,7 @@ jobs:
             target: --win nsis
             files: dist/*.exe
           - os: macos-15
-            target: --mac dmg
+            target: --mac dmg --universal    # named targets take their arch from the command line, not electron-builder.yml
             files: dist/*.dmg
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
