@@ -1,7 +1,8 @@
 import { IDBFactory } from 'fake-indexeddb';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { TextFile, TreeResponse } from '../api/types';
-import { evictions, IdbNoteCache, MAX_NOTE_CHARS, planMaintenance, type CacheIndexEntry } from './noteCache';
+import { CAPTURES, done, OFFLINE_DB, openOfflineDb, request } from './db';
+import { clearEveryVault, evictions, IdbNoteCache, MAX_NOTE_CHARS, planMaintenance, type CacheIndexEntry } from './noteCache';
 
 const file = (path: string, content = 'text', version = 'v-' + content): TextFile => ({
   path,
@@ -106,5 +107,38 @@ describe('offline copy upkeep', () => {
     const plan = planMaintenance([entry('a.md', 'v1'), entry('b.md', 'v1')], new Map([['b.md', { version: 'v1' }]]), () => 'b.md');
     expect(plan.rekey).toEqual([]);
     expect(plan.remove).toEqual(['a.md']);
+  });
+});
+
+describe('clearEveryVault', () => {
+  it('removes the copies and tree of every vault on this device, keeping queued captures and drafts', async () => {
+    const factory = new IDBFactory();
+    const tree: TreeResponse = { eventId: 'b.1', folders: [], files: [] };
+    const main = new IdbNoteCache(factory, OFFLINE_DB);
+    const work = new IdbNoteCache(factory, `${OFFLINE_DB}@work`);
+    for (const c of [main, work]) {
+      await c.put(file('a.md'), true);
+      await c.saveTree(tree, 1);
+    }
+    // A capture waiting in the work vault, and the drafts database, are not copies.
+    const workDb = await openOfflineDb(factory, `${OFFLINE_DB}@work`);
+    const tx = workDb.transaction(CAPTURES, 'readwrite');
+    tx.objectStore(CAPTURES).add({ text: 'later' });
+    await done(tx);
+    workDb.close();
+    const drafts = await request(factory.open('notesapp', 1));
+    drafts.close();
+
+    await clearEveryVault(factory, main);
+
+    for (const name of [OFFLINE_DB, `${OFFLINE_DB}@work`]) {
+      const c = new IdbNoteCache(factory, name);
+      expect(await c.index()).toEqual([]);
+      expect(await c.loadTree()).toBeNull();
+    }
+    const after = await openOfflineDb(factory, `${OFFLINE_DB}@work`);
+    expect(await request(after.transaction(CAPTURES).objectStore(CAPTURES).count())).toBe(1);
+    after.close();
+    expect((await factory.databases()).map((d) => d.name)).toContain('notesapp');
   });
 });

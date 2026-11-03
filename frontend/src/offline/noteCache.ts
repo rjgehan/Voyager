@@ -4,7 +4,7 @@
 // version check decides (API.md §4). A stale copy can therefore cause a conflict banner, never an
 // overwrite.
 import type { FileEntry, TextFile, TreeResponse } from '../api/types';
-import { done, META, NOTES, openOfflineDb, request } from './db';
+import { done, META, NOTES, OFFLINE_DB, openOfflineDb, request } from './db';
 
 /** At most this many notes, and this many bytes of text; the least recently opened go first. */
 export const MAX_NOTES = 100;
@@ -112,6 +112,10 @@ export class IdbNoteCache implements NoteCacheStore {
   constructor(factory: IDBFactory = indexedDB, name?: string) {
     this.factory = factory;
     this.name = name;
+  }
+
+  get databaseName(): string {
+    return this.name ?? OFFLINE_DB;
   }
 
   private open(): Promise<IDBDatabase> {
@@ -229,6 +233,36 @@ export class IdbNoteCache implements NoteCacheStore {
     tx.objectStore(META).clear();
     await done(tx);
     this.meta = Promise.resolve(new Map());
+  }
+
+  /** Closes the connection (a cache opened only to clear another vault's copies). */
+  async close(): Promise<void> {
+    const db = this.db;
+    this.db = null;
+    if (db) (await db.catch(() => null))?.close();
+  }
+}
+
+/**
+ * Settings › This device is one setting for the device, while each vault keeps its copies in its
+ * own database (`notesapp-offline`, `notesapp-offline@<vault>`): clears `own` and every other
+ * vault's database this browser lists. Only the copies and tree snapshots go; queued captures (in
+ * the same databases) and the drafts database stay. Without `indexedDB.databases()` only `own` is cleared.
+ */
+export async function clearEveryVault(factory: IDBFactory, own: NoteCacheStore): Promise<void> {
+  await own.clear();
+  if (typeof factory.databases !== 'function') return;
+  const ownName = own instanceof IdbNoteCache ? own.databaseName : OFFLINE_DB;
+  const names = (await factory.databases())
+    .map((d) => d.name ?? '')
+    .filter((n) => n !== ownName && (n === OFFLINE_DB || n.startsWith(`${OFFLINE_DB}@`)));
+  for (const name of names) {
+    const other = new IdbNoteCache(factory, name);
+    try {
+      await other.clear();
+    } finally {
+      await other.close();
+    }
   }
 }
 

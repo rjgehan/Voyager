@@ -8,7 +8,7 @@ import type { TextFile, TreeResponse, WriteResult } from '../api/types';
 import { usePrefs } from '../state/prefs';
 import { vaultKey } from '../state/vault';
 import { OFFLINE_DB } from './db';
-import { IdbNoteCache, NoNoteCache, type CachedTree, type NoteCacheStore } from './noteCache';
+import { clearEveryVault, IdbNoteCache, NoNoteCache, type CachedTree, type NoteCacheStore } from './noteCache';
 
 export interface OfflineState {
   /** Notes this page opened from the device's copy (path → when the copy was stored). */
@@ -88,7 +88,8 @@ export function saveTreeSnapshot(tree: TreeResponse): void {
   void noteCache.saveTree(tree).catch(() => undefined);
 }
 
-/** Settings › This device: removes every offline copy (drafts and queued captures are kept). */
+/** Settings › This device: removes every offline copy, of every vault (drafts and queued captures are kept). */
 export async function clearOfflineCopies(): Promise<void> {
-  await noteCache.clear();
+  if (typeof indexedDB === 'undefined') await noteCache.clear();
+  else await clearEveryVault(indexedDB, noteCache);
 }

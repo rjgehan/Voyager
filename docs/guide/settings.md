@@ -60,7 +60,7 @@ Your vaults, and creating a new one. See [Multiple vaults](vaults.md).
 | **Load remote images** | Off: pictures from other websites wait for a tap |
 | **Scripts in notes** | Run, ask first, or show as code (see [Scripts and queries](scripts-and-queries.md)) |
 | **Vim key bindings** | Vim keys in notes, on a computer with a keyboard (the status bar shows the mode; `:w` saves) |
-| **Keep recent notes for offline reading** | A copy of your last 100 opened notes on the device |
+| **Keep recent notes for offline reading** | A copy of your last 100 opened notes on the device. Turning it off, or **Remove them**, removes the copies of every vault from the device |
 | **Transcribe voice notes** | Whether new recordings are written out, when the server can |
 | **Lock encrypted notes after**, **…when the app is hidden** | See [Encryption](encryption.md#locking) |
 | **Recently discarded edits** | Text this device set aside without saving, kept 7 days |
