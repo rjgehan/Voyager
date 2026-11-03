@@ -35,6 +35,10 @@ export function InlineTitle({ path, editable, label = 'Note title', onEnter }: {
     const handoff = takeTitleHandoff(path);
     if (handoff !== null) {
       el.value = handoff.title;
+      // Checked at once, as in the pending view: an invalid name shows its message and stays.
+      // (The hand-over is taken from the pending-note store once, at mount.)
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setDraft(handoff.title);
       el.focus();
       el.setSelectionRange(handoff.selectionStart, handoff.selectionEnd);
     }
