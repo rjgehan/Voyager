@@ -2,7 +2,8 @@ import { CompletionContext, insertBracket, type Completion, type CompletionResul
 import { ensureSyntaxTree } from '@codemirror/language';
 import { EditorSelection, EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
-import { afterEach, describe, expect, it } from 'vitest';
+import { Tree } from '@lezer/common';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { FileEntry, Settings } from '../api/types';
 import { buildVaultTree } from '../api/vaultTree';
 import { basenameOf, extensionOf, lastSegment } from '../features/paths';
@@ -243,6 +244,36 @@ describe('tag completion', () => {
     expect(result.options.map((o) => o.label)).toEqual(expect.arrayContaining(['project', 'project/alpha']));
     pick(view, result, 'project/alpha');
     expect(view.state.doc.toString()).toBe('#local here\n\nnew #project/alpha ');
+  });
+
+  it('reads a long note’s tags once, not on every key after # (only the lines edited since)', async () => {
+    const filler = Array.from({ length: 20000 }, (_, i) => (i % 1000 === 0 ? `Line ${i} #topic${i}` : `Line ${i} with *some* text`)).join('\n');
+    const doc = `${filler}\n\nnew #t`;
+    const view = makeView(doc, doc.length);
+    const iterate = vi.spyOn(Tree.prototype, 'iterate');
+    try {
+      const first = (await complete(tagSource, view))!;
+      expect(first.options.map((o) => o.label)).toEqual(expect.arrayContaining(['topic1000']));
+      const spans: number[] = [];
+      for (const ch of ['o', 'p']) {
+        const pos = view.state.selection.main.head;
+        view.dispatch({ changes: { from: pos, insert: ch }, selection: { anchor: pos + 1 } });
+        iterate.mockClear();
+        const result = (await complete(tagSource, view))!;
+        expect(result.options.map((o) => o.label)).toContain('topic1000');
+        // The tag being typed is not offered as its own completion.
+        expect(result.options.map((o) => o.label)).not.toContain(view.state.sliceDoc(doc.length - 1, view.state.doc.length));
+        spans.push(...iterate.mock.calls.map(([spec]) => (spec.to ?? Infinity) - (spec.from ?? 0)));
+      }
+      expect(spans.length).toBeGreaterThan(0);
+      for (const span of spans) expect(span).toBeLessThan(100);
+      // A tag typed elsewhere meanwhile is offered.
+      view.dispatch({ changes: { from: 0, insert: '#topfresh ' } });
+      view.dispatch({ selection: { anchor: view.state.doc.length } });
+      expect((await complete(tagSource, view))!.options.map((o) => o.label)).toContain('topfresh');
+    } finally {
+      iterate.mockRestore();
+    }
   });
 
   it('does not complete a tag after a word character', async () => {

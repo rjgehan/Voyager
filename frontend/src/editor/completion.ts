@@ -4,6 +4,7 @@
 // them on every keystroke and the list re-ranks as the query grows.
 import { pickedCompletion, startCompletion, type Completion, type CompletionContext, type CompletionResult, type CompletionSource } from '@codemirror/autocomplete';
 import { syntaxTree } from '@codemirror/language';
+import { StateField, type EditorState } from '@codemirror/state';
 import type { EditorView } from '@codemirror/view';
 import type { FileEntry } from '../api/types';
 import { blockIdsIn, newBlockId, noteLines, pickableBlocks, planBlockId, scanBlocks, type NoteBlock } from '../features/blocks';
@@ -270,6 +271,79 @@ function renameInsertedId(view: EditorView, near: number, provisional: string, i
   }
 }
 
+interface LocalTag {
+  from: number;
+  to: number;
+  name: string;
+}
+
+/**
+ * The note's own tags with their places, for `#` completion: walked once, then kept up to date
+ * through edits (only the lines an edit touched are read again), so a keystroke after `#` in a
+ * 5 MB note does not walk the whole syntax tree. Filled when completion first asks.
+ */
+class LocalTags {
+  constructor(
+    public tags: LocalTag[] | null,
+    /** Ranges edited since the tags were read, to read again. */
+    public dirty: Array<{ from: number; to: number }>,
+  ) {}
+}
+
+/** Text that can turn whole stretches of the note into code or a comment: the tags are read again. */
+const BLOCK_MARKS = /```|~~~|%%|<!--|-->|\$\$/;
+
+export const localTagIndex = StateField.define<LocalTags>({
+  create: () => new LocalTags(null, []),
+  update(value, tr) {
+    if (!tr.docChanged) return value;
+    if (value.tags === null) return new LocalTags(null, []);
+    let reread = false;
+    const dirty = value.dirty.map((r) => ({ from: tr.changes.mapPos(r.from, -1), to: tr.changes.mapPos(r.to, 1) }));
+    tr.changes.iterChanges((fromA, toA, fromB, toB, inserted) => {
+      if (BLOCK_MARKS.test(inserted.toString()) || BLOCK_MARKS.test(tr.startState.sliceDoc(fromA, toA))) reread = true;
+      dirty.push({ from: fromB, to: toB });
+    });
+    if (reread) return new LocalTags(null, []);
+    const tags: LocalTag[] = [];
+    for (const t of value.tags) {
+      if (!tr.changes.touchesRange(t.from, t.to)) tags.push({ from: tr.changes.mapPos(t.from, 1), to: tr.changes.mapPos(t.to, -1), name: t.name });
+    }
+    return new LocalTags(tags, dirty);
+  },
+});
+
+function walkTags(state: EditorState, from?: number, to?: number): LocalTag[] {
+  const out: LocalTag[] = [];
+  syntaxTree(state).iterate({
+    from,
+    to,
+    enter(node) {
+      if (node.name === 'Hashtag' && (from === undefined || (node.from >= from && node.to <= to!))) out.push({ from: node.from, to: node.to, name: state.sliceDoc(node.from + 1, node.to) });
+    },
+  });
+  return out;
+}
+
+/** The note's tags (see `localTagIndex`; without it, or while the note is still being parsed, one walk). */
+function localTags(state: EditorState): readonly LocalTag[] {
+  const index = state.field(localTagIndex, false);
+  if (!index || syntaxTree(state).length < state.doc.length) return walkTags(state);
+  if (index.tags === null) {
+    index.tags = walkTags(state);
+    index.dirty = [];
+  } else if (index.dirty.length > 0) {
+    for (const r of index.dirty) {
+      const from = state.doc.lineAt(Math.min(r.from, state.doc.length)).from;
+      const to = state.doc.lineAt(Math.min(r.to, state.doc.length)).to;
+      index.tags = index.tags.filter((t) => t.to < from || t.from > to);
+      index.tags.push(...walkTags(state, from, to));
+    }
+    index.dirty = [];
+  }
+  return index.tags;
+}
+
 export const tagSource: CompletionSource = async (context: CompletionContext): Promise<CompletionResult | null> => {
   const ctx = context.state.facet(noteContext);
   if (!ctx) return null;
@@ -277,11 +351,8 @@ export const tagSource: CompletionSource = async (context: CompletionContext): P
   if (!match || inCodeOrComment(context.state, context.pos) || inFrontmatter(context.state, context.pos)) return null;
   const query = match.text.slice(1);
   const local = new Set<string>();
-  syntaxTree(context.state).iterate({
-    enter(node) {
-      if (node.name === 'Hashtag' && (node.to < match.from || node.from > context.pos)) local.add(context.state.sliceDoc(node.from + 1, node.to));
-    },
-  });
+  // Not the tag being typed.
+  for (const t of localTags(context.state)) if (t.to < match.from || t.from > context.pos) local.add(t.name);
   let vault: string[] = [];
   try {
     vault = await ctx.vaultTags();
