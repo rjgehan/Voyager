@@ -16,6 +16,7 @@ import { noteRoute } from '../../../features/paths';
 import { useFormulaAssist } from '../../../views/sheet/formulaAssist';
 import { SheetChart } from '../../../views/sheet/SheetChart';
 import { columnLetters, toA1 } from '../../a1';
+import { conditionalStyles } from '../../conditional';
 import { effectiveFormat, shownCell } from '../../display';
 import { clearEdits, copyRange, fillDownEdits, pasteEdits, typedEdit } from '../../edits';
 import type { CellEdit, Workbook } from '../../engine';
@@ -398,6 +399,8 @@ export function EmbedGrid(props: Props) {
   const errorHint = sheet && workbook && isCellError(value) ? workbook.errorMessage(sheet.id, toA1(active.col, active.row)) : null;
   const charts = sheet && !target?.range && !sheetChoice && !subpath ? Object.entries(sheet.charts).sort(([a], [b]) => compareIds(a, b)) : [];
   const sheets = model?.sheets ?? [];
+  // Conditional formatting of the shown sheet (DESIGN §6.21.12), worked out once per render.
+  const styleAt = sheet ? conditionalStyles(sheet) : null;
 
   let body: ReactNode;
   if (props.problem) body = <div className="markdown-embed-empty">{props.problem}</div>;
@@ -468,8 +471,18 @@ export function EmbedGrid(props: Props) {
                     ]
                       .filter(Boolean)
                       .join(' ');
+                    // Conditional formatting, as the grid and the read-only embed show it (DESIGN §6.21.12).
+                    const style = styleAt?.(col, row);
+                    const css = style
+                      ? {
+                          background: style.bg,
+                          color: shown.color === 'error' ? undefined : style.color,
+                          fontWeight: style.bold ? 700 : undefined,
+                          fontStyle: style.italic ? ('italic' as const) : undefined,
+                        }
+                      : undefined;
                     return (
-                      <td key={col} data-cell={`${col}:${row}`} className={classes} aria-selected={editable ? inSel(col, row) : undefined}>
+                      <td key={col} data-cell={`${col}:${row}`} className={classes} style={css} aria-selected={editable ? inSel(col, row) : undefined}>
                         {shown.text}
                       </td>
                     );

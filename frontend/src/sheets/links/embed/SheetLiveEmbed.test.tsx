@@ -109,6 +109,18 @@ describe('a spreadsheet embedded in a note that can be written', () => {
     expect(container.querySelectorAll('tbody tr')).toHaveLength(5);
   });
 
+  it('shows conditional formatting as the grid and the read-only embed do (format version 2)', async () => {
+    const sheets = [{ ...BUDGET.sheets[0], conditional: { r1: { range: 'B2:B4', when: 'gt', value: '1000', bg: '#b7e1cd', bold: true } } }, BUDGET.sheets[1]];
+    const path = newFile({ ...BUDGET, version: 2, sheets });
+    const { container } = show(path);
+    await waitFor(() => expect(cell(container, 'B2').textContent).toBe('$1,450.00'));
+    expect(cell(container, 'B2').style.background).toBe('rgb(183, 225, 205)');
+    expect(cell(container, 'B2').style.fontWeight).toBe('700');
+    expect(cell(container, 'B4').style.background).toBe('rgb(183, 225, 205)');
+    // 300 is not over 1000.
+    expect(cell(container, 'B3').getAttribute('style')).toBeNull();
+  });
+
   it('edits a cell in place: the value is saved and the total recalculated', async () => {
     const path = newFile();
     const { container } = show(path);

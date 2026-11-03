@@ -115,7 +115,7 @@ In a note you can edit, the embed is a small spreadsheet of its own:
 - **The toolbar** has Undo, Redo, Bold rows, Fill down, Insert a row below and Delete rows; `Ctrl+Z`, `Ctrl+D`, `Ctrl+B` and copy and paste work too.
 - **Open full sheet** opens the spreadsheet itself, for everything else: the fill handle, freezing, column widths, number formats and editing charts.
 
-It is the same spreadsheet: an edit in the note is saved, synced and undone exactly like one made in the spreadsheet, and a spreadsheet open in another tab shows it at once. The embed shows up to 100 rows and 26 columns. In a note you cannot edit (a locked one, a note shown inside another note, a canvas), the embed is a read-only table; click it to open the spreadsheet.
+It is the same spreadsheet: an edit in the note is saved, synced and undone exactly like one made in the spreadsheet, and a spreadsheet open in another tab shows it at once. The embed shows up to 100 rows and 26 columns, with the spreadsheet's number formats, bold rows and columns, and [conditional formatting](#conditional-formatting). In a note you cannot edit (a locked one, a note shown inside another note, a canvas), the embed is a read-only table; click it to open the spreadsheet.
 
 ## Read notes from a spreadsheet
 
