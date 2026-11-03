@@ -73,7 +73,11 @@ function MoreMenu({ path, mode, onClose }: { path: string | null; mode: ViewMode
       {label}
     </button>
   );
-  const command = (id: string, label: string, icon: ReactNode) => (getCommand(id) ? item(label, icon, () => runCommand(id, { activePath: path })) : null);
+  // A command that would not run here (its `when`) is left out, as in the palette.
+  const command = (id: string, label: string, icon: ReactNode) => {
+    const c = getCommand(id);
+    return c && (!c.when || c.when({ activePath: path })) ? item(label, icon, () => runCommand(id, { activePath: path })) : null;
+  };
   const dark = resolvedTheme() === 'dark';
   // Notes shown by another view (an `.excalidraw.md` drawing) have no outline or template target.
   const note = !!entry && isMarkdownViewPath(entry.path);

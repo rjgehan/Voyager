@@ -6,7 +6,8 @@ import { createNote } from '../../features/fileOps';
 import { documents } from '../../sync/instance';
 import { isKanbanText, KANBAN_PROBE_CHARS, setKanbanAsMarkdown, showsKanbanAsMarkdown } from './detect';
 
-function isOpenBoard(path: string | null): path is string {
+/** True when the loaded note at `path` is a Kanban board (whether this tab shows it as a board or as Markdown). */
+export function isOpenBoard(path: string | null): path is string {
   const session = path ? documents.get(path) : undefined;
   return !!session && session.getSnapshot().loaded && isKanbanText(session.editorState.doc.sliceString(0, KANBAN_PROBE_CHARS));
 }
