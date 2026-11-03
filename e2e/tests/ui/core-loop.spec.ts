@@ -13,8 +13,7 @@ test('create a note, write in Live Preview and link another note from autocomple
   await createFile(`${target}.md`, `# ${target}\n\nRaised beds.\n`);
   const title = unique('Ideas');
 
-  // Start from an open note: New note in the first moment after the app opens races the start
-  // page (a known bug, tests/ui/known-bugs.spec.ts).
+  // Start from an open note (New note while the app is still opening is the test below).
   await openNote(page, `${target}.md`);
   await newNote(page);
   await page.keyboard.type(title);
@@ -43,6 +42,22 @@ test('create a note, write in Live Preview and link another note from autocomple
   if (isPhone(page)) await link.tap();
   else await link.click({ modifiers: ['ControlOrMeta'] });
   await expect(noteTitle(page)).toHaveValue(target);
+});
+
+// QA F2: on the PC the race showed every time; on the phone (the drawer's New note) only sometimes,
+// so it is tested on the PC.
+test('New note pressed while the app is still opening keeps what is typed into its title @desktop', async ({ page }) => {
+  // A slow tailnet on a phone's cold start: the tree takes a while.
+  await page.route('**/api/tree', async (route) => {
+    await new Promise((r) => setTimeout(r, 1500));
+    await route.continue();
+  });
+  await page.goto('/');
+  await newNote(page, { waitForTitle: false });
+  const title = unique('Typed at once');
+  await page.keyboard.type(title);
+  await page.waitForTimeout(2500);
+  await expect(noteTitle(page)).toHaveValue(title, { timeout: 2000 });
 });
 
 test('renaming a note from its title updates the links to it', async ({ page }) => {

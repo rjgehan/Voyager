@@ -65,11 +65,10 @@ for it, as for the unit tests: a change that renames a button or label a test us
 | `tests/api/vaults.spec.ts` | Same path in two vaults, search/tasks/trash per vault, path escapes, `/api/v/main`, names and refusals |
 | `tests/api/security.spec.ts` | `X-Client-Id`, `Origin`/`Sec-Fetch-Site` (CSRF), the Host allowlist (DNS rebinding), the identity allowlist and RFC 2047 names, commit authors, Funnel, security headers |
 | `tests/api/events.spec.ts` | What another device hears and in which order, echo suppression, task events, replay from the last id and resync |
-| `tests/ui/core-loop.spec.ts` | New note, Live Preview, a wikilink from autocomplete (Mod-click / tap to follow), rename from the title updating links, table formulas recalculating and saving what was typed |
-| `tests/ui/sync.spec.ts` | Two devices on one note: live update, offline edits ending in the conflict banner, Compare, Keep mine, Take theirs |
+| `tests/ui/core-loop.spec.ts` | New note, Live Preview, a wikilink from autocomplete (Mod-click / tap to follow), rename from the title updating links, table formulas recalculating and saving what was typed; New note while the app is still opening (QA F2) |
+| `tests/ui/sync.spec.ts` | Two devices on one note: live update, offline edits ending in the conflict banner, Compare, Keep mine, Take theirs; going offline right after opening a note does not reload the built app (QA F1) |
 | `tests/ui/find-and-plan.spec.ts` | Search page (open at the match, search-as-you-type), task quick add, checking off on Today, the calendar's day and daily note, a spreadsheet formula from the formula bar, a sheet embed |
 | `tests/ui/layout.spec.ts` | Layout regressions jsdom cannot see: the note header in a narrow split pane, Dataview tables on a phone |
-| `tests/ui/known-bugs.spec.ts` | Bugs found and not fixed yet (below) |
 | `tests/screens/inventory.spec.ts` | Not a test: captures every page, panel and sheet for the PDF |
 | `scripts/*.test.mjs` | The suite's own tooling, with `npm run test:scripts` (no server, no browser; CI runs it before the suite): each project lists only its own folder wherever the checkout lives; `reset` rebuilds a jar or frontend older than what it is built from, and starts the server with the vault watcher except on Windows; `stop` stops what was recorded on Windows, Linux and macOS, and never forgets a process it could not check |
 
@@ -82,7 +81,7 @@ a test to one.
 A test for something broken today is marked `test.fail(…, 'KNOWN BUG …')`. It shows as ✘ but
 counts as passing. When the bug is fixed, Playwright reports **"Expected to fail, but passed"**:
 delete the `test.fail` line. A green run means "nothing got worse", and the `KNOWN` lines are the
-bug list.
+bug list. None is open today: the QA pass of 2026-11-02 (`qa/2026-11-02/FINDINGS.md`) found two, F1 and F2, both fixed and now ordinary tests in `sync.spec.ts` and `core-loop.spec.ts`.
 
 ```bash
 grep -rn "KNOWN BUG" tests/
