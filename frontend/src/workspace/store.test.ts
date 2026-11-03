@@ -8,6 +8,7 @@ import {
   focusPaneById,
   loadWorkspace,
   openInNewTab,
+  rebaseWorkspace,
   reopenClosedTab,
   resetWorkspace,
   routerNavigated,
@@ -143,6 +144,36 @@ describe('persistence', () => {
       const loaded = loadWorkspace();
       expect(allTabs(loaded).map(({ tab }) => tab.route)).toEqual(['/n/a.md', '/n/b.md']);
     }
+  });
+
+  // The desktop capture window and a /clip tab load the workspace and keep that copy: they must
+  // never write it over the one the main window saved since (on pagehide, or after a rename).
+  for (const page of ['/capture', '/clip?url=x']) {
+    it(`${page} never writes its old copy over a newer one`, async () => {
+      openInNewTab('/n/b.md');
+      saveWorkspaceNow();
+      window.history.replaceState(null, '', page);
+      resetWorkspace(loadWorkspace());
+      const newer = JSON.stringify(createWorkspace('/n/c.md'));
+      localStorage.setItem(WORKSPACE_KEY, newer);
+      window.dispatchEvent(new Event('pagehide'));
+      expect(localStorage.getItem(WORKSPACE_KEY)).toBe(newer);
+      rebaseWorkspace('b.md', 'd.md', 'file');
+      await new Promise((r) => setTimeout(r, 300));
+      expect(localStorage.getItem(WORKSPACE_KEY)).toBe(newer);
+    });
+  }
+
+  it('pagehide writes only a change that is not saved yet', () => {
+    saveWorkspaceNow();
+    const newer = JSON.stringify(createWorkspace('/n/c.md'));
+    // Another window of this device saved since: an unchanged page leaves that alone.
+    localStorage.setItem(WORKSPACE_KEY, newer);
+    window.dispatchEvent(new Event('pagehide'));
+    expect(localStorage.getItem(WORKSPACE_KEY)).toBe(newer);
+    openInNewTab('/n/b.md');
+    window.dispatchEvent(new Event('pagehide'));
+    expect(allTabs(JSON.parse(localStorage.getItem(WORKSPACE_KEY)!)).map(({ tab }) => tab.route)).toEqual(['/n/a.md', '/n/b.md']);
   });
 
   it('starts over from a damaged record', () => {

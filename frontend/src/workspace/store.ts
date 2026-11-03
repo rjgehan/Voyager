@@ -87,6 +87,9 @@ function trimmed(ws: Workspace): Workspace {
 export function saveWorkspaceNow(): void {
   if (saveTimer !== null) clearTimeout(saveTimer);
   saveTimer = null;
+  // The capture and clip pages keep the copy they loaded and never see later changes: writing it
+  // would put back the tabs of hours ago (the desktop capture window reloads after every capture).
+  if (outsideWorkspace(appPathname())) return;
   try {
     localStorage.setItem(vaultKey(WORKSPACE_KEY), JSON.stringify(trimmed(workspace())));
   } catch {
@@ -98,7 +101,13 @@ useWorkspace.subscribe(() => {
   if (saveTimer === null) saveTimer = setTimeout(saveWorkspaceNow, 250);
 });
 
-if (typeof window !== 'undefined') window.addEventListener('pagehide', saveWorkspaceNow);
+// Only a change not saved yet: storage already holds the rest, and another window of this device
+// may have saved a newer layout since.
+if (typeof window !== 'undefined') {
+  window.addEventListener('pagehide', () => {
+    if (saveTimer !== null) saveWorkspaceNow();
+  });
+}
 
 // ---------- changes ----------
 
