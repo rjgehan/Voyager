@@ -432,6 +432,65 @@ class TrashServiceTest {
 	}
 
 	@Test
+	void anEntryWhoseItemLeftTheTrashOutsideTheAppIsForgotten() throws Exception {
+		create("Work/Plan.md", "work plan");
+		TrashEntry first = this.vault.trash.deleteFile("Work/Plan.md", TestVault.ALICE, CLIENT);
+		// Emptied in Obsidian or a file manager.
+		Files.delete(this.dir.resolve(".trash/Plan.md"));
+
+		assertThat(this.vault.trash.list()).isEmpty();
+		assertThat(Files.readString(this.dir.resolve(".notesapp/trash.json"))).doesNotContain(first.id());
+
+		// Another tool trashes an unrelated Plan.md: it is not mistaken for the first one.
+		writeOnDisk(".trash/Plan.md", "personal plan");
+		TrashEntry listed = this.vault.trash.list().get(0);
+		assertThat(listed.id()).isEqualTo(TrashStore.untrackedId("Plan.md"));
+		assertThat(listed.originalPath()).isEqualTo("Plan.md");
+		assertThat(listed.deletedBy()).isEqualTo("unknown");
+		assertThat(restore(listed.id(), null).path()).isEqualTo("Plan.md");
+	}
+
+	@Test
+	void aTrashWriteDropsEntriesWhoseItemVanished() throws Exception {
+		create("Work/Plan.md", "work plan");
+		TrashEntry first = this.vault.trash.deleteFile("Work/Plan.md", TestVault.ALICE, CLIENT);
+		Files.delete(this.dir.resolve(".trash/Plan.md"));
+
+		// The next delete takes the same name; the old entry must not stay beside the new one.
+		create("Personal/Plan.md", "personal plan");
+		TrashEntry second = this.vault.trash.deleteFile("Personal/Plan.md", TestVault.ALICE, CLIENT);
+		String metadata = Files.readString(this.dir.resolve(".notesapp/trash.json"));
+		assertThat(metadata).doesNotContain(first.id()).contains(second.id());
+
+		restore(second.id(), null);
+		writeOnDisk(".trash/Plan.md", "x");
+		assertThat(this.vault.trash.list()).singleElement()
+			.satisfies((entry) -> assertThat(entry.id()).startsWith("x-"));
+	}
+
+	@Test
+	void aTrashJsonThatIsNotJsonIsKeptBesideItBeforeTheNextDelete() throws Exception {
+		create("Projects/Plan.md", "p");
+		this.vault.trash.deleteFile("Projects/Plan.md", TestVault.ALICE, CLIENT);
+		Path metadata = this.dir.resolve(".notesapp/trash.json");
+		String text = Files.readString(metadata).strip();
+		String broken = text.substring(0, text.length() - 1);
+		Files.writeString(metadata, broken);
+		assertThat(this.vault.trash.list()).singleElement()
+			.satisfies((entry) -> assertThat(entry.id()).startsWith("x-"));
+
+		create("Other.md", "o");
+		this.vault.trash.deleteFile("Other.md", TestVault.ALICE, CLIENT);
+
+		List<Path> backups;
+		try (var files = Files.list(this.dir.resolve(".notesapp"))) {
+			backups = files.filter((path) -> path.getFileName().toString().startsWith("trash.json.bak-")).toList();
+		}
+		assertThat(backups).singleElement().satisfies((backup) -> assertThat(backup).hasContent(broken));
+		assertThat(Files.readString(metadata)).contains("Other.md");
+	}
+
+	@Test
 	void trashIsNeverCommitted() throws Exception {
 		create("a.md", "a");
 		this.vault.trash.deleteFile("a.md", TestVault.ALICE, CLIENT);
