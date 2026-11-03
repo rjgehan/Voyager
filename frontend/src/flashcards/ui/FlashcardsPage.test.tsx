@@ -1,5 +1,6 @@
 import { QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { queryClient } from '../../api/queryClient';
@@ -79,6 +80,29 @@ describe('FlashcardsPage', () => {
     fireEvent.keyDown(window, { key: 'u' });
     expect(await screen.findByText('hola')).toBeInTheDocument();
     await waitFor(() => expect(flashcardApi.undo).toHaveBeenCalledWith({ card: sent.card, at: sent.at, state: undefined }));
+  });
+
+  it('Enter or Space on a focused button does what the button says, not the shortcut', async () => {
+    const user = userEvent.setup();
+    renderAt('/x/flashcards?view=review&deck=flashcards/spanish');
+    expect(await screen.findByText('hola')).toBeInTheDocument();
+    // With the focus on the page, Space still shows the answer.
+    fireEvent.keyDown(window, { key: ' ' });
+    expect(await screen.findByText('hello')).toBeInTheDocument();
+    const again = screen.getByRole('button', { name: /Again/ });
+    // The key is not taken from the button (its own activation follows).
+    expect(fireEvent.keyDown(again, { key: 'Enter' })).toBe(true);
+    expect(fireEvent.keyDown(again, { key: ' ' })).toBe(true);
+    expect(flashcardApi.review).not.toHaveBeenCalled();
+    again.focus();
+    await user.keyboard('{Enter}');
+    await waitFor(() => expect(flashcardApi.review).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(flashcardApi.review).mock.calls[0][0][0].rating).toBe('again');
+    // Enter on End review leaves the session instead of showing the answer.
+    const end = screen.getByRole('button', { name: 'End review' });
+    expect(fireEvent.keyDown(end, { key: 'Enter' })).toBe(true);
+    expect(screen.queryByText('hello')).not.toBeInTheDocument();
+    expect(screen.queryByText('goodbye')).not.toBeInTheDocument();
   });
 
   it('answers with the buttons and finishes', async () => {
