@@ -1,8 +1,8 @@
 {
   "name": "notesapp-desktop",
-  "productName": "NotesApp",
-  "version": "1.0.0",
-  "description": "NotesApp for Windows and macOS: a thin, hardened shell around your NotesApp server.",
+  "productName": "Voyager",
+  "version": "1.1.0",
+  "description": "Voyager for Windows and macOS: a thin, hardened shell around your Voyager server.",
   "author": "rjgehan",
   "license": "GPL-3.0-only",
   "private": true,
@@ -10,7 +10,7 @@
   "scripts": {
     "start": "electron .",
     "test": "node --test \"test/*.test.js\"",
-    "lint": "node --check src/main.js && node --check src/preload.js && node --check src/pages/setup.js && node --check src/pages/offline.js",
+    "lint": "node --check src/main.js && node --check src/userData.js && node --check src/preload.js && node --check src/pages/setup.js && node --check src/pages/offline.js",
     "dist:win": "electron-builder --win nsis --publish never",
     "dist:mac": "electron-builder --mac dmg --publish never",
     "dist:dir": "electron-builder --dir --publish never"

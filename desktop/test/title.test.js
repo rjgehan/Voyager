@@ -4,11 +4,11 @@ const assert = require('node:assert/strict');
 const { windowTitle, isConnectionState } = require('../src/title');
 
 test('the title shows the connection state', () => {
-  assert.equal(windowTitle('Inbox · Notes', 'live'), 'Inbox · Notes');
-  assert.equal(windowTitle('Inbox · Notes', 'reconnecting'), 'Inbox · Notes — Reconnecting…');
-  assert.equal(windowTitle('Inbox · Notes', 'offline'), 'Inbox · Notes — Offline');
-  assert.equal(windowTitle('', 'offline'), 'NotesApp — Offline');
-  assert.equal(windowTitle(undefined, 'weird'), 'NotesApp');
+  assert.equal(windowTitle('Inbox · Voyager', 'live'), 'Inbox · Voyager');
+  assert.equal(windowTitle('Inbox · Voyager', 'reconnecting'), 'Inbox · Voyager — Reconnecting…');
+  assert.equal(windowTitle('Inbox · Voyager', 'offline'), 'Inbox · Voyager — Offline');
+  assert.equal(windowTitle('', 'offline'), 'Voyager — Offline');
+  assert.equal(windowTitle(undefined, 'weird'), 'Voyager');
 });
 
 test('connection states', () => {

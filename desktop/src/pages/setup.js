@@ -12,7 +12,7 @@
   $('serverUrl').value = state.serverUrl || '';
   $('captureHotkey').value = state.captureHotkey || '';
   $('launchAtLogin').checked = !!state.launchAtLogin;
-  $('version').textContent = `NotesApp desktop ${state.version}`;
+  $('version').textContent = `Voyager desktop ${state.version}`;
   if (!state.firstRun) {
     $('heading').textContent = 'Settings';
     save.textContent = 'Save';

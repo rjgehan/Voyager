@@ -1,7 +1,13 @@
 # Packaging (ROADMAP item 41, docs/DESKTOP.md): a Windows NSIS installer and an unsigned macOS dmg.
 # The UI comes from the server, so the package holds only the shell in src/.
+#
+# The app was called NotesApp until 1.1.0 (ROADMAP item 45). appId must never change: the installer's
+# registry keys (install location, uninstall entry) are derived from it, so Voyager-Setup finds the
+# NotesApp install, runs its uninstaller (which removes NotesApp.exe and the NotesApp shortcuts and keeps
+# the user data), installs into the same folder and takes over the same Apps entry. The Windows taskbar
+# and notifications know the app by it too (app.setAppUserModelId in main.js).
 appId: com.rjgehan.notesapp.desktop
-productName: NotesApp
+productName: Voyager
 copyright: Copyright © rjgehan. GPL-3.0-only.
 directories:
   output: dist
@@ -15,8 +21,9 @@ electronLanguages: [en-US]
 
 win:
   target: [nsis]
-  icon: build/icon.png
-  artifactName: NotesApp-Setup-${version}.${ext}
+  # 16 to 48 px are the simplified drawing (scripts/brand/render-icons.mjs).
+  icon: build/icon.ico
+  artifactName: Voyager-Setup-${version}.${ext}
   # Not code-signed: Windows SmartScreen asks once ("More info" › "Run anyway").
   signAndEditExecutable: true
 nsis:
@@ -25,7 +32,7 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
-  shortcutName: NotesApp
+  shortcutName: Voyager
   # Keeps the window state and server setting when the app is removed and reinstalled.
   deleteAppDataOnUninstall: false
 
@@ -35,11 +42,11 @@ mac:
       arch: [universal]
   icon: build/icon.png
   category: public.app-category.productivity
-  artifactName: NotesApp-${version}-mac.${ext}
+  artifactName: Voyager-${version}-mac.${ext}
   # Unsigned and not notarised: ad-hoc signed only, so Apple Silicon runs it. Gatekeeper steps in docs/DESKTOP.md.
   identity: "-"
   hardenedRuntime: false
   gatekeeperAssess: false
   notarize: false
 dmg:
-  title: NotesApp ${version}
+  title: Voyager ${version}

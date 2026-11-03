@@ -54,7 +54,7 @@ test('permission checks mirror the requests', () => {
 });
 
 test('IPC senders', () => {
-  const pages = 'file:///C:/Program%20Files/NotesApp/resources/app.asar/src/pages/';
+  const pages = 'file:///C:/Users/me/AppData/Local/Programs/Voyager/resources/app.asar/src/pages/';
   assert.equal(isTrustedSender(`${ORIGIN}/n/a.md`, 'app', ORIGIN, pages), true);
   assert.equal(isTrustedSender('https://evil.example/', 'app', ORIGIN, pages), false);
   assert.equal(isTrustedSender(`${pages}setup.html`, 'app', ORIGIN, pages), false);

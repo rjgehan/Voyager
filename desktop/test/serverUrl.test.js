@@ -41,15 +41,20 @@ function response(status, body) {
   };
 }
 
-test('checkServer accepts a NotesApp manifest and asks for it without following redirects', async () => {
+test('checkServer accepts a Voyager manifest and asks for it without following redirects', async () => {
   let seen;
   const r = await checkServer('https://notes.example', async (url, init) => {
     seen = { url, init };
-    return response(200, { name: 'NotesApp', short_name: 'Notes' });
+    return response(200, { name: 'Voyager', short_name: 'Voyager' });
   });
   assert.deepEqual(r, { ok: true });
   assert.equal(seen.url, 'https://notes.example/manifest.webmanifest');
   assert.equal(seen.init.redirect, 'error');
+});
+
+test('checkServer still accepts a server from before the rename (NotesApp)', async () => {
+  const r = await checkServer('https://notes.example', async () => response(200, { name: 'NotesApp', short_name: 'Notes' }));
+  assert.deepEqual(r, { ok: true });
 });
 
 test('checkServer explains each failure', async () => {
@@ -81,10 +86,10 @@ test('checkServer explains each failure', async () => {
   assert.match(broken.error, /HTTP 502/);
 
   const other = await checkServer('https://notes.example', async () => response(200, { name: 'Something else' }));
-  assert.match(other.error, /isn't NotesApp/);
+  assert.match(other.error, /isn't Voyager/);
 
   const html = await checkServer('https://notes.example', async () => response(200, '<html>'));
-  assert.match(html.error, /isn't NotesApp/);
+  assert.match(html.error, /isn't Voyager/);
 });
 
 test('checkServer times out', async () => {

@@ -38,7 +38,7 @@ if (location.protocol === 'file:') {
     isCaptureWindow: arg('notes-window') === 'capture',
     notify: (n) =>
       ipcRenderer.send('app:notify', {
-        title: text(n && n.title, 200) ?? 'NotesApp',
+        title: text(n && n.title, 200) ?? 'Voyager',
         body: text(n && n.body, 1000),
         path: text(n && n.path, 4096),
       }),

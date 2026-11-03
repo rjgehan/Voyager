@@ -4,6 +4,9 @@ The desktop app shows Voyager in its own window on Windows and macOS, with a tra
 
 Step-by-step installation, including what to do when Windows SmartScreen or macOS Gatekeeper warn about an unsigned app, is in [DESKTOP.md](https://github.com/rjgehan/notesapp/blob/main/docs/DESKTOP.md).
 
+> [!NOTE]
+> Until November 2026 the app was called NotesApp. Installing Voyager on Windows replaces it and keeps your server address and settings; on a Mac, move the old NotesApp app to the Bin after installing Voyager. DESKTOP.md's *Updating from NotesApp* has the details.
+
 ## Before you start
 
 - **Tailscale** must be installed and connected on the computer, signed in with an account the server allows (the same as for the browser).

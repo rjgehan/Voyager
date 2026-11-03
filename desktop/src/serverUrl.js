@@ -3,6 +3,8 @@
 // Pure functions; main.js passes Electron's `net.fetch` to `checkServer`.
 
 const LOOPBACK = new Set(['localhost', '127.0.0.1', '[::1]']);
+/** The manifest's name: Voyager since ROADMAP item 45, NotesApp before it. */
+const APP_NAME = /voyager|notesapp/i;
 
 /** True for hosts whose plain-http pages are still a secure context (the service worker needs one). */
 function isLoopbackHost(hostname) {
@@ -19,7 +21,7 @@ function isLoopbackHost(hostname) {
  */
 function normalizeServerUrl(input) {
   const raw = String(input ?? '').trim();
-  if (!raw) return { ok: false, error: 'Enter the address of your NotesApp server.' };
+  if (!raw) return { ok: false, error: 'Enter the address of your Voyager server.' };
   if (raw.length > 2048) return { ok: false, error: 'That address is too long.' };
   const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`;
   let url;
@@ -34,7 +36,7 @@ function normalizeServerUrl(input) {
   if (url.username || url.password) return { ok: false, error: 'The address must not contain a user name or password.' };
   if (!url.hostname) return { ok: false, error: 'That is not a valid address.' };
   if (url.protocol === 'http:' && !isLoopbackHost(url.hostname)) {
-    return { ok: false, error: 'Use https:// (Tailscale serves your NotesApp over HTTPS, e.g. https://notes.<tailnet>.ts.net).' };
+    return { ok: false, error: 'Use https:// (Tailscale serves Voyager over HTTPS, e.g. https://notes.<tailnet>.ts.net).' };
   }
   return { ok: true, origin: url.origin };
 }
@@ -48,8 +50,9 @@ function describeNetworkError(e) {
 }
 
 /**
- * Checks that `origin` is a NotesApp server that admits this computer: its web app manifest answers
- * (the same Host and identity checks as every other request, DESIGN §5.13) and names NotesApp.
+ * Checks that `origin` is a Voyager server that admits this computer: its web app manifest answers
+ * (the same Host and identity checks as every other request, DESIGN §5.13) and names the app: Voyager,
+ * or NotesApp for a server not yet updated past the rename (ROADMAP item 45).
  * @param {string} origin
  * @param {(url: string, init?: object) => Promise<Response>} fetchImpl
  * @returns {Promise<{ ok: true } | { ok: false, error: string, reachable: boolean }>}
@@ -76,10 +79,10 @@ async function checkServer(origin, fetchImpl, timeoutMs = 10_000) {
   try {
     manifest = await res.json();
   } catch {
-    // Not JSON: not a NotesApp server.
+    // Not JSON: not a Voyager server.
   }
-  if (!manifest || typeof manifest.name !== 'string' || !/notesapp/i.test(manifest.name)) {
-    return { ok: false, reachable: true, error: "That server answers, but it isn't NotesApp." };
+  if (!manifest || typeof manifest.name !== 'string' || !APP_NAME.test(manifest.name)) {
+    return { ok: false, reachable: true, error: "That server answers, but it isn't Voyager." };
   }
   return { ok: true };
 }

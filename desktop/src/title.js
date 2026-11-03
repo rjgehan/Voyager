@@ -13,7 +13,7 @@ const SUFFIX = {
  * @param {'live' | 'reconnecting' | 'offline'} connection what the page reported (desktop/bridge.ts)
  */
 function windowTitle(pageTitle, connection) {
-  const base = typeof pageTitle === 'string' && pageTitle.trim() ? pageTitle.trim() : 'NotesApp';
+  const base = typeof pageTitle === 'string' && pageTitle.trim() ? pageTitle.trim() : 'Voyager';
   return base + (SUFFIX[connection] ?? '');
 }
 

@@ -1,6 +1,6 @@
 'use strict';
-// NotesApp for Windows and macOS (ROADMAP item 41, docs/DESKTOP.md): a thin, hardened Electron shell
-// around the user's NotesApp server. It bundles no copy of the web app: the main window loads the
+// Voyager for Windows and macOS (ROADMAP item 41, docs/DESKTOP.md): a thin, hardened Electron shell
+// around the user's Voyager server. It bundles no copy of the web app: the main window loads the
 // configured server over Tailscale, so every deploy updates the desktop UI and live sync is the same
 // event stream the browser uses. Offline, the app's own service worker serves the cached app.
 const path = require('node:path');
@@ -32,12 +32,19 @@ const {
 } = require('./security');
 const { restoreBounds, snapshot, captureBounds } = require('./windowState');
 const { windowTitle, isConnectionState } = require('./title');
+const { useUserData } = require('./userData');
 
 const APP_ID = 'com.rjgehan.notesapp.desktop';
 const PAGES_DIR = path.join(__dirname, 'pages');
 const PAGES_URL = pathToFileURL(PAGES_DIR).href + '/';
 const PRELOAD = path.join(__dirname, 'preload.js');
+/** The icon at 256 px: the shell's pages, notifications, and the windows on macOS. */
 const ICON = path.join(PAGES_DIR, 'icon.png');
+/** Every size Windows asks for, 16 to 48 px drawn simpler (scripts/brand): the windows and the tray. */
+const ICON_ICO = path.join(PAGES_DIR, 'icon.ico');
+/** The simplified drawing at 64 px, for the macOS menu bar. */
+const ICON_SMALL = path.join(PAGES_DIR, 'icon-small.png');
+const WINDOW_ICON = process.platform === 'win32' ? ICON_ICO : ICON;
 const OFFLINE_RETRY_MS = 15_000;
 /** Chromium's ERR_ABORTED: a navigation replaced by another one, not a failure. */
 const ERR_ABORTED = -3;
@@ -54,7 +61,7 @@ let setupWindow = null;
 /** @type {Tray | null} */
 let tray = null;
 let quitting = false;
-let pageTitle = 'NotesApp';
+let pageTitle = 'Voyager';
 /** The main window's connection state: reported by the page, or `offline` while the shell's offline page shows. */
 let connection = 'live';
 let offlineTimer = null;
@@ -106,7 +113,7 @@ app.on('web-contents-created', (_event, contents) => {
     if (kind === 'allow') {
       return {
         action: 'allow',
-        overrideBrowserWindowOptions: { autoHideMenuBar: true, icon: ICON, webPreferences: secureWebPreferences(PRELOAD, windowArgs('popup')) },
+        overrideBrowserWindowOptions: { autoHideMenuBar: true, icon: WINDOW_ICON, webPreferences: secureWebPreferences(PRELOAD, windowArgs('popup')) },
       };
     }
     if (kind === 'external') openExternal(url);
@@ -243,7 +250,7 @@ function installIpc() {
 
   ipcMain.on('app:notify', (event, n) => {
     if (!fromApp(event) || !n || typeof n !== 'object') return;
-    notify(String(n.title || 'NotesApp'), typeof n.body === 'string' ? n.body : '', typeof n.path === 'string' ? n.path : null);
+    notify(String(n.title || 'Voyager'), typeof n.body === 'string' ? n.body : '', typeof n.path === 'string' ? n.path : null);
   });
 
   // The page's window.focus() (a notification's click handler, e.g. a reminder) brings the window
@@ -274,8 +281,8 @@ function createMainWindow({ show }) {
     minWidth: 480,
     minHeight: 360,
     show: false,
-    title: 'NotesApp',
-    icon: ICON,
+    title: 'Voyager',
+    icon: WINDOW_ICON,
     backgroundColor: '#1e1e1e',
     autoHideMenuBar: true,
     // In the tray the page keeps its live-sync stream and timers at full speed, so reminders
@@ -336,9 +343,9 @@ function saveWindowNow() {
 
 function updateTitle() {
   if (!mainWindow || mainWindow.isDestroyed()) return;
-  const title = windowTitle(offlineTimer ? 'NotesApp' : pageTitle, connection);
+  const title = windowTitle(offlineTimer ? 'Voyager' : pageTitle, connection);
   mainWindow.setTitle(title);
-  if (tray) tray.setToolTip(connection === 'live' ? 'NotesApp' : title);
+  if (tray) tray.setToolTip(connection === 'live' ? 'Voyager' : title);
 }
 
 function loadServer(appPath = '/') {
@@ -432,7 +439,7 @@ function createCaptureWindow() {
     minHeight: 300,
     show: false,
     title: 'Quick capture',
-    icon: ICON,
+    icon: WINDOW_ICON,
     alwaysOnTop: true,
     skipTaskbar: true,
     minimizable: false,
@@ -448,7 +455,7 @@ function createCaptureWindow() {
   wc.on('did-fail-load', (_e, code, description, url, isMainFrame) => {
     if (isMainFrame && code !== ERR_ABORTED && isServerUrl(url, serverOrigin())) showOffline(captureWindow, description);
   });
-  // The capture page's "Open the note" and "Open NotesApp" go to the main window.
+  // The capture page's "Open the note" and "Open Voyager" go to the main window.
   const leaveCapture = (url) => {
     if (!isServerUrl(url, serverOrigin())) return false;
     const u = new URL(url);
@@ -530,8 +537,8 @@ function openSetup() {
     minimizable: false,
     maximizable: false,
     fullscreenable: false,
-    title: 'NotesApp — Settings',
-    icon: ICON,
+    title: 'Voyager — Settings',
+    icon: WINDOW_ICON,
     autoHideMenuBar: true,
     show: false,
     backgroundColor: '#1e1e1e',
@@ -562,8 +569,9 @@ function applyLaunchAtLogin() {
 }
 
 function trayIcon() {
-  const size = process.platform === 'darwin' ? 18 : 16;
-  return nativeImage.createFromPath(ICON).resize({ width: size, height: size, quality: 'best' });
+  // Windows picks the icon file's own 16 px (or, scaled, 20 to 32 px) image; the menu bar takes 18 pt.
+  if (process.platform === 'win32') return nativeImage.createFromPath(ICON_ICO);
+  return nativeImage.createFromPath(ICON_SMALL).resize({ width: 18, height: 18, quality: 'best' });
 }
 
 function hotkeyLabel() {
@@ -575,7 +583,7 @@ function hotkeyLabel() {
 function buildTrayMenu() {
   return Menu.buildFromTemplate([
     { label: hotkeyLabel(), click: showCapture },
-    { label: 'Open NotesApp', click: showMain },
+    { label: 'Open Voyager', click: showMain },
     {
       label: "Open today's note",
       click: () => {
@@ -597,8 +605,8 @@ function buildTrayMenu() {
     },
     { label: 'Settings…', click: openSetup },
     { type: 'separator' },
-    { label: `NotesApp desktop ${version()}`, enabled: false },
-    { label: 'Quit NotesApp', click: () => app.quit() },
+    { label: `Voyager desktop ${version()}`, enabled: false },
+    { label: 'Quit Voyager', click: () => app.quit() },
   ]);
 }
 
@@ -611,7 +619,7 @@ function currentAppPath() {
 
 function createTray() {
   tray = new Tray(trayIcon());
-  tray.setToolTip('NotesApp');
+  tray.setToolTip('Voyager');
   const refresh = () => tray.setContextMenu(buildTrayMenu());
   refresh();
   // Windows: a click opens the app; the menu is on right-click. (macOS shows the menu on click.)
@@ -646,7 +654,7 @@ function buildAppMenu() {
       submenu: [
         { role: 'minimize' },
         { label: 'Quick capture', click: showCapture },
-        { label: 'Open NotesApp', click: showMain },
+        { label: 'Open Voyager', click: showMain },
         { label: 'Settings…', click: openSetup },
       ],
     },
@@ -654,6 +662,10 @@ function buildAppMenu() {
 }
 
 // ---------------------------------------------------------------- lifecycle
+
+// The user-data folder first: the single-instance lock, the settings and the web storage all live
+// there, and a computer that ran the app as NotesApp keeps its folder (userData.js, ROADMAP item 45).
+useUserData(app);
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -663,6 +675,9 @@ if (!app.requestSingleInstanceLock()) {
 
   app.whenReady().then(() => {
     settings = settingsStore.load(settingsFile());
+    // The login item names the program's file, which was NotesApp.exe (NotesApp.app) before the app
+    // was renamed (ROADMAP item 45): register it again, so an updated install still starts at login.
+    if (settings.launchAtLogin) applyLaunchAtLogin();
     installSessionPolicy();
     installIpc();
     Menu.setApplicationMenu(buildAppMenu());

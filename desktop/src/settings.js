@@ -1,6 +1,7 @@
 'use strict';
 // The shell's own settings (docs/DESKTOP.md), a small JSON file in the app's user-data folder
-// (%APPDATA%\NotesApp on Windows, ~/Library/Application Support/NotesApp on macOS). No tokens or
+// (%APPDATA%\Voyager on Windows, ~/Library/Application Support/Voyager on macOS, or the NotesApp
+// folder of a computer that ran the app before it was renamed: userData.js). No tokens or
 // passwords: the server knows this computer by its Tailscale identity.
 const fs = require('node:fs');
 const path = require('node:path');
