@@ -138,9 +138,13 @@ function registerCreateCommands(): void {
   }
 }
 
-/** F2 / "Rename current file": the inline title when the note shows one, otherwise a prompt. */
+/**
+ * F2 / "Rename current file": the inline title when the note shows one, otherwise a prompt. Only the
+ * active pane's title (its scroll container is #workspace-scroll, DESIGN §6.40): with split panes the
+ * first title in the page may be another note's.
+ */
 function renameCurrent(path: string): void {
-  const title = document.querySelector<HTMLTextAreaElement>('.inline-title-input:not([readonly])');
+  const title = document.getElementById('workspace-scroll')?.querySelector<HTMLTextAreaElement>('.inline-title-input:not([readonly])');
   if (title) {
     title.focus();
     title.select();
