@@ -109,9 +109,18 @@ function guestNote(n: QueriedNote) {
   return { ...n, mtimeLocal: Number.isFinite(mtime.getTime()) ? localWallMs(mtime) : 0 };
 }
 
-/** Answers one run's API calls. */
-export function createHost(deps: HostDeps): { call(name: string, args: string): Promise<string>; reads: ReadSet } {
+const count = (n: number) => n.toLocaleString('en-US');
+
+/**
+ * Answers one run's API calls. `notices` collects what the block should say under its output: a
+ * query over more notes than the endpoint returns ran on the first ones only (API.md §40.1).
+ */
+export function createHost(deps: HostDeps): { call(name: string, args: string): Promise<string>; reads: ReadSet; notices: string[] } {
   const reads: ReadSet = { paths: new Set(), broad: false };
+  const notices: string[] = [];
+  const notice = (text: string) => {
+    if (!notices.includes(text)) notices.push(text);
+  };
   const now = () => deps.now?.() ?? new Date();
 
   const notePath = (ref: string): string | null => deps.resolve(ref);
@@ -182,6 +191,8 @@ export function createHost(deps: HostDeps): { call(name: string, args: string): 
         const q = parseQuery(args);
         const f = sourceFilter(q);
         const r = await deps.queryNotes({ tag: f.tag, folder: f.folder, linksTo: f.linksTo, tasks: f.tasks, limit: MAX_LIMIT });
+        // WHERE, SORT and LIMIT run here, on the notes the endpoint returned (in path order).
+        if (r.truncated) notice(`Only the first ${count(r.notes.length)} of ${count(r.total)} notes (in path order) were searched: narrow the query with FROM.`);
         return runQuery(q, r.notes, evalContext());
       } catch (e) {
         if (e instanceof QueryError) throw new HostError(`Query: ${e.message}`);
@@ -192,6 +203,7 @@ export function createHost(deps: HostDeps): { call(name: string, args: string): 
 
   return {
     reads,
+    notices,
     async call(name, argsJson) {
       const handler = Object.prototype.hasOwnProperty.call(handlers, name) ? handlers[name] : undefined;
       if (!handler) return JSON.stringify({ e: `Unknown API call: ${name}` });

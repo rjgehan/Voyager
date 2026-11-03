@@ -31,8 +31,10 @@ export async function runNoteScript(path: string, request: ScriptRequest): Promi
     resolve: (target) => resolve(target, path, currentTree().links),
     evaluate: request.evaluate,
   });
+  // The host's own sentences (no script text), in italics under the output.
+  const notices = result.notices.map((n) => `*${n}*`);
   return {
-    markdown: outputMarkdown(result.output),
+    markdown: [outputMarkdown(result.output), ...notices].filter((b) => b !== '').join('\n\n'),
     // A query's error has no line of its own: the block's one line is not worth a number.
     error: result.error ? { ...result.error, line: request.kind === 'dataview' ? null : result.error.line } : null,
     reads: result.reads,

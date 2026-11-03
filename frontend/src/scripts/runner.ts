@@ -11,6 +11,8 @@ export interface RunResult {
   output: OutputItem[];
   error: ScriptError | null;
   reads: ReadSet;
+  /** What to say under the output (a query that searched only part of the vault). */
+  notices: string[];
 }
 
 interface Pending {
@@ -100,7 +102,7 @@ async function runOnce(code: string, path: string, host: ReturnType<typeof creat
 /** Runs a script of the note `deps.path`; runs queue behind each other. */
 export function runScript(code: string, deps: HostDeps): Promise<RunResult> {
   const host = createHost(deps);
-  const run = queue.then(() => runOnce(code, deps.path, host)).then((r) => ({ ...r, reads: host.reads }));
+  const run = queue.then(() => runOnce(code, deps.path, host)).then((r) => ({ ...r, reads: host.reads, notices: host.notices }));
   queue = run.catch(() => {});
   return run;
 }

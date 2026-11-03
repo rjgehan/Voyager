@@ -31,6 +31,8 @@ The pieces:
 
 Besides your own properties, you can use `file.name`, `file.folder`, `file.mtime` (last changed), `file.tags`, `file.size`, `file.link` and more, and functions such as `contains(tags, "work")`, `date("today")`, `length(…)` and `lower(…)`. This is a large part of the Obsidian Dataview plugin's query language; `GROUP BY`, `FLATTEN`, `CALENDAR` and `dataviewjs` are not supported.
 
+A query looks at up to 2,000 notes: the ones its `FROM` picks, taken in path order. In a bigger vault, a query without `FROM` (or one whose `FROM` matches more notes) works on the first 2,000 only and says so under its result; add a `FROM` to narrow it.
+
 ## A script: a few lines of JavaScript
 
 Type `/script` and pick **Script block** for a small example. A script uses a handful of functions to read your notes and `show()` to display things:
