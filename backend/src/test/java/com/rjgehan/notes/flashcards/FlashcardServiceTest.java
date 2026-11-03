@@ -4,10 +4,16 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.List;
 import java.util.stream.Stream;
 
 import com.rjgehan.notes.api.dto.FlashcardReview;
+import com.rjgehan.notes.api.dto.FlashcardWriteResult;
+import com.rjgehan.notes.history.Author;
+import com.rjgehan.notes.vault.Hashing;
+import com.rjgehan.notes.vault.ApiPath;
+import com.rjgehan.notes.api.error.NotesException;
 import com.rjgehan.notes.support.TestVault;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -16,6 +22,7 @@ import org.junit.jupiter.api.io.TempDir;
 import tools.jackson.databind.node.ObjectNode;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** {@code .notesapp/srs.json} on disk: what a write does to a file that could not be read in full. */
 class FlashcardServiceTest {
@@ -113,6 +120,23 @@ class FlashcardServiceTest {
 		this.service.review(List.of(review("b2", "2026-10-14T09:01:00.000Z", "good")), TestVault.ALICE, null);
 
 		assertThat(backups()).isEmpty();
+	}
+
+	@Test
+	void anAnswerRefusedAsBusyIsWrittenWhenItIsRetried() throws IOException {
+		this.vault.batcher.beginImport();
+		this.vault.batcher.setImportWait(Duration.ofMillis(10));
+		this.vault.batcher.markDirty(new ApiPath("other.md", "other.md"), Author.of(TestVault.BOB));
+		List<FlashcardReview> answer = List.of(review("c1", "2026-10-15T10:00:00.000Z", "good"));
+
+		assertThatThrownBy(() -> this.service.review(answer, TestVault.ALICE, null)).isInstanceOf(NotesException.class);
+		assertThat(file()).doesNotExist();
+		assertThat(this.service.state().cards()).doesNotContainKey("c1");
+
+		this.vault.batcher.endImport();
+		FlashcardWriteResult retried = this.service.review(answer, TestVault.ALICE, null);
+		assertThat(Files.readString(file())).contains("\"c1\"");
+		assertThat(retried.version()).isEqualTo(Hashing.blobId(Files.readAllBytes(file())));
 	}
 
 }
