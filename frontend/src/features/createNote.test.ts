@@ -4,7 +4,7 @@ import { createMockEndpoints } from '../api/mock';
 import { MockVault } from '../api/mock/vault';
 import { queryClient } from '../api/queryClient';
 import { queryKeys } from '../api/queryKeys';
-import { clearPendingNote, hasPendingBody, setPendingBody, updatePendingTitle, usePendingNote } from '../state/pendingNote';
+import { clearPendingNote, hasPendingBody, setPendingBody, updatePendingSelection, updatePendingTitle, usePendingNote } from '../state/pendingNote';
 import { documents } from '../sync/instance';
 import { newDrawingContent } from '../views/excalidraw/format';
 import { createNote } from './fileOps';
@@ -14,19 +14,46 @@ import { templateRenderer } from './templates';
 
 let vault: MockVault;
 let routes: string[];
+/** Whether the new note's session could take input when the route switched to it. */
+let editableAtSwap: boolean[];
 
 beforeEach(() => {
   vault = new MockVault(false);
   installEndpoints(createMockEndpoints(vault, { latency: 0, failures: [] }));
   queryClient.setQueryData(queryKeys.tree(), vault.getTree());
   routes = [];
-  setNavigator((to) => routes.push(to));
+  editableAtSwap = [];
+  setNavigator((to) => {
+    routes.push(to);
+    const path = decodeURIComponent(to.slice('/n/'.length));
+    if (path.endsWith('.md')) editableAtSwap.push(documents.get(path)?.isEditable() ?? false);
+  });
   usePendingNote.setState({ pending: null, handoff: null });
 });
 
 afterEach(() => {
   queryClient.clear();
 });
+
+/** Holds the first read of `path` (the new note's session load) until `release` is called. */
+function gateRead(path: string): () => void {
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  const read = api.readFile;
+  const spy = vi.spyOn(api, 'readFile').mockImplementation(async (p, ...rest) => {
+    if (p === path) await gate;
+    return read(p, ...rest);
+  });
+  onTestFinished(() => spy.mockRestore());
+  return release;
+}
+
+/** The note's session, closed when the test ends (the registry outlives the test's vault). */
+function sessionOf(path: string) {
+  const session = documents.get(path)!;
+  onTestFinished(() => documents.close(session));
+  return session;
+}
 
 const settle = () => vi.waitFor(() => expect(vault.getTree().files.length).toBeGreaterThan(0));
 
@@ -54,12 +81,23 @@ describe('createNote for files without an inline title (a new drawing, DESIGN §
     await vi.waitFor(() => expect(routes).toEqual(['/n/Untitled.excalidraw']));
   });
 
-  it('a note still opens at once and hands its title over to the inline title', async () => {
+  it('a note opens once it has loaded and hands the title typed by then over to the inline title', async () => {
+    const release = gateRead('Untitled.md');
     createNote('', '', 'md');
     const id = usePendingNote.getState().pending!.id;
-    updatePendingTitle(id, 'Half typ', false);
+    updatePendingTitle(id, 'Shop', false);
+    await settle();
+    // Created, but its text is still being read: the pending view keeps taking the title.
+    await new Promise((r) => setTimeout(r, 20));
+    expect(routes).toEqual([]);
+    expect(usePendingNote.getState().pending).toMatchObject({ id, title: 'Shop' });
+    updatePendingTitle(id, 'Shopping', false);
+    updatePendingSelection(id, 8, 8);
+    release();
     await vi.waitFor(() => expect(routes).toEqual(['/n/Untitled.md']));
-    expect(usePendingNote.getState().handoff).toMatchObject({ path: 'Untitled.md', title: 'Half typ' });
+    // The inline title is editable and the editor mounts in the same commit as the swap.
+    expect(editableAtSwap).toEqual([true]);
+    expect(usePendingNote.getState().handoff).toEqual({ path: 'Untitled.md', title: 'Shopping', selectionStart: 8, selectionEnd: 8 });
   });
 });
 
@@ -75,13 +113,6 @@ describe('writing typed into a new note before it exists (DESIGN §6.15)', () =>
     });
     onTestFinished(() => spy.mockRestore());
     return release;
-  }
-
-  /** The note's session, closed when the test ends (the registry outlives the test's vault). */
-  function sessionOf(path: string) {
-    const session = documents.get(path)!;
-    onTestFinished(() => documents.close(session));
-    return session;
   }
 
   it('goes into the note under its new name, with everything typed meanwhile and the caret where it was', async () => {
@@ -146,11 +177,23 @@ describe('writing typed into a new note before it exists (DESIGN §6.15)', () =>
     expect(routes).toEqual([]);
   });
 
-  it('opens a note without a body as soon as it exists', async () => {
+  it('opens a note without a body once it has loaded, with what was typed into the body meanwhile', async () => {
+    const release = gateRead('Plan.md');
     createNote('', '', 'md');
     const id = usePendingNote.getState().pending!.id;
+    // Enter in the title: the body has the focus, nothing typed into it yet.
     updatePendingTitle(id, 'Plan', true);
+    await vi.waitFor(() => expect(vault.getTree().files.map((f) => f.path)).toEqual(['Plan.md']));
+    await new Promise((r) => setTimeout(r, 20));
+    // The pending view (and its focused body field) stays while the note is read.
+    expect(routes).toEqual([]);
+    expect(usePendingNote.getState().pending).toMatchObject({ id, committed: true });
+    setPendingBody(id, { text: 'Step one', selectionStart: 8, selectionEnd: 8 });
+    release();
     await vi.waitFor(() => expect(routes).toEqual(['/n/Plan.md']));
-    expect(documents.get('Plan.md')).toBeUndefined();
+    expect(editableAtSwap).toEqual([true]);
+    const session = sessionOf('Plan.md');
+    expect(session.getText()).toBe('Step one');
+    expect(session.editorState.selection.main.head).toBe(8);
   });
 });

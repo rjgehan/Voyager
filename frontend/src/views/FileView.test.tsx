@@ -11,7 +11,7 @@ import { navigateTo, setNavigator } from '../features/navigation';
 import { moveMap } from '../sync/instance';
 import { moveEntry } from '../sync/treePatch';
 import { FileView } from './FileView';
-import { registerView, type FileViewProps } from './registry';
+import { preloadView, registerView, type FileViewProps } from './registry';
 
 let mounts = 0;
 
@@ -29,6 +29,19 @@ registerView({
   textual: false,
   modes: ['read'],
   load: () => Promise.resolve({ default: ProbeView }),
+});
+
+function LateView({ path }: FileViewProps) {
+  return <div data-testid="late">{path}</div>;
+}
+
+registerView({
+  id: 'late',
+  match: (e) => (e.path.endsWith('.late') ? 10 : 0),
+  icon: FileText,
+  textual: false,
+  modes: ['read'],
+  load: () => new Promise((r) => setTimeout(() => r({ default: LateView }), 10)),
 });
 
 function entry(path: string): FileEntry {
@@ -69,5 +82,19 @@ describe('FileView (FE-2, ux)', () => {
     act(() => navigateTo('/n/other.probe'));
     expect(await screen.findByText('other.probe')).toBeInTheDocument();
     expect(mounts).toBe(2);
+  });
+
+  it('shows a preloaded view in its first commit, without a fallback first (DESIGN §6.15 new note)', async () => {
+    const late = { ...entry('new.late'), extension: 'late' };
+    queryClient.setQueryData(queryKeys.tree(), { eventId: 'b.1', folders: [], files: [late] });
+    await preloadView(late);
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={['/n/new.late']}>
+          <FileView />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    expect(screen.getByTestId('late')).toHaveTextContent('new.late');
   });
 });

@@ -68,6 +68,8 @@ export function PendingNoteView({ pending }: { pending: PendingNote }) {
                 setTitle(e.target.value);
                 autoGrow(e.target);
                 updatePendingTitle(pending.id, e.target.value, false);
+                // onSelect follows the key, so the selection is kept with the text it belongs to.
+                updatePendingSelection(pending.id, e.target.selectionStart, e.target.selectionEnd);
               }}
               onSelect={(e) => updatePendingSelection(pending.id, e.currentTarget.selectionStart, e.currentTarget.selectionEnd)}
               onKeyDown={onKeyDown}

@@ -59,6 +59,17 @@ describe('PendingNoteView', () => {
     expect(takePendingBody(5)).toEqual({ text: 'milk\neggs', selectionStart: 9, selectionEnd: 9 });
   });
 
+  it('keeps the title’s selection with the text it belongs to', () => {
+    queryClient.setQueryData(queryKeys.settings(), { settings: DEFAULT_SETTINGS, version: 'v1', readOnly: false });
+    startPendingNote(7, '', 'Untitled');
+    render(view());
+    const title = screen.getByLabelText<HTMLTextAreaElement>('Note title');
+    // "I" typed over the selected "Untitled": the input event comes before any selectionchange, and
+    // the note may be handed over in between.
+    fireEvent.change(title, { target: { value: 'I', selectionStart: 1, selectionEnd: 1 } });
+    expect(usePendingNote.getState().pending).toMatchObject({ title: 'I', selectionStart: 1, selectionEnd: 1 });
+  });
+
   it('a tap in the body commits the title the same way', () => {
     queryClient.setQueryData(queryKeys.settings(), { settings: DEFAULT_SETTINGS, version: 'v1', readOnly: false });
     startPendingNote(6, '', 'Untitled');

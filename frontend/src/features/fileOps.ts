@@ -11,6 +11,7 @@ import { clearPendingNote, hasPendingBody, startPendingNote, takePendingBody, us
 import { toast } from '../state/toasts';
 import { useUi } from '../state/ui';
 import { applyFolderResult, applyMoveResult, applyRestoreResult, applyTrashEntry } from '../sync/applyEvents';
+import type { DocumentSession } from '../sync/DocumentSession';
 import { documents } from '../sync/instance';
 import { syncTarget } from '../sync/liveSync';
 import { applyWriteResult } from '../sync/treePatch';
@@ -23,6 +24,7 @@ import { afterOpen, requestNoteFocus } from './focus';
 import { folderTemplateOutput, folderTemplateRenderer, placeTemplateCursor } from './folderTemplates';
 import type { TemplateOutput } from './templates';
 import { retitleText } from './templateTitle';
+import { preloadView } from '../views/registry';
 
 /** The default new-note location (API.md §5 `newNoteLocation`). */
 export function newNoteFolder(fromPath: string | null, settings: Settings = currentSettings()): string {
@@ -93,32 +95,42 @@ export async function retitleNewNote(from: string, to: string): Promise<void> {
 const BODY_HOLDER = 'pending-body';
 
 /**
- * Writing typed into the pending view's body (DESIGN §6.15) moves into the new note at `path`. Once
- * the note has loaded, the text typed by then goes in at the note's caret (a template's `{{cursor}}`)
- * or its end, with the caret where it was in the body, and `open` runs in the same task while the
- * pending view is still up, so nothing typed meanwhile is lost. Text left behind by a navigation goes
- * in too, without opening the note.
+ * Writing typed into the pending view's body (DESIGN §6.15) goes into the loaded note at the note's
+ * caret (a template's `{{cursor}}`) or its end, with the caret where it was in the body.
  */
-async function handOverBody(path: string, id: number, open: () => void): Promise<void> {
-  const session = documents.acquire(path, BODY_HOLDER);
-  try {
-    await session.whenSettled();
-    const body = takePendingBody(id);
-    if (body && session.isEditable()) {
-      const { from, to } = session.insertionRange();
-      session.applyEdit({ from, to, insert: body.text }, { selection: { anchor: from + body.selectionStart, head: from + body.selectionEnd } });
-    }
-    if (usePendingNote.getState().pending?.id === id) open();
-  } finally {
-    documents.release(session, BODY_HOLDER);
-  }
+function insertPendingBody(session: DocumentSession, id: number): void {
+  if (!hasPendingBody(id) || !session.isEditable()) return;
+  const body = takePendingBody(id)!;
+  const { from, to } = session.insertionRange();
+  session.applyEdit({ from, to, insert: body.text }, { selection: { anchor: from + body.selectionStart, head: from + body.selectionEnd } });
 }
 
-/** The new note at `path` replaces its pending view, with the focus in its text. */
-function openNewNote(path: string, id: number): void {
-  clearPendingNote(id);
-  requestNoteFocus();
-  openPath(path, null, { newNote: true });
+/**
+ * The new file at `path` replaces pending note `id` (DESIGN §6.15) once it can take input at once:
+ * a note's session has loaded (so its inline title is editable and its editor mounts in the same
+ * commit) and the view's chunk is loaded. The pending view keeps taking keys meanwhile; then, in one
+ * task, the body typed by then goes in, the title typed by then (with its selection) goes to the
+ * inline title, and the note opens. If the user went elsewhere meanwhile, the body still goes in.
+ */
+async function openWhenReady(path: string, id: number, note: boolean): Promise<void> {
+  const session = note ? documents.acquire(path, BODY_HOLDER) : null;
+  try {
+    const entry = currentTree().byPath.get(path);
+    await Promise.all([session?.whenSettled(), entry ? preloadView(entry).catch(() => undefined) : undefined]);
+    if (session) insertPendingBody(session, id);
+    const { pending } = usePendingNote.getState();
+    if (pending?.id !== id) return;
+    // A title still being typed continues in the inline title; after a committed one the writing
+    // continues in the note's text.
+    usePendingNote.setState({
+      pending: null,
+      handoff: pending.committed ? null : { path, title: pending.title, selectionStart: pending.selectionStart, selectionEnd: pending.selectionEnd },
+    });
+    if (pending.committed) requestNoteFocus();
+    openPath(path, null, { newNote: true });
+  } finally {
+    if (session) documents.release(session, BODY_HOLDER);
+  }
 }
 
 /** The pending note `id` once its title is committed, or null when another view replaced it. */
@@ -180,44 +192,29 @@ export function createNote(folder: string, initialContent: string | Promise<stri
     // the pending view: it opens once the title is committed (Enter or blur), or never if the
     // user went elsewhere.
     if (extension !== 'md' && pending?.id === id && !pending.committed) pending = await titleCommitted(id);
+    const note = extension === 'md';
     if (!pending || pending.id !== id) {
       // The user went elsewhere; the note exists (as `Untitled 1`, say), with anything typed into
       // its body.
-      void retitleNewNote(created.path, created.path).then(() => (hasPendingBody(id) ? handOverBody(created.path, id, () => undefined) : undefined));
+      await retitleNewNote(created.path, created.path);
+      if (hasPendingBody(id)) await openWhenReady(created.path, id, note);
       return;
     }
     const wanted = pending.title.trim();
+    let final = created.path;
     // An untouched title keeps the server's free name (`Untitled 1` when `Untitled` exists).
     if (pending.committed && wanted !== '' && wanted !== initialTitle && wanted !== created.basename) {
-      let final = created.path;
       try {
         final = await renameEntry(created.path, wanted, 'file');
       } catch (e) {
         toastError(e);
       }
-      await retitleNewNote(created.path, final);
-      // The title was committed (Enter, or a tap on the body area): writing continues in the note,
-      // with what was typed into the body meanwhile.
-      if (hasPendingBody(id)) await handOverBody(final, id, () => openNewNote(final, id));
-      else if (usePendingNote.getState().pending?.id === id) openNewNote(final, id);
-      return;
     }
-    if (pending.committed && hasPendingBody(id)) {
-      // Writing started in the body: it goes in once the note (and a template's cursor) is there.
-      await retitleNewNote(created.path, created.path);
-      await handOverBody(created.path, id, () => openNewNote(created.path, id));
-      return;
-    }
-    const { title, selectionStart, selectionEnd } = pending;
-    usePendingNote.setState({
-      pending: null,
-      handoff: pending.committed ? null : { path: created.path, title, selectionStart, selectionEnd },
-    });
-    if (pending.committed) requestNoteFocus();
-    openPath(created.path, null, { newNote: true });
-    // The server's free name (`Untitled 1`); the inline title's rename retitles it again later.
-    // A body typed while a template's questions held the title goes in too.
-    void retitleNewNote(created.path, created.path).then(() => (hasPendingBody(id) ? handOverBody(created.path, id, () => undefined) : undefined));
+    // A template's `{{title}}` follows the final name (the server's free name, `Untitled 1`, until
+    // the inline title renames it) and its `{{cursor}}` places the caret; then the note replaces
+    // the pending view, with what was typed into its title and body meanwhile.
+    await retitleNewNote(created.path, final);
+    await openWhenReady(final, id, note);
   })();
 }
 
