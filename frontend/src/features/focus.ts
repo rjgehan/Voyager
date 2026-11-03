@@ -10,6 +10,10 @@ let focusUntil = 0;
 /** The file the request was made for; null for whichever view mounts next. */
 let focusPath: string | null = null;
 let clearScheduled = false;
+/** Counts requests, so the clearing of one taken request leaves a newer one alone. */
+let requestSeq = 0;
+/** The request last taken by a view. */
+let takenSeq = 0;
 
 /**
  * The next note view to mount takes the keyboard focus: the view of `path` when given, so a view
@@ -18,6 +22,7 @@ let clearScheduled = false;
 export function requestNoteFocus(path?: string): void {
   focusUntil = Date.now() + REQUEST_TTL_MS;
   focusPath = path ?? null;
+  requestSeq++;
 }
 
 /** Withdraws a pending request (the navigation it was made for did not happen). */
@@ -33,12 +38,15 @@ export function cancelNoteFocus(): void {
 export function wantsNoteFocus(path?: string): boolean {
   if (Date.now() >= focusUntil) return false;
   if (focusPath !== null && path !== undefined && path !== focusPath) return false;
+  takenSeq = requestSeq;
   if (!clearScheduled) {
     clearScheduled = true;
     setTimeout(() => {
+      clearScheduled = false;
+      // A request made after the last one taken (a rename about to remount the view) stays.
+      if (requestSeq !== takenSeq) return;
       focusUntil = 0;
       focusPath = null;
-      clearScheduled = false;
     }, 0);
   }
   return true;

@@ -28,23 +28,6 @@ export function InlineTitle({ path, editable, label = 'Note title', onEnter }: {
   useAutoGrow(ref);
   const error = draft !== null && draft.trim() !== title ? validateNewName(nameWithExtension(path, draft.trim(), 'file')) : null;
 
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    // A new note whose title was being typed before it existed continues here with the focus.
-    const handoff = takeTitleHandoff(path);
-    if (handoff !== null) {
-      el.value = handoff.title;
-      // Checked at once, as in the pending view: an invalid name shows its message and stays.
-      // (The hand-over is taken from the pending-note store once, at mount.)
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setDraft(handoff.title);
-      el.focus();
-      el.setSelectionRange(handoff.selectionStart, handoff.selectionEnd);
-    }
-    autoGrow(el);
-  }, [path]);
-
   const revert = () => {
     const el = ref.current;
     if (el) {
@@ -92,6 +75,37 @@ export function InlineTitle({ path, editable, label = 'Note title', onEnter }: {
       setBusy(false);
     }
   };
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    // A new note whose title was being typed before it existed continues here with the focus.
+    const handoff = takeTitleHandoff(path);
+    if (handoff?.committed) {
+      // Committed while the note opened (Enter in the pending title): the note's text, mounting
+      // now, takes the focus, and the title is then committed here as on a blur, Enter-style.
+      el.value = handoff.title;
+      autoGrow(el);
+      requestNoteFocus(path);
+      setTimeout(() => {
+        toText.current = true;
+        void commit();
+      }, 0);
+      return;
+    }
+    if (handoff !== null) {
+      el.value = handoff.title;
+      // Checked at once, as in the pending view: an invalid name shows its message and stays.
+      // (The hand-over is taken from the pending-note store once, at mount.)
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setDraft(handoff.title);
+      el.focus();
+      el.setSelectionRange(handoff.selectionStart, handoff.selectionEnd);
+    }
+    autoGrow(el);
+    // `commit` reads only the ref and this render's title.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [path]);
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.nativeEvent.isComposing) return;

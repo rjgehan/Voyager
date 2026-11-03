@@ -40,6 +40,11 @@ export interface TitleHandoff {
   title: string;
   selectionStart: number;
   selectionEnd: number;
+  /**
+   * The title was committed (Enter, or a tap on the body) after the note began opening: the inline
+   * title renames the note to it and the writing continues in the note's text.
+   */
+  committed?: boolean;
 }
 
 /** Text typed into a pending note's body, with its selection: it goes into the note once it exists. */
@@ -87,8 +92,8 @@ export function startPendingNote(id: number, folder: string, title: string, file
  */
 function titleHandoff(pending: PendingNote, path: string): TitleHandoff {
   const free = titleOf(path);
-  if (pending.title === startTitle && free !== pending.title) return { path, title: free, selectionStart: 0, selectionEnd: free.length };
-  return { path, title: pending.title, selectionStart: pending.selectionStart, selectionEnd: pending.selectionEnd };
+  if (pending.title === startTitle && free !== pending.title) return { path, title: free, selectionStart: 0, selectionEnd: free.length, committed: pending.committed };
+  return { path, title: pending.title, selectionStart: pending.selectionStart, selectionEnd: pending.selectionEnd, committed: pending.committed };
 }
 
 /** The title typed after the note began opening follows into its hand-over. */
@@ -100,10 +105,12 @@ function followingHandoff(pending: PendingNote, handoff: TitleHandoff | null): T
 export function updatePendingTitle(id: number, title: string, committed: boolean): void {
   const { pending, handoff } = usePendingNote.getState();
   if (pending?.id !== id) return;
-  if (committed) committedTitles.set(id, title);
-  else committedTitles.delete(id);
   const next = { ...pending, title, committed };
-  usePendingNote.setState({ pending: next, handoff: followingHandoff(next, handoff) });
+  const following = followingHandoff(next, handoff);
+  // Once the note is opening, its inline title takes a committed title (and renames to it).
+  if (committed && following === handoff) committedTitles.set(id, title);
+  else committedTitles.delete(id);
+  usePendingNote.setState({ pending: next, handoff: following });
 }
 
 export function updatePendingSelection(id: number, selectionStart: number, selectionEnd: number): void {

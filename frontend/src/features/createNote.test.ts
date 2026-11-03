@@ -117,12 +117,12 @@ describe('createNote for files without an inline title (a new drawing, DESIGN §
     await vi.waitFor(() => expect(routes).toEqual(['/n/Untitled.md']));
     // The inline title is editable and the editor mounts in the same commit as the swap.
     expect(editableAtSwap).toEqual([true]);
-    expect(usePendingNote.getState().handoff).toEqual({ path: 'Untitled.md', title: 'Shopping', selectionStart: 8, selectionEnd: 8 });
+    expect(usePendingNote.getState().handoff).toEqual({ path: 'Untitled.md', title: 'Shopping', selectionStart: 8, selectionEnd: 8, committed: false });
     // Until the pane shows the note, the pending view stays and what is typed follows into the hand-over.
     expect(usePendingNote.getState().pending).toMatchObject({ id, opening: 'Untitled.md' });
     updatePendingTitle(id, 'Shopping list', false);
     updatePendingSelection(id, 13, 13);
-    expect(usePendingNote.getState().handoff).toEqual({ path: 'Untitled.md', title: 'Shopping list', selectionStart: 13, selectionEnd: 13 });
+    expect(usePendingNote.getState().handoff).toEqual({ path: 'Untitled.md', title: 'Shopping list', selectionStart: 13, selectionEnd: 13, committed: false });
   });
 });
 

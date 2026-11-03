@@ -47,6 +47,19 @@ describe('requestNoteFocus', () => {
     requestNoteFocus();
     expect(wantsNoteFocus('A.md')).toBe(true);
   });
+
+  it('ends with the task that took it, but a newer request made meanwhile stays', async () => {
+    requestNoteFocus('Untitled.md');
+    expect(wantsNoteFocus('Untitled.md')).toBe(true);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(wantsNoteFocus('Untitled.md')).toBe(false);
+    // A new note's text took the focus, then its title renames it: the renamed view takes it again.
+    requestNoteFocus('Untitled.md');
+    expect(wantsNoteFocus('Untitled.md')).toBe(true);
+    requestNoteFocus();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(wantsNoteFocus('Groceries.md')).toBe(true);
+  });
 });
 
 describe('trapTab', () => {
