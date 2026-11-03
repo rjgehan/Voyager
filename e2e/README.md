@@ -15,6 +15,7 @@ npm test                   # API + PC + iPhone, about 2 minutes
 npm run screens            # screen inventory → screens-output/screens.pdf
 npm run report             # open the last HTML report
 npm run stop               # stop what reset started
+npm run test:scripts       # the tooling's own tests (no server needed)
 ```
 
 - **Production mode.** `npm run reset -- --prod` serves the *built* frontend from the jar on :18570,
@@ -61,6 +62,7 @@ for it, as for the unit tests: a change that renames a button or label a test us
 | `tests/ui/layout.spec.ts` | Layout regressions jsdom cannot see: the note header in a narrow split pane, Dataview tables on a phone |
 | `tests/ui/known-bugs.spec.ts` | Bugs found and not fixed yet (below) |
 | `tests/screens/inventory.spec.ts` | Not a test: captures every page, panel and sheet for the PDF |
+| `scripts/*.test.mjs` | The suite's own tooling, with `npm run test:scripts` (no server, no browser; CI runs it before the suite): each project lists only its own folder wherever the checkout lives |
 
 UI tests run on both devices (`desktop`, 1366 × 860, and `iphone`, 390 × 844 with touch, no hover
 and an iPhone user agent, so the app takes its iOS paths); a title with `@desktop` or `@phone` keeps

@@ -50,10 +50,12 @@ export default defineConfig({
     actionTimeout: 15_000,
     navigationTimeout: 30_000,
   },
+  // Each project by its folder, not by a pattern: testMatch is matched against the absolute path,
+  // so a pattern like /ui\/.*\.spec\.ts/ also matched every spec of a checkout under ".../mobile-ui/".
   projects: [
-    { name: 'api', testMatch: /api\/.*\.spec\.ts/ },
-    { name: 'desktop', testMatch: /ui\/.*\.spec\.ts/, grepInvert: /@phone/, use: device(desktop) },
-    { name: 'iphone', testMatch: /ui\/.*\.spec\.ts/, grepInvert: /@desktop/, use: device(iphone) },
-    ...(wantScreens ? [{ name: 'screens', testMatch: /screens\/.*\.spec\.ts/, use: device(iphone), timeout: 600_000 }] : []),
+    { name: 'api', testDir: './tests/api' },
+    { name: 'desktop', testDir: './tests/ui', grepInvert: /@phone/, use: device(desktop) },
+    { name: 'iphone', testDir: './tests/ui', grepInvert: /@desktop/, use: device(iphone) },
+    ...(wantScreens ? [{ name: 'screens', testDir: './tests/screens', use: device(iphone), timeout: 600_000 }] : []),
   ],
 });
