@@ -2,6 +2,7 @@
 // in the style the app writes: ATX headings, fenced code, `-` bullets, `*` emphasis.
 import TurndownService from 'turndown';
 import { gfm } from 'turndown-plugin-gfm';
+import { markdownUrl } from './markdownUrl';
 
 /** Elements that never become Markdown. */
 const DROPPED = ['script', 'style', 'noscript', 'template', 'form', 'button', 'input', 'select', 'textarea', 'object', 'embed', 'canvas', 'dialog'];
@@ -15,10 +16,7 @@ function cleanAlt(alt: string): string {
   return alt.replace(/[\r\n]+/g, ' ').replace(/[[\]]/g, '').trim();
 }
 
-/** `(` and `)` and spaces in a URL would end the destination. */
-export function markdownUrl(url: string): string {
-  return url.replace(/[ ()]/g, (c) => encodeURIComponent(c));
-}
+export { markdownUrl };
 
 export function createTurndown(): TurndownService {
   const td = new TurndownService({

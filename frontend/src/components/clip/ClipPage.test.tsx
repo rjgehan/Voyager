@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { TransientError } from '../../api/client';
 import { api, httpEndpoints, installEndpoints } from '../../api/endpoints';
 import type { AttachmentResult, CreateFileRequest, FileEntry, WriteResult } from '../../api/types';
 import { CLIP_MESSAGE, READY_MESSAGE, RESULT_MESSAGE } from '../../features/clip';
@@ -67,6 +68,28 @@ describe('/clip', () => {
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Saved to Clippings/A page.md.'));
     expect(uploadAttachment).toHaveBeenCalledTimes(1);
     expect(createFile.mock.calls[0][0].content).toContain('![[p.png]]');
+  });
+
+  it('says a clip that could not reach the server is not saved, and Save again repeats the same request', async () => {
+    createFile.mockRejectedValueOnce(new TransientError('Network error'));
+    const posted = vi.spyOn(window, 'postMessage');
+    renderPage();
+    await waitFor(() => expect(document.documentElement.dataset.notesappClip).toBe('ready'));
+    deliver({ type: CLIP_MESSAGE, v: 1, kind: 'clip', clip: CLIP, images: [{ url: 'https://cdn.example.com/p.png', name: 'p.png', type: 'image/png', data: btoa('x') }], folder: null, autoSave: true });
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Not saved: the server could not be reached. Keep this page open and press Save again.');
+    expect(alert).not.toHaveTextContent('kept on this device');
+    expect(posted).toHaveBeenCalledWith({ type: RESULT_MESSAGE, status: 'failed', error: expect.stringContaining('Not saved') }, window.location.origin);
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Saved to Clippings/A page.md.'));
+    // The same Idempotency-Keys: if the first request reached the server, it answers with that result.
+    const keysOf = (fn: { mock: { calls: unknown[][] } }, at: number) => fn.mock.calls.map((c) => c[at]);
+    const [firstNote, secondNote] = keysOf(createFile, 1);
+    expect(firstNote).toEqual(secondNote);
+    expect(firstNote).toEqual({ idempotencyKey: expect.any(String) });
+    const [firstImage, secondImage] = keysOf(uploadAttachment, 3);
+    expect(firstImage).toEqual(secondImage);
+    expect(firstImage).not.toEqual(firstNote);
   });
 
   it('never saves a bookmarklet’s page without Save, and ignores other windows', async () => {

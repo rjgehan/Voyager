@@ -1,6 +1,7 @@
 // Turns a clip into a note (DESIGN §6.27.1): a vault-safe file name from the page title, Obsidian
 // Web Clipper's frontmatter properties (title, source, author, published, created, description,
 // tags) and the request body of POST /api/files (API.md §8.2) that every client sends.
+import { markdownUrl } from './markdownUrl';
 import type { Clip } from './types';
 
 /** The folder clippings go to by default (ROADMAP item 19). */
@@ -170,6 +171,8 @@ function escapeRegExp(s: string): string {
  * writes them) with `embed`, the attachment's embed from POST /api/attachments (API.md §9.3).
  */
 export function replaceImage(markdown: string, url: string, embed: string): string {
-  const re = new RegExp(`!\\[[^\\]\\n]*\\]\\(<?${escapeRegExp(url)}>?(?: "(?:[^"\\\\]|\\\\.)*")?\\)`, 'g');
+  // The Markdown has the URL as markdownUrl writes it (extract.ts); an older or hand-made one, raw.
+  const forms = [...new Set([markdownUrl(url), url])].map(escapeRegExp).join('|');
+  const re = new RegExp(`!\\[[^\\]\\n]*\\]\\(<?(?:${forms})>?(?: "(?:[^"\\\\]|\\\\.)*")?\\)`, 'g');
   return markdown.replace(re, () => embed);
 }

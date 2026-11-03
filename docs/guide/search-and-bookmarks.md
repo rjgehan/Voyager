@@ -16,6 +16,7 @@ Press `Ctrl+Shift+F`, or open the **Search** tab of the left sidebar, and type. 
 - **Sort** results by **Relevance** or **Modified** (newest first).
 - A misspelt word also finds the words it was probably meant to be; the search says which, and **Exact words only** turns that off.
 - To search within one note, use `Ctrl+F` in the note instead.
+- Search needs the server: offline it says **Offline: search needs the server.** A search you already ran keeps its results.
 
 ### Search syntax
 

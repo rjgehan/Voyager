@@ -188,11 +188,15 @@ function useSettingsDraft(response: SettingsResponse | undefined) {
       if (document.visibilityState === 'hidden') void writer.flush();
     };
     const onPageHide = () => void writer.flush();
+    // An edit that failed offline is waiting (SettingsWriter.retryLater): send it as soon as the connection is back.
+    const onOnline = () => void writer.flush();
     document.addEventListener('visibilitychange', onVisibility);
     window.addEventListener('pagehide', onPageHide);
+    window.addEventListener('online', onOnline);
     return () => {
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('pagehide', onPageHide);
+      window.removeEventListener('online', onOnline);
       // Writes outlive the page (a debounced edit is sent on leaving); the form state does not.
       writer.setAttached(false);
       // Leaving Settings within the debounce sends the edit instead of dropping it.

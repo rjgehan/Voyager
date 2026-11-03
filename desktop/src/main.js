@@ -71,6 +71,8 @@ let saveTimer = null;
 /** Commands for the main window's page, sent once its bridge says it is listening. */
 let bridgeReady = false;
 const pendingCommands = [];
+/** `{ previous }` from a server change until the main window has navigated (see serverAfterStay). */
+let pendingServerChange = null;
 
 const serverOrigin = () => settings.serverUrl;
 const version = () => app.getVersion();
@@ -207,7 +209,8 @@ function installIpc() {
       const check = await checkServer(n.origin, (url, init) => net.fetch(url, init));
       if (!check.ok) return { ok: false, error: check.error, field: 'serverUrl', canSkip: !check.reachable };
     }
-    const serverChanged = n.origin !== settings.serverUrl;
+    const previousServer = settings.serverUrl;
+    const serverChanged = n.origin !== previousServer;
     settings = { ...settings, serverUrl: n.origin, captureHotkey: hotkey, launchAtLogin: !!form.launchAtLogin };
     saveSettings();
     applyLaunchAtLogin();
@@ -217,6 +220,8 @@ function installIpc() {
       // A different server: fresh windows, so nothing of the old origin lingers.
       if (captureWindow && !captureWindow.isDestroyed()) captureWindow.destroy();
       captureWindow = null;
+      // Until the window has left the old server: Stay on its unsaved-changes prompt goes back to it.
+      pendingServerChange = previousServer ? { previous: previousServer } : null;
       loadServer();
     }
     showMain();
@@ -324,9 +329,17 @@ function createMainWindow({ show }) {
     const choice = decideUnload({ quitting, ask: () => askUnload() });
     if (choice === 'leave') {
       e.preventDefault();
-    } else if (!bridgeReady) {
+    } else {
+      // Stay after a server change: the window is still on the old server, so the shell goes back
+      // to it too, or it would treat that page's notifications and links as coming from elsewhere.
+      const keep = serverAfterStay(pendingServerChange, wc.getURL());
+      pendingServerChange = null;
+      if (keep) {
+        settings = { ...settings, serverUrl: keep };
+        saveSettings();
+      }
       // The page stays, and its bridge is listening (it reported before it could refuse).
-      markBridgeReady();
+      if (!bridgeReady) markBridgeReady();
     }
   });
   wc.on('did-fail-load', (_e, code, description, url, isMainFrame) => {
@@ -334,6 +347,7 @@ function createMainWindow({ show }) {
     showOffline(mainWindow, description || `Error ${code}`);
   });
   wc.on('did-navigate', (_e, url) => {
+    pendingServerChange = null;
     if (isServerUrl(url, serverOrigin())) leaveOffline();
   });
 

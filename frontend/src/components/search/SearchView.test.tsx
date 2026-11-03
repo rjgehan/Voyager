@@ -1,5 +1,5 @@
-import { QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { onlineManager, QueryClientProvider } from '@tanstack/react-query';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useState } from 'react';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -128,6 +128,40 @@ describe('SearchView', () => {
     );
     renderView('/a(b/');
     expect(await screen.findByRole('alert')).toHaveTextContent('Invalid regular expression /a(b/');
+  });
+
+  describe('offline', () => {
+    afterEach(() => onlineManager.setOnline(true));
+
+    it('does not show the last query’s results under a new query', async () => {
+      const search = vi.spyOn(api, 'search').mockResolvedValue({ ...RESPONSE, corrections: [] });
+      renderView('jam');
+      expect(await screen.findByText('2 results')).toBeInTheDocument();
+      act(() => onlineManager.setOnline(false));
+      fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'budget' } });
+      expect(await screen.findByRole('alert')).toHaveTextContent('Offline: search needs the server');
+      expect(screen.queryByText('2 results')).not.toBeInTheDocument();
+      expect(screen.queryByText('Manual')).not.toBeInTheDocument();
+      expect(search).toHaveBeenCalledTimes(1);
+    });
+
+    it('says so instead of “Searching…” for a first search made offline', async () => {
+      const search = vi.spyOn(api, 'search').mockResolvedValue(RESPONSE);
+      onlineManager.setOnline(false);
+      renderView('budget');
+      expect(await screen.findByRole('alert')).toHaveTextContent('Offline: search needs the server');
+      expect(screen.queryByText('Searching…')).not.toBeInTheDocument();
+      expect(search).not.toHaveBeenCalled();
+    });
+
+    it('still shows a search it already has', async () => {
+      vi.spyOn(api, 'search').mockResolvedValue({ ...RESPONSE, corrections: [] });
+      renderView('jam');
+      expect(await screen.findByText('2 results')).toBeInTheDocument();
+      act(() => onlineManager.setOnline(false));
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      expect(screen.getByText('Manual')).toBeInTheDocument();
+    });
   });
 });
 
