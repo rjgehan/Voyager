@@ -2,6 +2,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ApiError } from '../../api/client';
 import { api } from '../../api/endpoints';
 import { queryClient } from '../../api/queryClient';
 import { queryKeys } from '../../api/queryKeys';
@@ -133,6 +134,14 @@ describe('graph view (ROADMAP item 16)', () => {
     // Outgoing links only: Daily/B.md links to pic.png, and Hub.md only links to it.
     fireEvent.click(screen.getByLabelText('Incoming links'));
     expect(await screen.findByRole('img', { name: 'Local graph: 2 nodes, 1 links' })).toBeInTheDocument();
+  });
+
+  it('says so when the local graph could not be loaded, instead of loading for ever', async () => {
+    vi.spyOn(api, 'getGraph').mockRejectedValue(new ApiError({ type: 'about:blank', title: 'Internal Server Error', status: 500, code: 'internal-error', detail: 'Graph failed' } as never));
+    renderWithClient(<LocalGraphPanel activePath="Daily/B.md" />);
+    await waitFor(() => expect(queryClient.getQueryState(queryKeys.graph())?.status).toBe('error'));
+    expect(await screen.findByRole('alert')).toHaveTextContent('The graph could not be loaded: Graph failed');
+    expect(screen.queryByText('Loading…')).toBeNull();
   });
 
   it('explains an empty local graph', async () => {

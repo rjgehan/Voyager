@@ -10,7 +10,7 @@ const ENTRY: FileEntry = { path: 'Attachments/diagram.png', name: 'diagram.png',
 describe('ImageView', () => {
   it('toggles fit and actual size with a focusable button, by Enter and Space', async () => {
     const user = userEvent.setup();
-    const { container } = render(<ImageView entry={ENTRY} />);
+    const { container } = render(<ImageView path={ENTRY.path} entry={ENTRY} mode="read" />);
     const stage = container.querySelector('.image-stage')!;
     const toggle = screen.getByRole('button', { name: 'Actual size' });
     expect(toggle).toHaveAttribute('aria-pressed', 'false');
