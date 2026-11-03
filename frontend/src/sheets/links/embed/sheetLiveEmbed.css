@@ -137,6 +137,10 @@
   font-size: var(--font-ui-small);
   font-variant-numeric: tabular-nums;
   box-shadow: var(--shadow-s);
+  /* A one-row textarea (a cell's line breaks survive an edit): one line shows, scrolled to the caret. */
+  resize: none;
+  overflow: hidden;
+  white-space: pre;
 }
 
 .sheet-live-input:focus {

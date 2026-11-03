@@ -70,7 +70,7 @@ Two devices changed the same note at the same time. Choose **Keep mine**, **Take
 
 ### "A new version is available"
 
-The server was updated. Click **Reload** in the banner when it suits you; your unsaved edits are kept.
+The server was updated. When nothing is being edited, Voyager reloads itself into the new version; while a note has unsaved changes, or you are typing somewhere else (a new note’s title, Quick capture, a dialog, Ask), it shows this banner instead. Click **Reload** when it suits you: unsaved changes to notes are kept on this device, but finish what you are typing elsewhere first.
 
 ### "Unsaved changes are not protected on this device"
 

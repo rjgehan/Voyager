@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { registerBuiltins } from '../extensions/builtins';
 import { runCommand } from '../features/commands';
 import { clearActiveEditor, setActiveEditor } from './activeEditor';
-import { toggleCheckbox } from './editorCommands';
+import { insertHorizontalRule, toggleCheckbox } from './editorCommands';
 // An editor is loaded: its commands are, too (kit.ts).
 import './kit';
 
@@ -82,5 +82,26 @@ describe('editor commands from the palette (FE-4)', () => {
     runCommand('editor.toggleCheckbox', { activePath: 'Plan.md' });
     expect(view.hasFocus).toBe(true);
     outside.remove();
+  });
+});
+
+describe('insertHorizontalRule (the phone toolbar, the palette)', () => {
+  it('replaces an empty list item, task or quote line', () => {
+    for (const [doc, expected] of [
+      ['- ', '---\n'],
+      ['- [ ] ', '---\n'],
+      ['> ', '---\n'],
+      ['- one\n- ', '- one\n\n---\n'],
+    ]) {
+      const view = editor(doc, doc.length);
+      insertHorizontalRule(view);
+      expect(view.state.doc.toString()).toBe(expected);
+    }
+  });
+
+  it('goes after a list item with text', () => {
+    const view = editor('- one', 5);
+    insertHorizontalRule(view);
+    expect(view.state.doc.toString()).toBe('- one\n\n---\n');
   });
 });

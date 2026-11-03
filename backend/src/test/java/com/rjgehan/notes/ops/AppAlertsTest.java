@@ -54,6 +54,18 @@ class AppAlertsTest {
 	}
 
 	@Test
+	void theAlertOpensTheStatusPageWhereTheAppIsServed() {
+		// CasaOS: tailscale serve on :8443, the name listed with and without the port.
+		AppAlerts alerts = alerts(
+				Map.of("notes.allowed-hosts", "homeserver.example.ts.net,homeserver.example.ts.net:8443"));
+		alerts.raise(AlertMarker.GIT_COMMIT_FAILED, this.clock.instant());
+		alerts.tick();
+		assertThat(this.sent).singleElement()
+			.satisfies((s) -> assertThat(s.message().click())
+				.isEqualTo(URI.create("https://homeserver.example.ts.net:8443/x/status")));
+	}
+
+	@Test
 	void aMarkerIsSentToTheAlertsTopicWithItsFixedText() {
 		AppAlerts alerts = alerts();
 		alerts.raise(AlertMarker.GIT_COMMIT_FAILED, this.clock.instant());

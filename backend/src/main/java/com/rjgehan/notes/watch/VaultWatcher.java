@@ -1,9 +1,12 @@
 package com.rjgehan.notes.watch;
 
 import java.io.IOException;
+import java.nio.file.AccessDeniedException;
 import java.nio.file.ClosedWatchServiceException;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
+import java.nio.file.NotDirectoryException;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardWatchEventKinds;
@@ -206,21 +209,26 @@ public class VaultWatcher implements SmartLifecycle {
 
 	private void handle(WatchEvent.Kind<?> kind, Path child) {
 		String disk = relative(child);
-		if (disk == null || isIgnored(disk)) {
+		// Hidden entries first, before any stat.
+		if (disk == null || isIgnored(disk, true)) {
 			return;
 		}
-		if (kind == StandardWatchEventKinds.ENTRY_DELETE) {
+		boolean delete = kind == StandardWatchEventKinds.ENTRY_DELETE;
+		BasicFileAttributes attributes = delete ? null : VaultFs.attributes(child);
+		boolean directory = attributes != null && attributes.isDirectory();
+		// A deleted entry is gone: it was a folder if this watcher watched it (asked only for an ignored-looking name).
+		if (isIgnored(disk, directory) && !(delete && this.keys.containsValue(child))) {
+			return;
+		}
+		if (delete) {
 			cancelUnder(child);
 		}
-		else if (kind == StandardWatchEventKinds.ENTRY_CREATE) {
-			BasicFileAttributes attributes = VaultFs.attributes(child);
-			if (attributes != null && attributes.isDirectory()) {
-				try {
-					registerTree(child);
-				}
-				catch (IOException ex) {
-					degrade(ex);
-				}
+		else if (kind == StandardWatchEventKinds.ENTRY_CREATE && directory) {
+			try {
+				registerTree(child);
+			}
+			catch (IOException ex) {
+				degrade(ex);
 			}
 		}
 		this.deadlines.put(disk, System.nanoTime() + this.debounceNanos);
@@ -259,7 +267,12 @@ public class VaultWatcher implements SmartLifecycle {
 		}
 	}
 
-	/** Registers {@code root} and every folder under it, skipping hidden folders and links. */
+	/**
+	 * Registers {@code root} and every folder under it, skipping hidden folders and links. A folder that is gone or
+	 * unreadable by the time it is registered (a tool that creates a folder and removes or renames it at once) is
+	 * skipped, as the walk skips one it cannot open: the reconciler sees what is there. Only a failure of the watch
+	 * service itself (the inotify watch limit) is thrown, and makes the watcher fall back to polling.
+	 */
 	private void registerTree(Path root) throws IOException {
 		WatchService watchService = this.service;
 		if (watchService == null) {
@@ -272,14 +285,27 @@ public class VaultWatcher implements SmartLifecycle {
 				if (!dir.equals(VaultWatcher.this.fs.root()) && dir.getFileName().toString().startsWith(".")) {
 					return FileVisitResult.SKIP_SUBTREE;
 				}
-				WatchKey key = dir.register(watchService, StandardWatchEventKinds.ENTRY_CREATE,
-						StandardWatchEventKinds.ENTRY_DELETE, StandardWatchEventKinds.ENTRY_MODIFY);
+				WatchKey key;
+				try {
+					key = dir.register(watchService, StandardWatchEventKinds.ENTRY_CREATE,
+							StandardWatchEventKinds.ENTRY_DELETE, StandardWatchEventKinds.ENTRY_MODIFY);
+				}
+				catch (NoSuchFileException | NotDirectoryException | AccessDeniedException ex) {
+					logger.debug("Not watching {}: {}", dir, ex.toString());
+					return FileVisitResult.SKIP_SUBTREE;
+				}
 				VaultWatcher.this.keys.put(key, dir);
 				return FileVisitResult.CONTINUE;
 			}
 
 			@Override
 			public FileVisitResult visitFileFailed(Path file, IOException exc) {
+				return FileVisitResult.CONTINUE;
+			}
+
+			@Override
+			public FileVisitResult postVisitDirectory(Path dir, @Nullable IOException exc) {
+				// A folder that vanished while it was listed: nothing under it is left to watch.
 				return FileVisitResult.CONTINUE;
 			}
 
@@ -328,14 +354,18 @@ public class VaultWatcher implements SmartLifecycle {
 		return root.relativize(path).toString().replace('\\', '/');
 	}
 
-	/** Hidden entries (and anything under them) and names the index ignores are never reconciled. */
-	static boolean isIgnored(String disk) {
+	/**
+	 * Hidden entries (and anything under them) are never reconciled, nor are files with a name the index ignores (an
+	 * editor's temp file). A folder with such a name ({@code Drafts~}, {@code old.tmp}) is indexed like any other, as in
+	 * the vault walk (DESIGN §4.5), so it is watched and reconciled too.
+	 */
+	static boolean isIgnored(String disk, boolean directory) {
 		for (String segment : disk.split("/")) {
 			if (segment.startsWith(".")) {
 				return true;
 			}
 		}
-		return NameRules.isIgnored(disk.substring(disk.lastIndexOf('/') + 1));
+		return !directory && NameRules.isIgnored(disk.substring(disk.lastIndexOf('/') + 1));
 	}
 
 }

@@ -181,6 +181,8 @@ describe('new notes', () => {
   it('a new note opens in Live Preview whatever the vault default, and keeps it when renamed', async () => {
     defaultMode('read');
     vi.spyOn(api, 'createFile').mockImplementation(async (req): Promise<WriteResult> => ({ file: entry(req.path), created: true, createdFolders: [] }));
+    // The new note opens once it has been read back (DESIGN §6.15).
+    vi.spyOn(api, 'readFile').mockImplementation(async (path) => ({ path, kind: 'note', content: '', version: entry(path).version!, size: 0, mtime: entry(path).mtime, lossy: false }));
     createNote('');
     await vi.waitFor(() => expect(window.location.pathname).toBe('/n/Untitled.md'));
     expect(currentNoteMode()).toBe('live');

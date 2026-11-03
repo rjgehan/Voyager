@@ -544,6 +544,18 @@ textarea.text-input {
   margin: 0;
 }
 
+/* The server refused the new note: the title and the writing stay, with Try again (DESIGN §6.15). */
+.pending-note-problem {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.pending-note-problem .field-error {
+  margin: 0;
+}
+
 /* The new note's body before the note exists (DESIGN §6.15): it looks like the note's text, and a
    tap anywhere below the title lands in it. 16 px keeps iOS from zooming in on focus. */
 .pending-note-body {

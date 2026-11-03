@@ -430,6 +430,82 @@ class BookmarkServiceTest {
 			.isEqualTo("{ broken");
 	}
 
+	private static final String LONG_TITLE = "a".repeat(1025);
+
+	/** A hand-edited file with two items the codec leaves out: a dot-segment path and a title over 1,024 characters. */
+	private void writeHandEdited() throws IOException {
+		write(BookmarkService.FILE, """
+				{"items":[{"type":"file","ctime":1,"path":"Plan.md"},
+				  {"type":"file","ctime":2,"path":".github/README.md"},
+				  {"type":"group","ctime":3,"title":"G","items":[
+				    {"type":"search","ctime":4,"query":"x","title":"%s"},
+				    {"type":"file","ctime":5,"path":"Plan.md","subpath":"#Plan"}]},
+				  {"type":"url","ctime":6,"url":"https://example.com"}],"futureField":true}""".formatted(LONG_TITLE));
+	}
+
+	private List<Path> bookmarkBackups() throws IOException {
+		try (Stream<Path> files = Files.list(this.dir.resolve(".notesapp"))) {
+			return files.filter((p) -> p.getFileName().toString().startsWith("bookmarks.json.bak-")).toList();
+		}
+	}
+
+	@Test
+	void aMoveKeepsTheBookmarksTheFileHoldsButTheAppLeavesOut() throws Exception {
+		start();
+		write("Plan.md", "# Plan\n");
+		this.vault.builder.build();
+		writeHandEdited();
+		assertThat(paths(service().get())).containsExactly("Plan.md", "", "Plan.md", "");
+
+		this.vault.moves.move("Plan.md", "Archive/Plan.md", null, false, TestVault.ALICE, CLIENT);
+
+		String file = Files.readString(this.dir.resolve(BookmarkService.FILE));
+		assertThat(file).contains(".github/README.md", LONG_TITLE, "futureField").doesNotContain("\"Plan.md\"");
+		assertThat(paths(service().get())).containsExactly("Archive/Plan.md", "", "Archive/Plan.md", "");
+		JsonNode written = TestVault.JSON.readTree(file);
+		assertThat(written.get("items").get(1).get("path").asString()).isEqualTo(".github/README.md");
+		assertThat(written.get("items").get(2).get("items").get(0).get("title").asString()).isEqualTo(LONG_TITLE);
+	}
+
+	@Test
+	void aHeadingRenameKeepsTheBookmarksTheAppLeavesOut() throws Exception {
+		start();
+		write("Plan.md", "# Plan\n");
+		this.vault.builder.build();
+		writeHandEdited();
+		assertThat(service().headingRenamed("Plan.md", "Plan", "Roadmap", false, TestVault.ALICE)).isEqualTo(1);
+		assertThat(Files.readString(this.dir.resolve(BookmarkService.FILE))).contains(".github/README.md", LONG_TITLE,
+				"#Roadmap");
+	}
+
+	@Test
+	void aSaveThatDropsBookmarksTheAppLeftOutKeepsTheFileBesideIt() throws Exception {
+		start();
+		writeHandEdited();
+		byte[] before = Files.readAllBytes(this.dir.resolve(BookmarkService.FILE));
+		BookmarksResponse current = service().get();
+		ArrayNode next = TestVault.JSON.valueToTree(current.items());
+		next.addObject().put("type", "folder").put("ctime", 7).put("path", "Projects");
+		service().update(next, current.version(), TestVault.ALICE, CLIENT);
+
+		assertThat(bookmarkBackups()).singleElement()
+			.satisfies((backup) -> assertThat(Files.readAllBytes(backup)).isEqualTo(before));
+		// The file holds only what the app accepts now: the next save keeps no second copy.
+		service().update(next, service().get().version(), TestVault.ALICE, CLIENT);
+		put("[]");
+		assertThat(bookmarkBackups()).hasSize(1);
+	}
+
+	@Test
+	void migratedSavedSearchesKeepTheBookmarksTheAppLeavesOut() throws Exception {
+		start();
+		writeHandEdited();
+		write(BookmarkService.SAVED_SEARCHES_FILE, "{\"searches\":[{\"id\":\"a\",\"name\":\"P\",\"query\":\"plans\"}]}");
+		assertThat(service().migrateSavedSearches()).isEqualTo(1);
+		assertThat(Files.readString(this.dir.resolve(BookmarkService.FILE))).contains(".github/README.md", LONG_TITLE,
+				"plans");
+	}
+
 	@Test
 	void belowCountsSegmentsNotCharacters() {
 		assertThat(BookmarkService.below("Projects/Deep/Note.md", "projects")).isEqualTo("Deep/Note.md");

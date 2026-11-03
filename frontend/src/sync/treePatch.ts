@@ -26,7 +26,12 @@ export function treePatchCount(): number {
 
 function patchTree(qc: QueryClient, fn: (tree: TreeResponse) => TreeResponse | null): void {
   const tree = qc.getQueryData<TreeResponse>(queryKeys.tree());
-  if (!tree) return;
+  if (!tree) {
+    // Before the first tree (a cold start): the snapshot on its way may predate this mutation, and
+    // the stream never replays this tab's own events, so the startup fetch must fetch again.
+    patches++;
+    return;
+  }
   const next = fn(tree);
   if (next && next !== tree) {
     patches++;

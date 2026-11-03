@@ -83,6 +83,23 @@ describe('SheetChart', () => {
     expect(screen.getByText('A scatter chart’s first column holds its X values: A holds no numbers.')).toBeInTheDocument();
   });
 
+  it('fits a scatter’s X axis to the data, and labels dates as dates', () => {
+    const cells: Record<string, SheetCell> = { A1: { v: 'Date' }, B1: { v: 'Weight' } };
+    for (let i = 0; i < 365; i++) {
+      cells[`A${i + 2}`] = { v: 46023 + i, fmt: 'yyyy-mm-dd' };
+      cells[`B${i + 2}`] = { v: 70 + (i % 10) };
+    }
+    const sheet: Sheet = { ...emptySheet('s3', 'Weight'), cells };
+    const { container } = render(<SheetChart sheet={sheet} chart={{ type: 'scatter', range: 'A1:B366', headers: true }} />);
+    const xs = [...container.querySelectorAll('circle.sheet-chart-dot')].map((c) => Number(c.getAttribute('cx')));
+    // The dots spread over most of the plot (360 px wide in tests), not a sliver at its right edge.
+    expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThan(250);
+    // The X ticks (the value axis up the side keeps its zero).
+    const ticks = [...container.querySelectorAll('text.sheet-chart-tick[text-anchor="middle"]')].map((t) => t.textContent ?? '');
+    expect(ticks).not.toContain('0');
+    expect(ticks.filter((t) => /^20\d\d-\d\d-\d\d$/.test(t)).length).toBeGreaterThan(1);
+  });
+
   it('draws a doughnut, puts the legend below or hides it, and titles the axes', () => {
     const { container } = draw({ type: 'pie', donut: true, range: 'A2:B3', labels: true, legend: 'bottom' });
     expect(screen.getAllByRole('figure').at(-1)).toHaveAttribute('aria-label', 'Doughnut chart: Column B');

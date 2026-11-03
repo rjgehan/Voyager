@@ -14,6 +14,8 @@ import java.security.SecureRandom;
 import java.text.Normalizer;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -48,8 +50,11 @@ import org.springframework.stereotype.Component;
  * {@code " 1"}, {@code " 2"}, ... on collisions, and its original path lives only in {@code .notesapp/trash.json}.
  * Every read-modify-write of the metadata and every choice of a trash name happens under this store's lock, taken
  * with {@link #locked}; the other methods must be called while holding it. Listing reconciles the metadata 1:1 with
- * the items actually in {@code .trash/}: entries whose item vanished are dropped, and items without metadata (put
- * there by Obsidian or by hand) are listed with an {@code x-} id.
+ * the items actually in {@code .trash/}: entries whose item vanished (emptied by Obsidian or a file manager) are
+ * dropped from the file, so they can never claim an unrelated item that later takes the same name, and items without
+ * metadata (put there by Obsidian or by hand) are listed with an {@code x-} id. A metadata file that cannot be read in
+ * full is kept beside it as {@code trash.json.bak-<timestamp>} before it is rewritten: it is not in git, so that copy
+ * is the only one.
  */
 @Component
 public class TrashStore {
@@ -65,6 +70,13 @@ public class TrashStore {
 	private static final char[] CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ".toCharArray();
 
 	private static final String UNKNOWN = "unknown";
+
+	private static final DateTimeFormatter BACKUP_STAMP = DateTimeFormatter.ofPattern("uuuuMMdd'T'HHmmss'Z'")
+		.withZone(ZoneOffset.UTC);
+
+	/** The entries read from the metadata file; {@code lossy} when reading left something out. */
+	private record Metadata(List<Item> items, boolean lossy) {
+	}
 
 	/** One listed item; {@code trashPath} is its single-segment name under {@code .trash/}. */
 	public record Item(String id, String originalPath, String trashPath, EntryType type, Instant deletedAt,
@@ -129,11 +141,16 @@ public class TrashStore {
 	public List<Item> list() throws IOException {
 		requireLock();
 		Map<String, BasicFileAttributes> present = topLevelItems();
+		Metadata metadata = readMetadata();
 		Map<String, Item> byName = new LinkedHashMap<>();
-		for (Item item : readMetadata()) {
+		for (Item item : metadata.items()) {
 			if (present.containsKey(item.trashPath())) {
 				byName.put(item.trashPath(), item);
 			}
+		}
+		if (byName.size() < metadata.items().size()) {
+			// Items that left .trash/ outside the app (or entries another one shadows): forget them for good.
+			writeMetadata(List.copyOf(byName.values()), metadata.lossy());
 		}
 		for (Map.Entry<String, BasicFileAttributes> entry : present.entrySet()) {
 			if (!byName.containsKey(entry.getKey())) {
@@ -208,11 +225,19 @@ public class TrashStore {
 			catch (FileAlreadyExistsException ex) {
 				continue;
 			}
-			List<Item> items = new ArrayList<>(readMetadata());
-			Item item = new Item(newId(items), originalPath, candidate, type, this.clock.instant(), deletedBy, size,
-					fileCount, true);
+			Metadata metadata = readMetadata();
+			Set<String> present = topLevelItems().keySet();
+			List<Item> items = new ArrayList<>();
+			for (Item other : metadata.items()) {
+				// The name was free, so an entry that names it is left from an item removed outside the app.
+				if (present.contains(other.trashPath()) && !other.trashPath().equals(candidate)) {
+					items.add(other);
+				}
+			}
+			Item item = new Item(newId(metadata.items()), originalPath, candidate, type, this.clock.instant(),
+					deletedBy, size, fileCount, true);
 			items.add(item);
-			writeMetadata(items);
+			writeMetadata(items, metadata.lossy());
 			return item;
 		}
 		throw new IOException("No free name in the trash for " + name);
@@ -221,9 +246,11 @@ public class TrashStore {
 	/** Drops the metadata of an item that was moved back into the vault. */
 	public void forget(Item item) throws IOException {
 		requireLock();
-		List<Item> items = new ArrayList<>(readMetadata());
-		if (items.removeIf((other) -> other.id().equals(item.id()))) {
-			writeMetadata(items);
+		Metadata metadata = readMetadata();
+		Set<String> present = topLevelItems().keySet();
+		List<Item> items = new ArrayList<>(metadata.items());
+		if (items.removeIf((other) -> other.id().equals(item.id()) || !present.contains(other.trashPath()))) {
+			writeMetadata(items, metadata.lossy());
 		}
 	}
 
@@ -262,7 +289,8 @@ public class TrashStore {
 				}
 			}
 		}
-		writeMetadata(List.of());
+		// Every item is gone, so nothing in a broken metadata file is worth keeping.
+		writeMetadata(List.of(), false);
 		return new Emptied(items.size(), List.copyOf(staged));
 	}
 
@@ -330,13 +358,13 @@ public class TrashStore {
 		return "x-" + sha1.toObjectId().name().substring(0, 16);
 	}
 
-	private List<Item> readMetadata() throws IOException {
+	private Metadata readMetadata() throws IOException {
 		byte[] bytes;
 		try {
 			bytes = this.fs.readBytes(METADATA);
 		}
 		catch (NoSuchFileException ex) {
-			return List.of();
+			return new Metadata(List.of(), false);
 		}
 		JsonNode root;
 		try {
@@ -344,20 +372,25 @@ public class TrashStore {
 		}
 		catch (JacksonException ex) {
 			logger.warn("{} is not valid JSON; trashed items are listed without their original paths", METADATA);
-			return List.of();
+			return new Metadata(List.of(), true);
 		}
-		JsonNode entries = (root != null) ? root.get("entries") : null;
+		JsonNode entries = (root instanceof ObjectNode object) ? object.get("entries") : null;
 		if (entries == null || !entries.isArray()) {
-			return List.of();
+			logger.warn("{} has no list of entries; trashed items are listed without their original paths", METADATA);
+			return new Metadata(List.of(), true);
 		}
 		List<Item> items = new ArrayList<>();
+		boolean lossy = false;
 		for (JsonNode entry : entries.values()) {
 			Item item = parseEntry(entry);
 			if (item != null) {
 				items.add(item);
 			}
+			else {
+				lossy = true;
+			}
 		}
-		return items;
+		return new Metadata(items, lossy);
 	}
 
 	private @Nullable Item parseEntry(JsonNode entry) {
@@ -410,7 +443,21 @@ public class TrashStore {
 		return (value != null && value.isString()) ? value.stringValue() : null;
 	}
 
-	private void writeMetadata(List<Item> items) throws IOException {
+	/**
+	 * Writes the metadata; {@code keepOld} first keeps the file on disk as {@code trash.json.bak-<timestamp>}, because
+	 * reading it left something out and it is not in git.
+	 */
+	private void writeMetadata(List<Item> items, boolean keepOld) throws IOException {
+		if (keepOld) {
+			String backup = METADATA + ".bak-" + BACKUP_STAMP.format(this.clock.instant());
+			try {
+				this.fs.atomicWrite(backup, this.fs.readBytes(METADATA));
+				logger.warn("{} could not be read in full; kept it as {} before writing", METADATA, backup);
+			}
+			catch (NoSuchFileException ex) {
+				// Gone meanwhile: nothing to keep.
+			}
+		}
 		ObjectNode root = JsonNodeFactory.instance.objectNode();
 		root.put("schemaVersion", 1);
 		ArrayNode entries = root.putArray("entries");

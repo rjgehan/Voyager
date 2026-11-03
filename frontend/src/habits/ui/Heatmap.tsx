@@ -6,6 +6,26 @@ import { useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEve
 import { dayjs } from '../../features/dates';
 import { calendarWeeks } from '../progress';
 
+/** A week column's width plus the gap after it (habits.css: 12 px tracks, 3 px gaps). */
+const COLUMN_STEP = 15;
+
+/**
+ * The month labels of the week columns: a column holding the 1st shows its month. The first
+ * column in full view (`start`, after the ones the scroller cuts or hides at its left edge) shows
+ * its month too when the next column starts none, so the label has room; columns before it show
+ * nothing, so no label is cut at the edge.
+ */
+function monthLabels(columns: readonly string[][], start = 0): string[] {
+  const month = (day: string) => dayjs(day, 'YYYY-MM-DD').format('MMM');
+  const firsts = columns.map((col) => col.find((d) => d.endsWith('-01')) ?? null);
+  return columns.map((col, i) => {
+    if (i < start) return '';
+    const first = firsts[i];
+    if (first) return month(first);
+    return i === start && !firsts[i + 1] ? month(col[0]) : '';
+  });
+}
+
 export interface HeatCell {
   day: string;
   /** CSS class suffix: the state for one habit, `level-N` for all habits. */
@@ -25,16 +45,21 @@ export function Heatmap({ today, weeks, cell, color, readout, legend, onSelect }
   const columns = calendarWeeks(today, weeks);
   const scroller = useRef<HTMLDivElement>(null);
   const [selected, setSelected] = useState<string | null>(null);
+  // The first week column in full view (the grid scrolls sideways on a phone).
+  const [start, setStart] = useState(0);
   // The latest weeks stay in view while the width changes (a rotation), until the user scrolls.
   useLayoutEffect(() => {
     const el = scroller.current;
     if (!el) return;
     let pinned = true;
+    const measure = () => setStart(Math.max(0, Math.ceil(el.scrollLeft / COLUMN_STEP - 0.01)));
     const pin = () => {
       if (pinned) el.scrollLeft = el.scrollWidth;
+      measure();
     };
     const onScroll = () => {
       pinned = el.scrollLeft + el.clientWidth >= el.scrollWidth - 2;
+      measure();
     };
     pin();
     el.addEventListener('scroll', onScroll, { passive: true });
@@ -81,10 +106,9 @@ export function Heatmap({ today, weeks, cell, color, readout, legend, onSelect }
         </div>
         <div className="hb-heatmap-scroll" ref={scroller}>
           <div className="hb-heatmap-months" aria-hidden>
-            {columns.map((col, i) => {
-              const first = col.find((d) => d.endsWith('-01'));
-              return <span key={i}>{first || i === 0 ? dayjs(first ?? col[0], 'YYYY-MM-DD').format('MMM') : ''}</span>;
-            })}
+            {monthLabels(columns, start).map((label, i) => (
+              <span key={i}>{label}</span>
+            ))}
           </div>
           <div className="hb-heatmap-grid" role="grid" aria-label="Calendar" onKeyDown={onKeyDown}>
             {columns.map((col, i) => (

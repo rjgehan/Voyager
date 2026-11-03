@@ -25,8 +25,9 @@ import tools.jackson.databind.node.ObjectNode;
  *
  * Other types Obsidian writes ({@code url}, {@code graph}) and fields this build does not know are kept as they are.
  * The same rules check a {@code PUT} body, where every problem is a {@link FieldError} (a 400), and the file on disk,
- * where an item that breaks them is dropped (it was edited by hand), so the client never gets an item it could not
- * send back. Paths are NFC-normalized; nothing else is changed.
+ * where an item that breaks them is left out of what clients get (it was edited by hand), so the client never gets an
+ * item it could not send back. Server-side rewrites (a move, a heading rename) work on the file's raw items, so the
+ * items left out stay in the file untouched. Paths are NFC-normalized; nothing else is changed.
  */
 final class BookmarkCodec {
 
@@ -78,8 +79,14 @@ final class BookmarkCodec {
 		return new Parsed(out, List.copyOf(reader.errors));
 	}
 
+	/** The file's {@code items} as they are, the ones {@link #readFile} leaves out included; empty without a list. */
+	static List<JsonNode> rawItems(@Nullable JsonNode root) {
+		JsonNode items = (root != null) ? root.get("items") : null;
+		return (items instanceof ArrayNode list) ? List.copyOf(list.values()) : List.of();
+	}
+
 	/** The document: {@code items} first, then the other fields of {@code root}, kept as they are. */
-	static ObjectNode document(@Nullable JsonNode root, List<ObjectNode> items) {
+	static ObjectNode document(@Nullable JsonNode root, List<? extends JsonNode> items) {
 		ObjectNode out = NODES.objectNode();
 		ArrayNode list = NODES.arrayNode();
 		items.forEach(list::add);
@@ -96,15 +103,17 @@ final class BookmarkCodec {
 
 	/**
 	 * Copies of {@code items} with {@code rewrite} applied to the {@code path} of every file and folder bookmark, in
-	 * groups too. {@code rewrite} returns null to keep a path. Returns null when no path changed.
+	 * groups too; {@code rewrite} gets the path NFC-normalized and returns null to keep it. Anything else, such as an
+	 * item that is not an object, is kept as it is. Returns null when no path changed.
 	 */
-	static @Nullable List<ObjectNode> rewritePaths(List<ObjectNode> items, PathRewrite rewrite) {
+	static @Nullable List<JsonNode> rewritePaths(List<? extends JsonNode> items, PathRewrite rewrite) {
 		return map(items, (item) -> {
 			String type = text(item, "type");
-			String path = text(item, "path");
-			if (type == null || path == null || !(type.equals(FILE) || type.equals(FOLDER))) {
+			String raw = text(item, "path");
+			if (type == null || raw == null || !(type.equals(FILE) || type.equals(FOLDER))) {
 				return item;
 			}
+			String path = Normalizer.normalize(raw, Normalizer.Form.NFC);
 			String next = rewrite.apply(type, path);
 			if (next == null || next.equals(path)) {
 				return item;
@@ -127,37 +136,40 @@ final class BookmarkCodec {
 	 * Copies of {@code items} with {@code rewrite} applied to every file bookmark (in groups too); it returns the item to
 	 * keep, the same object when nothing changes. Returns null when none changed.
 	 */
-	static @Nullable List<ObjectNode> rewriteFileItems(List<ObjectNode> items, UnaryOperator<ObjectNode> rewrite) {
+	static @Nullable List<JsonNode> rewriteFileItems(List<? extends JsonNode> items,
+			UnaryOperator<ObjectNode> rewrite) {
 		return map(items, (item) -> FILE.equals(text(item, "type")) ? rewrite.apply(item) : item);
 	}
 
-	/** {@code op} over every bookmark that is not a group, in groups too; null when it changed none. */
-	private static @Nullable List<ObjectNode> map(List<ObjectNode> items, UnaryOperator<ObjectNode> op) {
+	/**
+	 * {@code op} over every bookmark object that is not a group, in groups too; anything that is not an object is kept
+	 * as it is. Null when it changed none.
+	 */
+	private static @Nullable List<JsonNode> map(List<? extends JsonNode> items, UnaryOperator<ObjectNode> op) {
 		boolean changed = false;
-		List<ObjectNode> out = new ArrayList<>(items.size());
-		for (ObjectNode item : items) {
-			ObjectNode next = item;
+		List<JsonNode> out = new ArrayList<>(items.size());
+		for (JsonNode node : items) {
+			if (!(node instanceof ObjectNode item)) {
+				out.add(node);
+				continue;
+			}
+			JsonNode next = item;
 			if (GROUP.equals(text(item, "type"))) {
 				if (item.get("items") instanceof ArrayNode children) {
-					List<ObjectNode> nested = new ArrayList<>();
-					children.values().forEach((child) -> {
-						if (child instanceof ObjectNode object) {
-							nested.add(object);
-						}
-					});
-					List<ObjectNode> rewritten = map(nested, op);
+					List<JsonNode> rewritten = map(List.copyOf(children.values()), op);
 					if (rewritten != null) {
-						next = item.deepCopy();
+						ObjectNode copy = item.deepCopy();
 						ArrayNode list = NODES.arrayNode();
 						rewritten.forEach(list::add);
-						next.set("items", list);
+						copy.set("items", list);
+						next = copy;
 					}
 				}
 			}
 			else {
 				next = op.apply(item);
 			}
-			changed |= next != item;
+			changed |= next != node;
 			out.add(next);
 		}
 		return changed ? out : null;

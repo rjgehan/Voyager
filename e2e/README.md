@@ -15,24 +15,34 @@ npm test                   # API + PC + iPhone, about 2 minutes
 npm run screens            # screen inventory → screens-output/screens.pdf
 npm run report             # open the last HTML report
 npm run stop               # stop what reset started
+npm run test:scripts       # the tooling's own tests (no server needed)
 ```
 
 - **Production mode.** `npm run reset -- --prod` serves the *built* frontend from the jar on :18570,
-  as the Docker image does (the frontend is built first when `frontend/src` changed). CI uses it.
+  as the Docker image does (the frontend is built first when anything its build reads changed:
+  `frontend/src`, `public/`, the files at the top of `frontend/` such as `index.html`, `share.html`,
+  `vite.config.ts` and its plugins, and the user guide in `docs/guide`). CI uses it.
   Some bugs only exist in the built app (lazy chunks, see "Known bugs" below).
-- **Rebuilds.** `reset` rebuilds the jar when `backend/src/main` or `pom.xml` is newer than
-  `backend/target/classes` (`--build` forces it). Run `npm ci` in `frontend/` once before the first
-  reset.
-- **Ports and processes.** Only :18570 and :5153 (`E2E_API_PORT`, `E2E_WEB_PORT` to change them).
+- **Rebuilds.** `reset` rebuilds the jar when `backend/src/main`, `pom.xml` or `backend/target/classes`
+  is newer than the jar's last packaging (the time of `notesapp-*.jar.original`: the jar's own is
+  fixed by the reproducible build), so a `mvnw test`, a failed `verify` or an IDE compile after an
+  edit no longer passes for a current jar. `--build` forces both rebuilds. Run `npm ci` in
+  `frontend/` once before the first reset.
+- **Ports and processes.** Only :18570 and :5153 (`E2E_API_PORT`, `E2E_WEB_PORT` to change them), on
+  loopback (`E2E_WEB_HOST` and `E2E_EXTRA_HOSTS` are for the hallway test below).
   `reset` refuses to start when something else listens there, and stops only the processes it
-  recorded in `.run/pids.json`, by PID, after checking each is still the java or node it started.
+  recorded in `.run/pids.json`, by PID, after checking each is still the java or node it started
+  (with `tasklist` on Windows, `/proc` on Linux, `ps` on macOS). A recorded process it cannot check
+  is left running and stays recorded, and `reset` names it.
 - **Browser.** `channel: 'chrome'`. Without Chrome the suite uses the installed Edge (also
   Chromium); `PW_CHANNEL=chrome|msedge|chromium` picks one (`chromium` is Playwright's own build,
   which CI installs only when the runner has no Chrome).
 - **The server it starts** (`scripts/reset.mjs`): the dev profile, a scratch vault and a scratch
   folder for extra vaults, the Host allowlist `localhost`/`127.0.0.1` on both ports, the identity
   allowlist `e2e-owner@example.test` (any other `Tailscale-User-Login` is refused; no login is the
-  dev profile's default "Owner"), and a 2-second history batch.
+  dev profile's default "Owner"), a 2-second history batch, and the vault watcher on, as in the
+  Docker image, except on Windows (the dev profile turns it off there: JDK-6972833 keeps watched
+  folders from being renamed).
 
 ## In CI
 
@@ -55,12 +65,12 @@ for it, as for the unit tests: a change that renames a button or label a test us
 | `tests/api/vaults.spec.ts` | Same path in two vaults, search/tasks/trash per vault, path escapes, `/api/v/main`, names and refusals |
 | `tests/api/security.spec.ts` | `X-Client-Id`, `Origin`/`Sec-Fetch-Site` (CSRF), the Host allowlist (DNS rebinding), the identity allowlist and RFC 2047 names, commit authors, Funnel, security headers |
 | `tests/api/events.spec.ts` | What another device hears and in which order, echo suppression, task events, replay from the last id and resync |
-| `tests/ui/core-loop.spec.ts` | New note, Live Preview, a wikilink from autocomplete (Mod-click / tap to follow), rename from the title updating links, table formulas recalculating and saving what was typed |
-| `tests/ui/sync.spec.ts` | Two devices on one note: live update, offline edits ending in the conflict banner, Compare, Keep mine, Take theirs |
+| `tests/ui/core-loop.spec.ts` | New note, Live Preview, a wikilink from autocomplete (Mod-click / tap to follow), rename from the title updating links, table formulas recalculating and saving what was typed; New note while the app is still opening (QA F2) |
+| `tests/ui/sync.spec.ts` | Two devices on one note: live update, offline edits ending in the conflict banner, Compare, Keep mine, Take theirs; going offline right after opening a note does not reload the built app (QA F1) |
 | `tests/ui/find-and-plan.spec.ts` | Search page (open at the match, search-as-you-type), task quick add, checking off on Today, the calendar's day and daily note, a spreadsheet formula from the formula bar, a sheet embed |
 | `tests/ui/layout.spec.ts` | Layout regressions jsdom cannot see: the note header in a narrow split pane, Dataview tables on a phone |
-| `tests/ui/known-bugs.spec.ts` | Bugs found and not fixed yet (below) |
 | `tests/screens/inventory.spec.ts` | Not a test: captures every page, panel and sheet for the PDF |
+| `scripts/*.test.mjs` | The suite's own tooling, with `npm run test:scripts` (no server, no browser; CI runs it before the suite): each project lists only its own folder wherever the checkout lives; `reset` rebuilds a jar or frontend older than what it is built from, and starts the server with the vault watcher except on Windows; `stop` stops what was recorded on Windows, Linux and macOS, and never forgets a process it could not check |
 
 UI tests run on both devices (`desktop`, 1366 × 860, and `iphone`, 390 × 844 with touch, no hover
 and an iPhone user agent, so the app takes its iOS paths); a title with `@desktop` or `@phone` keeps
@@ -71,7 +81,7 @@ a test to one.
 A test for something broken today is marked `test.fail(…, 'KNOWN BUG …')`. It shows as ✘ but
 counts as passing. When the bug is fixed, Playwright reports **"Expected to fail, but passed"**:
 delete the `test.fail` line. A green run means "nothing got worse", and the `KNOWN` lines are the
-bug list.
+bug list. None is open today: the QA pass of 2026-11-02 (`qa/2026-11-02/FINDINGS.md`) found two, F1 and F2, both fixed and now ordinary tests in `sync.spec.ts` and `core-loop.spec.ts`.
 
 ```bash
 grep -rn "KNOWN BUG" tests/
@@ -83,6 +93,9 @@ grep -rn "KNOWN BUG" tests/
   then click only through the part the test is about. Every test makes its own notes under a
   `unique()` name: the vault is shared, and runs pile up until the next `reset`.
 - Basenames resolve vault-wide (`[[Plan]]` finds any `Plan.md`), so make linked names unique too.
+- Search for a `madeUpWord('stem')` of the test's own: random letters, so no earlier run's word
+  shares its prefix or is a typo away from it (a word from the clock would be, and a rerun without
+  `reset` would find both).
 - After typing, poll the file (`eventually(() => readFile(path), …)`) rather than trusting the
   screen: the app saves in the background.
 - Follow a link with Mod-click on the PC and a tap on the phone; a plain click edits it.
@@ -97,8 +110,21 @@ grep -rn "KNOWN BUG" tests/
 Give the iPhone to someone who has not seen the app, one task at a time, and say nothing. Write down
 every pause, wrong tap and "where's the…". Stop a task after two minutes.
 
-Set up with `npm run reset && npm run seed`, then open the app on the phone (over the tailnet, as
-docs/DESIGN.md §9.1 step 4 describes; never bind Vite to 0.0.0.0).
+Set up on the PC, with Vite on its tailnet address only (never 0.0.0.0, which would open the
+unauthenticated dev backend to every network the PC joins):
+
+```bash
+E2E_WEB_HOST=<the PC's address from `tailscale ip -4`> npm run reset && npm run seed
+```
+
+then open `http://<that address>:5153` in Safari on the phone (on the tailnet). To use the PC's
+tailnet name instead, add `E2E_EXTRA_HOSTS=<pc>.<tailnet>.ts.net:5153` (comma-separated, each
+`host:port`): the server and Vite then answer that name too. The phone talks to Vite directly, so it
+sends no Tailscale identity and the dev profile's default "Owner" applies. It is a plain-http origin,
+so there is no service worker: offline, the open page keeps working (task 11), but a reload does not
+load the app. `npm test`
+still works against this stack (it uses the address reset reports); `npm run reset` without
+`E2E_WEB_HOST` goes back to localhost.
 
 1. Write a note called **Packing list** with three things to bring.
 2. In it, link to the note about the **renovation**.

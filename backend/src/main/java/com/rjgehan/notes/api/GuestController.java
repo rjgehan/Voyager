@@ -3,6 +3,7 @@ package com.rjgehan.notes.api;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -16,6 +17,7 @@ import com.rjgehan.notes.api.dto.SaveFileRequest;
 import com.rjgehan.notes.api.dto.TextFile;
 import com.rjgehan.notes.api.dto.WriteResult;
 import com.rjgehan.notes.api.error.NotesException;
+import com.rjgehan.notes.api.error.VersionConflictException;
 import com.rjgehan.notes.config.ApiGuardInterceptor;
 import com.rjgehan.notes.config.NotesProperties;
 import com.rjgehan.notes.events.EventHub;
@@ -138,8 +140,20 @@ public class GuestController {
 		ShareAccess.Grant grant = this.access.open(key, identity);
 		String checked = this.access.writable(grant, path);
 		this.access.checkEmbeds(grant, checked, request.content());
-		FileService.Saved saved = this.files.saveText(checked, request.content(), request.baseVersion(),
-				Boolean.TRUE.equals(request.flushHistory()), identity, origin);
+		FileService.Saved saved;
+		try {
+			saved = this.files.saveText(checked, request.content(), request.baseVersion(),
+					Boolean.TRUE.equals(request.flushHistory()), identity, origin);
+		}
+		catch (VersionConflictException ex) {
+			// Where the owner moved the note is the guest's to know only inside the share (DESIGN §5.40).
+			Map<String, Object> properties = ex.getBody().getProperties();
+			if (properties != null && properties.get("movedTo") instanceof String movedTo
+					&& !grant.share().contains(movedTo)) {
+				ex.getBody().setProperty("movedTo", null);
+			}
+			throw ex;
+		}
 		return ResponseEntity.status(saved.created() ? HttpStatus.CREATED : HttpStatus.OK).body(saved.result());
 	}
 

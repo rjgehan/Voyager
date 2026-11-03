@@ -15,7 +15,8 @@ export const CLIP_TAG = 'clippings';
 // A name leaves room for " 999.md" (the server's de-duplication, API.md §8.2) inside 240 bytes.
 const MAX_BASENAME_BYTES = 200;
 
-const WINDOWS_RESERVED = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
+// With any extension, as the server's rule (API.md §1.3, NameRules): `Aux. power` is refused too.
+const WINDOWS_RESERVED = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\..*)?$/i;
 
 const encoder = new TextEncoder();
 

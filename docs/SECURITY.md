@@ -1,6 +1,6 @@
 # Voyager: threat model and security audit
 
-This is the security view of Voyager: what it protects, from whom, where the trust boundaries are in each way of running it, and which control holds each boundary. It also records the adversarial audit of 2026-11-02 (findings, fixes, and the risks that remain) and the hardening advice that follows from it. [DESIGN.md](DESIGN.md) §2.4, §5.3, §5.13 and §5.14 are the design of the controls; this document does not repeat their details. How to report a vulnerability: [SECURITY.md](../SECURITY.md) at the repository root.
+This is the security view of Voyager: what it protects, from whom, where the trust boundaries are in each way of running it, and which control holds each boundary. It also records the adversarial audit of 2026-11-02 (findings, fixes, and the risks that remain) and the hardening advice that follows from it. [DESIGN.md](DESIGN.md) §2.4, §5.3, §5.13, §5.14 and §5.40 are the design of the controls; this document does not repeat their details. How to report a vulnerability: [SECURITY.md](../SECURITY.md) at the repository root.
 
 ## 1. What is protected
 
@@ -13,7 +13,7 @@ This is the security view of Voyager: what it protects, from whom, where the tru
 | **The owner's devices** | Browsers (iPhone PWA, Windows), the desktop app, the clipper extension | Content rendered there must not run code, load from other sites by itself, or impersonate the app. Their offline caches hold note text. |
 | **Availability** | The one server | A crash loop or a full disk takes the notes away from every device at once. |
 
-There is **no app login**. Admission is Tailscale identity (the `Tailscale-User-*` headers that `tailscale serve` sets) checked against `notes.identity.allowed-logins`. Every admitted identity has full read and write access to every vault: there are no per-user permissions.
+There is **no app login**. Admission is Tailscale identity (the `Tailscale-User-*` headers that `tailscale serve` sets) checked against `notes.identity.allowed-logins`, which names the **owners**. Every owner has full read and write access to every vault: there are no per-user permissions among owners. Since family sharing (ROADMAP item 43, §3.12), every other Tailscale login is a **guest**, admitted only to the guest surface, where it reaches only the notes and folders shared with it. With the list empty, every login `tailscale serve` passes on is an owner and sharing is off.
 
 ## 2. Who might attack
 
@@ -21,7 +21,7 @@ There is **no app login**. Admission is Tailscale identity (the `Tailscale-User-
 |---|---|---|
 | A1 | Anyone on the internet | Reach the app through Funnel or a misconfiguration; abuse the public publish server. |
 | A2 | A device on the server's **LAN** (guest Wi-Fi, a compromised IoT device) | Talk to a published container port directly and forge identity headers. |
-| A3 | A **tailnet peer that is not the owner**: a tagged device, a user the node is shared with, another member when the allowlist is empty | Use the app as if it were the owner. |
+| A3 | A **tailnet peer that is not the owner**: a tagged device, a user the node is shared with, another member when the allowlist is empty, a family member something is shared with (a guest, §3.12) | Use the app as if it were the owner; as a guest, read or write beyond what is shared with it. |
 | A4 | **Content**: a web page that is clipped or pasted, an imported Obsidian vault, a downloaded PDF or SVG, a shared note, a prompt-injected AI answer | Run code in the app's origin, exfiltrate notes (to a remote image URL, for instance), draw a fake UI, crash the server. **The most realistic attacker**: the owner brings the content in themselves. |
 | A5 | A **website the owner visits** while the app is open | CSRF, DNS rebinding, reading API responses cross-origin, opening `/clip` with prepared content. |
 | A6 | A **compromised dependency** or other code running next to the app | Reach the tailnet or the LAN from the server; read secrets. |
@@ -39,7 +39,7 @@ The app shares the network namespace of a kernel-mode `tailscale` container and 
 
 ### 3.2 CasaOS simple layout (`deploy/casaos-compose.yml`, CASAOS.md)
 
-Tailscale runs on the **host**; `tailscale serve --https=8443 http://127.0.0.1:18095` proxies to the app. Since 2026-11-02 (finding F5) the app shares the **host's network** (`network_mode: host`) and listens on `127.0.0.1:18095`, the host's loopback: no port is published, so nothing on the LAN or the tailnet can open a connection to it, IPv4 or IPv6. `NOTES_IDENTITY_ALLOWED_LOGINS` is required in this file (a placeholder that admits nobody until it is replaced). Consequences:
+Tailscale runs on the **host**; `tailscale serve --https=8443 http://127.0.0.1:18095` proxies to the app. Since 2026-11-02 (finding F5) the app shares the **host's network** (`network_mode: host`) and listens on `127.0.0.1:18095`, the host's loopback: no port is published, so nothing on the LAN or the tailnet can open a connection to it, IPv4 or IPv6. `NOTES_IDENTITY_ALLOWED_LOGINS` is required in this file (a placeholder that makes nobody an owner until it is replaced: every login is then a guest, and without an owner no share exists, so no note is reachable). Consequences:
 
 - **A2 and A3 cannot reach the app** at all: a connection to `<server-ip>:18095`, the host's IPv6 addresses (link-local included) or `100.x.y.z:18095` is refused by the host's kernel.
 - **Processes on the host** can still connect to `127.0.0.1:18095` and send any identity headers. The host is inside the trust boundary in every layout (it holds the data folder and the Docker socket).
@@ -65,7 +65,7 @@ Off unless `NOTES_PUBLISH_ENABLED=true` **and** the tailnet policy grants `funne
 
 ### 3.5 The browser (the SPA, raw files, the service worker)
 
-- **Admission and CSRF** (DESIGN §5.13, §5.14): Host allowlist (`421`, blocks DNS rebinding), identity allowlist (`403`), and on every mutating `/api/**` request a well-formed `X-Client-Id` (a custom header, so a cross-origin request needs a CORS preflight, which fails: there is no CORS configuration), an `Origin` equal to the `Host` when present, and a same-origin `Sec-Fetch-Site` when present. JSON endpoints accept only `application/json`; uploads accept any type but need the header too. `GET` never has side effects. `/capture/share` (the PWA share target) accepts a form `POST` but only redirects.
+- **Admission and CSRF** (DESIGN §5.13, §5.14): Host allowlist (`421`, blocks DNS rebinding), identity allowlist (owners; any other login is a guest, `403 identity-not-allowed` outside the guest surface of §3.12), and on every mutating `/api/**` request (the guest API `/api/s/**` included) a well-formed `X-Client-Id` (a custom header, so a cross-origin request needs a CORS preflight, which fails: there is no CORS configuration), an `Origin` equal to the `Host` when present, and a same-origin `Sec-Fetch-Site` when present. JSON endpoints accept only `application/json`; uploads accept any type but need the header too. `GET` never has side effects. `/capture/share` (the PWA share target) accepts a form `POST` but only redirects.
 - **CSP** on every page: `script-src 'self' 'wasm-unsafe-eval'`, no inline script, `object-src 'none'`, `base-uri 'none'`, `frame-ancestors 'none'`, `connect-src 'self'`. `img-src` and `media-src` allow `https:`, because Obsidian notes embed remote images: **the CSP does not stop a page from loading a remote image**, so "nothing loads from other sites" is the sanitizer's job (next item).
 - **Raw files** (`/api/files/raw`, history, trash): `nosniff`, a sandbox CSP, HTML, XML and JavaScript forced to `application/octet-stream` + `attachment`, SVG inline only under `sandbox`, symlinks never served.
 - **Rendered note HTML** (reading pipeline, Live Preview widgets, embeds, script output, AI answers): DOMPurify plus the app's own rules: reserved attributes stripped (a note cannot forge an embed), no `position: fixed|sticky` or `z-index`, every remote load removed when remote images are off (always for script output and AI answers), and a `contain: paint` box around everything rendered so it cannot draw over the app.
@@ -101,14 +101,28 @@ The tailnet policy of DEPLOY.md step 6 gives `tag:notes` no outgoing grant, so c
 
 ### 3.11 Multiple vaults (DESIGN §5.39)
 
-Each extra vault is its own Spring context behind `/api/v/<name>/`; the prefix is rewritten before every filter runs, so admission, size limits, the CSRF guard and the security headers apply unchanged. Only a literal, well-formed prefix routes (no escapes, `;` parameters or dot segments). All vaults share one identity allowlist: **an admitted identity can use every vault**.
+Each extra vault is its own Spring context behind `/api/v/<name>/`; the prefix is rewritten before every filter runs, so admission, size limits, the CSRF guard and the security headers apply unchanged. Only a literal, well-formed prefix routes (no escapes, `;` parameters or dot segments). All vaults share one identity allowlist: **an owner can use every vault**. A guest's key opens only a share of the vault it was made in (§3.12).
+
+### 3.12 Sharing with family (guests)
+
+Family sharing (ROADMAP item 43; DESIGN §5.40 and §6.48; API.md §42) added the first identities that are admitted but are not owners. A **guest** is any Tailscale login outside `NOTES_IDENTITY_ALLOWED_LOGINS`; a request without an identity (a tagged device) is still refused everywhere, link or not.
+
+- **The guest surface** (`HostAndIdentityFilter`; `IdentityResolver` tells owners from guests), decided on the path Spring MVC matches (`RequestPaths.of`: percent-escapes and `;` parameters cannot disguise it), never for a path with a `.` or `..` segment: any method on the guest API `/api/s` and `/api/s/**` (an extra vault's `/api/v/<name>/s/**` is routed there first), with the CSRF guard of §3.5; `GET`/`HEAD` of the guest page `/s` and `/s/**` (`/v/<name>/s/**`) and its static files (`/assets/**`, `/favicon.svg`, `/theme-boot.js`: the app's public code); and `/`, which answers `303` to `/s`. Everything else, the owner's app and API, raw files, the event stream, the service worker and the manifest included, answers a guest `403 identity-not-allowed`. `ShareAuthorizationIntegrationTest` requests every handler mapping of the application as a guest and as a stranger, so an endpoint added later is covered.
+- **Keys** (`ShareAccess`): every guest endpoint names a share in its path, `/api/s/<key>/…`. A 12-character key is a share's id, which works only for the logins the share names (and for owners); a 43-character key is a capability link (256 bits from `SecureRandom`), which works for any identity that has it. Only a link's SHA-256 is stored, so neither `.notesapp/shares.json`, its git history nor a mirror reveals a working link, and the link is shown once. Any other key, an expired share and an id used by someone else all answer the same `404 share-not-found`. A key never opens another vault's share.
+- **Scope** (`ShareScope`): a path passes the vault's path rules (`VaultPaths.normalize`, §4) and is then compared as a string with the share's note, or with what lies strictly under its folder, before any file is touched: outside answers `403 outside-share`, whether the file exists or not. Raw reads may also be the images, audio, video and PDFs outside the share that a shared note embeds now.
+- **Embeds a guest adds**: an edit share's save is scanned, and an embed that resolves outside the share is accepted only when it is media the share embeds now or did within 24 hours; anything else is `403 outside-share`, so a guest cannot read a file by typing its name. Guests save and create notes only: no delete, move, rename, upload or folder.
+- **Rate limit** (`ShareRateLimiter`, server-wide): `404 share-not-found` and refused paths count against the login; after 20 in 15 minutes every guest request of that login answers `429 too-many-attempts` until the oldest leaves the window. It slows the probing of ids, names and paths; it is not what protects links (their 256 bits are).
+- **Live sync** (`GuestEventFilter`): a guest's event stream carries only the share's file events (and its embedded media's), moves the share followed, `share.changed` and `resync`; the share is checked again at every event and heartbeat, so revoking it, an expiry or a removed recipient ends the stream at once.
+- **The guest page** (`share.html`) runs none of the owner's app: `share/importGraph.test.ts` follows every import of its entry, lazy chunks included (the formula engine's), and fails if one reaches the owner's singletons or API client.
+- **What a guest can do to the owner**: an edit share's guest writes note content, script and `dataview` blocks included, that the owners later open; scripts run as the note shows (§3.8, R3). A guest's commits carry the guest's name and login, so history shows who wrote what. An embed's resolution can change later (a same-named file inside the share deleted), a known limit of DESIGN §5.40.
 
 ## 4. Controls by boundary
 
 | Boundary | Attackers | Controls |
 |---|---|---|
 | Network → app port | A1, A2, A3, A7 | Layout (§3): loopback-only listener or private Compose network; kernel-mode Tailscale check; the CasaOS simple layout listens on the host's loopback (§3.2), and only its older bridge variant needs §7.1. |
-| `tailscale serve` → app | A3 | Identity allowlist (`NOTES_IDENTITY_ALLOWED_LOGINS`); Host allowlist; Funnel requests refused. |
+| `tailscale serve` → app | A3 | Identity allowlist (`NOTES_IDENTITY_ALLOWED_LOGINS`: the owners; any other login only the guest surface, §3.12); Host allowlist; Funnel requests refused. |
+| Guest → shared notes | A3 (a guest), A4 | §3.12: the guest surface on the matched path (`HostAndIdentityFilter`); share keys (`ShareAccess`: ids for the named logins, hashed 256-bit links, one `404` for every refusal); scope before any file is touched (`ShareScope`); embedded media only while embedded, and no embed a guest adds may reach outside; the rate limit (`ShareRateLimiter`); the filtered event stream (`GuestEventFilter`); a guest page that runs none of the owner's app. |
 | Browser → API | A5 | Custom-header CSRF guard, Origin and `Sec-Fetch-Site` checks, no CORS, JSON-only bodies, side-effect-free `GET`. |
 | API → disk | A3, A5 | `VaultPaths` (§5.3): NFC, no `.`/`..`, no hidden segments (`.git`, `.notesapp`, `.trash` → `403`), Windows name rules, symlink and junction escape checks, `NOFOLLOW_LINKS` everywhere. |
 | Content → browser | A4 | CSP, raw-file sandboxing, DOMPurify + app rules, containment, remote-load blocking, script sandbox. |
@@ -138,7 +152,7 @@ Each extra vault is its own Spring context behind `/api/v/<name>/`; the prefix i
 
 ### 5.2 Attacks that failed (the controls held)
 
-- **Identity and Host**: no `Tailscale-User-Login` → `403`; a login outside the list → `403`; `Host: evil.com`, `notes.<tailnet>.ts.net.` (trailing dot) → `421`; without them only the health endpoints answer (`UP`, no details), and the actuator exposes nothing else (`/actuator/env` → `404`); the same on `/api/v/<name>/`.
+- **Identity and Host**: no `Tailscale-User-Login` → `403`; a login outside the list → `403` (as audited, before family sharing; since then such a login is a guest, `403 identity-not-allowed` everywhere but the guest surface of §3.12, which `ShareAuthorizationIntegrationTest` checks for every handler mapping); `Host: evil.com`, `notes.<tailnet>.ts.net.` (trailing dot) → `421`; without them only the health endpoints answer (`UP`, no details), and the actuator exposes nothing else (`/actuator/env` → `404`); the same on `/api/v/<name>/`.
 - **CSRF** on every mutating endpoint, plain and vault-prefixed: no or malformed `X-Client-Id` → `403`; a foreign `Origin` or `Sec-Fetch-Site: cross-site|same-site` → `403`; `text/plain` and form bodies → `415`; a CORS preflight gets no `Access-Control-Allow-*`; multipart is disabled; `POST /capture/share` only redirects. `GET` endpoints have no side effects, and every response is `Cross-Origin-Resource-Policy: same-origin`, so an `<img>` or `<script>` on another site cannot read a raw file.
 - **Paths**, on the file, raw, upload, history, trash and vault-prefixed routes: `..`, `%2e%2e`, `..%2f`, overlong UTF-8, fullwidth dots, `%00`, `\`, absolute and drive-letter paths, alternate data streams, trailing dots and spaces, `.git`, `.GIT`, `.notesapp`, `.trash`; an upload named `../x.svg` or `.x.svg` lands in `Attachments/` under a cleaned name; `/api/v/work/../`, `/api/v/Work/`, `%2f`, `;x=1` and `/api/v//` reach no other vault. A Windows junction to a folder outside the vault is refused for reading, writing, moving into, creating under and deleting (`400`, nothing outside touched); symbolic links get the same treatment by design (§5.3 of DESIGN.md), and are covered by `VaultPathsTest` and `FilesIntegrationTest`.
 - **Raw files**: HTML, XHTML, XML, JavaScript (`.js`, `.mjs`), `.webmanifest`, `.mht` and every unknown type are `application/octet-stream` + `attachment`; SVG is inline only under `sandbox`; PDF gets `default-src 'none'`; all with `nosniff`.
@@ -154,7 +168,7 @@ Each extra vault is its own Spring context behind `/api/v/<name>/`; the prefix i
 | | Risk | What limits it |
 |---|---|---|
 | R1 | **CasaOS layouts**: whoever reaches the app's port is whoever they claim to be (F5). With the shipped simple layout that is only the host itself; with the older bridge variant, the LAN. | The loopback listener of the simple layout (§3.2); for the bridge variant, §7.1. The sidecar layout (§3.3) and the main layout (§3.1) avoid it too. |
-| R2 | Every admitted identity has full access to every vault; there are no per-user permissions. | §7.2: name the allowed logins. |
+| R2 | Every owner has full access to every vault; there are no per-user permissions among owners. A guest has only its shares, but an **edit share's guest writes note content, scripts included, that the owners later open** (R3), and an embed a guest wrote may later resolve outside the share if a same-named file inside it is deleted (DESIGN §5.40). | §7.2: name the owners, and never list family there. Share for editing only with people whose notes you would open anyway; *Scripts in notes: Ask before running* (§7.5). |
 | R3 | Content you import is code: scripts in notes run as the note shows and can read the whole vault (§3.8). After F1 they cannot send it anywhere, but they can show misleading output. | §7.5. |
 | R4 | A crafted PDF still costs one restart (F3), and other parsers (PDFBox fonts and images, Excalidraw and canvas JSON) are bounded by size and time limits rather than memory limits. | Indexing by name after a crash; `notes.search.pdf.enabled=false` turns PDF text off. |
 | R5 | Web Push: a host name that resolves to a public address at the check and to a private one at the connection (DNS rebinding) passes F4's check. Only an admitted caller can subscribe. | The tailnet policy (§7.3). |
@@ -183,7 +197,7 @@ and make them survive reboots (`sudo apt install iptables-persistent && sudo net
 
 ### 7.2 Name the allowed logins
 
-Set `NOTES_IDENTITY_ALLOWED_LOGINS` to your own Tailscale login(s) in every layout. Without it, every identity `tailscale serve` passes on (any member of the tailnet, and users the node is shared with) has full access. The app logs a warning at startup when the list is empty.
+Set `NOTES_IDENTITY_ALLOWED_LOGINS` to your own Tailscale login(s) in every layout. Without it, every identity `tailscale serve` passes on (any member of the tailnet, and users the node is shared with) has full access. The app logs a warning at startup when the list is empty. The listed logins are the owners: never add family to the list. Any other login is a guest that sees only what you share with it (§3.12).
 
 ### 7.3 Tailnet policy
 
@@ -213,9 +227,11 @@ Until R6 is fixed, a note or spreadsheet whose formulas build very large arrays 
 | Maven advisories | `cd backend && ./mvnw -B -o dependency:list -DincludeScope=runtime -DoutputFile=deps.txt`, then look each `group:artifact` up in the GitHub Advisory Database (`gh api graphql` with `securityVulnerabilities(ecosystem: MAVEN, package: "group:artifact")`) and compare the version with each `vulnerableVersionRange` (2026-11-02, after F7: only `opentelemetry-api`, R7). OWASP dependency-check works too where the NVD feed can be downloaded. |
 | Admission and CSRF | `SecurityIntegrationTest`, `IdentityIntegrationTest`, `MultipleVaultsIntegrationTest`, `HostAndIdentityFilterTest`, `ApiGuardInterceptorTest`; by hand, against a backend run with `allow-default` off and a Host allowlist: `curl -H 'Host: <allowed host>' -H 'Tailscale-User-Login: <login>' …` with each header left out or changed |
 | Paths | `VaultPathsTest`, `FilesIntegrationTest`, `UploadIntegrationTest`; by hand, the inputs of §5.2 |
+| Sharing (guests, §3.12) | `ShareAuthorizationIntegrationTest` (every handler mapping as guest and stranger; every guest endpoint as owner, recipient, link holder and stranger; paths outside the scope however spelled; the embeds a guest adds; the rate limit; revocation and expiry, streams included), `ShareIntegrationTest`, `ShareScopeTest`, `ShareRateLimiterTest`, `ShareServiceTest`, `IdentityResolverTest`, `HostAndIdentityFilterTest`; the guest page: `share/importGraph.test.ts`, `share/guestFormulas.test.ts` |
 | Rendering | `render/urlSafety.test.ts`, `render/render.test.ts` (security audit cases), `render/rich/rich.test.ts`, `editor/livePreview/scripts.test.ts`, `styles/containment.test.ts` |
 | Script sandbox | `scripts/sandbox.test.ts`, `scripts/host.test.ts`, `scripts/output.test.ts` |
 | Web Push destinations | `WebPushTest`, `RemindersIntegrationTest` |
+| This document | `ThreatModelDocTest`: the guest surface is in it, the guest controls it names are classes that exist, and so is every test this table names; `CasaOsLayoutTest` holds the CasaOS file to §3.2 |
 | PDF crash guard | `PdfTextTest`; end to end: a PDF whose content stream inflates to one huge string, a server started with `-Xmx256m -XX:+ExitOnOutOfMemoryError` (it exits), then started again (it logs `reading its text stopped the server last time` and stays up) |
 
 ### 8.1 Commits of the 2026-11-02 audit (branch `fix/security-audit`)

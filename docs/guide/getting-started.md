@@ -34,6 +34,8 @@ The right sidebar's panels open as a sheet from the bottom of the screen; drag i
 2. Type the note's name. It shows at the top as the note's title.
 3. Press `Enter` to move into the note, and write.
 
+You can start typing at once, even while the server is still answering ("Creating the note…"): the name and the text go into the note as soon as it exists. If the server cannot be reached, the new note waits on screen with what you typed and is created when the connection returns; if the server refuses it, the reason shows with **Try again**.
+
 There is no Save button: the note saves as you type. The status bar (phone: the pill next to the title) says **Saved** or **Unsaved**, and **Offline** when the server cannot be reached; your edits are then kept on the device and saved when the connection returns.
 
 > [!TIP]

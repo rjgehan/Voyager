@@ -2,7 +2,7 @@
 // is created in. Kept apart from templates.ts, which loads on first use with its YAML library; this
 // module only decides whether a template applies, then loads it.
 import { isProblem } from '../api/client';
-import { currentSettings } from '../api/hooks';
+import { settingsReady } from '../api/hooks';
 import type { Settings } from '../api/types';
 import { toast } from '../state/toasts';
 import { useUi } from '../state/ui';
@@ -33,7 +33,7 @@ const EMPTY: TemplateOutput = { text: '', cursor: null };
  * when the questions were cancelled.
  */
 export async function folderTemplateRenderer(folder: string): Promise<TitledTemplate | '' | null> {
-  const template = folderTemplateFor(folder, currentSettings());
+  const template = folderTemplateFor(folder, await settingsReady());
   if (!template) return '';
   try {
     return await (await import('./templates')).templateRenderer(template);

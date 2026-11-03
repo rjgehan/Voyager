@@ -423,3 +423,35 @@ describe('text element ids in Markdown drawings', () => {
     expect(elements[1].id).toBe('longTextId');
   });
 });
+
+describe('texts with a line ending like an entry id', () => {
+  // A line of a text that ends in " ^" and 8 id characters is not the end of its entry unless
+  // the id names an element of the drawing (or a blank line follows, as between entries).
+  const T = 'Call the plumber ^tomorrow\nand the electrician';
+  const typed = (d: Drawing, id: string, t: string, version: number): Scene => ({
+    ...d.scene,
+    elements: d.scene.elements.map((e) => (e.id === id ? { ...e, text: t, originalText: t, rawText: t, version } : e)),
+  });
+
+  it('keeps the whole text after a save, a reload and another save', () => {
+    const d0 = parsed('markdown', markdownDrawing({ texts: [['Ab12Cd34', 'Hello']], scene: scene([text('Ab12Cd34', 'Hello'), el('rect0001')]) }));
+    const out1 = writeDrawing(d0, typed(d0, 'Ab12Cd34', T, 2));
+    expect(out1).toContain('Call the plumber ^tomorrow\nand the electrician ^Ab12Cd34\n\n');
+    const d1 = parsed('markdown', out1);
+    expect(d1.markdown!.texts).toEqual([{ id: 'Ab12Cd34', raw: T }]);
+    expect(d1.scene.elements.find((e) => e.id === 'Ab12Cd34')).toMatchObject({ text: T, originalText: T, rawText: T });
+    const out2 = writeDrawing(d1, { ...d1.scene, elements: d1.scene.elements.map((e) => (e.id === 'rect0001' ? { ...e, x: 5, version: 3 } : e)) });
+    const d2 = parsed('markdown', out2);
+    expect(d2.scene.elements.find((e) => e.id === 'Ab12Cd34')).toMatchObject({ text: T, originalText: T, rawText: T });
+    expect(out2).toContain('Call the plumber ^tomorrow\nand the electrician ^Ab12Cd34\n\n');
+  });
+
+  it('still ends entries at ids the drawing has, and at others followed by a blank line', () => {
+    const ids = new Set(['aaaaaaaa', 'bbbbbbbb']);
+    expect(parseTextEntries('One ^nextweek\ntwo ^aaaaaaaa\n\nStale ^gone0001\n\nThree ^bbbbbbbb', ids)).toEqual([
+      { id: 'aaaaaaaa', raw: 'One ^nextweek\ntwo' },
+      { id: 'gone0001', raw: 'Stale' },
+      { id: 'bbbbbbbb', raw: 'Three' },
+    ]);
+  });
+});

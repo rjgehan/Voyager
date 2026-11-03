@@ -84,6 +84,30 @@ describe('SearchView', () => {
     expect(await screen.findByRole('button', { name: 'Remove the bookmark for this search' })).toHaveAttribute('aria-pressed', 'true');
   });
 
+  it('shows a task’s related note as its label, not as a raw Markdown link (QA finding F9)', async () => {
+    vi.spyOn(api, 'search').mockResolvedValue({
+      ...RESPONSE,
+      query: 'renovation',
+      corrections: [],
+      total: 1,
+      results: [
+        {
+          path: 'Tasks/Inbox.tasks',
+          basename: 'Inbox',
+          kind: 'note',
+          score: 1,
+          mtime: '2026-10-16T10:00:00.000Z',
+          titleRanges: [],
+          matches: [{ line: 2, text: '[Home renovation](/Projects/Home%20renovation.md)', ranges: [{ from: 6, to: 16 }], page: null }],
+          moreMatches: 0,
+        },
+      ],
+    });
+    renderView('renovation');
+    const mark = await screen.findByText('renovation', { selector: 'mark' });
+    expect(mark.closest('button')!.textContent).toBe('Home renovation');
+  });
+
   it('shows PDF hits with their page, and corrections with a way back to exact words', async () => {
     const search = vi.spyOn(api, 'search').mockResolvedValue(RESPONSE);
     renderView('recieve jam');

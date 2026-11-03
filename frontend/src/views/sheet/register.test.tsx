@@ -76,6 +76,28 @@ describe('the sheet view descriptor', () => {
     off();
     expect(activeSheet('a.sheet')).toBeNull();
   });
+
+  it('keeps each mounted spreadsheet’s commands, so a second pane with another one takes nothing away', () => {
+    const calls: string[] = [];
+    const sheet = (path: string) =>
+      new Proxy({ path, editable: () => true } as SheetActions, { get: (t, k: string) => (k in t ? t[k as keyof SheetActions] : () => calls.push(`${path} ${k}`)) });
+    const insert = SHEET_COMMANDS.find((c) => c.id === 'sheet.insertRowsAbove')!;
+    // Budget in the left pane, then Expenses in a right pane.
+    const offBudget = setActiveSheet(sheet('Budget.sheet'));
+    const offExpenses = setActiveSheet(sheet('Expenses.sheet'));
+    // Back in the left pane.
+    expect(insert.when!({ activePath: 'Budget.sheet' })).toBe(true);
+    void insert.run({ activePath: 'Budget.sheet' });
+    expect(insert.when!({ activePath: 'Expenses.sheet' })).toBe(true);
+    void insert.run({ activePath: 'Expenses.sheet' });
+    expect(calls).toEqual(['Budget.sheet insertRowsAbove', 'Expenses.sheet insertRowsAbove']);
+    // Closing the right pane leaves the left one's.
+    offExpenses();
+    expect(activeSheet('Budget.sheet')?.path).toBe('Budget.sheet');
+    expect(activeSheet('Expenses.sheet')).toBeNull();
+    offBudget();
+    expect(activeSheet('Budget.sheet')).toBeNull();
+  });
 });
 
 describe('the grid theme', () => {

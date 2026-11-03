@@ -218,4 +218,21 @@ describe('a shared folder', () => {
     expect(window.location.search).toBe('?path=Family%2FRecipes%2FPie.md');
     await waitFor(() => expect(container.querySelector('.cm-content')?.textContent).toContain('Apples'));
   });
+
+  it('computes a note’s formulas from the share’s own spreadsheet, asking only the share', async () => {
+    at(`/s/${ID}?path=Family%2FRecipes%2FPie.md`);
+    const prices = JSON.stringify({ type: 'notesapp-sheet', version: 1, engine: '', sheets: [{ id: 's1', name: 'Prices', cells: { B1: { v: 3 } }, cols: {}, rows: {}, frozen: { rows: 0, cols: 0 } }], named: {} });
+    const fetchMock = serve((_method, url) => {
+      if (url === `/api/s/${ID}`)
+        return json(share({ kind: 'folder', path: 'Family/Recipes', title: 'Recipes', folders: [{ path: 'Family/Recipes', name: 'Recipes' }], files: [entry('Family/Recipes/Pie.md'), entry('Family/Recipes/Prices.sheet', 'text')] }));
+      if (url === `/api/s/${ID}/files?path=Family%2FRecipes%2FPie.md`)
+        return json({ path: 'Family/Recipes/Pie.md', kind: 'note', content: '# Pie\n\nTwo apples: `=Prices.sheet!B1*2`\n', version: 'v1', size: 40, mtime: '2026-11-02T10:00:00.000Z', lossy: false });
+      if (url === `/api/s/${ID}/files?path=Family%2FRecipes%2FPrices.sheet`)
+        return json({ path: 'Family/Recipes/Prices.sheet', kind: 'text', content: prices, version: 'v1', size: prices.length, mtime: '2026-11-02T10:00:00.000Z', lossy: false });
+      return undefined;
+    });
+    const { container } = render(<GuestApp />);
+    await waitFor(() => expect(container.querySelector('.cm-formula-inline')?.textContent).toBe('6'), { timeout: 8000 });
+    expect(fetchMock.mock.calls.every(([url]) => String(url).startsWith(`/api/s/${ID}`))).toBe(true);
+  });
 });

@@ -21,7 +21,7 @@ import {
   SquareSplitVertical,
   Trash2,
 } from 'lucide-react';
-import { useMemo, useRef, useState, type MouseEvent } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import { ContextMenu, type MenuEntry } from '../../components/overlays/ContextMenu';
 import { MarkdownSnippet } from '../../render/MarkdownSnippet';
 import { confirmAction, promptText } from '../../state/dialogs';
@@ -170,6 +170,8 @@ export default function KanbanBoard({ session, readOnly, onShowMarkdown }: Props
 
   const startEdit = (item: Item) => {
     if (!editable) return;
+    // An edit still open (its editor went away with its card) is committed, never overwritten.
+    if (editingNow.current?.key !== item.key) finishEdit();
     commitAdd(false);
     draft.current = item.card.text;
     editingNow.current = { key: item.key, ref: { lane: item.lane, index: item.index }, original: item.card.text };
@@ -192,6 +194,14 @@ export default function KanbanBoard({ session, readOnly, onShowMarkdown }: Props
       return editCard(b, at, value);
     });
   }
+
+  // The card being edited went away under its editor (another device changed its text or deleted
+  // it, so its key is gone): the edit ends at once, and finishEdit keeps the typed text, as a new
+  // card in its lane when the card cannot be found by its old text.
+  useLayoutEffect(() => {
+    const e = editingNow.current;
+    if (e && !items.some((cards) => cards.some((i) => i.key === e.key))) finishEdit();
+  });
 
   function commitAdd(keepOpen: boolean, seq?: number) {
     const a = addingNow.current;
@@ -458,7 +468,8 @@ export default function KanbanBoard({ session, readOnly, onShowMarkdown }: Props
             editing?.key === item.key ? (
               <div className="kanban-edit">
                 <CardEditor
-                  text={item.card.text}
+                  // The text typed so far: a card moved to another lane meanwhile remounts its editor.
+                  text={draft.current}
                   canvasPath={path}
                   className="kanban-card-editor"
                   onChange={(v) => (draft.current = v)}

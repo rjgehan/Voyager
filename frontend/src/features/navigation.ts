@@ -2,7 +2,7 @@
 // `NavigationBridge` (inside the router) registers react-router's navigate function.
 import { isProblem } from '../api/client';
 import { api } from '../api/endpoints';
-import { currentSettings, currentTree } from '../api/hooks';
+import { currentSettings, currentTree, settingsReady } from '../api/hooks';
 import { queryClient } from '../api/queryClient';
 import { newIdempotencyKey } from '../state/clientId';
 import { toast } from '../state/toasts';
@@ -72,7 +72,14 @@ export async function openLink(target: string, subpath: string | null, source: s
     openPath(resolved, subpath);
     return;
   }
-  const path = createPath(target, source, currentSettings().files);
+  let path: string | null;
+  try {
+    // Where new notes go comes from the vault's settings, never the defaults (DESIGN §6.6).
+    path = createPath(target, source, (await settingsReady()).files);
+  } catch (e) {
+    toastError(e);
+    return;
+  }
   if (!path) {
     toast("Can't create a note for this link", { kind: 'error' });
     return;

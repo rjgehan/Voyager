@@ -192,7 +192,7 @@ function bigSheet(seedOffset) {
     cell(`${column(29)}${r}`, `{ "f": "=${column(26)}${r}*1.2", "c": ${total * 1.2} }`);
   }
   cell(`${column(26)}${ROWS + 2}`, `{ "f": "=SUM(${column(26)}2:${column(26)}${ROWS + 1})", "c": ${grand} }`);
-  return '{\n  "type": "notesapp-sheet",\n  "version": 1,\n  "engine": "hyperformula@3.4.0",\n  "sheets": [\n' +
+  return '{\n  "type": "notesapp-sheet",\n  "version": 1,\n  "engine": "hyperformula@3.5.0",\n  "sheets": [\n' +
     '    {\n      "id": "s1",\n      "name": "Data",\n      "cells": {\n' + lines.join(',\n') + '\n      },\n' +
     '      "cols": {},\n      "rows": {\n        "1": { "bold": true }\n      },\n' +
     '      "frozen": { "rows": 1, "cols": 1 }\n    }\n  ],\n  "named": {}\n}\n';

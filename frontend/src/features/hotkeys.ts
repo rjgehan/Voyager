@@ -32,10 +32,13 @@ export function eventSpec(e: KeyboardEvent): string | null {
 /**
  * AltGr typing a character: Windows and Linux report AltGr as Ctrl+Alt, so AltGr+T (ț in
  * Romanian, ₺ in Turkish Q) would match a Mod-Alt-t hotkey. A key that produces a character
- * other than a plain letter or digit with Ctrl+Alt held is that character, not a hotkey.
+ * other than a plain letter or digit with Ctrl+Alt held is that character, not a hotkey; except
+ * the bracket keys giving their own bracket (US and UK layouts), which are the pane keys
+ * Mod-Alt-[ and Mod-Alt-] (German AltGr+8 and AltGr+9 type brackets from the digit keys).
  */
 function isAltGrCharacter(e: KeyboardEvent): boolean {
-  return !isApple && e.ctrlKey && e.altKey && !e.metaKey && e.key.length === 1 && !/^[a-z0-9]$/i.test(e.key);
+  if (isApple || !e.ctrlKey || !e.altKey || e.metaKey || e.key.length !== 1 || /^[a-z0-9]$/i.test(e.key)) return false;
+  return !((e.key === '[' && e.code === 'BracketLeft') || (e.key === ']' && e.code === 'BracketRight'));
 }
 
 function inTextInput(target: EventTarget | null): boolean {

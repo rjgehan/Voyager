@@ -49,3 +49,21 @@ test('the capture window opens centred, a third of the way down the pointer disp
   assert.deepEqual(captureBounds(right), { x: 1920 + (2560 - 520) / 2, y: Math.round((1400 - 440) / 3), width: 520, height: 440 });
   assert.deepEqual(captureBounds({ x: 0, y: 0, width: 400, height: 300 }), { x: 0, y: 0, width: 400, height: 300 });
 });
+
+// The app's desktop layout needs a page at least 1200 CSS px wide (frontend useBreakpoint.ts), and on
+// Windows the window's width includes its frame (about 8 px a side), so a 1200 px window got the
+// tablet layout.
+const DESKTOP_LAYOUT_MIN = 1200;
+const WINDOWS_FRAME = 16;
+
+test('first launch on a 1080p screen opens wide enough for the desktop layout', () => {
+  assert.ok(restoreBounds(null, [primary]).width - WINDOWS_FRAME >= DESKTOP_LAYOUT_MIN);
+});
+
+test('a window saved at the old default size (never resized) opens at the new default', () => {
+  const r = restoreBounds({ x: 360, y: 120, width: 1200, height: 800, maximized: false }, [primary]);
+  assert.equal(r.width, DEFAULT.width);
+  assert.equal(r.x, 360);
+  // A width the user chose stays as it is.
+  assert.equal(restoreBounds({ x: 360, y: 120, width: 1200, height: 900 }, [primary]).width, 1200);
+});

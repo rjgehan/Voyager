@@ -41,3 +41,38 @@ describe('Live Preview syntax visibility (per device, ROADMAP 10a)', () => {
     expect((await freshPrefs()).getState().syntaxVisibility).toBe('hide-all');
   });
 });
+
+// Two tabs of the app on one device (two vaults share the device's preferences).
+describe('preferences changed in another tab', () => {
+  async function tabB() {
+    localStorage.clear();
+    vi.resetModules();
+    const prefs = await import('./prefs');
+    const offline = await import('../offline/offlineStore');
+    return { ...prefs, offline };
+  }
+
+  function tabAWrites(stored: Record<string, unknown>) {
+    localStorage.setItem(PREFS_KEY, JSON.stringify(stored));
+  }
+
+  it('are followed: offline copies stop, and the theme changes', async () => {
+    const { usePrefs, DEFAULT_PREFS, offline } = await tabB();
+    expect(usePrefs.getState().offlineNotes).toBe(true);
+    tabAWrites({ ...DEFAULT_PREFS, offlineNotes: false, theme: 'light' });
+    window.dispatchEvent(new StorageEvent('storage', { key: PREFS_KEY, newValue: localStorage.getItem(PREFS_KEY) }));
+    expect(usePrefs.getState().offlineNotes).toBe(false);
+    expect(offline.offlineCopiesEnabled()).toBe(false);
+    expect(usePrefs.getState().theme).toBe('light');
+    expect(document.documentElement.getAttribute('data-theme')).toBe('light');
+  });
+
+  it('are not undone by this tab’s next change', async () => {
+    const { usePrefs, DEFAULT_PREFS, toggleTheme } = await tabB();
+    tabAWrites({ ...DEFAULT_PREFS, offlineNotes: false, theme: 'light' });
+    usePrefs.getState().update({ vimMode: true });
+    expect(JSON.parse(localStorage.getItem(PREFS_KEY)!)).toMatchObject({ offlineNotes: false, theme: 'light', vimMode: true });
+    toggleTheme();
+    expect(JSON.parse(localStorage.getItem(PREFS_KEY)!)).toMatchObject({ offlineNotes: false, vimMode: true });
+  });
+});

@@ -26,6 +26,8 @@ export interface ChartData {
   categories: string[];
   /** The first column's numbers, the X values of a scatter chart (null where it holds none). */
   xValues?: Array<number | null>;
+  /** The first X value's date or time format, for a scatter chart's X ticks. */
+  xFormat?: string;
   series: ChartSeries[];
   /** The first value cell's number format shows percentages: axis ticks get a %. */
   percent: boolean;
@@ -107,7 +109,11 @@ export function chartData(sheet: Sheet, chart: ChartProps): ChartResult {
   if (numbers === 0) return { ok: false, message: `${rangeText(range)} holds no numbers to chart.` };
   const percent = formatKind(effectiveFormat(sheet, firstCol, firstRow)) === 'percent';
   const data: ChartData = { categories, series, percent, hiddenSeries: cols - seriesCount, hiddenCategories: rows - categoryCount };
-  if (scatter) data.xValues = xValues;
+  if (scatter) {
+    data.xValues = xValues;
+    const xFormat = effectiveFormat(sheet, range.col, firstRow);
+    if (['date', 'time', 'datetime'].includes(formatKind(xFormat))) data.xFormat = xFormat;
+  }
   return { ok: true, data };
 }
 
@@ -168,11 +174,20 @@ export function pieSlices(data: ChartData): PieSlice[] {
   return kept.map((x) => ({ ...x, share: x.value / total }));
 }
 
-/** Round axis ticks from `min` to `max` (0 included), about `count` of them. */
-export function niceTicks(min: number, max: number, count = 5): number[] {
-  let lo = Math.min(0, min);
-  let hi = Math.max(0, max);
-  if (lo === hi) hi = lo + 1;
+/**
+ * Round axis ticks from `min` to `max`, about `count` of them; 0 included for a value axis, but
+ * not for a scatter chart's X axis (`withZero` false), which fits the data as in Google Sheets.
+ */
+export function niceTicks(min: number, max: number, count = 5, withZero = true): number[] {
+  let lo = withZero ? Math.min(0, min) : min;
+  let hi = withZero ? Math.max(0, max) : max;
+  if (lo === hi) {
+    if (withZero) hi = lo + 1;
+    else {
+      lo -= 1;
+      hi += 1;
+    }
+  }
   const raw = (hi - lo) / Math.max(1, count);
   const magnitude = 10 ** Math.floor(Math.log10(raw));
   const step = [1, 2, 2.5, 5, 10].map((m) => m * magnitude).find((s) => s >= raw) ?? 10 * magnitude;

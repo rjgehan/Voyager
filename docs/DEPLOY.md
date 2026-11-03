@@ -1051,7 +1051,7 @@ Check, in order: `NOTES_PUBLISH_ENABLED=true` reached the container (`docker com
 
 ### A vault says "Vault not available" (`503 vault-unavailable`)
 
-Right after a start or a creation, an extra vault needs a moment; the app retries by itself. If it stays, the log has `VAULT_START_FAILED` with the reason (often a folder not owned by uid 1000: `sudo chown -R 1000:1000 /srv/notes/data/vaults`). A folder whose name is not a valid vault name is skipped with a warning naming it.
+Right after a start or a creation, an extra vault needs a moment, and while the server shuts down for an update its extra vaults close first; in both cases the answer asks the app to retry (`reason` `starting` or `stopping`), and it does by itself, saves included. If it stays, the log has `VAULT_START_FAILED` with the reason (often a folder not owned by uid 1000: `sudo chown -R 1000:1000 /srv/notes/data/vaults`). A folder whose name is not a valid vault name is skipped with a warning naming it.
 
 ### Saves fail with `permission-denied`
 

@@ -7,6 +7,7 @@ import { noteWritten, openNote } from '../offline/offlineStore';
 import { renameRecent } from '../features/recent';
 import { setUnsavedProbe } from '../state/buildCheck';
 import { clientId } from '../state/clientId';
+import { hasOpenInput } from '../state/openInput';
 import { toast } from '../state/toasts';
 import { vaultKey } from '../state/vault';
 import { useUi } from '../state/ui';
@@ -80,6 +81,7 @@ export const documents: DocumentRegistry = registry;
 // Editor code finds the open note's session here (encrypted sections, DESIGN §6.33).
 provideSessionLookup((path) => documents.get(path));
 
-setUnsavedProbe(() => documents.anyUnsaved());
+// A new-build reload waits for unsaved notes and for text typed anywhere else (DESIGN §6.18).
+setUnsavedProbe(() => documents.anyUnsaved() || hasOpenInput());
 
 void draftStore.prune().catch(() => undefined);

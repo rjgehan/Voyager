@@ -16,7 +16,7 @@ Click or tap a cell and type. Each change is saved in the note as you go, and `C
 
 | Key | Moves to |
 |---|---|
-| `Tab`, `Shift+Tab` | The next or previous cell. `Tab` in the last cell adds a row. |
+| `Tab`, `Shift+Tab` | The next or previous cell, with its text selected so that typing replaces it (as in Google Sheets, `=` starts a formula). `Tab` in the last cell adds a row. |
 | `Enter`, `Shift+Enter` | The cell below or above. `Enter` in the last row adds a row. |
 | Arrow keys | The next cell, once the cursor reaches the edge of the text |
 | `Esc` | Back to the note, under the table |
@@ -128,6 +128,7 @@ A formula in a note's table, or in a sentence, can read a [spreadsheet](spreadsh
 - Filling a column or `Ctrl+D` moves these references like any other (`Budget.sheet!B2` becomes `B3`).
 - `#REF!` means no such spreadsheet or sheet, `#NAME?` no such named range. `#CYCLE!` means the spreadsheet reads this note's values back (with `NOTETABLE`), so neither can use the other's.
 - Reading a spreadsheet does not make a link: to see the note among the spreadsheet's backlinks, link it too (`[[Budget.sheet]]`).
+- In a note shared with family, these read the spreadsheets shared with it (in the same shared folder). `NOTEPROP`, `NOTECOUNT` and `NOTEQUERY` need your whole vault, so on the shared page they say *Not available in a shared note*.
 
 ## Formulas in a sentence
 

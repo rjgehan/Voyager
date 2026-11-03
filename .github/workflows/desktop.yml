@@ -1,6 +1,7 @@
 name: Desktop app
 # Builds the Windows installer and the macOS dmg (ROADMAP item 41, docs/DESKTOP.md) when a
-# `desktop-v*` tag is pushed (e.g. `desktop-v1.0.1`), and attaches them to that tag's release.
+# `desktop-v*` tag is pushed (e.g. `desktop-v1.0.1`), and attaches them to that tag's release, which
+# stays a draft until both are there.
 # Not on ordinary pushes: the shell rarely changes, because its UI comes from the server.
 on:
   push:
@@ -19,13 +20,13 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Create the release (once)
+      - name: Create the release as a draft (once); the publish job makes it public
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.ref_name }}
         run: |
           gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 \
-            || gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "Voyager desktop ${TAG#desktop-v}" \
+            || gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --title "Voyager desktop ${TAG#desktop-v}" \
                  --notes "Windows installer and macOS dmg (unsigned). Install steps: docs/DESKTOP.md."
 
   build:
@@ -39,7 +40,7 @@ jobs:
             target: --win nsis
             files: dist/*.exe
           - os: macos-15
-            target: --mac dmg
+            target: --mac dmg --universal    # named targets take their arch from the command line, not electron-builder.yml
             files: dist/*.dmg
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
@@ -81,3 +82,21 @@ jobs:
         run: |
           ls -la dist
           echo "Manual run: the packages were built; push a desktop-v* tag to publish them."
+
+  publish:                    # a failed platform leaves the release a draft, never a public release missing a package
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/desktop-v') && needs.build.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Publish the release once both packages are attached
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          assets=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')
+          echo "$assets" | grep -q '\.exe$' || { echo "::error::$TAG has no Windows installer"; exit 1; }
+          echo "$assets" | grep -q '\.dmg$' || { echo "::error::$TAG has no macOS dmg"; exit 1; }
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false

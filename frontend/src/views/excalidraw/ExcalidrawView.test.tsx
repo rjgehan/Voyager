@@ -127,6 +127,44 @@ describe('ExcalidrawView', () => {
     expect(excalidraw.mounts).toBe(1);
   });
 
+  it('sizes the toolbar by the pane, not the window, in a narrow split pane (F14)', async () => {
+    // Excalidraw shrinks its toolbar buttons only below 450 and 379 px of window width; a pane
+    // that narrow in a wide window gets the same sizes through the host's data-pane attribute.
+    let width = 370;
+    const observers: Array<() => void> = [];
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(fn: () => void) {
+          observers.push(fn);
+        }
+        observe() {}
+        disconnect() {}
+      },
+    );
+    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(function (this: HTMLElement) {
+      return this.classList.contains('excalidraw-host') ? width : 0;
+    });
+    try {
+      const { container } = open('Pane.excalidraw', JSON.stringify(scene([el('a')])));
+      await screen.findByTestId('excalidraw');
+      const host = container.querySelector<HTMLElement>('.excalidraw-host')!;
+      expect(host.dataset.pane).toBe('narrower');
+      width = 420;
+      act(() => observers.forEach((f) => f()));
+      expect(host.dataset.pane).toBe('narrow');
+      width = 800;
+      act(() => observers.forEach((f) => f()));
+      expect(host.dataset.pane).toBeUndefined();
+      const css = (await sourceFiles('views/excalidraw/excalidraw.css'))['views/excalidraw/excalidraw.css'].replace(/\/\*[\s\S]*?\*\//g, '').replace(/\s+/g, ' ');
+      expect(css).toContain(".excalidraw-host[data-pane] .excalidraw .App-toolbar-container .ToolIcon__icon { width: 28.8px; height: 28.8px; }");
+      expect(css).toContain(".excalidraw-host[data-pane='narrower'] .excalidraw .App-toolbar-container .ToolIcon__icon { width: 24px; height: 24px; }");
+    } finally {
+      vi.unstubAllGlobals();
+      vi.restoreAllMocks();
+    }
+  });
+
   it('saves an edit to the vault', async () => {
     open('Plan.excalidraw', JSON.stringify(scene([el('a')])));
     await screen.findByTestId('excalidraw');

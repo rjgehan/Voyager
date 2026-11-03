@@ -27,7 +27,7 @@ class SheetDocumentIndexerTest {
 				{
 				  "type": "notesapp-sheet",
 				  "version": 1,
-				  "engine": "hyperformula@3.4.0",
+				  "engine": "hyperformula@3.5.0",
 				  "sheets": [
 				    {
 				      "id": "s1",
@@ -145,7 +145,7 @@ class SheetDocumentIndexerTest {
 				{
 				  "type": "notesapp-sheet",
 				  "version": 2,
-				  "engine": "hyperformula@3.4.0",
+				  "engine": "hyperformula@3.5.0",
 				  "sheets": [
 				    {
 				      "id": "s1",

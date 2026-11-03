@@ -1,9 +1,11 @@
 import { HyperFormula } from 'hyperformula';
 import { describe, expect, it, vi } from 'vitest';
 import { shownCell } from './display';
+import { typedEdit } from './edits';
 import { ENGINE_ID, Workbook, type WorkbookChange } from './engine';
 import { cellValue, parseSheet, serializeSheet, SHEET_ENGINE, type SheetFile } from './format';
 import { loadSheetEngine } from './loadEngine';
+import { mergeSheetText } from './merge';
 
 function file(value: unknown): SheetFile {
   const result = parseSheet(JSON.stringify(value));
@@ -59,6 +61,51 @@ describe('engine identity', () => {
     const engine = await loadSheetEngine();
     expect(engine.Workbook).toBe(Workbook);
     expect(await loadSheetEngine()).toBe(engine);
+  });
+});
+
+describe('results that match Google Sheets', () => {
+  const one = (f: string, cells: Record<string, unknown> = {}) => value(workbook([{ name: 'S', cells: { ...cells, Z1: { f } } }]), 'Z1');
+  // 1000000000.1 is not exact in binary, so its results are right to about 1e-6.
+  const near = (actual: unknown, expected: number, relative = 1e-9) => {
+    expect(typeof actual).toBe('number');
+    expect(Math.abs((actual as number) - expected)).toBeLessThanOrEqual(Math.abs(expected) * relative + 1e-12);
+  };
+
+  it('gives MOD the sign of the divisor, so the overnight-shift idiom works', () => {
+    expect(one('=MOD(-7,3)')).toBe(2);
+    expect(one('=MOD(-1,5)')).toBe(4);
+    expect(one('=MOD(7,-3)')).toBe(-2);
+    near(one('=MOD(TIME(1,0,0)-TIME(22,0,0),1)*24'), 3);
+  });
+
+  it('averages to 0 rather than #DIV/0! when the matching values cancel out', () => {
+    const cells = { A1: { v: 'a' }, A2: { v: 'a' }, A3: { v: 'b' }, A4: { v: 'a' }, B1: { v: -5 }, B2: { v: 5 }, B3: { v: 9 }, B4: { v: 0 } };
+    expect(one('=AVERAGEIF(A1:A4,"a",B1:B4)', cells)).toBe(0);
+  });
+
+  it('keeps VAR and STDEV precise on data with a large mean and a small spread', () => {
+    near(one('=VAR(98765432,98765433,98765434)'), 1);
+    near(one('=VAR(1000000000.1,1000000000.2,1000000000.3)'), 0.01, 1e-6);
+    near(one('=STDEV(1000000000.1,1000000000.2,1000000000.3)'), 0.1, 1e-6);
+    near(one('=STDEV(100000000,100000001,100000002,100000003)'), 1.2909944487358056);
+    const times = Object.fromEntries(Array.from({ length: 60 }, (_, i) => [`A${i + 1}`, { f: `=DATE(2026,11,2)+TIME(9,${i},0)` }]));
+    near(one('=STDEV(A1:A60)*1440', times), Math.sqrt(305));
+  });
+
+  it('reads text dates month first, as typed input does (10/1/2026 is October 1)', () => {
+    // Typed input stores 1/15/2026, 10/5/2026 and 10/20/2026 as these serial dates.
+    const cells = {
+      A1: { v: 46037, fmt: 'm/d/yyyy' }, A2: { v: 46300, fmt: 'm/d/yyyy' }, A3: { v: 46315, fmt: 'm/d/yyyy' },
+      B1: { v: 10 }, B2: { v: 20 }, B3: { v: 30 },
+    };
+    expect(one('=SUMIFS(B1:B3,A1:A3,">=10/1/2026")', cells)).toBe(50);
+    expect(one('=COUNTIF(A1:A3,"<10/15/2026")', cells)).toBe(2);
+    expect(one('=COUNTIF(A1:A3,">=1/12/2026")', cells)).toBe(3);
+    expect(one('=COUNTIF(A1:A3,">=2026-10-01")', cells)).toBe(2);
+    expect(one('=DATEVALUE("10/17/2026")')).toBe(46312);
+    expect(one('=DATEVALUE("03/04/2026")')).toBe(46085);
+    expect(one('=DATEVALUE("2026-10-17")')).toBe(46312);
   });
 });
 
@@ -686,6 +733,51 @@ describe('moving cells (cut and paste)', () => {
     expect(wb.file.named).toEqual({ Doubled: 'Data!$B$1' });
     wb.redo();
     expect(wb.file.sheets[0].cells.C1).toEqual({ f: '=B5+1', c: 21 });
+  });
+
+  it('changes the structure marker of the sheets cells move on and off, so a merge cannot misplace them', () => {
+    const cells = Object.fromEntries(Array.from({ length: 9 }, (_, i) => [`A${i + 2}`, { v: i + 2 }]));
+    const base = workbook([{ name: 'Data', cells: { A1: { v: 'Amount' }, ...cells } }, { name: 'Other' }]);
+    const baseText = base.serialize();
+    const mine = Workbook.open(file(JSON.parse(baseText)));
+    mine.moveCells({ sheet: 's1', range: { col: 0, row: 1, width: 1, height: 9 } }, { sheet: 's1', col: 2, row: 1 });
+    expect(mine.file.sheets[0].structure).toMatch(/^[0-9a-z]{8}$/);
+    expect(mine.file.sheets[1].structure).toBeUndefined();
+    // The other device adds a formula over the cells that moved: the banner decides.
+    const theirs = Workbook.open(file(JSON.parse(baseText)));
+    theirs.setCell('s1', 'E1', { f: '=SUM(A2:A10)' });
+    expect(mergeSheetText(baseText, mine.serialize(), theirs.serialize())).toBeNull();
+    expect(mergeSheetText(baseText, theirs.serialize(), mine.serialize())).toBeNull();
+    // One undo step restores the marker.
+    mine.undo();
+    expect(mine.file.sheets[0].structure).toBeUndefined();
+    // Across sheets, both sheets change.
+    mine.moveCells({ sheet: 's1', range: { col: 0, row: 1, width: 1, height: 9 } }, { sheet: 's2', col: 0, row: 0 });
+    expect(mine.file.sheets[0].structure).toMatch(/^[0-9a-z]{8}$/);
+    expect(mine.file.sheets[1].structure).toMatch(/^[0-9a-z]{8}$/);
+    expect(mergeSheetText(baseText, mine.serialize(), theirs.serialize())).toBeNull();
+  });
+
+  it('keeps the curly apostrophe of a sheet renamed on an iPhone (Mom’s) when its formula is edited', () => {
+    const wb = workbook([
+      { name: 'Sheet1', cells: { A1: { f: '=Moms!B2' } } },
+      { name: 'Moms', cells: { B2: { v: 42 }, B3: { v: 43 } } },
+    ]);
+    wb.renameSheet('s2', 'Mom’s');
+    expect(wb.file.sheets[0].cells.A1).toEqual({ f: "='Mom’s'!B2", c: 42 });
+    wb.setCells([typedEdit(wb.file.sheets[0], 0, 0, "='Mom’s'!B3")]);
+    expect(wb.file.sheets[0].cells.A1).toEqual({ f: "='Mom’s'!B3", c: 43 });
+  });
+
+  it('quotes a sheet name with a dot in the formulas a move rewrites', () => {
+    const wb = workbook([
+      { name: 'Sales.2026', cells: { B1: { v: 7 }, A1: { f: '=B1*2' } } },
+      { name: 'Other', cells: { A1: { v: 3 }, B1: { f: '=A1' } } },
+    ]);
+    wb.moveCells({ sheet: 's1', range: { col: 0, row: 0, width: 1, height: 1 } }, { sheet: 's2', col: 0, row: 4 });
+    expect(wb.file.sheets[1].cells.A5).toEqual({ f: "='Sales.2026'!B1*2", c: 14 });
+    wb.moveCells({ sheet: 's2', range: { col: 0, row: 0, width: 1, height: 1 } }, { sheet: 's1', col: 3, row: 0 });
+    expect(wb.file.sheets[1].cells.B1).toEqual({ f: "='Sales.2026'!D1", c: 3 });
   });
 
   it('keeps a moved formula pointing at the cells outside the move', () => {

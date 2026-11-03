@@ -13,6 +13,7 @@ import { afterOpen, isKeyboardClick } from '../../features/focus';
 import { linkMention } from '../../features/mentions';
 import { navigateTo } from '../../features/navigation';
 import { displayName, folderOf, noteRoute } from '../../features/paths';
+import { displaySnippet } from '../../features/snippetText';
 import { toast } from '../../state/toasts';
 import { useUi } from '../../state/ui';
 import { HighlightedText } from '../HighlightedText';
@@ -49,7 +50,7 @@ function Group({ group, targetPath, unlinked }: { group: BacklinkGroup; targetPa
         {group.mentions.map((m, i) => (
           <li key={`${m.from}-${i}`} className="backlink-mention">
             <button type="button" className="backlink-context" onClick={(e) => openMention(group.source, m, e)}>
-              <HighlightedText text={m.context} ranges={[m.contextRange]} />
+              <HighlightedText {...displaySnippet(m.context, [m.contextRange])} />
               {!unlinked && <BlockChip raw={m.matched} />}
             </button>
             {unlinked && (

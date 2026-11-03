@@ -1,7 +1,7 @@
 // Focus helpers (DESIGN §6.19): the Tab trap of modal overlays, arrow keys in menus, and where the
 // focus goes when an overlay closes.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { menuKey, returnFocus, trapTab } from './focus';
+import { cancelNoteFocus, menuKey, requestNoteFocus, returnFocus, trapTab, wantsNoteFocus } from './focus';
 
 function key(key: string, shiftKey = false): KeyboardEvent {
   return new KeyboardEvent('keydown', { key, shiftKey, cancelable: true });
@@ -32,6 +32,22 @@ function dialog(): { panel: HTMLElement; first: HTMLButtonElement; field: HTMLIn
   const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
   return { panel: $('panel'), first: $('first'), field: $('field'), last: $('last'), outside: $('outside') };
 }
+
+describe('requestNoteFocus', () => {
+  afterEach(() => cancelNoteFocus());
+
+  it('is taken by the view of the file it was made for, not by another file’s view mounting first', () => {
+    // A new note opening: the previous note's view may mount for a moment on the way.
+    requestNoteFocus('Plan.md');
+    expect(wantsNoteFocus('A.md')).toBe(false);
+    expect(wantsNoteFocus('Plan.md')).toBe(true);
+  });
+
+  it('without a file, is taken by the next view whatever its file', () => {
+    requestNoteFocus();
+    expect(wantsNoteFocus('A.md')).toBe(true);
+  });
+});
 
 describe('trapTab', () => {
   it('wraps Tab from the last element to the first, and Shift-Tab from the first to the last', () => {

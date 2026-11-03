@@ -126,6 +126,14 @@ let counter = 0;
 /** A name no other test or run uses: "Prefix k3x9a1". Valid as a file or folder name. */
 export const unique = (prefix: string) => `${prefix} ${Date.now().toString(36)}${(counter++).toString(36)}`;
 
+/**
+ * A made-up word for search tests: the stem and 8 random letters ("vermillionqkzrtbwa"). Letters
+ * only, since search corrects no typos in words with digits; random rather than from the clock, so
+ * the words of runs close together share no prefix (runs pile up in the vault until the next reset).
+ */
+export const madeUpWord = (stem: string) =>
+  stem + Array.from({ length: 8 }, () => String.fromCharCode(97 + Math.floor(Math.random() * 26))).join('');
+
 /** Query-string encoding for a vault path (API.md §1.3: `+` must be %2B). */
 export const q = (path: string) => encodeURIComponent(path);
 

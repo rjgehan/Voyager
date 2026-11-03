@@ -195,13 +195,26 @@ export class CanvasController {
 
   /** The session's text changed under us (load, remote update, Take theirs, merge): it becomes the document. */
   private adopt(text: string): void {
-    // Typing not yet written loses to the session's newer text; the session decides about conflicts.
+    // Typing not yet written (within its pause) is in no text the session has: it goes on top of
+    // the session's newer text, so the card being typed in keeps it (and wins over that card's
+    // other changes, as an Excalidraw element being edited does).
+    const editing = this.state.editing;
+    const typed = this.writeTimer && editing ? this.state.doc?.nodes.find((n) => n.id === editing) : undefined;
     if (this.writeTimer) clearTimeout(this.writeTimer);
     this.writeTimer = null;
     this.syncedText = text;
     let doc: CanvasDoc;
     try {
       doc = parseCanvas(text);
+      const target = typed ? doc.nodes.find((n) => n.id === typed.id) : undefined;
+      if (typed && target && target.type === 'text' && target.text !== typed.text) {
+        doc = updateNode(doc, typed.id, { text: typed.text });
+        // Written after the same pause, as the typing would have been.
+        this.writeTimer = setTimeout(() => {
+          this.writeTimer = null;
+          this.write();
+        }, TEXT_WRITE_DELAY_MS);
+      }
     } catch (e) {
       this.undoStack = [];
       this.redoStack = [];

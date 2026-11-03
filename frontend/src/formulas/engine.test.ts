@@ -69,4 +69,32 @@ describe('note formulas engine (ROADMAP 39)', () => {
     expect(r.evaluate('=UPPER("x")')).toBe('X');
     expect(r.evaluate('=1/0')).toMatchObject({ error: '#DIV/0!' });
   });
+
+  it('knows TRUE and FALSE without brackets, as a .sheet file does', () => {
+    const t: FormulaTable = {
+      name: 'Table1',
+      named: false,
+      rows: [
+        ['Item', 'Cost', 'Look', 'Flag'],
+        ['Rent', '1450', '=VLOOKUP("Food",A2:B3,2,FALSE)', '=IF(B2>100, TRUE, FALSE)'],
+        ['Food', '90', '', '=IF(B3>100, TRUE, FALSE)'],
+      ],
+      formats: {},
+    };
+    const r = computeNote({ tables: [t] });
+    expect(r.cell(0, 1, 2)).toMatchObject({ text: '90', className: 'cm-formula-value' });
+    expect(r.cell(0, 1, 3)?.text).toBe('TRUE');
+    expect(r.cell(0, 2, 3)?.text).toBe('FALSE');
+    expect(r.inline('=NOT(FALSE)')?.text).toBe('TRUE');
+    expect(r.evaluate('=IF(TRUE,1,2)')).toBe(1);
+    expect(r.evaluate('=SUM(1,TRUE)')).toBe(2);
+  });
+
+  it('reads a date cell month first, as a spreadsheet’s typed input does', () => {
+    const t: FormulaTable = { name: 'Table1', named: false, rows: [['Due', 'Next'], ['10/17/2026', '=A2+1'], ['10/1/2026', '=A3*1']], formats: {} };
+    const r = computeNote({ tables: [t] });
+    expect(r.cell(0, 1, 1)?.text).toBe('2026-10-18');
+    expect(r.cell(0, 2, 1)?.text).toBe('2026-10-01');
+    expect(r.evaluate('=DATEVALUE("10/17/2026")')).toBe(46312);
+  });
 });

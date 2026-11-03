@@ -6,7 +6,7 @@ import { parseCards } from './parse';
 import { formatReview, replay, schedulerFor, toState, type Review } from './schedule';
 import { CONFIG } from './testing';
 import { answer, buildQueue, pickNext, refresh, remaining, reveal, skip, spreadSiblings, startSession, undo, waitingUntil } from './session';
-import { Outbox, overlay, patchRecords, withoutReview, withReview, type OutboxDeps, type OutboxOp } from './store';
+import { loadOps, Outbox, overlay, patchRecords, saveOps, withoutReview, withReview, type OutboxDeps, type OutboxOp } from './store';
 
 const f = schedulerFor(CONFIG);
 const T0 = Date.UTC(2026, 9, 1, 9);
@@ -196,5 +196,57 @@ describe('outbox', () => {
     release(ok);
     await vi.waitFor(() => expect(box.size).toBe(0));
     expect(deps.sendUndo).toHaveBeenCalledWith({ kind: 'undo', card: 'a', at: '2026-10-01T09:00:00.000Z', state: undefined });
+  });
+});
+
+// Two tabs of one vault share the stored outbox (localStorage): each keeps the other's answers
+// there, and takes out only what it sent or took back itself.
+describe('outbox in two tabs', () => {
+  const ok: FlashcardWriteResult = { cards: {}, version: 'v' };
+  const review = (card: string, at: string): OutboxOp => ({ kind: 'review', review: { card, at, rating: 'good' } });
+  const at = (i: number) => new Date(T0 + i * 60_000).toISOString();
+  function tab(send: OutboxDeps['sendReviews']) {
+    const deps: OutboxDeps = {
+      load: loadOps,
+      save: saveOps,
+      sendReviews: vi.fn(send),
+      sendUndo: vi.fn<OutboxDeps['sendUndo']>().mockResolvedValue(ok),
+      onResult: vi.fn(),
+      onRefused: vi.fn(),
+      setTimeout: () => 0,
+      clearTimeout: () => {},
+    };
+    return new Outbox(deps);
+  }
+  const offline = async (): Promise<FlashcardWriteResult> => {
+    throw new TransientError('Network error');
+  };
+
+  it('keeps both tabs’ answers saved while offline', async () => {
+    const a = tab(offline);
+    const b = tab(offline);
+    for (let i = 0; i < 20; i++) a.add(review('a' + i, at(i)));
+    b.add(review('x', at(99)));
+    await Promise.resolve();
+    // A reload (or a new tab) finds every answer.
+    expect(tab(offline).size).toBe(21);
+    // A's next answer does not drop B's either.
+    a.add(review('a20', at(20)));
+    expect(loadOps()).toHaveLength(22);
+  });
+
+  it('takes out only what this tab sent or took back', async () => {
+    const a = tab(offline);
+    const b = tab(offline);
+    a.add(review('a', at(1)));
+    a.add(review('a2', at(2)));
+    b.add(review('b', at(3)));
+    a.undo('a2', at(2));
+    expect(loadOps().map((op) => (op.kind === 'review' ? op.review.card : 'undo'))).toEqual(['a', 'b']);
+    // Another tab comes back online and sends its own answer: A's and B's stay saved.
+    const online = new Outbox({ load: () => [], save: saveOps, sendReviews: vi.fn(async () => ok), sendUndo: vi.fn(), onResult: vi.fn(), onRefused: vi.fn(), setTimeout: () => 0, clearTimeout: () => {} });
+    online.add(review('c', at(4)));
+    await vi.waitFor(() => expect(online.size).toBe(0));
+    expect(loadOps().map((op) => (op.kind === 'review' ? op.review.card : 'undo'))).toEqual(['a', 'b']);
   });
 });

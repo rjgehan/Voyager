@@ -16,15 +16,25 @@ import { documents, moveMap } from '../sync/instance';
 import { useDocumentSession } from '../sync/useTextDocument';
 import { useExclusiveOwner, usePane } from '../workspace/PaneContext';
 import { focusPaneById } from '../workspace/store';
-import { viewFor, type FileViewDescriptor, type FileViewProps } from './registry';
+import { loadedView, viewFor, type FileViewDescriptor, type FileViewProps } from './registry';
 import { appTitle } from '../state/vault';
 
 const lazyViews = new Map<string, ComponentType<FileViewProps>>();
 
+/**
+ * A view module already loaded (`preloadView`) is handed to React.lazy through a thenable that
+ * calls back at once, so its first render shows the view in that commit, not a fallback first.
+ */
+function loadView(d: FileViewDescriptor): Promise<{ default: ComponentType<FileViewProps> }> {
+  const loaded = loadedView(d);
+  if (!loaded) return d.load();
+  return { then: (resolve: (m: typeof loaded) => void) => resolve(loaded) } as unknown as Promise<typeof loaded>;
+}
+
 function lazyView(d: FileViewDescriptor): ComponentType<FileViewProps> {
   let c = lazyViews.get(d.id);
   if (!c) {
-    c = lazy(d.load);
+    c = lazy(() => loadView(d));
     lazyViews.set(d.id, c);
   }
   return c;

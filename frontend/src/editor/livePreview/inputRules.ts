@@ -92,9 +92,12 @@ function fenceClosed(state: EditorState, code: SyntaxNode, line: Line, nested: b
   // Inside a quote or a list the text after the line cannot be parsed on its own: trust the tree.
   if (nested) return true;
   const restFrom = Math.min(state.doc.length, line.to + 1);
-  const at = marks[marks.length - 1].from - restFrom;
+  const close = marks[marks.length - 1];
+  const at = close.from - restFrom;
   let opens = false;
-  markdownLanguage.parser.parse(state.sliceDoc(restFrom)).iterate({
+  // Whether that fence opens a block depends only on the text before it and its own line, so the
+  // parse stops there: a long note is not parsed again on every such Enter.
+  markdownLanguage.parser.parse(state.sliceDoc(restFrom, state.doc.lineAt(close.to).to)).iterate({
     from: at,
     to: at,
     enter(node) {

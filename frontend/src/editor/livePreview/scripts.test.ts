@@ -9,6 +9,9 @@ import { destroyEditors, noteEditor, testContext } from '../../test/noteEditor';
 import type { ScriptOutcome, ScriptRequest } from '../context';
 import { renderedRichBlocks } from './rich';
 import { fencedCode, invalidateScripts, resetScriptsForTests } from './scripts';
+import type { FileEntry, TreeResponse } from '../../api/types';
+import { registerScripts } from '../../scripts/register';
+import { applyWriteResult, moveEntry, removeFile } from '../../sync/treePatch';
 
 const TREE = { eventId: 'b.1', folders: [], files: [] };
 
@@ -189,5 +192,70 @@ describe('script blocks', () => {
       }),
     });
     await waitFor(() => expect(value).toBe(5), { timeout: 5000 });
+  });
+});
+
+// This page's own saves, creates, moves and deletes come back without an event (API §16.4): the
+// tree, which they patch, tells the results that read those notes they are stale.
+describe('own writes', () => {
+  function entry(path: string, version: string): FileEntry {
+    const name = path.split('/').pop()!;
+    const extension = name.includes('.') ? name.slice(name.lastIndexOf('.') + 1) : '';
+    return { path, name, basename: name.replace(/\.[^.]*$/, ''), extension, kind: extension === 'md' ? 'note' : 'other', size: 1, mtime: '2026-11-02T10:00:00Z', version, aliases: [] };
+  }
+  const DASHBOARD = ['```dataview', 'TASK FROM "Projects" WHERE !completed', '```'].join('\n');
+  const output = (view: { contentDOM: HTMLElement }) => view.contentDOM.querySelector('.cm-lp-script-output')?.textContent?.trim();
+
+  function seed(): void {
+    registerScripts();
+    const tree: TreeResponse = { eventId: 'b.2', folders: [{ path: 'Projects', name: 'Projects' }], files: [entry('Here.md', 'h1'), entry('Projects/Home.md', 'v1'), entry('Projects/plan.png', 'p1')] };
+    queryClient.setQueryData(queryKeys.tree(), tree);
+  }
+
+  async function shown(reads: ScriptOutcome['reads']) {
+    let n = 0;
+    const run = vi.fn(async () => outcome(`run ${++n}`, { reads }));
+    const view = noteEditor(DASHBOARD, { mode: 'locked', ctx: app(run) });
+    await waitFor(() => expect(output(view)).toBe('run 1'));
+    return { run, view };
+  }
+
+  it('a save of a note it read runs a showing block again', async () => {
+    seed();
+    const { run, view } = await shown({ paths: new Set(), broad: true });
+    applyWriteResult(queryClient, { file: entry('Projects/Home.md', 'v2'), created: false, createdFolders: [] }, '- [x] Call plumber');
+    await waitFor(() => expect(output(view)).toBe('run 2'), { timeout: 3000 });
+    expect(run).toHaveBeenCalledTimes(2);
+  });
+
+  it('a block that was not showing runs when it shows again', async () => {
+    seed();
+    const { run, view } = await shown({ paths: new Set(['Projects/Home.md']), broad: false });
+    view.destroy();
+    applyWriteResult(queryClient, { file: entry('Projects/Home.md', 'v2'), created: false, createdFolders: [] });
+    const again = noteEditor(DASHBOARD, { mode: 'locked', ctx: app(run) });
+    await waitFor(() => expect(output(again)).toBe('run 2'));
+  });
+
+  it('a save of the note itself runs its block again (formula() reads its tables)', async () => {
+    seed();
+    const { view } = await shown({ paths: new Set(), broad: false });
+    applyWriteResult(queryClient, { file: entry('Here.md', 'h2'), created: false, createdFolders: [] });
+    await waitFor(() => expect(output(view)).toBe('run 2'), { timeout: 3000 });
+  });
+
+  it('creates, moves and deletes of notes count; other files and unrelated notes do not', async () => {
+    seed();
+    const { run, view } = await shown({ paths: new Set(['Projects/Home.md', 'Projects/New.md']), broad: false });
+    applyWriteResult(queryClient, { file: entry('Projects/plan.png', 'p2'), created: false, createdFolders: [] });
+    applyWriteResult(queryClient, { file: entry('Elsewhere.md', 'e1'), created: true, createdFolders: [] });
+    await new Promise((r) => setTimeout(r, 1300));
+    expect(run).toHaveBeenCalledTimes(1);
+    applyWriteResult(queryClient, { file: entry('Projects/New.md', 'n1'), created: true, createdFolders: [] });
+    await waitFor(() => expect(output(view)).toBe('run 2'), { timeout: 3000 });
+    moveEntry(queryClient, 'Projects/Home.md', 'Archive/Home.md', 'file');
+    await waitFor(() => expect(output(view)).toBe('run 3'), { timeout: 3000 });
+    removeFile(queryClient, 'Projects/New.md');
+    await waitFor(() => expect(output(view)).toBe('run 4'), { timeout: 3000 });
   });
 });

@@ -53,7 +53,8 @@ function Unavailable({ status }: { status: AiStatus }) {
     return (
       <div className="ai-unavailable">
         <p>
-          <strong>Ask and summaries are off.</strong> When they are on, your questions and the text of the notes they need are sent to Anthropic’s Claude API to write the answer.
+          <strong>Ask and summaries are off.</strong> When they are on, your questions and the text of the notes they need are sent to Anthropic{' '}
+          {status.provider === 'api' ? 'through the Anthropic API (billed per token)' : 'through Claude Code with your Claude subscription'} to write the answer.
         </p>
         <SettingsLink />
       </div>

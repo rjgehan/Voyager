@@ -81,13 +81,18 @@ public class TimelineService {
 				changes.authors(), files(changes.files()), changes.truncated());
 	}
 
-	/** {@code GET /api/history/deleted}: files deleted in history that do not exist now, newest first. */
+	/**
+	 * {@code GET /api/history/deleted}: files deleted in history that do not exist now, not even with another case,
+	 * newest first.
+	 */
 	public DeletedFilesResponse deleted(@Nullable String query, int limit, int offset) throws IOException {
 		requireAvailable();
 		String needle = (query != null && !query.isBlank()) ? PathNames.lower(query.strip()) : null;
 		List<DeletedFile> all = new ArrayList<>();
 		for (GitTimeline.Deletion deletion : this.timeline.deletions()) {
-			if (this.index.file(deletion.path()) != null || this.index.isFolder(deletion.path())) {
+			// Exists now, also in another case (a restore would be refused with case-collision).
+			if (this.index.fileIgnoreCase(deletion.path()) != null
+					|| this.index.folderIgnoreCase(deletion.path()) != null) {
 				continue;
 			}
 			if (needle != null && !PathNames.lower(deletion.path()).contains(needle)) {

@@ -477,6 +477,53 @@ class ShareAuthorizationIntegrationTest {
 	}
 
 	@Test
+	void aGuestsConflictTellsWhereAMovedNoteWentOnlyInsideTheShare() {
+		String edit = "/api/s/" + editFolderShare;
+		create("Family/Recipes/Stew.md", "# Stew\n");
+		create("Family/Recipes/Broth.md", "# Broth\n");
+		String stew = this.api.get(edit + "/files?path=" + Api.enc("Family/Recipes/Stew.md"), LOGIN, MOM)
+			.ok(200)
+			.get("version")
+			.asString();
+		String broth = this.api.get(edit + "/files?path=" + Api.enc("Family/Recipes/Broth.md"), LOGIN, MOM)
+			.ok(200)
+			.get("version")
+			.asString();
+		// Out of the share, twice: the guest's save answers as for a deleted note, whatever the spelling or version.
+		owner().postJson("/api/move", Map.of("from", "Family/Recipes/Stew.md", "to", "Private/Necklace for Mom.md"),
+				LOGIN, OWNER)
+			.ok(200);
+		owner().postJson("/api/move", Map.of("from", "Private/Necklace for Mom.md", "to", "Private/Old/Necklace.md"),
+				LOGIN, OWNER)
+			.ok(200);
+		for (String path : List.of("Family/Recipes/Stew.md", "Family/Recipes/stew.md")) {
+			for (String base : List.of(stew, "not-a-real-version")) {
+				Reply conflict = this.api.putJson(edit + "/files?path=" + Api.enc(path),
+						Map.of("content", "edited\n", "baseVersion", base), LOGIN, MOM);
+				assertThat(conflict.problem(409)).as(path).isEqualTo("version-conflict");
+				assertThat(conflict.json().get("movedTo").isNull()).as(path).isTrue();
+				assertThat(conflict.json().get("currentVersion").isNull()).isTrue();
+				assertThat(conflict.text()).doesNotContain("Private/").doesNotContain("Necklace");
+			}
+		}
+		// Inside the share, the guest's page follows the note.
+		owner().postJson("/api/move", Map.of("from", "Family/Recipes/Broth.md", "to", "Family/Recipes/Soups/Broth.md"),
+				LOGIN, OWNER)
+			.ok(200);
+		Reply inside = this.api.putJson(edit + "/files?path=" + Api.enc("Family/Recipes/Broth.md"),
+				Map.of("content", "edited\n", "baseVersion", broth), LOGIN, MOM);
+		assertThat(inside.problem(409)).isEqualTo("version-conflict");
+		assertThat(inside.json().get("movedTo").asString()).isEqualTo("Family/Recipes/Soups/Broth.md");
+		// The guest page works inside the share only, for an owner who opens it too.
+		assertThat(this.api
+			.putJson(edit + "/files?path=" + Api.enc("Family/Recipes/Stew.md"),
+					Map.of("content", "edited\n", "baseVersion", stew), LOGIN, OWNER)
+			.json()
+			.get("movedTo")
+			.isNull()).isTrue();
+	}
+
+	@Test
 	void guestsCannotAddEmbedsThatReachOutsideTheShare() {
 		String key = "/api/s/" + noteShare;
 		String path = "?path=" + Api.enc("Family/Groceries.md");
@@ -663,6 +710,16 @@ class ShareAuthorizationIntegrationTest {
 			stream.awaitEvent("share.changed");
 			assertThat(stream.frames().stream().map(SseRecorder.Frame::event)).doesNotContain("entry.moved");
 			assertThat(stream.frames().toString()).doesNotContain("Private/Soup.md").doesNotContain("Later.md");
+		}
+	}
+
+	@Test
+	void aGuestStreamIsNotAnOpenVoyagerTabForInAppReminders() throws Exception {
+		try (SseRecorder stream = SseRecorder.openPath(this.port,
+				"/api/s/" + editFolderShare + "/events?clientId=mom-client-002", Map.of(LOGIN, MOM))) {
+			assertThat(stream.frames().get(0).event()).isEqualTo("hello");
+			JsonNode status = this.api.get("/api/reminders/status", LOGIN, OWNER).ok(200);
+			assertThat(status.get("inApp").get("connections").asInt()).isZero();
 		}
 	}
 

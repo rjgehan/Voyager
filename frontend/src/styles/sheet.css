@@ -104,6 +104,11 @@
 .sheet-formula-input {
   flex: 1;
   min-width: 0;
+  /* A one-row textarea (a cell's line breaks survive an edit): one line shows, scrolled to the caret. */
+  resize: none;
+  overflow: hidden;
+  white-space: pre;
+  line-height: 20px;
 }
 
 .sheet-name-box:focus,

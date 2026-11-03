@@ -2,7 +2,11 @@
 // Window position and size (docs/DESKTOP.md): remembered between launches, and brought back onto a
 // screen when the monitor it was on is gone.
 
-const DEFAULT = { width: 1200, height: 800 };
+// The app's desktop layout needs a page at least 1200 CSS px wide, and on Windows the width includes
+// the window frame: 1280 leaves room for it.
+const DEFAULT = { width: 1280, height: 800 };
+/** The default before 2026-11: a window saved at exactly this size was never resized. */
+const OLD_DEFAULT = { width: 1200, height: 800 };
 const MIN = { width: 480, height: 360 };
 /** At least this much of the title bar must be on a screen for the saved position to be kept. */
 const VISIBLE_MARGIN = 80;
@@ -24,7 +28,9 @@ function intersection(a, b) {
  * @returns {{ width: number, height: number, x?: number, y?: number, maximized: boolean }}
  */
 function restoreBounds(saved, workAreas) {
-  const s = saved && typeof saved === 'object' ? saved : {};
+  const given = saved && typeof saved === 'object' ? saved : {};
+  const neverResized = given.width === OLD_DEFAULT.width && given.height === OLD_DEFAULT.height;
+  const s = neverResized ? { ...given, width: DEFAULT.width } : given;
   const primary = workAreas[0] || { x: 0, y: 0, width: DEFAULT.width, height: DEFAULT.height };
   // No larger than the largest screen, no smaller than the minimum.
   const maxW = workAreas.length ? Math.max(MIN.width, ...workAreas.map((a) => a.width)) : Infinity;

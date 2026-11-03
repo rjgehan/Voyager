@@ -9,7 +9,7 @@
 // format, so formulas move as in the view. Every change goes through the workbook: one undo step,
 // saved and synced like an edit in the spreadsheet.
 import { ArrowDownToLine, Bold, ExternalLink, FileSpreadsheet, Redo2, Rows3, Trash2, Undo2 } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent, type MouseEvent, type ReactNode, type RefObject, type TouchEvent } from 'react';
+import { useCallback, useEffect, useId, useRef, useState, type ClipboardEvent, type KeyboardEvent, type MouseEvent, type ReactNode, type RefObject, type TouchEvent } from 'react';
 import { openPath } from '../../../features/navigation';
 import { keyLabel } from '../../../features/platform';
 import { noteRoute } from '../../../features/paths';
@@ -24,7 +24,7 @@ import { cellText, cellValue, compareIds, isCellError, sheetById, type Sheet, ty
 import { pickSlot, placeReference, spanOf, type PickedSlot } from '../../formulaText';
 import { rangeText, type CellRange } from '../../refs';
 import { resolveTarget, usedRange } from '../../target';
-import { embedClip, setEmbedClip } from './clipboard';
+import { setSheetClip, sheetClip } from '../../clipboard';
 
 /** An embed shows at most this many rows and columns (as item 6b's); the spreadsheet has the rest. */
 export const EMBED_ROWS = 100;
@@ -81,15 +81,20 @@ function shownRange(sheet: Sheet, range: CellRange | null, editable: boolean): {
 export function EmbedGrid(props: Props) {
   const { path, subpath, caption, model, workbook, editable, version } = props;
   const frame = useRef<HTMLDivElement>(null);
+  /** Prefix of the cells' ids, which the grid's aria-activedescendant names. */
+  const cellIds = useId();
   const scroller = useRef<HTMLDivElement>(null);
   const table = useRef<HTMLTableElement>(null);
-  const input = useRef<HTMLInputElement>(null);
+  /** The cell editor: a one-row textarea, so a cell's line breaks survive an edit. */
+  const input = useRef<HTMLTextAreaElement>(null);
   const [sheetChoice, setSheetChoice] = useState<string | null>(null);
   const [chosen, setActive] = useState<At>({ col: 0, row: 0 });
   const [chosenAnchor, setAnchor] = useState<At>({ col: 0, row: 0 });
   const [editing, setEditingState] = useState<Editing | null>(null);
   /** The edit under way, as the handlers of this very event see it (a blur follows a hide at once). */
   const editingNow = useRef<Editing | null>(null);
+  /** The text the cell editor opened with (null when a typed key replaced it). */
+  const editStart = useRef<string | null>(null);
   const setEditing = (e: Editing | null) => {
     editingNow.current = e;
     setEditingState(e);
@@ -144,6 +149,8 @@ export function EmbedGrid(props: Props) {
     el.style.minWidth = `${Math.max(td.offsetWidth, 120)}px`;
     el.style.height = `${td.offsetHeight}px`;
     el.value = initial ?? editText(sheet, at);
+    // What the editor showed of the cell: only a change from it is written.
+    editStart.current = initial === undefined ? el.value : null;
     el.hidden = false;
     el.focus({ preventScroll: true });
     const end = el.value.length;
@@ -174,15 +181,20 @@ export function EmbedGrid(props: Props) {
     if (el) el.hidden = true;
   };
 
-  /** Writes the editor's text into the cell it edits, if it changed. */
+  /**
+   * Writes the editor's text into the cell it edits, if it changed from what the editor started
+   * with (a typed first key always counts): opening a cell and leaving it writes nothing, even when
+   * another device changed the cell meanwhile.
+   */
   const commit = (move: 'down' | 'up' | 'right' | 'left' | 'none') => {
     const el = input.current;
     const at = editingNow.current;
     if (!at || !el || !model) return;
     const s = sheetById(model, at.sheet);
     const text = el.value;
+    const changed = text !== editStart.current;
     stopEdit();
-    if (s && text !== editText(s, at)) apply([typedEdit(s, at.col, at.row, text)]);
+    if (s && changed && text !== editText(s, at)) apply([typedEdit(s, at.col, at.row, text)]);
     if (move !== 'none') moveTo(step(at, move), false);
     if (!coarse()) table.current?.focus({ preventScroll: true });
   };
@@ -322,10 +334,14 @@ export function EmbedGrid(props: Props) {
     }
   };
 
-  const onInputKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+  const onInputKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     e.stopPropagation();
     if (e.nativeEvent.isComposing) return;
-    if (e.key === 'Enter') {
+    if (e.key === 'Enter' && (e.altKey || e.ctrlKey || e.metaKey)) {
+      // A line break inside the cell, as in Google Sheets.
+      e.preventDefault();
+      e.currentTarget.setRangeText('\n', e.currentTarget.selectionStart, e.currentTarget.selectionEnd, 'end');
+    } else if (e.key === 'Enter') {
       e.preventDefault();
       commit(e.shiftKey ? 'up' : 'down');
     } else if (e.key === 'Tab') {
@@ -345,7 +361,8 @@ export function EmbedGrid(props: Props) {
     e.clipboardData.setData('text/plain', clip.text);
     e.preventDefault();
     e.stopPropagation();
-    setEmbedClip(clip);
+    // Shared with the spreadsheet view (sheets/clipboard.ts), so a paste there brings the formulas too.
+    setSheetClip(clip);
     if (cut && editable) apply(clearEdits(sheet, selection));
   };
 
@@ -354,7 +371,7 @@ export function EmbedGrid(props: Props) {
     e.preventDefault();
     e.stopPropagation();
     const text = e.clipboardData.getData('text/plain');
-    const { edits, range: pasted } = pasteEdits(sheet, selection, text, embedClip());
+    const { edits, range: pasted } = pasteEdits(sheet, selection, text, sheetClip());
     apply(edits);
     setActive({ col: pasted.col, row: pasted.row });
     setAnchor({ col: pasted.col + pasted.width - 1, row: pasted.row + pasted.height - 1 });
@@ -417,6 +434,11 @@ export function EmbedGrid(props: Props) {
           className={`sheet-embed-table sheet-live-table${editable ? ' is-editable' : ''}`}
           tabIndex={editable ? 0 : undefined}
           aria-label={caption}
+          // Editable, it is a grid whose cells can be selected (a plain table's cells cannot);
+          // the active cell is announced as the focused grid's active descendant.
+          role={editable ? 'grid' : undefined}
+          aria-multiselectable={editable ? true : undefined}
+          aria-activedescendant={editable ? `${cellIds}-${active.col}-${active.row}` : undefined}
           onKeyDown={onTableKeyDown}
           onMouseDown={onMouseDown}
           onDoubleClick={onDoubleClick}
@@ -482,7 +504,14 @@ export function EmbedGrid(props: Props) {
                         }
                       : undefined;
                     return (
-                      <td key={col} data-cell={`${col}:${row}`} className={classes} style={css} aria-selected={editable ? inSel(col, row) : undefined}>
+                      <td
+                        key={col}
+                        id={editable ? `${cellIds}-${col}-${row}` : undefined}
+                        data-cell={`${col}:${row}`}
+                        className={classes}
+                        style={css}
+                        aria-selected={editable ? inSel(col, row) : undefined}
+                      >
                         {shown.text}
                       </td>
                     );
@@ -493,9 +522,10 @@ export function EmbedGrid(props: Props) {
           </tbody>
         </table>
         {editable && (
-          <input
+          <textarea
             ref={input}
             className="sheet-live-input"
+            rows={1}
             hidden
             aria-label="Cell"
             autoComplete="off"

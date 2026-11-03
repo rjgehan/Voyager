@@ -1,8 +1,10 @@
 package com.rjgehan.notes.drawings;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 import com.rjgehan.notes.index.DocumentIndexer;
@@ -93,7 +95,11 @@ public class ExcalidrawDocumentIndexer implements DocumentIndexer {
 		if (drawing == null || scene == null) {
 			return null;
 		}
-		Map<String, String> texts = drawing.texts();
+		Set<String> ids = new HashSet<>();
+		for (DrawingScene.Element element : scene.elements()) {
+			ids.add(element.id());
+		}
+		Map<String, String> texts = drawing.texts(ids);
 		List<String> blocks = new ArrayList<>();
 		for (DrawingScene.Element element : scene.elements()) {
 			if (element.deleted()) {

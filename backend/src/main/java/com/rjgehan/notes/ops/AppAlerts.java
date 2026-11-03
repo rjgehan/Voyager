@@ -27,6 +27,7 @@ import com.rjgehan.notes.api.dto.AlertTestResult;
 import com.rjgehan.notes.api.dto.AlertsState;
 import com.rjgehan.notes.api.dto.AlertsStatus;
 import com.rjgehan.notes.config.NotesProperties;
+import com.rjgehan.notes.config.ServedHost;
 import com.rjgehan.notes.notify.NtfyClient;
 import com.rjgehan.notes.notify.NtfyConfig;
 import com.rjgehan.notes.notify.NtfyConfigFile;
@@ -172,13 +173,17 @@ public class AppAlerts implements DisposableBean {
 		}
 	}
 
-	/** The status page on the first allowed host, opened when the notification is tapped. */
+	/**
+	 * The status page on the first allowed host (on its port when it is also listed with one, {@link ServedHost}),
+	 * opened when the notification is tapped.
+	 */
 	private static @Nullable URI statusPage(List<String> allowedHosts) {
-		if (allowedHosts.isEmpty()) {
+		String host = ServedHost.of(allowedHosts, (h) -> true);
+		if (host == null) {
 			return null;
 		}
 		try {
-			return URI.create("https://" + allowedHosts.get(0).strip() + "/x/status");
+			return URI.create("https://" + host + "/x/status");
 		}
 		catch (IllegalArgumentException ex) {
 			return null;

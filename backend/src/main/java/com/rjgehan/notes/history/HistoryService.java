@@ -204,9 +204,13 @@ public class HistoryService {
 			BasicFileAttributes attributes = (existing != null) ? this.fs.attributes(path.disk()) : null;
 			boolean exists = attributes != null && attributes.isRegularFile();
 			checkBase(path, kind, request.baseVersion(), exists);
+			boolean created = !exists;
+			if (created) {
+				// Parents resolve ignoring case; a name that now exists in another case is refused.
+				path = this.files.recreateTarget(path);
+			}
 			this.files.preserve(path);
 			boolean kept = exists && this.files.keepReplacedVersion(path, identity.login());
-			boolean created = !exists;
 			List<String> createdFolders = created ? this.files.ensureParentFolders(path) : List.of();
 			if (created) {
 				try {

@@ -250,13 +250,24 @@ function lineEnd(text: string, line: Line): number {
   return line.to < text.length ? line.to + 1 : line.to;
 }
 
-/** Splits a Text Elements body into its `text ^id` entries. */
-export function parseTextEntries(body: string): TextEntry[] {
+/**
+ * Splits a Text Elements body into its `text ^id` entries. Given the drawing's element ids, a
+ * text's own line that ends like an entry (`Call the plumber ^tomorrow`) does not end it: only an
+ * id of the drawing does, or one followed by a blank line or the end, as entries are written.
+ */
+export function parseTextEntries(body: string, ids?: ReadonlySet<string>): TextEntry[] {
   const entries: TextEntry[] = [];
+  const re = new RegExp(TEXT_ID.source, 'g');
   let pos = 0;
-  for (const m of body.matchAll(TEXT_ID)) {
+  for (let m = re.exec(body); m !== null; m = re.exec(body)) {
+    const end = m.index + m[0].length;
+    if (ids && !ids.has(m[1]) && end < body.length && !m[0].includes('\n\n')) {
+      // Part of the text: look on from the next character (the next match may start inside this one).
+      re.lastIndex = m.index + 1;
+      continue;
+    }
     entries.push({ id: m[1], raw: body.slice(pos, m.index) });
-    pos = m.index + m[0].length;
+    pos = end;
   }
   return entries;
 }
@@ -428,7 +439,10 @@ export function parseDrawing(format: DrawingFormat, text: string): ParseResult {
   if (json.trim() === '') return { ok: true, drawing: { format, scene: emptyScene(), markdown: parts } };
   const scene = parseSceneJson(json);
   if (typeof scene === 'string') return { ok: false, reason: 'malformed', message: scene };
-  return { ok: true, drawing: { format, scene: withSectionLinks(withSectionTexts(scene, parts), parts), markdown: parts } };
+  // The entries again, ended only at the drawing's own ids (a text may have a line like one).
+  const section = parts.textSection;
+  const withIds: MarkdownParts = section ? { ...parts, texts: parseTextEntries(text.slice(section.from, section.to), new Set(scene.elements.map((e) => e.id))) } : parts;
+  return { ok: true, drawing: { format, scene: withSectionLinks(withSectionTexts(scene, withIds), withIds), markdown: withIds } };
 }
 
 /**

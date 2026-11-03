@@ -364,6 +364,8 @@ describe('sheet names and ids', () => {
     expect(formulaSheetName("It's")).toBe("'It''s'");
     expect(formulaSheetName('A1')).toBe("'A1'");
     expect(formulaSheetName('2024')).toBe("'2024'");
+    // The engine cannot read a dot in an unquoted sheet name.
+    for (const dotted of ['Sales.2026', 'v2.0', 'Q1.2026', 'Data.v2']) expect(formulaSheetName(dotted)).toBe(`'${dotted}'`);
   });
 
   it('makes unique ids and next names', () => {

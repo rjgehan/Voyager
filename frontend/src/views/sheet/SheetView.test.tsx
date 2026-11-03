@@ -14,6 +14,8 @@ import { Dialogs } from '../../components/overlays/Dialogs';
 import { Toasts } from '../../components/overlays/Toasts';
 import { runCommand } from '../../features/commands';
 import { activeSheet } from '../../sheets/activeSheet';
+import { setSheetClip } from '../../sheets/clipboard';
+import { copyRange } from '../../sheets/edits';
 import { loadSheetEngine } from '../../sheets/loadEngine';
 import { parseSheet, type SheetFile } from '../../sheets/format';
 import { useToasts } from '../../state/toasts';
@@ -24,6 +26,19 @@ import { SHEET_COMMANDS } from './register';
 import SheetView from './SheetView';
 import { clearSheetBindings } from './useSheetDocument';
 
+// The data region around a cell, counted: it is worked out only when something asks for it.
+const regions = vi.hoisted(() => ({ calls: 0 }));
+vi.mock('../../sheets/filter', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../sheets/filter')>();
+  return {
+    ...actual,
+    dataRegion: (...args: Parameters<typeof actual.dataRegion>) => {
+      regions.calls++;
+      return actual.dataRegion(...args);
+    },
+  };
+});
+
 vi.mock('@glideapps/glide-data-grid', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@glideapps/glide-data-grid')>();
   const { FakeDataEditor } = await import('../../test/fakeGrid');
@@ -33,7 +48,7 @@ vi.mock('@glideapps/glide-data-grid', async (importOriginal) => {
 const BUDGET = {
   type: 'notesapp-sheet',
   version: 1,
-  engine: 'hyperformula@3.4.0',
+  engine: 'hyperformula@3.5.0',
   sheets: [
     {
       id: 's1',
@@ -250,6 +265,22 @@ describe('the spreadsheet view', () => {
     act(() => void window.dispatchEvent(other));
     const after = (await saved(path)).sheets[0].cells;
     expect([after.E2, after.F2.f, after.E3]).toEqual([{ v: 'x' }, '=1+1', { v: 3 }]);
+  });
+
+  it('pastes a copy made in a note’s embed of the same spreadsheet with its formulas', async () => {
+    const path = await openGrid();
+    // What copying C2 (=B2/Total) in an embed of this file leaves: the shared clip and its text.
+    const sheet = parseSheet(JSON.stringify(BUDGET));
+    if (!sheet.ok) throw new Error(sheet.error);
+    const clip = copyRange(sheet.file.sheets[0], { col: 2, row: 1, width: 1, height: 1 });
+    setSheetClip(clip);
+    screen.getByTestId('grid').focus();
+    select(2, 5); // C7
+    const clipboardData = { setData: () => {}, getData: () => clip.text };
+    const paste = new Event('paste', { cancelable: true }) as ClipboardEvent;
+    Object.defineProperty(paste, 'clipboardData', { value: clipboardData });
+    act(() => void window.dispatchEvent(paste));
+    expect((await saved(path)).sheets[0].cells.C7.f).toBe('=B7/Total');
   });
 
   it('moves cut cells on paste: formulas and named ranges follow, one undo step', async () => {
@@ -867,6 +898,57 @@ describe('number formats, charts, import and export (6b, 6c)', () => {
   });
 });
 
+describe('editing while another device edits', () => {
+  it('keeps a cell’s line breaks when it is edited in the formula bar, and Alt+Enter adds one', async () => {
+    const content = structuredClone(BUDGET);
+    (content.sheets[0].cells as Record<string, unknown>).A2 = { v: '12 Main St\nSpringfield' };
+    const path = await openGrid(content);
+    select(0, 0); // A2
+    fireEvent.focus(formulaInput());
+    expect(formulaInput().value).toBe('12 Main St\nSpringfield');
+    fireEvent.change(formulaInput(), { target: { value: formulaInput().value + '!' } });
+    fireEvent.keyDown(formulaInput(), { key: 'Enter' });
+    expect((await saved(path)).sheets[0].cells.A2).toEqual({ v: '12 Main St\nSpringfield!' });
+    // Alt+Enter puts a line break at the caret instead of committing.
+    select(0, 1); // A3, Food
+    fireEvent.focus(formulaInput());
+    formulaInput().setSelectionRange(2, 2);
+    fireEvent.keyDown(formulaInput(), { key: 'Enter', altKey: true });
+    expect(formulaInput().value).toBe('Fo\nod');
+    fireEvent.keyDown(formulaInput(), { key: 'Enter' });
+    expect((await saved(path)).sheets[0].cells.A3).toEqual({ v: 'Fo\nod' });
+  });
+
+  it('writes nothing from an untouched formula bar, even after another device changed the cell', async () => {
+    const path = await openGrid();
+    select(1, 0); // B2, 1450
+    fireEvent.focus(formulaInput()); // just reading it
+    const next = structuredClone(BUDGET);
+    next.sheets[0].cells.B2 = { v: 2000 };
+    vault.externalWrite(path, JSON.stringify(next));
+    await act(async () => {
+      await session(path).onRemoteChanged({ version: vault.readFile(path).version });
+    });
+    expect(screen.getByTestId('cell-B0')).toHaveTextContent('2000');
+    // The untouched bar follows the cell.
+    expect(formulaInput().value).toBe('2000');
+    fireEvent.blur(formulaInput());
+    expect(session(path).currentStatus).toBe('clean');
+    expect((await saved(path)).sheets[0].cells.B2).toEqual({ v: 2000 });
+    // Enter moves on without writing.
+    fireEvent.focus(formulaInput());
+    fireEvent.keyDown(formulaInput(), { key: 'Enter' });
+    expect(nameBox().value).toBe('B3');
+    expect(session(path).currentStatus).toBe('clean');
+    // A typed change is written.
+    fireEvent.focus(formulaInput());
+    fireEvent.change(formulaInput(), { target: { value: '7' } });
+    fireEvent.blur(formulaInput());
+    expect((await saved(path)).sheets[0].cells.B3).toEqual({ v: 7 });
+  });
+
+});
+
 describe('sorting and filters (DESIGN §6.21.11)', () => {
   const header = (col: number, x: number, y: number) =>
     ({ localEventX: x, localEventY: y, bounds: { x: col * 100, y: 0, width: 100, height: 50 }, isTouch: false, isDoubleClick: false, preventDefault: vi.fn() }) as never;
@@ -881,6 +963,21 @@ describe('sorting and filters (DESIGN §6.21.11)', () => {
     expect([cells.A2, cells.A3, cells.B2, cells.C3.f]).toEqual([{ v: 'Food' }, { v: 'Rent' }, { v: 487.5 }, '=B3/Total']);
     fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
     expect(screen.getByTestId('cell-A0')).toHaveTextContent('Rent');
+  });
+
+  it('works out the data around the cell only for the Sort and filter menu, not on every move or edit', async () => {
+    await openGrid();
+    select(0, 0);
+    regions.calls = 0;
+    select(1, 0);
+    select(1, 1);
+    fireEvent.focus(formulaInput());
+    fireEvent.change(formulaInput(), { target: { value: '500' } });
+    fireEvent.keyDown(formulaInput(), { key: 'Enter' });
+    expect(regions.calls).toBe(0);
+    fireEvent.click(screen.getByRole('button', { name: 'Sort and filter' }));
+    expect(screen.getByRole('menuitem', { name: /^Sort range \S+ by column B, A → Z/})).toBeInTheDocument();
+    expect(regions.calls).toBeGreaterThan(0);
   });
 
   it('filters by values from a column’s button, shows the rows left, and edits the right row', async () => {
@@ -1026,6 +1123,31 @@ describe('checkboxes and dropdowns (DESIGN §6.21.13)', () => {
     fireEvent.keyDown(formulaInput(), { key: 'Enter' });
     expect(await screen.findByText(/“Water” is not one of the values A2 takes/)).toBeInTheDocument();
     expect((await saved(path)).sheets[0].cells.A2).toEqual({ v: 'Rent' });
+  });
+
+  it('takes its own items that read as amounts ($5 shows $5.00): picked, ticked and typed under a strict rule', async () => {
+    const path = await openGrid();
+    select(0, 0, 1, 2); // A2:A3
+    fireEvent.click(screen.getByRole('button', { name: 'Checkboxes and dropdowns' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Insert dropdown…' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Data validation rules' });
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Item 1' }), { target: { value: '$5' } });
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Item 2' }), { target: { value: '$10' } });
+    fireEvent.click(within(dialog).getByRole('radio', { name: 'Reject the input' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Done' }));
+    click(0, 1, 95);
+    fireEvent.click(within(await screen.findByRole('listbox', { name: 'Values for A3' })).getByRole('option', { name: '$5' }));
+    expect((await saved(path)).sheets[0].cells.A3).toEqual({ v: 5, fmt: '$#,##0.00' });
+    click(0, 1, 95);
+    const again = await screen.findByRole('listbox', { name: 'Values for A3' });
+    expect(within(again).getByRole('option', { name: '$5' })).toHaveAttribute('aria-selected', 'true');
+    fireEvent.keyDown(again, { key: 'Escape' });
+    select(0, 0);
+    fireEvent.focus(formulaInput());
+    fireEvent.change(formulaInput(), { target: { value: '$10' } });
+    fireEvent.keyDown(formulaInput(), { key: 'Enter' });
+    expect((await saved(path)).sheets[0].cells.A2).toEqual({ v: 10, fmt: '$#,##0.00' });
+    expect(screen.queryByText(/is not one of the values/)).toBeNull();
   });
 });
 

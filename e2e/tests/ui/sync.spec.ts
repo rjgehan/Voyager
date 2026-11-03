@@ -19,9 +19,7 @@ test('live update between two devices, then a conflict resolved with Keep mine',
     await eventually(() => readFile(path), (f) => f.content.includes('first line from A'));
     await expect(editor(b.page)).toContainText('first line from A');
 
-    // B is editing too (so the editor's lazy parts have loaded: going offline before that reloads
-    // the page in the built app, a known bug in tests/ui/known-bugs.spec.ts). Then it loses the
-    // network and keeps typing, while A edits the same line.
+    // B is editing too. Then it loses the network and keeps typing, while A edits the same line.
     await focusEditor(b.page);
     await b.context.setOffline(true);
     await typeAtEndOf(b.page, 'first line', ' and B offline');
@@ -87,4 +85,20 @@ test('Take theirs drops the local edit and shows the other device’s text', asy
   } finally {
     await b.context.close();
   }
+});
+
+// QA F1: without a service worker (a first visit, every Playwright run), a lazy chunk that could
+// not load offline was taken for a new deploy and the built app reloaded into the browser's
+// offline page.
+test('going offline just after opening a note does not reload the page', async ({ page, context }) => {
+  const path = `${unique('Offline')}.md`;
+  await createFile(path, '# Offline\n\nstart\n');
+  await openNote(page, path);
+  await context.setOffline(true);
+  await editor(page).locator('.cm-line', { hasText: 'start' }).click();
+  await page.keyboard.press('End');
+  await page.keyboard.type(' typed offline');
+  await page.waitForTimeout(1500);
+  await expect(editor(page)).toContainText('start typed offline', { timeout: 2000 });
+  await context.setOffline(false);
 });

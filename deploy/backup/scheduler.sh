@@ -15,13 +15,26 @@ log() {
 	printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"
 }
 
-# The first TIME after $1 (epoch seconds). Built from the calendar date, so DST changes need no special case.
+# TIME on the calendar date $1 (YYYY-MM-DD), in epoch seconds. A time the clocks skip when they go forward (02:30
+# in New York) is counted from midnight, so it falls just after the jump (03:30), as BusyBox's date reads it; GNU
+# date refuses it.
+time_on() {
+	date -d "$1 $TIME" +%s 2>/dev/null && return
+	hours=${TIME%:*}
+	minutes=${TIME#*:}
+	echo $(($(date -d "$1 00:00" +%s) + ${hours#0} * 3600 + ${minutes#0} * 60))
+}
+
+# The first TIME after $1 (epoch seconds), built from calendar dates. Tomorrow is the date 24 hours after today's
+# noon: 24 hours after "now" is still today on the 25-hour day the clocks go back (the run would start again at
+# once) and can be the day after tomorrow on the eve of the 23-hour day (a night skipped).
 next_run() {
 	day=$(date -d "@$1" +%Y-%m-%d)
-	at=$(date -d "$day $TIME" +%s)
+	at=$(time_on "$day")
 	if [ "$at" -le "$1" ]; then
-		day=$(date -d "@$(($1 + 86400))" +%Y-%m-%d)
-		at=$(date -d "$day $TIME" +%s)
+		noon=$(date -d "$day 12:00" +%s)
+		day=$(date -d "@$((noon + 86400))" +%Y-%m-%d)
+		at=$(time_on "$day")
 	fi
 	echo "$at"
 }

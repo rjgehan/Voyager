@@ -3,6 +3,7 @@
 import { startCompletion } from '@codemirror/autocomplete';
 import type { ChangeSpec } from '@codemirror/state';
 import type { Command, EditorView } from '@codemirror/view';
+import { isBlankForBlock } from './blankLine';
 import { noteContext } from './context';
 import { linkAt, type LinkHit } from './linkAt';
 
@@ -61,7 +62,7 @@ export const insertHorizontalRule: Command = (view) => {
   if (state.readOnly) return false;
   const line = state.doc.lineAt(state.selection.main.head);
   const previousBlank = line.number === 1 || state.doc.line(line.number - 1).text.trim() === '';
-  const blank = line.text.trim() === '';
+  const blank = isBlankForBlock(line.text);
   const from = blank ? line.from : line.to;
   const insert = blank ? (previousBlank ? '' : '\n') + '---\n' : '\n\n---\n';
   view.dispatch({ changes: { from, to: line.to, insert }, selection: { anchor: from + insert.length }, userEvent: 'input', scrollIntoView: true });

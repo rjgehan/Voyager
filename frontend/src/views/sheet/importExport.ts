@@ -4,7 +4,7 @@
 import { api } from '../../api/endpoints';
 import { queryClient } from '../../api/queryClient';
 import { openPath } from '../../features/navigation';
-import { joinPath, titleOf } from '../../features/paths';
+import { joinPath, newNameError, titleOf, utf8Length } from '../../features/paths';
 import { decodeText, detectSeparator, parseCsv, rowsToCells, sheetToCsv, type Separator } from '../../sheets/csv';
 import type { CellEdit, Workbook } from '../../sheets/engine';
 import { freeSheetName, sameName, serializeSheet, SHEET_TYPE, SHEET_VERSION, type Sheet, type SheetFile } from '../../sheets/format';
@@ -115,10 +115,30 @@ export function bookToFile(book: ImportedBook): SheetFile {
   return { type: SHEET_TYPE, version: SHEET_VERSION, engine: '', sheets, named: book.named };
 }
 
-/** Creates `<folder>/<name>.sheet` (or `<name> 1.sheet`, …) with `file` and opens it. */
+/**
+ * `name` (an imported file's name without its extension) cleaned so `<name>.sheet` passes the
+ * new-name rules (API.md §1.3), as the server cleans attachment names: characters a name cannot
+ * hold and `%%` become `-`, spaces collapse, leading and trailing dots and spaces go, a Windows
+ * device name gets a `_`, and the result fits 240 bytes. `Imported` when nothing is left.
+ */
+export function sheetFileName(name: string): string {
+  const ext = '.sheet';
+  let base = name
+    .normalize('NFC')
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u001f\u007f:*?"<>|#^[\]\\/]|%%/g, '-')
+    .replace(/\s+/g, ' ')
+    .replace(/^[. ]+|[. ]+$/g, '');
+  if (/^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i.test(base)) base = '_' + base;
+  while (base !== '' && utf8Length(base + ext) > 240) base = [...base].slice(0, -1).join('').replace(/[. ]+$/, '');
+  return base === '' || newNameError(base + ext) !== null ? 'Imported' : base;
+}
+
+/** Creates `<folder>/<name>.sheet` (or `<name> 1.sheet`, …) with `file` and opens it; `name` is cleaned first. */
 export async function createSheetFile(folder: string, name: string, file: SheetFile): Promise<string> {
   const content = serializeSheet(file);
-  const result = await api.createFile({ path: joinPath(folder, `${name}.sheet`), content, onConflict: 'rename' }, { idempotencyKey: newIdempotencyKey() });
+  const path = joinPath(folder, `${sheetFileName(name)}.sheet`);
+  const result = await api.createFile({ path, content, onConflict: 'rename' }, { idempotencyKey: newIdempotencyKey() });
   applyWriteResult(queryClient, result, content);
   openPath(result.file.path);
   return result.file.path;

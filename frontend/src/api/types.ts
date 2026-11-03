@@ -47,7 +47,7 @@ export interface Problem {
   line?: number;                  // block-not-found: the line the request named (§37)
   from?: VaultPath;
   to?: VaultPath;
-  reason?: string;                // e.g. vault-unavailable: starting | failed (§41)
+  reason?: string;                // e.g. vault-unavailable: starting | stopping | failed (§41)
   vault?: string;                 // vault-not-found, vault-unavailable: the vault name (§41)
   retryAfter?: number;            // too-many-attempts: seconds until the next try, as Retry-After (§42)
   incidentId?: string;

@@ -126,7 +126,7 @@ Besides notes, the server indexes the content of some structured text files (DES
 | `Origin` | Sent automatically by browsers | On mutating requests, if present, its host:port must equal the `Host` header, compared case-insensitively. `Origin: null` is rejected. Failure gets `403 cross-origin`. |
 | `Sec-Fetch-Site` | Sent automatically by browsers | On mutating requests, if present, it must be `same-origin` or `none`. Anything else gets `403 cross-origin`. |
 | `Accept` | Optional | `application/json`, or `text/event-stream` for §16 |
-| `Idempotency-Key` | Optional on `POST /api/files`, `POST /api/s/{key}/files` (§42.8), `PUT /api/files/raw`, `POST /api/attachments`, `POST /api/capture`, `POST /api/capture/file` and every `POST`, `PATCH` and `DELETE` of the task API (§20) | Any string of 8 to 64 characters from `[A-Za-z0-9-]`, unique per logical operation (for example `crypto.randomUUID()` generated once and reused for every retry). The server keeps a per-boot cache of 1,000 keys for 1 hour; a request whose key, method and path match an earlier one gets the **stored status and body** of the first result, and nothing is done again. Without it, a retried "New note" whose response was lost would create `Untitled 1.md`. |
+| `Idempotency-Key` | Optional on `POST /api/files`, `POST /api/s/{key}/files` (§42.8), `PUT /api/files/raw`, `POST /api/attachments`, `POST /api/capture`, `POST /api/capture/file` and every `POST`, `PATCH` and `DELETE` of the task API (§20) | Any string of 8 to 64 characters from `[A-Za-z0-9-]`, unique per logical operation (for example `crypto.randomUUID()` generated once and reused for every retry). The server keeps a per-boot cache of 1,000 keys for 1 hour; a request whose key, method and path match an earlier one gets the **stored status and body** of the first result, and nothing is done again. Only successful results are stored, so a request that failed (a problem document, a lost connection) may be sent again with the same key. Without it, a retried "New note" whose response was lost would create `Untitled 1.md`. |
 | `Host` | Sent by every client | Must match the server's allowlist (`notes.<tailnet>.ts.net` in production). Otherwise `421 unknown-host`. |
 | `Tailscale-User-*` | Set by `tailscale serve` in production | Identity (§6.1). A request without an allowed `Tailscale-User-Login` gets `403 identity-not-allowed` (DESIGN §5.13), except that any other login may use the guest endpoints of shares (§42). Clients never send them. |
 
@@ -199,7 +199,7 @@ Every error response is RFC 9457 `application/problem+json` with an extra `code`
 | `funnel-request` | 403 | Not available through Funnel | The request carries `Tailscale-Funnel-Request`: it came from the internet through Tailscale Funnel. Every path, health included (§26) | |
 | `publishing-off` | 409 | Public publishing is off | §26.2: `NOTES_PUBLISH_ENABLED` is not `true` on the server | |
 | `vault-not-found` | 404 | No such vault | §41: a `/api/v/<name>/` request for a name this server does not serve | `vault` |
-| `vault-unavailable` | 503 | Vault not available | §41: the vault's context is starting (`reason: "starting"`, with `Retry-After: 2`) or could not be started (`reason: "failed"`) | `vault`, `reason` |
+| `vault-unavailable` | 503 | Vault not available | §41: the vault's context is starting (`reason: "starting"`, with `Retry-After: 2`), is closing because the server is shutting down (`reason: "stopping"`, with `Retry-After: 2`), or could not be started (`reason: "failed"`) | `vault`, `reason` |
 | `vaults-off` | 409 | Creating vaults is off | §41.2: `NOTES_VAULTS_DIR` is empty or `NOTES_VAULTS_ALLOW_CREATE=false` | |
 | `share-not-found` | 404 | Share not found | §42: a guest endpoint's key names no share, a revoked or expired one, or a share id used by someone who is not one of its recipients (the same answer in every case) | |
 | `outside-share` | 403 | Outside the share | §42: the path is not in the share (the same answer whether the file exists or not), or a guest's text adds an embed of a file outside the share (§42.8) | `path` |
@@ -215,7 +215,7 @@ export interface FieldError { field: string; message: string }   // e.g. {"field
 
 | Class | Responses | Client behaviour |
 |---|---|---|
-| Transient | A network error; `502`; `504`; a `503` that is not problem+json; `503 busy`; any response whose `Content-Type` is neither `application/json` nor `application/problem+json` (during a deploy, `tailscale serve` answers an empty `502` for 10–30 s) | Keep the data, go offline, retry with backoff, honour `Retry-After` |
+| Transient | A network error; `502`; `504`; a `503` that is not problem+json; `503 busy`; `503 vault-unavailable` with `reason` `starting` or `stopping` (an extra vault during a restart, §41); any response whose `Content-Type` is neither `application/json` nor `application/problem+json` (during a deploy, `tailscale serve` answers an empty `502` for 10–30 s) | Keep the data, go offline, retry with backoff, honour `Retry-After` |
 | Server storage | `io-error`, `internal-error`, `permission-denied`, `insufficient-storage` | Keep the data and the draft, retry with the same backoff, show a storage error |
 | Terminal | Every other problem code | Handled by the flow that made the request; not retried automatically |
 
@@ -618,12 +618,13 @@ Request `SaveFileRequest`:
 | `baseVersion` | The version the edit started from, or `null` to create a file that does not exist. A missing field is treated as `null`, which is safe: for an existing file it can only produce a 409. The rules and their order are in §4. |
 | `flushHistory` | Optional, default `false`. When `true`, the server commits its current copy to git before overwriting it, and answers `503 history-unavailable` instead of writing if that commit fails. Clients set it for Keep mine, Save merged and Recreate. |
 
-`200 WriteResult` (`created: false`, `createdFolders: []`). `file.version` is the new version, or the current version when the content was already on disk (an idempotent retry). `201 WriteResult` (`created: true`) when `baseVersion` was `null` and the file was created; its missing parents are in `createdFolders`. Creating through `PUT` does not apply the new-name rules (§1.3).
+`200 WriteResult` (`created: false`, `createdFolders: []`). `file.version` is the new version, or the current version when the content was already on disk (an idempotent retry). `201 WriteResult` (`created: true`) when `baseVersion` was `null` and the file was created; its missing parents are in `createdFolders`. Creating through `PUT` does not apply the new-name rules (§1.3), but the vault stays case-insensitively unique: the parents resolve ignoring case to existing folders (`Projects/B.md` when `projects/` exists is created as `projects/B.md`, and `file.path` carries the real path), and a name that differs from an existing file or folder only by case is `409 case-collision`.
 
 | Errors |
 |---|
 | `400`, `403` |
 | `409 version-conflict` (§4), with `movedTo` when the path was moved |
+| `409 case-collision` (`baseVersion: null`, and an entry whose name differs only by case exists; `existingPath` names it) |
 | `409 type-mismatch` |
 | `413 too-large`, `415 not-text` |
 | `503 history-unavailable` (`reason: "commit-failed"`) with `flushHistory: true` |
@@ -1379,7 +1380,7 @@ Request `HistoryRestoreRequest`:
 
 | Field | Meaning |
 |---|---|
-| `path` | Where to write: the file's current path (or its last path, if it no longer exists). The new-name rules are not applied. |
+| `path` | Where to write: the file's current path (or its last path, if it no longer exists). The new-name rules are not applied. When the file does not exist, the parents resolve ignoring case to existing folders (a folder renamed `Projects` to `projects` since then receives the file), and `file.path` carries the real path. |
 | `sourcePath` | The path at `commit`; defaults to `path` |
 | `baseVersion` | **Text kinds:** the client's current version of `path`, or `null` when the file does not exist now (it is then recreated). A mismatch is `409 version-conflict`; `null` while the file exists is `409 already-exists`. **Non-text kinds:** must be `null`; an existing file is overwritten, and `already-exists` never applies. |
 
@@ -1401,6 +1402,7 @@ The server commits immediately: `Restore <path> to version <shortId>`. `commitId
 |---|
 | `400`, `403`, `404` |
 | `409 version-conflict` (text kinds) / `already-exists` (text kinds, `baseVersion: null` but the file exists) |
+| `409 case-collision`: the file does not exist, but an entry whose name differs only by case does (`existingPath`) |
 | `503 history-unavailable` |
 
 Events: `file.changed` or `file.created` (with `folder.created` first for any re-created parents), then `trash.changed` when a large file was kept in the trash, then `history.committed`.
@@ -1460,7 +1462,7 @@ What changed over a period ("what changed this week"): the net difference betwee
 
 ### 14.8 `GET /api/history/deleted[?q=][&limit=50][&offset=0]`
 
-Files that were deleted at some point and do not exist now, so they can be brought back from git even after the trash was emptied. Each path is listed once, with its latest deletion; newest first. A path whose latest change is not a deletion (it was re-created, or renamed away) is not listed, nor is a path that exists now.
+Files that were deleted at some point and do not exist now, so they can be brought back from git even after the trash was emptied. Each path is listed once, with its latest deletion; newest first. A path whose latest change is not a deletion (it was re-created, or renamed away) is not listed, nor is a path that exists now, also in another case (`Plan.md` is not listed while `plan.md` exists).
 
 | Parameter | Meaning |
 |---|---|
@@ -1906,7 +1908,7 @@ export interface Problem {
   line?: number;                  // block-not-found: the line the request named (§37)
   from?: VaultPath;
   to?: VaultPath;
-  reason?: string;                // e.g. vault-unavailable: starting | failed (§41)
+  reason?: string;                // e.g. vault-unavailable: starting | stopping | failed (§41)
   vault?: string;                 // vault-not-found, vault-unavailable: the vault name (§41)
   retryAfter?: number;            // too-many-attempts: seconds until the next try, as Retry-After (§42)
   incidentId?: string;
@@ -3266,12 +3268,12 @@ Names are 1 to 200 characters on one line, trimmed. `color` is `#rrggbb` or a lo
 - `INTERVAL`, `BYDAY`, `BYMONTHDAY`, `BYMONTH`, `BYYEARDAY`, `BYWEEKNO`, `BYSETPOS`, `WKST`, `BYHOUR`, `BYMINUTE` (hours and minutes apply only to a task with a time);
 - `COUNT` or `UNTIL` (not both). `COUNT` is the number of occurrences left, including the current one: each roll-forward decreases it, and completing the last one closes the task. `UNTIL` (`YYYYMMDD` or `YYYYMMDDTHHMMSSZ`) is compared by date.
 
-Rules are evaluated on local dates and times, so daylight-saving changes never shift a task. A rule that never produces an occurrence (`FREQ=YEARLY;BYMONTH=2;BYMONTHDAY=30`) is refused with `400`.
+Rules are evaluated on local dates and times, so daylight-saving changes never shift a task. A rule that never produces an occurrence (`FREQ=YEARLY;BYMONTH=2;BYMONTHDAY=30`) is refused with `400`. A `.tasks` file edited by hand can hold a rule outside the subset (no `FREQ` or `FREQ=HOURLY`, `BYDAY=THU`, `BYMONTHDAY=32`, `UNTIL=2026-11-03`, `COUNT` with `UNTIL`, a bad `INTERVAL`): it is served as written with a problem `"recurrence.rrule" cannot repeat: <reason>`, it is never evaluated, and completing the task closes it.
 
 | `from` | The next occurrence is |
 |---|---|
 | `due` | The first occurrence after the task's `due` (else `start`) date that also falls after the completion day. Completing an overdue task therefore skips the occurrences already missed: a weekly Wednesday task three weeks late moves to the next Wednesday. |
-| `completion` | The first occurrence after the completion day, at the task's time if it has one: `FREQ=DAILY;INTERVAL=3` means "three days after I last did it". |
+| `completion` | The first occurrence after the completion day, at the task's time if it has one: `FREQ=DAILY;INTERVAL=3` means "three days after I last did it". A rule on set days (`BYDAY`, `BYMONTHDAY`, `BYMONTH`, `BYYEARDAY`, `BYWEEKNO` or `BYSETPOS`) also skips the occurrences up to the task's `due` (else `start`): `FREQ=WEEKLY;BYDAY=WE` due Wednesday 2026-11-04 and completed the day before moves to 2026-11-11, never to the occurrence being completed. A `MONTHLY` or `YEARLY` rule that takes its day from the start (no `BY…` day parts) lands `INTERVAL` months or years after the completion day, on the month's last day when that month is shorter: `FREQ=MONTHLY` completed on 2026-01-30 gives 2026-02-28 and `FREQ=YEARLY` completed on 2028-02-29 gives 2029-02-28 (RFC 5545 would skip to 2026-03-30 and 2032-02-29). |
 
 Examples, completed on Wednesday 2026-10-14: `FREQ=WEEKLY` from `due` `2026-10-14T08:00` gives `2026-10-21T08:00`; `FREQ=MONTHLY;BYMONTHDAY=-1` from `due` `2026-09-30` gives `2026-10-31`; `FREQ=MONTHLY` from `due` `2026-01-31` skips months without a 31st, as RFC 5545 says.
 
@@ -3342,7 +3344,7 @@ Bookmarks are stored in `.notesapp/bookmarks.json`, in the format of Obsidian's 
 - Every item may have `ctime` (when it was bookmarked, epoch milliseconds, which Obsidian writes) and `title` (a display name; without one, the client shows the target's name, the heading, or the query).
 - Items are **passed through** in Obsidian's shape: a field that does not apply is absent, not `null`, and fields this build does not know are kept, at the item and at the top level of the file.
 - Without the file, the response lists the bookmarks of `.obsidian/bookmarks.json` when Obsidian left one (it is only ever read), or none. `version` is then the blob id of the document Voyager would write, so a `PUT` with it creates the file.
-- Items in the file that break the rules of §21.2 (a hand edit) are left out of the response and logged, so a client never receives an item it could not send back. A file that is not JSON at all reads as no bookmarks; the next save keeps it beside the new one as `bookmarks.json.bak-<timestamp>`.
+- Items in the file that break the rules of §21.2 (a hand edit) are left out of the response and logged, so a client never receives an item it could not send back. They stay in the file when the server rewrites it (a move, a heading rename); a save, which holds only the items the client had, first keeps the file beside the new one as `bookmarks.json.bak-<timestamp>`. A file that is not JSON at all reads as no bookmarks; the next save keeps it the same way.
 - The file is read on every request, so a hand edit or a pull is seen at once.
 
 ### 21.2 `PUT /api/bookmarks`
@@ -3644,7 +3646,7 @@ A reminder's `at` is a local date-time with no zone. The server reads it in the 
 
 - `webPush.available` is false, with `reason`, when `<secrets-dir>/push.json` cannot be read or is malformed. `webPush.publicKey` is null until the key pair exists (`POST /api/push/key`).
 - `ntfy.configured` is false, with `reason`, when `<secrets-dir>/ntfy.json` is missing or invalid (the same file as the app alerts, §6.6). `ownTopic` is true when it has `"reminders": {"topic": …}`; otherwise reminders go to its default topic. The topic and token are never shown.
-- `inApp.connections` counts the open event streams.
+- `inApp.connections` counts the owner's open event streams (`GET /api/events`); a guest's share page (§42) is not one.
 
 **`PUT /api/reminders/zone`** `ReminderZoneRequest` → `204`. `400 bad-request` for anything but an IANA zone id (`Europe/Berlin`, `America/New_York`, `UTC`). Clients send it at startup.
 
@@ -3680,7 +3682,7 @@ Both take `ReminderActionRequest` with the `taskId` and `at` of the notification
 
 ### 28.5 `reminder.due`
 
-The in-app route publishes `ReminderDueEvent` on the event stream (§16.4) for each reminder it delivers. It counts as delivered only when at least one stream is connected. Clients show each `key` once (a replay after a reconnect repeats it) and ignore events sent more than 15 minutes ago. `kind` is `task`, `daily` or `test`.
+The in-app route publishes `ReminderDueEvent` on the event stream (§16.4) for each reminder it delivers. It counts as delivered only when at least one of the owner's streams (`GET /api/events`) is connected; a guest's share stream (§42) never carries it and does not count. Clients show each `key` once (a replay after a reconnect repeats it) and ignore events sent more than 15 minutes ago. `kind` is `task`, `daily` or `test`.
 
 ---
 
@@ -3708,7 +3710,7 @@ The notes that may hold cards, with their text: `{config, notes: [{path, version
 
 ### 34.3 `GET /api/flashcards`
 
-`FlashcardsResponse`: the effective settings (every field, with defaults filled in), every record by card id, and `version`, the blob id of `srs.json` (`null` before the first write).
+`FlashcardsResponse`: the effective settings (every field, with defaults filled in), every record by card id, and `version`, the blob id of `srs.json` (`null` before the first write). Reading is tolerant: a file that is not JSON reads as no records and default settings, and a record that cannot be read is left out. The next write keeps such a file beside the new one as `srs.json.bak-<timestamp>` (DESIGN §5.34).
 
 | Setting | Default | Range |
 |---|---|---|
@@ -3914,7 +3916,7 @@ The metadata of the notes matching every filter given (filters combine with AND;
 | `prop` (repeatable) | `name` (present and not empty), `name=value` or `name!=value` (a note without the property matches `!=`). Names compare ignoring case; values compare as text ignoring case, an element of a list property matches, and `[[Note]]` matches `Note` |
 | `linksTo` | Notes with a link or embed that resolves to this note (a vault path, or a link target resolved from the vault root) |
 | `q` | Notes the full-text search (§12.1's syntax) matches |
-| `tasks` | `true`: each note's Markdown checkbox tasks (outside code fences, at most 500 per note); otherwise `tasks` is `null` |
+| `tasks` | `true`: each note's Markdown checkbox tasks (outside code fences, at most 500 per note; a list item `- [ ] text`, `1. [x] text` after any blanks and blockquote markers `>`); otherwise `tasks` is `null` |
 | `limit` | 1–2000, default 500 |
 
 At most 10 `tag` and `prop` filters together, each (and `folder`, `linksTo`) at most 200 characters. Repeated parameters are read as sent (a value may hold a comma).
@@ -3942,7 +3944,7 @@ It may compile WebAssembly (QuickJS, inlined in the worker: it fetches nothing) 
 One server can serve several independent vaults (DESIGN §5.39). The **default vault** is the one at `NOTES_VAULT_DIR`; every endpoint of this document is its endpoint, unchanged. An **extra vault** has exactly the same API under a prefix: **`/api/v/<name>/...`** is the extra vault's `/api/...` (for example `GET /api/v/work/tree`, `PUT /api/v/work/files?path=…`, `GET /api/v/work/events?clientId=…`). The default vault also answers under its own name (`/api/v/main/...`). Each vault has its own versions, event ids, idempotency keys, trash ids, task ids and commit ids: nothing returned by one vault means anything to another.
 
 - **Names.** 1 to 32 lowercase letters, digits and dashes, starting and ending with a letter or digit. Only the literal prefix is routed: a percent-encoded, upper-case or `;`-parameterized name, or a path with a `.` or `..` segment, is not a vault path and gets `404`.
-- **Errors.** `404 vault-not-found` (`vault`) for a name the server does not serve; `503 vault-unavailable` (`vault`, `reason`: `starting` with `Retry-After: 2`, or `failed`). Admission, CSRF and size rules (§2, §3) apply to prefixed requests exactly as to unprefixed ones. A problem's `instance` is the path within the vault (`/api/tree`).
+- **Errors.** `404 vault-not-found` (`vault`) for a name the server does not serve; `503 vault-unavailable` (`vault`, `reason`: `starting` with `Retry-After: 2`; `stopping` with `Retry-After: 2` while the server shuts down, because the extra vaults close when it starts to, before the web server stops taking requests; or `failed`). Clients retry `starting` and `stopping` like a network error (§3), so a save during a deploy is saved once the vault is back. Admission, CSRF and size rules (§2, §3) apply to prefixed requests exactly as to unprefixed ones. A problem's `instance` is the path within the vault (`/api/tree`).
 - **Server-wide endpoints** are only unprefixed: `GET` and `POST /api/vaults` (`/api/v/<name>/vaults` is `404`). Every other endpoint exists in every vault; in an extra vault, `GET /api/publish` reports `enabled: false` and `POST /api/publish` answers `409 publishing-off`, and `POST /api/mirror/push` has no mirror (§6.4), since publishing and the mirror belong to the default vault. `/api/status/details` and `/api/alerts/test` report the server's alerts and backups from any vault. Push subscriptions (§28) are server-wide: subscribing from any vault subscribes the device for every vault's reminders.
 - **The app** of an extra vault is served at `/v/<name>/` and `/v/<name>/**` (the same `index.html`, §18).
 
@@ -4025,9 +4027,9 @@ A text file of the share, exactly as §8.1 (`200 TextFile`, `404 not-found`, `41
 
 ### 42.8 `PUT /api/s/{key}/files?path={path}` and `POST /api/s/{key}/files`
 
-Edit shares only (`403 share-read-only` otherwise), Markdown notes only (`403 share-read-only` for other files). `PUT` saves a note of the share with the version protocol of §4 (`200 WriteResult`, `409 version-conflict` with the current text, `413 too-large`); a note share's note must exist (`404 not-found`: a guest never recreates a deleted shared note). `POST` (`CreateFileRequest`, `Idempotency-Key` honoured) creates a note inside a folder share (`201 WriteResult`, `409 already-exists` unless `onConflict: "rename"`); a note share creates nothing (`403 outside-share`).
+Edit shares only (`403 share-read-only` otherwise), Markdown notes only (`403 share-read-only` for other files). `PUT` saves a note of the share with the version protocol of §4 (`200 WriteResult`, `409 version-conflict` with the current text, `413 too-large`); a conflict's `movedTo` is given only when the note's new path is inside the share, and is `null` when the owner moved it out (the same answer as a deleted note); a note share's note must exist (`404 not-found`: a guest never recreates a deleted shared note). `POST` (`CreateFileRequest`, `Idempotency-Key` honoured) creates a note inside a folder share (`201 WriteResult`, `409 already-exists` unless `onConflict: "rename"`); a note share creates nothing (`403 outside-share`).
 
-**Embeds a guest adds.** The text is scanned, and every embed (`![[…]]`, `![](…)`) whose target as written is not already embedded by the note's current text must resolve inside the share, or to media the share embeds now or did in the last 24 hours. Anything else, an unresolved embed included, answers `403 outside-share` (`path`: the note), whatever exists in the vault; these refusals do not count toward the rate limit. The client keeps the guest's text and saves it again after the next edit (DESIGN §6.48). The commit is the guest's: its author is the guest's Tailscale name and login.
+**Embeds a guest adds.** The text is scanned as the index will read it once written (a text starting with U+FEFF both with and without that character, so frontmatter values count too), and every embed (`![[…]]`, `![](…)`) whose target as written is not already embedded by the note's current text must resolve inside the share, or to media the share embeds now or did in the last 24 hours. Anything else, an unresolved embed included, answers `403 outside-share` (`path`: the note), whatever exists in the vault; these refusals do not count toward the rate limit. The client keeps the guest's text and saves it again after the next edit (DESIGN §6.48). The commit is the guest's: its author is the guest's Tailscale name and login.
 
 Guests have no other write: no delete, move, rename, upload or folder (those are owner endpoints).
 

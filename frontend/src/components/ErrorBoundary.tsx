@@ -6,6 +6,12 @@ interface Props {
   children: ReactNode;
   /** Rendered instead of the error panel (an overlay host shows nothing rather than a panel in the shell's grid). */
   fallback?: ReactNode;
+  /** The error clears when one of these changes: the note a panel is about, the page's address. */
+  resetKeys?: readonly unknown[];
+}
+
+function changed(a: readonly unknown[] = [], b: readonly unknown[] = []): boolean {
+  return a.length !== b.length || a.some((v, i) => !Object.is(v, b[i]));
 }
 
 interface State {
@@ -21,6 +27,11 @@ export class ErrorBoundary extends Component<Props, State> {
 
   override componentDidCatch(error: Error, info: ErrorInfo): void {
     console.error(`[notesapp] ${this.props.label} crashed`, error, info.componentStack);
+  }
+
+  override componentDidUpdate(prevProps: Props, prevState: State): void {
+    // Not on the update that caught the error: only once the keys move on from it.
+    if (prevState.error !== null && this.state.error !== null && changed(prevProps.resetKeys, this.props.resetKeys)) this.reset();
   }
 
   private reset = () => this.setState({ error: null });

@@ -9,7 +9,7 @@ import { autoGrow, useAutoGrow } from '../autoGrow';
 import { validateNewName } from '../../features/fileOps';
 import { noteWidthProps } from '../../features/settings';
 import { usePrefs } from '../../state/prefs';
-import { setPendingBody, updatePendingSelection, updatePendingTitle, type PendingNote } from '../../state/pendingNote';
+import { retryPendingNote, setPendingBody, updatePendingSelection, updatePendingTitle, type PendingNote } from '../../state/pendingNote';
 
 export function PendingNoteView({ pending }: { pending: PendingNote }) {
   const settings = useVaultSettings();
@@ -68,6 +68,8 @@ export function PendingNoteView({ pending }: { pending: PendingNote }) {
                 setTitle(e.target.value);
                 autoGrow(e.target);
                 updatePendingTitle(pending.id, e.target.value, false);
+                // onSelect follows the key, so the selection is kept with the text it belongs to.
+                updatePendingSelection(pending.id, e.target.selectionStart, e.target.selectionEnd);
               }}
               onSelect={(e) => updatePendingSelection(pending.id, e.currentTarget.selectionStart, e.currentTarget.selectionEnd)}
               onKeyDown={onKeyDown}
@@ -86,9 +88,25 @@ export function PendingNoteView({ pending }: { pending: PendingNote }) {
           )}
         </div>
       </header>
-      <p className="pending-note-hint muted">
-        {pending.committed ? `Creating the ${pending.label}…` : note ? 'Name the new note, then start writing.' : `Name the new ${pending.label}, then press Enter to open it.`}
-      </p>
+      {pending.problem?.retry === 'manual' ? (
+        // The server refused the note: what was typed stays here, and Try again asks again.
+        <div className="pending-note-problem" role="alert">
+          <p className="field-error">{pending.problem.message}</p>
+          <button type="button" className="button button-small" onClick={() => retryPendingNote(pending.id)}>
+            Try again
+          </button>
+        </div>
+      ) : (
+        <p className="pending-note-hint muted" role={pending.problem ? 'status' : undefined}>
+          {pending.problem
+            ? pending.problem.message
+            : pending.committed
+              ? `Creating the ${pending.label}…`
+              : note
+                ? 'Name the new note, then start writing.'
+                : `Name the new ${pending.label}, then press Enter to open it.`}
+        </p>
+      )}
       {note && (
         // Writing before the note exists (DESIGN §6.15): it moves into the note, caret and all.
         <textarea

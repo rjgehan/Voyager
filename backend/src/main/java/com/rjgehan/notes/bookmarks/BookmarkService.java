@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.text.Normalizer;
 import java.time.Clock;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
@@ -87,10 +88,16 @@ public class BookmarkService {
 	/**
 	 * The bookmarks as stored: {@code root} is the whole document (other top-level fields kept), {@code version} the
 	 * blob id of the file's bytes (or of the serialized document when there is no file), {@code broken} when the file
-	 * exists but is not a JSON object.
+	 * exists but is not a JSON object, {@code lossy} when {@code items} leaves out bookmarks the file holds.
 	 */
-	private record Document(ObjectNode root, List<ObjectNode> items, String version, boolean onDisk,
-			boolean broken) {
+	private record Document(ObjectNode root, List<ObjectNode> items, String version, boolean onDisk, boolean broken,
+			boolean lossy) {
+
+		/** Even the raw items lose something: the file's items field is not a list. */
+		boolean dropsRaw() {
+			return this.lossy && !(this.root.get("items") instanceof ArrayNode);
+		}
+
 	}
 
 	private final VaultFs fs;
@@ -159,7 +166,8 @@ public class BookmarkService {
 				if (!current.version().equals(baseVersion)) {
 					throw conflict(current);
 				}
-				write(current, bytes, Author.of(identity));
+				// The client never had the bookmarks this build leaves out: the file is kept beside the new one.
+				write(current, bytes, Author.of(identity), current.lossy());
 				this.hub.publish(new BookmarksChangedEvent(version, origin));
 				logger.info("BOOKMARKS saved items={} client={} user={}", count(parsed.items()), origin,
 						identity.login());
@@ -224,7 +232,8 @@ public class BookmarkService {
 		UnaryOperator<ObjectNode> rename = (item) -> {
 			String path = BookmarkCodec.text(item, "path");
 			String subpath = BookmarkCodec.text(item, "subpath");
-			if (path == null || subpath == null || !PathNames.lower(path).equals(lowerPath)) {
+			if (path == null || subpath == null
+					|| !PathNames.lower(Normalizer.normalize(path, Normalizer.Form.NFC)).equals(lowerPath)) {
 				return item;
 			}
 			String[] segments = subpath.split("#", -1);
@@ -287,8 +296,12 @@ public class BookmarkService {
 			}
 			List<ObjectNode> added = savedSearchBookmarks(parse(saved), current.items());
 			if (!added.isEmpty()) {
-				List<ObjectNode> items = new ArrayList<>(current.items());
+				// Appended to the raw items: bookmarks this build leaves out stay in the file.
+				List<JsonNode> items = new ArrayList<>(BookmarkCodec.rawItems(current.root()));
 				items.addAll(added);
+				if (current.dropsRaw()) {
+					keepBackup("has an items field that is not a list");
+				}
 				this.fs.atomicWrite(FILE, serialize(BookmarkCodec.document(current.root(), items)));
 			}
 			String kept = this.fs.existsExactly(MIGRATED_SAVED_SEARCHES_FILE)
@@ -370,8 +383,7 @@ public class BookmarkService {
 	}
 
 	/** A server-side change: written and announced to every client (origin null) when it changed anything. */
-	private boolean change(Function<List<ObjectNode>, @Nullable List<ObjectNode>> edit, String what,
-			Identity identity) {
+	private boolean change(Function<List<JsonNode>, @Nullable List<JsonNode>> edit, String what, Identity identity) {
 		try {
 			if (!this.lock.tryLock(5, TimeUnit.SECONDS)) {
 				logger.warn("Bookmarks not updated after the {}: they are busy", what);
@@ -387,12 +399,13 @@ public class BookmarkService {
 			if (current.broken()) {
 				return false;
 			}
-			List<ObjectNode> items = edit.apply(current.items());
+			// The raw items: a bookmark this build leaves out (a hand edit) stays in the file untouched.
+			List<JsonNode> items = edit.apply(BookmarkCodec.rawItems(current.root()));
 			if (items == null) {
 				return false;
 			}
 			byte[] bytes = serialize(BookmarkCodec.document(current.root(), items));
-			write(current, bytes, Author.of(identity));
+			write(current, bytes, Author.of(identity), false);
 			String version = Hashing.blobId(bytes);
 			this.hub.publish(new BookmarksChangedEvent(version, null));
 			logger.info("BOOKMARKS updated after the {}", what);
@@ -424,16 +437,26 @@ public class BookmarkService {
 		return this.index.file(path) != null || this.index.isFolder(path);
 	}
 
-	/** Writes under the lock; a file that was not JSON is kept beside it first, so a hand edit is never lost. */
-	private void write(Document current, byte[] bytes, Author author) throws IOException {
+	/**
+	 * Writes under the lock. A file that was not JSON, or one holding bookmarks this write drops ({@code dropsItems}),
+	 * is kept beside it first, so a hand edit is never lost.
+	 */
+	private void write(Document current, byte[] bytes, Author author, boolean dropsItems) throws IOException {
 		this.batcher.prepareWrite(author);
 		if (current.broken()) {
-			String backup = FILE + ".bak-" + BACKUP_STAMP.format(this.clock.instant());
-			this.fs.atomicWrite(backup, this.fs.readBytes(FILE));
-			logger.warn("{} was not valid JSON; kept it as {} before writing", FILE, backup);
+			keepBackup("was not valid JSON");
+		}
+		else if (dropsItems) {
+			keepBackup("held bookmarks this build leaves out");
 		}
 		this.fs.atomicWrite(FILE, bytes);
 		this.batcher.markDirty(PATH, author);
+	}
+
+	private void keepBackup(String why) throws IOException {
+		String backup = FILE + ".bak-" + BACKUP_STAMP.format(this.clock.instant());
+		this.fs.atomicWrite(backup, this.fs.readBytes(FILE));
+		logger.warn("{} {}; kept it as {} before writing", FILE, why, backup);
 	}
 
 	private Document read() throws IOException {
@@ -443,19 +466,20 @@ public class BookmarkService {
 			if (!(tree instanceof ObjectNode root)) {
 				logger.warn("{} is not a JSON object; it shows no bookmarks until the next change replaces it", FILE);
 				return new Document(BookmarkCodec.document(null, List.of()), List.of(), Hashing.blobId(bytes), true,
-						true);
+						true, false);
 			}
 			BookmarkCodec.Parsed parsed = BookmarkCodec.readFile(root);
 			if (!parsed.errors().isEmpty()) {
 				logger.warn("{}: left out invalid bookmarks: {}", FILE, describe(parsed.errors()));
 			}
-			return new Document(root, parsed.items(), Hashing.blobId(bytes), true, false);
+			return new Document(root, parsed.items(), Hashing.blobId(bytes), true, false,
+					!parsed.errors().isEmpty());
 		}
 		byte[] obsidian = readOrNull(OBSIDIAN_FILE);
 		JsonNode seed = (obsidian != null) ? parse(obsidian) : null;
 		List<ObjectNode> items = (seed instanceof ObjectNode) ? BookmarkCodec.readFile(seed).items() : List.of();
 		ObjectNode root = BookmarkCodec.document(null, items);
-		return new Document(root, items, Hashing.blobId(serialize(root)), false, false);
+		return new Document(root, items, Hashing.blobId(serialize(root)), false, false, false);
 	}
 
 	private VersionConflictException conflict(Document current) {

@@ -46,7 +46,7 @@ Open them from the ribbon (computer) or the drawer (phone). Each task page has t
 
 In a task's details, **Repeat** offers every day, every weekday, weekly, every two weeks, monthly and yearly, or **Custom…**: every few days, weeks, months or years, on chosen weekdays, on "the second Tuesday", until a date or for a number of times. You can also type the rule in words ("every 2 weeks on Monday and Friday").
 
-**Repeat from** chooses whether the next date counts from the due date (rent: always on the 1st) or from when you completed it (water the plants: a week after you last did).
+**Repeat from** chooses whether the next date counts from the due date (rent: always on the 1st) or from when you completed it (water the plants: a week after you last did). A task that repeats on set days (weekly on Wednesday, monthly on the 15th) and is ticked early still moves on to its next day: watered on Tuesday for Wednesday, it comes back the Wednesday after. "Every month" from completion comes back a month after you did it, on the last day of a shorter month: paid on 30 January, it is due on 28 February.
 
 ## Reminders
 

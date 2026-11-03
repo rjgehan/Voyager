@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { api, httpEndpoints, installEndpoints } from '../../api/endpoints';
@@ -12,6 +12,7 @@ import CanvasView from './CanvasView';
 import { OBSIDIAN_SAMPLE } from './fixtures.test-data';
 
 let vault: MockVault;
+let controls: { latency: number; failures: never[] };
 
 beforeAll(() => {
   // jsdom lays nothing out: give elements a size so the board fits and culls as in a browser.
@@ -37,7 +38,8 @@ function setupVault(): void {
   vault = new MockVault(false);
   vault.createFile({ path: 'Projects/Plan.md', content: '# Plan\n\nThe plan.\n' }, 'other-device-1');
   vault.createFile({ path: 'Board.canvas', content: OBSIDIAN_SAMPLE }, 'other-device-1');
-  installEndpoints(createMockEndpoints(vault, { latency: 0, failures: [] }));
+  controls = { latency: 0, failures: [] };
+  installEndpoints(createMockEndpoints(vault, controls));
 }
 
 function renderWithApp(ui: React.ReactNode) {
@@ -61,23 +63,20 @@ describe('CanvasView', () => {
     expect(container.querySelectorAll('.canvas-edge')).toHaveLength(2);
     expect(screen.getByText('see also')).toBeInTheDocument();
 
+    // A slow server (300 to 700 ms a request): the test waits for the save, not for a fixed time.
+    controls.latency = 500;
     fireEvent.click(screen.getByRole('button', { name: 'Add card' }));
     await waitFor(() => expect(container.querySelectorAll('[data-node-id]')).toHaveLength(6));
     expect(container.querySelector('.canvas-card-editor')).not.toBeNull();
-    await act(async () => {
-      await new Promise((r) => setTimeout(r, 1200));
-    });
+    // The save lands about a second later (the autosave debounce) plus the request.
+    await waitFor(() => expect(JSON.parse(vault.readFile('Board.canvas').content).nodes).toHaveLength(6), { timeout: 5000 });
     const saved = JSON.parse(vault.readFile('Board.canvas').content) as { nodes: Array<{ type: string; text?: string }>; metadata: unknown };
-    expect(saved.nodes).toHaveLength(6);
     expect(saved.nodes[5]).toMatchObject({ type: 'text', text: '' });
     // Unknown top-level data survived.
     expect(saved.metadata).toEqual({ version: '1.0-1.0', frontmatter: {} });
 
     fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
-    await act(async () => {
-      await new Promise((r) => setTimeout(r, 1200));
-    });
-    expect(vault.readFile('Board.canvas').content).toBe(OBSIDIAN_SAMPLE);
+    await waitFor(() => expect(vault.readFile('Board.canvas').content).toBe(OBSIDIAN_SAMPLE), { timeout: 5000 });
   });
 
   it('offers to edit the file as text when it is not a canvas', async () => {

@@ -103,3 +103,40 @@ describe('script host: escapes (security re-test)', () => {
     expect(seen).toEqual([]);
   });
 });
+
+// GET /api/notes/query answers at most 2,000 notes in path order (API §40.1); a query runs its
+// WHERE, SORT and LIMIT on those, so a cut list is said, not hidden.
+describe('script host: a query over more notes than the endpoint returns', () => {
+  const many: QueriedNote[] = Array.from({ length: 2001 }, (_, i) => ({
+    path: `N/${String(i).padStart(4, '0')}.md`,
+    title: String(i).padStart(4, '0'),
+    aliases: [],
+    tags: [],
+    frontmatter: null,
+    mtime: i === 2000 ? '2026-11-01T00:00:00Z' : '2026-01-01T00:00:00Z',
+    size: 1,
+    links: [],
+    tasks: i === 2000 ? [{ line: 0, status: ' ', done: false, text: 'late task' }] : [],
+  }));
+  // As the server does: path order, the first `limit` (500 by default), total and truncated.
+  const server = deps({
+    queryNotes: async (f) => {
+      const limit = f.limit ?? 500;
+      const notes = many.slice(0, limit).map((n) => (f.tasks ? n : { ...n, tasks: null }));
+      return { notes, total: many.length, truncated: many.length > limit };
+    },
+  });
+
+  it('says that only the first 2,000 notes were searched', async () => {
+    const r = await runScript(`show(query(${JSON.stringify('TABLE file.mtime AS "Modified"\nSORT file.mtime DESC\nLIMIT 10')}))`, server);
+    expect(r.error).toBeNull();
+    expect(r.notices).toEqual(['Only the first 2,000 of 2,001 notes (in path order) were searched: narrow the query with FROM.']);
+    const t = await runScript('show(query("TASK WHERE !completed")); show(query("LIST"))', server);
+    expect(t.notices).toHaveLength(1);
+  });
+
+  it('says nothing when every note was searched', async () => {
+    const r = await runScript('show(query("LIST"))', deps());
+    expect(r.notices).toEqual([]);
+  });
+});

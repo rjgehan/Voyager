@@ -11,6 +11,7 @@ const {
   Menu,
   Notification,
   Tray,
+  dialog,
   globalShortcut,
   ipcMain,
   nativeImage,
@@ -33,6 +34,7 @@ const {
 const { restoreBounds, snapshot, captureBounds } = require('./windowState');
 const { windowTitle, isConnectionState } = require('./title');
 const { useUserData } = require('./userData');
+const { decideUnload, UNLOAD_PROMPT } = require('./unload');
 
 const APP_ID = 'com.rjgehan.notesapp.desktop';
 const PAGES_DIR = path.join(__dirname, 'pages');
@@ -241,11 +243,8 @@ function installIpc() {
     if (!fromApp(event) || !mainWindow || event.sender !== mainWindow.webContents || !isConnectionState(state)) return;
     connection = state;
     updateTitle();
-    if (!bridgeReady) {
-      // The page's bridge reports its state once it is listening: send what was waiting.
-      bridgeReady = true;
-      for (const cmd of pendingCommands.splice(0)) mainWindow.webContents.send('app:command', cmd);
-    }
+    // The page's bridge reports its state once it is listening: send what was waiting.
+    if (!bridgeReady) markBridgeReady();
   });
 
   ipcMain.on('app:notify', (event, n) => {
@@ -265,6 +264,18 @@ function installIpc() {
 }
 
 // ---------------------------------------------------------------- main window
+
+/** Asks over the window, or on its own while the window sits hidden in the tray (tray › Reload). */
+function askUnload() {
+  const options = { ...UNLOAD_PROMPT, buttons: [...UNLOAD_PROMPT.buttons] };
+  return mainWindow && mainWindow.isVisible() ? dialog.showMessageBoxSync(mainWindow, options) : dialog.showMessageBoxSync(options);
+}
+
+function markBridgeReady() {
+  bridgeReady = true;
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  for (const cmd of pendingCommands.splice(0)) mainWindow.webContents.send('app:command', cmd);
+}
 
 function workAreas() {
   const primary = screen.getPrimaryDisplay();
@@ -306,6 +317,17 @@ function createMainWindow({ show }) {
   });
   wc.on('did-start-navigation', (details) => {
     if (details.isMainFrame && !details.isSameDocument) bridgeReady = false;
+  });
+  // The page refused to unload (a note has unsaved changes): Quit goes ahead, anything else asks.
+  // Without this Electron cancels it silently, so Quit, Reload and a server change did nothing.
+  wc.on('will-prevent-unload', (e) => {
+    const choice = decideUnload({ quitting, ask: () => askUnload() });
+    if (choice === 'leave') {
+      e.preventDefault();
+    } else if (!bridgeReady) {
+      // The page stays, and its bridge is listening (it reported before it could refuse).
+      markBridgeReady();
+    }
   });
   wc.on('did-fail-load', (_e, code, description, url, isMainFrame) => {
     if (!isMainFrame || code === ERR_ABORTED || !isServerUrl(url, serverOrigin())) return;
@@ -470,6 +492,8 @@ function createCaptureWindow() {
   wc.on('will-navigate', (e, url) => {
     if (leaveCapture(url)) e.preventDefault();
   });
+  // Hiding reloads a fresh form and discards an unsent draft by design: never held up.
+  wc.on('will-prevent-unload', (e) => e.preventDefault());
   wc.on('before-input-event', (_e, input) => {
     if (input.type === 'keyDown' && input.key === 'Escape' && !input.control && !input.meta && !input.alt && !input.shift) hideCapture();
   });

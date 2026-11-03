@@ -18,7 +18,7 @@ export const SHEET_VERSION = 2;
  * The engine whose results new files carry. engine.test.ts checks it against the running
  * HyperFormula, so an engine upgrade cannot slip in without updating it.
  */
-export const SHEET_ENGINE = 'hyperformula@3.4.0';
+export const SHEET_ENGINE = 'hyperformula@3.5.0';
 
 export type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 /** Keys this version does not know (or values it cannot use), kept and written back verbatim. */
@@ -346,9 +346,12 @@ export function freeSheetName(wanted: string, taken: ReadonlyArray<{ name: strin
   }
 }
 
-/** A sheet name as written in a formula: quoted unless it is a plain identifier. */
+/**
+ * A sheet name as written in a formula: quoted unless it is a plain identifier (letters, digits and
+ * `_`; the engine cannot read `Sales.2026!B1`, only `'Sales.2026'!B1`).
+ */
 export function formulaSheetName(name: string): string {
-  return /^[A-Za-z_][A-Za-z0-9_.]*$/.test(name) && !/^[A-Za-z]{1,3}[0-9]+$/.test(name) ? name : `'${name.replace(/'/g, "''")}'`;
+  return /^[A-Za-z_][A-Za-z0-9_]*$/.test(name) && !/^[A-Za-z]{1,3}[0-9]+$/.test(name) ? name : `'${name.replace(/'/g, "''")}'`;
 }
 
 // ---------- typed input ----------

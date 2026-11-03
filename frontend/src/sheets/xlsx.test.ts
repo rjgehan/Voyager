@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx';
 import { describe, expect, it } from 'vitest';
-import { formulaSheetName, parseSheet, type SheetFile } from './format';
+import { Workbook } from './engine';
+import { cellValue, formulaSheetName, parseSheet, type SheetFile } from './format';
 import { fromExcelFormula, readWorkbook, toExcelFormula, writeWorkbook } from './xlsx';
 
 function file(value: unknown): SheetFile {
@@ -12,7 +13,7 @@ function file(value: unknown): SheetFile {
 const BUDGET = file({
   type: 'notesapp-sheet',
   version: 1,
-  engine: 'hyperformula@3.4.0',
+  engine: 'hyperformula@3.5.0',
   sheets: [
     {
       id: 's1',
@@ -79,9 +80,14 @@ describe('a round trip through .xlsx', () => {
 
   it('keeps array formulas and the values they spill into', () => {
     const [budget] = book.sheets;
-    expect(budget.cells.D1).toEqual({ f: '=SEQUENCE(3)', c: 1 });
+    // Excel stores a spilling formula as an array formula, which comes back inside ARRAYFORMULA
+    // (it computes the same); the formula beside it does not.
+    expect(budget.cells.D1).toEqual({ f: '=ARRAYFORMULA(SEQUENCE(3))', c: 1 });
     expect(budget.cells.D2).toEqual({ c: 2 });
     expect(budget.cells.D3).toEqual({ c: 3 });
+    expect(budget.cells.C2.f).toBe('=TEXTJOIN(", ", TRUE, A1:A3)');
+    const wb = Workbook.open(file({ type: 'notesapp-sheet', version: 1, engine: '', sheets: book.sheets.map((s, i) => ({ id: `s${i + 1}`, ...s })), named: book.named }));
+    expect([1, 2, 3].map((r) => cellValue(wb.cell('s1', `D${r}`)))).toEqual([1, 2, 3]);
   });
 
   it('keeps column widths, row heights and named ranges', () => {
@@ -95,6 +101,61 @@ describe('a round trip through .xlsx', () => {
   it('cuts sheet names to 31 characters and points formulas at the new name', () => {
     expect(book.sheets.map((s) => s.name)).toEqual(['Budget', 'A very long sheet name that Exc', 'Totals']);
     expect(book.sheets[2].cells.A1).toEqual({ f: "='A very long sheet name that Exc'!A1*2", c: 10 });
+  });
+});
+
+describe('array formulas from Excel', () => {
+  const asFile = (book: ReturnType<typeof readWorkbook>) =>
+    file({ type: 'notesapp-sheet', version: 1, engine: '', sheets: book.sheets.map((s, i) => ({ id: `s${i + 1}`, ...s })), named: book.named });
+  /** A workbook as Excel writes legacy {=…} array formulas and Excel 365's dynamic ones. */
+  function excelBook(): Uint8Array {
+    const ws = XLSX.utils.aoa_to_sheet([
+      [1, 4],
+      [2, 5],
+      [3, 6],
+    ]);
+    ws.D1 = { t: 'n', v: 32, f: 'SUM(A1:A3*B1:B3)', F: 'D1:D1' };
+    ws.D5 = { t: 'n', v: 6, f: 'MAX(IF(A1:A3>1,B1:B3))', F: 'D5:D5' };
+    ws.E5 = { t: 'n', v: 32, f: 'SUM(A1:A3*B1:B3)', F: 'E5:E5', D: true };
+    ws.F1 = { t: 'n', v: 4, f: 'A1:A3*B1:B3', F: 'F1:F3', D: true };
+    ws.F2 = { t: 'n', v: 10, F: 'F1:F3' };
+    ws.F3 = { t: 'n', v: 18, F: 'F1:F3' };
+    ws['!ref'] = 'A1:F5';
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Data');
+    return new Uint8Array(XLSX.write(wb, { type: 'array', bookType: 'xlsx' }) as ArrayBuffer);
+  }
+
+  it('imports them as ARRAYFORMULA, as Google Sheets does, so they compute what Excel showed', () => {
+    const book = readWorkbook(excelBook());
+    const cells = book.sheets[0].cells;
+    expect(cells.D1).toEqual({ f: '=ARRAYFORMULA(SUM(A1:A3*B1:B3))', c: 32 });
+    expect(cells.D5).toEqual({ f: '=ARRAYFORMULA(MAX(IF(A1:A3>1,B1:B3)))', c: 6 });
+    expect(cells.E5).toEqual({ f: '=ARRAYFORMULA(SUM(A1:A3*B1:B3))', c: 32 });
+    expect(cells.F1).toEqual({ f: '=ARRAYFORMULA(A1:A3*B1:B3)', c: 4 });
+    expect(cells.F2).toEqual({ c: 10 });
+    const wb = Workbook.open(asFile(book));
+    const value = (ref: string) => cellValue(wb.cell('s1', ref));
+    expect([value('D1'), value('D5'), value('E5'), value('F1'), value('F2'), value('F3')]).toEqual([32, 6, 32, 4, 10, 18]);
+  });
+
+  it('exports ARRAYFORMULA as an Excel array formula, which Excel computes the same', () => {
+    const out = XLSX.read(writeWorkbook(asFile(readWorkbook(excelBook()))), { type: 'array', cellFormula: true });
+    const ws = out.Sheets.Data;
+    expect([ws.D1.f, ws.D1.F]).toEqual(['SUM(A1:A3*B1:B3)', 'D1:D1']);
+    expect([ws.F1.f, ws.F1.F]).toEqual(['A1:A3*B1:B3', 'F1:F3']);
+    // Anywhere in a formula: the whole formula becomes an array formula.
+    const pivot = file({
+      type: 'notesapp-sheet',
+      version: 1,
+      engine: '',
+      sheets: [{ id: 's1', name: 'P', cells: { A1: { f: '=IFERROR(ARRAYFORMULA(AVERAGE(IF(B1:B3>0, B1:B3, ""))), "")', c: 2 }, B1: { v: 2 } } }],
+      named: {},
+    });
+    const cell = XLSX.read(writeWorkbook(pivot), { type: 'array', cellFormula: true }).Sheets.P.A1;
+    expect([cell.f, cell.F]).toEqual(['IFERROR(AVERAGE(IF(B1:B3>0, B1:B3, "")), "")', 'A1:A1']);
+    // Text that only looks like the function is kept.
+    expect(toExcelFormula('="ARRAYFORMULA(x)"&A1')).toBe('"ARRAYFORMULA(x)"&A1');
   });
 });
 

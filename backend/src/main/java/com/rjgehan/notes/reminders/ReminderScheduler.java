@@ -38,6 +38,7 @@ import com.rjgehan.notes.api.dto.TaskReminder;
 import com.rjgehan.notes.api.dto.UpcomingReminder;
 import com.rjgehan.notes.capture.MomentFormat;
 import com.rjgehan.notes.config.NotesProperties;
+import com.rjgehan.notes.config.ServedHost;
 import com.rjgehan.notes.identity.Identity;
 import com.rjgehan.notes.settings.DailyNotesSettings;
 import com.rjgehan.notes.settings.RemindersSettings;
@@ -753,15 +754,14 @@ public class ReminderScheduler implements DisposableBean {
 
 	// ---------------------------------------------------------------- helpers
 
-	/** {@code https://<first allowed host>}, the app's own address, or null without one. */
+	/**
+	 * {@code https://<the host the app is served on>} ({@link ServedHost}: the first allowed host with a dot that is
+	 * not loopback, on its port when it is also listed with one), the app's own address, or null without one.
+	 */
 	static @Nullable String baseUrl(List<String> allowedHosts) {
-		for (String host : allowedHosts) {
-			String h = host.strip();
-			if (!h.isEmpty() && h.contains(".") && !h.startsWith("localhost") && !h.startsWith("127.")) {
-				return "https://" + h;
-			}
-		}
-		return null;
+		String host = ServedHost.of(allowedHosts,
+				(h) -> h.contains(".") && !h.startsWith("localhost") && !h.startsWith("127."));
+		return (host != null) ? "https://" + host : null;
 	}
 
 	static String describe(Exception ex) {

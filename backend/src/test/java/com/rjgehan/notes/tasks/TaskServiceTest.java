@@ -305,6 +305,27 @@ class TaskServiceTest {
 	}
 
 	@Test
+	void aRepeatOnSetDaysFromCompletionTickedEarlyMovesToTheNextOccurrence() throws Exception {
+		Task task = this.fx.create("""
+				{"title": "Water the plants", "due": "2026-11-04", "reminders": [{"at": "2026-11-04T09:00"}],
+				 "recurrence": {"rrule": "FREQ=WEEKLY;BYDAY=WE;COUNT=3", "from": "completion"}}
+				""");
+		Task step = this.fx.create("{\"title\": \"Fill can\", \"parentId\": \"" + task.id() + "\"}");
+		this.fx.tasks.complete(step.id(), null, TestVault.ALICE, TaskFixture.CLIENT);
+		CompleteTaskRequest tuesday = new CompleteTaskRequest(null, "2026-11-03",
+				TaskFixture.json("{\"due\": \"2026-11-04\", \"start\": null}"));
+		TaskWriteResult rolled = this.fx.tasks.complete(task.id(), tuesday, TestVault.ALICE, TaskFixture.CLIENT);
+		assertThat(rolled.rolledForward()).isTrue();
+		assertThat(rolled.task().due()).isEqualTo("2026-11-11");
+		assertThat(rolled.task().reminders()).extracting((r) -> r.at()).containsExactly("2026-11-11T09:00");
+		assertThat(rolled.task().recurrence().rrule()).isEqualTo("FREQ=WEEKLY;BYDAY=WE;COUNT=2");
+		// Another device completing the same occurrence changes nothing.
+		TaskWriteResult again = this.fx.tasks.complete(task.id(), tuesday, TestVault.ALICE, TaskFixture.CLIENT);
+		assertThat(again.rolledForward()).isFalse();
+		assertThat(this.fx.get(task.id()).recurrence().rrule()).isEqualTo("FREQ=WEEKLY;BYDAY=WE;COUNT=2");
+	}
+
+	@Test
 	void theLastOccurrenceClosesTheTask() throws Exception {
 		Task task = this.fx.create("""
 				{"title": "Physio", "due": "2026-10-14", "recurrence": {"rrule": "FREQ=DAILY;COUNT=2"}}
@@ -334,6 +355,21 @@ class TaskServiceTest {
 		assertThat(done.task().due()).isEqualTo("2026-10-14");
 		assertThat(done.task().recurrence().rrule()).isEqualTo("FREQ=DAILY;INTERVAL=0");
 		assertThat(this.fx.read("Tasks/Inbox.tasks")).contains("\"FREQ=DAILY;INTERVAL=0\"");
+	}
+
+	@Test
+	void completingAHandEditedRuleWithATypoOrAnUnreadableEndClosesTheTask() throws Exception {
+		// Lax evaluation would drop THU and move the task to Tuesday 2026-11-10, or ignore UNTIL and repeat forever.
+		for (String rule : List.of("FREQ=WEEKLY;BYDAY=TU,THU", "FREQ=DAILY;UNTIL=2026-11-03")) {
+			Task task = this.fx.create("{\"title\": \"Gym\", \"due\": \"2026-11-04\", \"recurrence\": {\"rrule\": \"FREQ=DAILY\"}}");
+			String file = this.fx.read("Tasks/Inbox.tasks");
+			this.fx.write("Tasks/Inbox.tasks", file.replace("\"FREQ=DAILY\"", "\"" + rule + "\""));
+			TaskWriteResult done = this.fx.tasks.complete(task.id(), new CompleteTaskRequest(null, "2026-11-05", null),
+					TestVault.ALICE, TaskFixture.CLIENT);
+			assertThat(done.rolledForward()).as(rule).isFalse();
+			assertThat(done.task().status()).as(rule).isEqualTo(TaskStatus.DONE);
+			assertThat(done.task().due()).as(rule).isEqualTo("2026-11-04");
+		}
 	}
 
 	// ---------------------------------------------------------------- reorder and delete

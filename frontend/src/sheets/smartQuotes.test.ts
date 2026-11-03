@@ -10,6 +10,18 @@ describe('straightenFormula (iOS Smart Punctuation)', () => {
     expect(straightenFormula(' =„x‟')).toBe(' ="x"');
   });
 
+  it('keeps an apostrophe inside a quoted sheet name (Mom’s), straightening only the name’s own quotes', () => {
+    expect(straightenFormula("='Mom’s'!B3")).toBe("='Mom’s'!B3");
+    expect(straightenFormula('=‘Mom’s’!B2')).toBe("='Mom’s'!B2");
+    expect(straightenFormula("=SUM('Mom’s'!A1:A3)+‘Q1 plan’!B2")).toBe("=SUM('Mom’s'!A1:A3)+'Q1 plan'!B2");
+    // A sheet named Mom’, and a doubled '' inside a name.
+    expect(straightenFormula("='Mom’'!B2")).toBe("='Mom’'!B2");
+    expect(straightenFormula("='It''s ’'!B2")).toBe("='It''s ’'!B2");
+    // While the name is being typed, its closing quote straightens once the ! follows.
+    expect(straightenFormula('=‘My sheet’')).toBe("='My sheet’");
+    expect(straightenFormula('=‘My sheet’!')).toBe("='My sheet'!");
+  });
+
   it('leaves text that is not a formula, and formulas without curly quotes, alone', () => {
     expect(straightenFormula('“Quoted” text')).toBe('“Quoted” text');
     expect(straightenFormula('=A1&"x"')).toBe('=A1&"x"');

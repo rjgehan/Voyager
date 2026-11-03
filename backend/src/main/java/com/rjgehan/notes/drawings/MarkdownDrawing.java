@@ -16,9 +16,10 @@ import org.jspecify.annotations.Nullable;
  * {@code json} or {@code compressed-json} (lz-string base64) block, and which elements the Markdown before it already
  * describes. The plugin writes each text element as a {@code text ^id} entry under {@code ## Text Elements} and each
  * element link as an {@code id: link} line under {@code ## Element Links}; when it loads a drawing, those entries take
- * priority over the JSON, and JSON elements without one are added to them.
+ * priority over the JSON, and JSON elements without one are added to them. {@code textBody} is the Text Elements
+ * section's body ({@code ""} without one), read into entries by {@link #texts(Set)} with the scene's element ids.
  */
-public record MarkdownDrawing(String json, Map<String, String> texts, Set<String> linkIds) {
+public record MarkdownDrawing(String json, String textBody, Set<String> linkIds) {
 
 	/**
 	 * Larger blocks are not decompressed: lz-string can expand crafted input quadratically, and a real drawing of
@@ -77,14 +78,14 @@ public record MarkdownDrawing(String json, Map<String, String> texts, Set<String
 		if (json == null || (compressed && json.isEmpty())) {
 			return null;
 		}
-		Map<String, String> texts = new HashMap<>();
+		String textBody = "";
 		Set<String> linkIds = new HashSet<>();
 		StringBuilder before = new StringBuilder();
 		boolean textSection = false;
 		int textStart = -1;
 		for (int i = 0; i < heading; i++) {
 			if (textStart >= 0 && TEXT_SECTION_END.matcher(lines[i]).matches()) {
-				readTexts(before.substring(textStart), texts);
+				textBody = before.substring(textStart);
 				textStart = -1;
 			}
 			before.append(lines[i]).append('\n');
@@ -94,23 +95,37 @@ public record MarkdownDrawing(String json, Map<String, String> texts, Set<String
 			}
 		}
 		if (textStart >= 0) {
-			readTexts(before.substring(textStart), texts);
+			textBody = before.substring(textStart);
 		}
 		Matcher link = LINK_LINE.matcher(before);
 		while (link.find()) {
 			linkIds.add(link.group(1));
 		}
-		return new MarkdownDrawing(json, Map.copyOf(texts), Set.copyOf(linkIds));
+		return new MarkdownDrawing(json, textBody, Set.copyOf(linkIds));
 	}
 
-	/** The {@code text ^id} entries of a Text Elements section body, by id. */
-	private static void readTexts(String body, Map<String, String> texts) {
+	/**
+	 * The {@code text ^id} entries of the Text Elements section, by id. A text's own line that ends like an entry
+	 * ({@code Call the plumber ^tomorrow}) does not end it: only one of {@code elementIds} does, or an id followed by a
+	 * blank line or the end of the section, as entries are written.
+	 */
+	public Map<String, String> texts(Set<String> elementIds) {
+		Map<String, String> texts = new HashMap<>();
+		String body = this.textBody;
 		Matcher entry = TEXT_ID.matcher(body);
 		int from = 0;
-		while (entry.find()) {
+		int search = 0;
+		while (search <= body.length() && entry.find(search)) {
+			if (!elementIds.contains(entry.group(1)) && entry.end() < body.length() && !entry.group().contains("\n\n")) {
+				// Part of the text: look on from the next character (the next match may start inside this one).
+				search = entry.start() + 1;
+				continue;
+			}
 			texts.putIfAbsent(entry.group(1), body.substring(from, entry.start()));
 			from = entry.end();
+			search = from;
 		}
+		return Map.copyOf(texts);
 	}
 
 }
