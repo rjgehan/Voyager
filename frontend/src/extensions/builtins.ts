@@ -49,7 +49,7 @@ import { getCommand, setViewCommandSource } from '../features/commands';
 import { registerReminders } from '../features/reminders/register';
 import { isDailyNote, openAdjacentDailyNote, openTodaysDailyNote } from '../features/daily';
 import { toastError } from '../features/errors';
-import { copyLink, createNote, downloadFile, nameWithExtension, newNoteFolder, renameEntry, validateNewName } from '../features/fileOps';
+import { copyLink, createNote, downloadFile, nameWithExtension, renameEntry, validateNewName } from '../features/fileOps';
 import { navigateTo, openSearch } from '../features/navigation';
 import { mirrorConfigured, pushMirrorNow } from '../features/mirror';
 import { toggleSourceMode } from '../features/noteMode';
@@ -132,7 +132,7 @@ function registerCreateCommands(): void {
       id: `file.new.${d.id}`,
       name: `Create new ${create.label}`,
       icon: d.icon,
-      run: (c) => createNote(newNoteFolder(c.activePath), create.initialContent(), create.extension, create.label),
+      run: (c) => createNote({ from: c.activePath }, create.initialContent(), create.extension, create.label),
     });
   }
 }
@@ -246,7 +246,7 @@ export function registerBuiltins(): void {
   registerCommand({ id: 'capture.quick', name: 'Quick capture', hotkey: 'Mod-Shift-Space', globalHotkey: true, icon: Inbox, run: () => useUi.getState().setOverlay('capture') });
 
   // ---------- files ----------
-  registerCommand({ id: 'file.newNote', name: 'Create new note', hotkey: 'Mod-Alt-n', icon: FilePlus, run: (c) => createNote(newNoteFolder(c.activePath)) });
+  registerCommand({ id: 'file.newNote', name: 'Create new note', hotkey: 'Mod-Alt-n', icon: FilePlus, run: (c) => createNote({ from: c.activePath }) });
   registerCommand({ id: 'file.newNoteFromTemplate', name: 'Create new note from template', icon: LayoutTemplate, run: () => useUi.getState().setOverlay('templates-new') });
   registerCommand({ id: 'file.newFolder', name: 'Create new folder', run: (c) => promptNewFolder(c.activePath ? folderOf(c.activePath) : '') });
   registerCommand({ id: 'file.rename', name: 'Rename current file', hotkey: 'F2', when: hasFile, run: (c) => renameCurrent(c.activePath!) });

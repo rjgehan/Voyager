@@ -5,7 +5,7 @@ import { LayoutTemplate } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useTemplates } from '../../api/hooks';
 import type { TemplateEntry } from '../../api/types';
-import { createNote, newNoteFolder } from '../../features/fileOps';
+import { createNote } from '../../features/fileOps';
 import { clearTemplatePickerFolder, templatePickerFolder } from '../../features/folderTemplates';
 import { fuzzyRank } from '../../features/fuzzy';
 import { activePath } from '../../features/navigation';
@@ -37,7 +37,7 @@ export function TemplatePicker({ mode }: { mode: 'insert' | 'new' }) {
       // template follow. Rendered once the note has its name too, so {{title}} is the title the
       // user types.
       createNote(
-        inFolder ?? newNoteFolder(target),
+        inFolder ?? { from: target },
         loadTemplates().then((m) => m.templateRenderer(t.path)),
       );
       return;

@@ -3106,6 +3106,8 @@ The version view of §6.11 also gains **Compare with**: in the History panel it 
 4. Otherwise render the template, if one is configured, with `title` set to the last segment of `name`, after asking its questions (cancelling creates nothing).
 5. `POST /api/files {path, content, onConflict:"fail"}`. Both 201 and 409 lead to opening the note; a note it created opens with the caret at the template's `{{cursor}}`.
 
+**Settings first.** Commands that create files read the vault’s settings through `settingsReady()` (`api/hooks.ts`), never the defaults that `currentSettings()` returns before `GET /api/settings` has answered: Today and the calendar (the daily folder, format and template), New note and the other new files from the palette, the ribbon, the tray and the template picker (`createNote({ from })`, the configured new-note location seen from the open file), the quick switcher’s Create, a link to a missing note (`createPath`), and every folder template. Without loaded settings it makes one request (no retries, at most 10 s); when that fails the command shows the offline toast and creates nothing. It used to put the file at the default place: an empty `Daily/2026-11-02.md` next to the real daily note (the desktop tray’s *Open today’s note* is delivered before any request answers), or `Untitled.md` at the root without the folder template. Offline, Today therefore says "You’re offline"; the settings are not kept on the device, so it cannot find today’s note in the snapshot.
+
 **Insert template** (palette, ribbon, mobile ⋯):
 
 1. A picker over `GET /api/templates` (fuzzy).

@@ -2,7 +2,7 @@
 // the configured template when missing; previous and next by strict date parsing of note names.
 import { isProblem } from '../api/client';
 import { api } from '../api/endpoints';
-import { currentSettings, currentTree } from '../api/hooks';
+import { currentSettings, currentTree, settingsReady } from '../api/hooks';
 import { queryClient } from '../api/queryClient';
 import type { DailyNotesSettings, FileEntry } from '../api/types';
 import { findFileIgnoreCase, type VaultTree } from '../api/vaultTree';
@@ -81,7 +81,14 @@ export function openTodaysDailyNote(now: Dayjs = dayjs()): Promise<boolean> {
  * the template renders that day, at the current time of day.
  */
 export async function openDailyNote(day: Dayjs): Promise<boolean> {
-  const s = currentSettings().dailyNotes;
+  let s: DailyNotesSettings;
+  try {
+    // Before the settings have loaded, the defaults would miss the vault's own daily note.
+    s = (await settingsReady()).dailyNotes;
+  } catch (e) {
+    toastError(e);
+    return false;
+  }
   const now = atTimeOf(day, dayjs());
   const name = dailyNoteName(s, now);
   const path = joinPath(s.folder, name + '.md');

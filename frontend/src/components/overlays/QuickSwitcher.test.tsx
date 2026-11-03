@@ -11,6 +11,7 @@ import { registerBuiltins } from '../../extensions/builtins';
 import { setNavigator } from '../../features/navigation';
 import { basenameOf, extensionOf, lastSegment } from '../../features/paths';
 import { recordOpened } from '../../features/recent';
+import { DEFAULT_SETTINGS } from '../../features/settings';
 import { switcherItems } from '../../features/switcher';
 import { useUi } from '../../state/ui';
 import { QuickSwitcher } from './QuickSwitcher';
@@ -41,6 +42,8 @@ const navigate = vi.fn();
 beforeEach(() => {
   registerBuiltins();
   queryClient.setQueryData(queryKeys.tree(), TREE);
+  // Loaded settings (creating a note waits for them, never using the defaults before they answer).
+  queryClient.setQueryData(queryKeys.settings(), { settings: DEFAULT_SETTINGS, version: 'v1', readOnly: false });
   setNavigator(navigate);
   navigate.mockClear();
   useUi.setState({ overlay: 'switcher' });
