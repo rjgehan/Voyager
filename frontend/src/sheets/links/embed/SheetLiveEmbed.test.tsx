@@ -4,7 +4,7 @@
 // sheets and charts, and a spreadsheet that reads notes.
 import { QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { httpEndpoints, installEndpoints } from '../../../api/endpoints';
 import { MockVault } from '../../../api/mock/vault';
 import { queryClient } from '../../../api/queryClient';
@@ -196,6 +196,35 @@ describe('a spreadsheet embedded in a note that can be written', () => {
     fireEvent.keyDown(input, { key: 'Enter', altKey: true });
     expect(input.value).toBe('Groceries\n');
     expect(input.hidden).toBe(false);
+  });
+
+  it('does not serialize the workbook to draw itself once it has been edited', async () => {
+    const engine = await loadSheetEngine();
+    const spy = vi.spyOn(engine.Workbook.prototype, 'serialize');
+    try {
+      const path = newFile();
+      const { container } = show(path);
+      await waitFor(() => expect(cell(container, 'B3').textContent).toBe('300'));
+      fireEvent.doubleClick(cell(container, 'B3'));
+      const input = screen.getByRole('textbox', { name: 'Cell' }) as HTMLTextAreaElement;
+      fireEvent.change(input, { target: { value: '500' } });
+      fireEvent.keyDown(input, { key: 'Enter' });
+      await waitFor(() => expect(cell(container, 'B4').textContent).toBe('1950'));
+      await waitFor(() => expect(saved(path).B3.v).toBe(500), { timeout: 4000 });
+      await waitFor(() => expect(documents.get(path)!.currentStatus).toBe('clean'));
+      // A second edit: drawing it serializes nothing (only the save and the draft do, later).
+      fireEvent.doubleClick(cell(container, 'B2'));
+      fireEvent.change(input, { target: { value: '1500' } });
+      spy.mockClear();
+      fireEvent.keyDown(input, { key: 'Enter' });
+      expect(cell(container, 'B4').textContent).toBe('2000');
+      expect(spy).not.toHaveBeenCalled();
+      await waitFor(() => expect(saved(path).B2.v).toBe(1500), { timeout: 4000 });
+      await waitFor(() => expect(documents.get(path)!.currentStatus).toBe('clean'));
+      expect(spy.mock.calls.length).toBeLessThanOrEqual(2);
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it('types over a selected cell, cancels with Escape, and undoes from the toolbar', async () => {

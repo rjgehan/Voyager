@@ -55,9 +55,12 @@ function LiveEmbed(props: EmbedProps) {
   // The workbook is needed once a cell is touched, or at once when it is already open (the
   // spreadsheet is shown elsewhere) or reads notes.
   const [wanted, setWanted] = useState(() => binding.getSnapshot().kind === 'ready');
-  const text = snapshot.loaded ? session.getText() : null;
+  // Once the workbook is ready it is the model: the session's text (which serializes the whole
+  // workbook once it has been edited) is read and parsed only until then.
+  const ready = binding.getSnapshot().kind === 'ready';
+  const text = snapshot.loaded && !ready ? session.getText() : null;
   const parsed = useMemo(() => (text === null ? null : parseSheet(text)), [text]);
-  const active = wanted || (parsed?.ok === true && readsNotes(parsed.file));
+  const active = wanted || ready || (parsed?.ok === true && readsNotes(parsed.file));
   const doc = useSyncExternalStore(active ? binding.subscribe : noSubscribe, active ? binding.getSnapshot : noSnapshot);
 
   const workbook = doc?.kind === 'ready' ? doc.workbook : null;
