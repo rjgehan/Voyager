@@ -172,6 +172,32 @@ describe('a spreadsheet embedded in a note that can be written', () => {
     await waitFor(() => expect(cell(container, 'A3').textContent).toBe('Food'));
   });
 
+  it('keeps a cell’s line breaks: leaving it untouched writes nothing, and an edit keeps them', async () => {
+    const content = structuredClone(BUDGET);
+    (content.sheets[0].cells as Record<string, unknown>).A2 = { v: '12 Main St\nSpringfield' };
+    const path = newFile(content);
+    const { container } = show(path);
+    await waitFor(() => expect(cell(container, 'B3').textContent).toBe('300'));
+    fireEvent.doubleClick(cell(container, 'A2'));
+    const input = screen.getByRole('textbox', { name: 'Cell' }) as HTMLTextAreaElement;
+    expect(input.value).toBe('12 Main St\nSpringfield');
+    fireEvent.keyDown(input, { key: 'Enter' });
+    fireEvent.doubleClick(cell(container, 'A3'));
+    fireEvent.change(input, { target: { value: 'Groceries' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() => expect(saved(path).A3.v).toBe('Groceries'), { timeout: 4000 });
+    expect(saved(path).A2.v).toBe('12 Main St\nSpringfield');
+    fireEvent.doubleClick(cell(container, 'A2'));
+    fireEvent.change(input, { target: { value: input.value + '!' } });
+    fireEvent.keyDown(input, { key: 'Tab' });
+    await waitFor(() => expect(saved(path).A2.v).toBe('12 Main St\nSpringfield!'), { timeout: 4000 });
+    // Alt+Enter adds a line break instead of committing.
+    fireEvent.doubleClick(cell(container, 'A3'));
+    fireEvent.keyDown(input, { key: 'Enter', altKey: true });
+    expect(input.value).toBe('Groceries\n');
+    expect(input.hidden).toBe(false);
+  });
+
   it('types over a selected cell, cancels with Escape, and undoes from the toolbar', async () => {
     const path = newFile();
     const { container } = show(path);

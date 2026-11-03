@@ -881,6 +881,26 @@ describe('number formats, charts, import and export (6b, 6c)', () => {
 });
 
 describe('editing while another device edits', () => {
+  it('keeps a cell’s line breaks when it is edited in the formula bar, and Alt+Enter adds one', async () => {
+    const content = structuredClone(BUDGET);
+    (content.sheets[0].cells as Record<string, unknown>).A2 = { v: '12 Main St\nSpringfield' };
+    const path = await openGrid(content);
+    select(0, 0); // A2
+    fireEvent.focus(formulaInput());
+    expect(formulaInput().value).toBe('12 Main St\nSpringfield');
+    fireEvent.change(formulaInput(), { target: { value: formulaInput().value + '!' } });
+    fireEvent.keyDown(formulaInput(), { key: 'Enter' });
+    expect((await saved(path)).sheets[0].cells.A2).toEqual({ v: '12 Main St\nSpringfield!' });
+    // Alt+Enter puts a line break at the caret instead of committing.
+    select(0, 1); // A3, Food
+    fireEvent.focus(formulaInput());
+    formulaInput().setSelectionRange(2, 2);
+    fireEvent.keyDown(formulaInput(), { key: 'Enter', altKey: true });
+    expect(formulaInput().value).toBe('Fo\nod');
+    fireEvent.keyDown(formulaInput(), { key: 'Enter' });
+    expect((await saved(path)).sheets[0].cells.A3).toEqual({ v: 'Fo\nod' });
+  });
+
   it('writes nothing from an untouched formula bar, even after another device changed the cell', async () => {
     const path = await openGrid();
     select(1, 0); // B2, 1450

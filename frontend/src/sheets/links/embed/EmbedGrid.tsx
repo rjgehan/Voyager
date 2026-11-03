@@ -83,7 +83,8 @@ export function EmbedGrid(props: Props) {
   const frame = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const table = useRef<HTMLTableElement>(null);
-  const input = useRef<HTMLInputElement>(null);
+  /** The cell editor: a one-row textarea, so a cell's line breaks survive an edit. */
+  const input = useRef<HTMLTextAreaElement>(null);
   const [sheetChoice, setSheetChoice] = useState<string | null>(null);
   const [chosen, setActive] = useState<At>({ col: 0, row: 0 });
   const [chosenAnchor, setAnchor] = useState<At>({ col: 0, row: 0 });
@@ -331,10 +332,14 @@ export function EmbedGrid(props: Props) {
     }
   };
 
-  const onInputKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+  const onInputKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     e.stopPropagation();
     if (e.nativeEvent.isComposing) return;
-    if (e.key === 'Enter') {
+    if (e.key === 'Enter' && (e.altKey || e.ctrlKey || e.metaKey)) {
+      // A line break inside the cell, as in Google Sheets.
+      e.preventDefault();
+      e.currentTarget.setRangeText('\n', e.currentTarget.selectionStart, e.currentTarget.selectionEnd, 'end');
+    } else if (e.key === 'Enter') {
       e.preventDefault();
       commit(e.shiftKey ? 'up' : 'down');
     } else if (e.key === 'Tab') {
@@ -502,9 +507,10 @@ export function EmbedGrid(props: Props) {
           </tbody>
         </table>
         {editable && (
-          <input
+          <textarea
             ref={input}
             className="sheet-live-input"
+            rows={1}
             hidden
             aria-label="Cell"
             autoComplete="off"

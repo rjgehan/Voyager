@@ -12,7 +12,7 @@ You can also start from a file: **Import spreadsheet from CSV or Excel…** in t
 
 ## Enter data
 
-- **Computer**: click a cell and start typing, or double-click it (or press `Enter` or `F2`) to change what is there. `Enter` saves and moves down, `Tab` moves right, `Esc` cancels.
+- **Computer**: click a cell and start typing, or double-click it (or press `Enter` or `F2`) to change what is there. `Enter` saves and moves down, `Tab` moves right, `Esc` cancels. `Alt+Enter` starts a new line inside the cell.
 - **Phone**: tap a cell to select it, and tap it again to type. You type in the **formula bar** above the grid; `Enter` saves and moves to the next cell with the keyboard still up.
 - **Delete** clears the selected cells.
 - Typing `$1,450`, `12%` or a date such as `2026-10-17` or `10/17/2026` stores the number and gives the cell the matching format. Dates are read month first, in formulas too: `=COUNTIF(A:A, ">=10/1/2026")` counts from October 1.

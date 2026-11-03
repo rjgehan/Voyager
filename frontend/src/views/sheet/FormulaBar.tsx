@@ -3,7 +3,8 @@
 // down, Tab right (Shift the other way), Esc reverts; leaving the field commits. Only a changed
 // draft is written: a draft left untouched (the field focused to read it) writes nothing, and
 // follows its cell when another device changes it. On a phone this is where cells are edited, at a
-// 16 px font so iOS does not zoom.
+// 16 px font so iOS does not zoom. The field is a one-row textarea, so a cell's line breaks survive
+// an edit (an input would drop them); Alt+Enter (or Ctrl or Cmd+Enter) adds one, as in Google Sheets.
 import { SquareFunction } from 'lucide-react';
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type KeyboardEvent } from 'react';
 import type { CellAt } from './gridModel';
@@ -18,7 +19,7 @@ export interface FormulaBarHandle {
   edit(target: EditTarget, text: string, initial?: string): void;
   isEditing(): boolean;
   /** The field, while it edits a cell (pointing at cells inserts references into it). */
-  editingInput(): HTMLInputElement | null;
+  editingInput(): HTMLTextAreaElement | null;
 }
 
 interface Props {
@@ -42,7 +43,7 @@ interface Props {
 }
 
 export const FormulaBar = forwardRef<FormulaBarHandle, Props>(function FormulaBar({ label, active, sheet, text, editable, touch, error, onCommit, onCancel, onGoTo }, ref) {
-  const input = useRef<HTMLInputElement>(null);
+  const input = useRef<HTMLTextAreaElement>(null);
   /** The edit: its cell, its text, and the cell's text when it started. */
   const [draft, setDraft] = useState<{ target: EditTarget; value: string; start: string } | null>(null);
   // Kept in step by begin() and commit(): handlers read it before React re-renders.
@@ -86,9 +87,20 @@ export const FormulaBar = forwardRef<FormulaBarHandle, Props>(function FormulaBa
     if (changed || move !== 'none') onCommit(d.target, d.value, move, changed);
   };
 
-  const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+  const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.nativeEvent.isComposing) return;
-    if (e.key === 'Enter') {
+    if (e.key === 'Enter' && (e.altKey || e.ctrlKey || e.metaKey)) {
+      // A line break inside the cell.
+      e.preventDefault();
+      const d = draftRef.current;
+      if (!d) return;
+      const el = e.currentTarget;
+      const at = el.selectionStart;
+      const value = el.value.slice(0, at) + '\n' + el.value.slice(el.selectionEnd);
+      el.value = value;
+      el.setSelectionRange(at + 1, at + 1);
+      begin(d.target, value, d.start);
+    } else if (e.key === 'Enter') {
       e.preventDefault();
       commit(e.shiftKey ? 'up' : 'down');
     } else if (e.key === 'Tab') {
@@ -151,9 +163,10 @@ export const FormulaBar = forwardRef<FormulaBarHandle, Props>(function FormulaBa
         }}
       />
       <SquareFunction className="sheet-fx" size={16} aria-hidden />
-      <input
+      <textarea
         ref={input}
         className="sheet-formula-input"
+        rows={1}
         aria-label={`Contents of ${label}`}
         value={shown}
         readOnly={!editable}
