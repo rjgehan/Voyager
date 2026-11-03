@@ -498,6 +498,34 @@ if [ -e /usr/share/zoneinfo/America/New_York ]; then
 	expect_next 1793523600 1793610000 # Sun 04:00 EST -> Mon 04:00 EST
 fi
 
+# New York's rules as a POSIX TZ string, so these run without zoneinfo too.
+for zone in "EST5EDT,M3.2.0,M11.1.0" America/New_York; do
+	case $zone in */*) [ -e "/usr/share/zoneinfo/$zone" ] || continue ;; esac
+	setup "a run just before the clocks go back is not repeated the same night ($zone)"
+	export TZ=$zone NOTES_BACKUP_TIME=00:30
+	expect_next 1793508000 1793597400 # Sun 2026-11-01 00:40 EDT, after that night's run -> Mon 00:30 EST
+	expect_next 1793509800 1793597400 # Sun 01:10 EDT -> Mon 00:30 EST
+	expect_next 1793505600 1793507400 # Sun 00:00 EDT -> 00:30 EDT the same night
+	setup "the night before the clocks go forward is not skipped ($zone)"
+	export TZ=$zone NOTES_BACKUP_TIME=23:00
+	expect_next 1772943000 1773025200 # Sat 2026-03-07 23:10 EST -> Sun 23:00 EDT, not Monday
+	expect_next 1772942400 1773025200 # Sat 23:00 EST itself -> Sun 23:00 EDT
+	expect_next 1773025200 1773111600 # Sun 23:00 EDT -> Mon 23:00 EDT
+	setup "the next run is always after now ($zone)"
+	export TZ=$zone
+	for t in 00:00 00:30 00:59 01:30 02:30 03:00 04:00 12:00 23:00 23:59; do
+		for now in 1772920800 1772942400 1772946000 1772960400 1772971200 1773025200 1793476800 1793505600 \
+			1793508000 1793509200 1793511000 1793514600 1793599200; do
+			got=$(NOTES_BACKUP_TIME=$t NOTES_BACKUP_NOW=$now $SH "$SCRIPTS/scheduler.sh" next-run 2>/dev/null)
+			if [ -n "$got" ] && [ "$got" -gt "$now" ] && [ "$got" -le $((now + 25 * 3600)) ]; then
+				pass
+			else
+				fail "TIME=$t now=$now: next run $got is not within the next 25 hours"
+			fi
+		done
+	done
+done
+
 rm -rf "$T"
 echo "$PASSED checks passed, $FAILED failed ($SH)"
 [ "$FAILED" -eq 0 ]

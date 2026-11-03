@@ -10,8 +10,8 @@ import org.springframework.stereotype.Component;
 
 /**
  * In-app reminders: a {@code reminder.due} event on the live-sync stream, which every open tab shows as a toast and a
- * browser notification. Accepted when at least one tab is connected, so with every tab closed another route (or the
- * next tick, once a tab is open again) delivers it.
+ * browser notification. Accepted when at least one of the owner's tabs is connected (a family member's share page
+ * does not count), so with every tab closed another route (or the next tick, once a tab is open again) delivers it.
  */
 @Component
 public class InAppRoute implements ReminderRoute {
@@ -37,7 +37,8 @@ public class InAppRoute implements ReminderRoute {
 
 	@Override
 	public Delivery deliver(ReminderMessage message, RemindersSettings settings) {
-		if (this.hub.connectionCount() == 0) {
+		// A guest's share page holds a stream too, but never shows a reminder: only the owner's tabs count.
+		if (this.hub.ownerConnectionCount() == 0) {
 			return Delivery.failed("no NotesApp tab is open");
 		}
 		this.hub.publish(new ReminderDueEvent(message.key(), message.kind(), message.taskId(), message.at(),

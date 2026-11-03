@@ -3268,12 +3268,12 @@ Names are 1 to 200 characters on one line, trimmed. `color` is `#rrggbb` or a lo
 - `INTERVAL`, `BYDAY`, `BYMONTHDAY`, `BYMONTH`, `BYYEARDAY`, `BYWEEKNO`, `BYSETPOS`, `WKST`, `BYHOUR`, `BYMINUTE` (hours and minutes apply only to a task with a time);
 - `COUNT` or `UNTIL` (not both). `COUNT` is the number of occurrences left, including the current one: each roll-forward decreases it, and completing the last one closes the task. `UNTIL` (`YYYYMMDD` or `YYYYMMDDTHHMMSSZ`) is compared by date.
 
-Rules are evaluated on local dates and times, so daylight-saving changes never shift a task. A rule that never produces an occurrence (`FREQ=YEARLY;BYMONTH=2;BYMONTHDAY=30`) is refused with `400`.
+Rules are evaluated on local dates and times, so daylight-saving changes never shift a task. A rule that never produces an occurrence (`FREQ=YEARLY;BYMONTH=2;BYMONTHDAY=30`) is refused with `400`. A `.tasks` file edited by hand can hold a rule outside the subset (no `FREQ` or `FREQ=HOURLY`, `BYDAY=THU`, `BYMONTHDAY=32`, `UNTIL=2026-11-03`, `COUNT` with `UNTIL`, a bad `INTERVAL`): it is served as written with a problem `"recurrence.rrule" cannot repeat: <reason>`, it is never evaluated, and completing the task closes it.
 
 | `from` | The next occurrence is |
 |---|---|
 | `due` | The first occurrence after the task's `due` (else `start`) date that also falls after the completion day. Completing an overdue task therefore skips the occurrences already missed: a weekly Wednesday task three weeks late moves to the next Wednesday. |
-| `completion` | The first occurrence after the completion day, at the task's time if it has one: `FREQ=DAILY;INTERVAL=3` means "three days after I last did it". |
+| `completion` | The first occurrence after the completion day, at the task's time if it has one: `FREQ=DAILY;INTERVAL=3` means "three days after I last did it". A rule on set days (`BYDAY`, `BYMONTHDAY`, `BYMONTH`, `BYYEARDAY`, `BYWEEKNO` or `BYSETPOS`) also skips the occurrences up to the task's `due` (else `start`): `FREQ=WEEKLY;BYDAY=WE` due Wednesday 2026-11-04 and completed the day before moves to 2026-11-11, never to the occurrence being completed. A `MONTHLY` or `YEARLY` rule that takes its day from the start (no `BY…` day parts) lands `INTERVAL` months or years after the completion day, on the month's last day when that month is shorter: `FREQ=MONTHLY` completed on 2026-01-30 gives 2026-02-28 and `FREQ=YEARLY` completed on 2028-02-29 gives 2029-02-28 (RFC 5545 would skip to 2026-03-30 and 2032-02-29). |
 
 Examples, completed on Wednesday 2026-10-14: `FREQ=WEEKLY` from `due` `2026-10-14T08:00` gives `2026-10-21T08:00`; `FREQ=MONTHLY;BYMONTHDAY=-1` from `due` `2026-09-30` gives `2026-10-31`; `FREQ=MONTHLY` from `due` `2026-01-31` skips months without a 31st, as RFC 5545 says.
 
@@ -3646,7 +3646,7 @@ A reminder's `at` is a local date-time with no zone. The server reads it in the 
 
 - `webPush.available` is false, with `reason`, when `<secrets-dir>/push.json` cannot be read or is malformed. `webPush.publicKey` is null until the key pair exists (`POST /api/push/key`).
 - `ntfy.configured` is false, with `reason`, when `<secrets-dir>/ntfy.json` is missing or invalid (the same file as the app alerts, §6.6). `ownTopic` is true when it has `"reminders": {"topic": …}`; otherwise reminders go to its default topic. The topic and token are never shown.
-- `inApp.connections` counts the open event streams.
+- `inApp.connections` counts the owner's open event streams (`GET /api/events`); a guest's share page (§42) is not one.
 
 **`PUT /api/reminders/zone`** `ReminderZoneRequest` → `204`. `400 bad-request` for anything but an IANA zone id (`Europe/Berlin`, `America/New_York`, `UTC`). Clients send it at startup.
 
@@ -3682,7 +3682,7 @@ Both take `ReminderActionRequest` with the `taskId` and `at` of the notification
 
 ### 28.5 `reminder.due`
 
-The in-app route publishes `ReminderDueEvent` on the event stream (§16.4) for each reminder it delivers. It counts as delivered only when at least one stream is connected. Clients show each `key` once (a replay after a reconnect repeats it) and ignore events sent more than 15 minutes ago. `kind` is `task`, `daily` or `test`.
+The in-app route publishes `ReminderDueEvent` on the event stream (§16.4) for each reminder it delivers. It counts as delivered only when at least one of the owner's streams (`GET /api/events`) is connected; a guest's share stream (§42) never carries it and does not count. Clients show each `key` once (a replay after a reconnect repeats it) and ignore events sent more than 15 minutes ago. `kind` is `task`, `daily` or `test`.
 
 ---
 
@@ -4027,9 +4027,9 @@ A text file of the share, exactly as §8.1 (`200 TextFile`, `404 not-found`, `41
 
 ### 42.8 `PUT /api/s/{key}/files?path={path}` and `POST /api/s/{key}/files`
 
-Edit shares only (`403 share-read-only` otherwise), Markdown notes only (`403 share-read-only` for other files). `PUT` saves a note of the share with the version protocol of §4 (`200 WriteResult`, `409 version-conflict` with the current text, `413 too-large`); a note share's note must exist (`404 not-found`: a guest never recreates a deleted shared note). `POST` (`CreateFileRequest`, `Idempotency-Key` honoured) creates a note inside a folder share (`201 WriteResult`, `409 already-exists` unless `onConflict: "rename"`); a note share creates nothing (`403 outside-share`).
+Edit shares only (`403 share-read-only` otherwise), Markdown notes only (`403 share-read-only` for other files). `PUT` saves a note of the share with the version protocol of §4 (`200 WriteResult`, `409 version-conflict` with the current text, `413 too-large`); a conflict's `movedTo` is given only when the note's new path is inside the share, and is `null` when the owner moved it out (the same answer as a deleted note); a note share's note must exist (`404 not-found`: a guest never recreates a deleted shared note). `POST` (`CreateFileRequest`, `Idempotency-Key` honoured) creates a note inside a folder share (`201 WriteResult`, `409 already-exists` unless `onConflict: "rename"`); a note share creates nothing (`403 outside-share`).
 
-**Embeds a guest adds.** The text is scanned, and every embed (`![[…]]`, `![](…)`) whose target as written is not already embedded by the note's current text must resolve inside the share, or to media the share embeds now or did in the last 24 hours. Anything else, an unresolved embed included, answers `403 outside-share` (`path`: the note), whatever exists in the vault; these refusals do not count toward the rate limit. The client keeps the guest's text and saves it again after the next edit (DESIGN §6.48). The commit is the guest's: its author is the guest's Tailscale name and login.
+**Embeds a guest adds.** The text is scanned as the index will read it once written (a text starting with U+FEFF both with and without that character, so frontmatter values count too), and every embed (`![[…]]`, `![](…)`) whose target as written is not already embedded by the note's current text must resolve inside the share, or to media the share embeds now or did in the last 24 hours. Anything else, an unresolved embed included, answers `403 outside-share` (`path`: the note), whatever exists in the vault; these refusals do not count toward the rate limit. The client keeps the guest's text and saves it again after the next edit (DESIGN §6.48). The commit is the guest's: its author is the guest's Tailscale name and login.
 
 Guests have no other write: no delete, move, rename, upload or folder (those are owner endpoints).
 

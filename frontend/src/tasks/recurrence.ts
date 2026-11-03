@@ -14,6 +14,10 @@ const SUPPORTED = new Set<Frequency>([Frequency.YEARLY, Frequency.MONTHLY, Frequ
 /** The parts of the server's subset (Recurrence.PARTS). */
 const PARTS = new Set(['FREQ', 'INTERVAL', 'COUNT', 'UNTIL', 'BYDAY', 'BYMONTHDAY', 'BYMONTH', 'BYYEARDAY', 'BYWEEKNO', 'BYSETPOS', 'WKST', 'BYHOUR', 'BYMINUTE']);
 const FREQUENCIES = new Set(['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY']);
+/** The parts that set the days a rule falls on (Recurrence.SET_DAYS). */
+const SET_DAYS = ['BYDAY', 'BYMONTHDAY', 'BYMONTH', 'BYYEARDAY', 'BYWEEKNO', 'BYSETPOS'];
+/** The parts of a monthly or yearly rule that takes its day of the month from its start (Recurrence.DAY_FROM_START). */
+const DAY_FROM_START = new Set(['FREQ', 'INTERVAL', 'WKST']);
 const NUMBER = /^[1-9][0-9]{0,4}$/;
 const UNTIL = /^(\d{8})(T\d{6}Z?)?$/;
 const MAX_LENGTH = 300;
@@ -141,6 +145,28 @@ function untilDate(value: string): LocalDate | null {
 }
 
 /**
+ * Why a rule is not in the server's subset, or null (Recurrence.ruleProblem): FREQ missing or not
+ * one of the four, a bad INTERVAL or COUNT, COUNT with UNTIL, an UNTIL that is not a date, or a WKST
+ * that is not a weekday. A hand-edited file can hold such a rule: it is shown as written and never
+ * evaluated (an unreadable UNTIL would otherwise mean no end), as on the server. What rrule cannot
+ * parse (`BYDAY=THU`) is caught where it is evaluated.
+ */
+function ruleProblem(parts: ReadonlyMap<string, string>): string | null {
+  const freq = parts.get('FREQ');
+  if (!freq || !FREQUENCIES.has(freq)) return 'FREQ must be DAILY, WEEKLY, MONTHLY or YEARLY';
+  for (const numeric of ['INTERVAL', 'COUNT']) {
+    const value = parts.get(numeric);
+    if (value !== undefined && !NUMBER.test(value)) return `${numeric} must be a whole number from 1 to 99999`;
+  }
+  if (parts.has('COUNT') && parts.has('UNTIL')) return 'COUNT and UNTIL cannot be combined';
+  const until = parts.get('UNTIL');
+  if (until !== undefined && untilDate(until) === null) return 'UNTIL must be a date (YYYYMMDD) or a date-time (YYYYMMDDTHHMMSSZ)';
+  const wkst = parts.get('WKST');
+  if (wkst !== undefined && !(WEEKDAYS as readonly string[]).includes(wkst)) return 'WKST must be a day of the week (MO to SU)';
+  return null;
+}
+
+/**
  * A rule without COUNT and UNTIL (the app handles those), bounded so a rule that never matches cannot
  * spin. Throws for an INTERVAL that is not a positive number (a hand-edited file can hold one): rrule
  * would step through it forever.
@@ -172,15 +198,8 @@ export function validateRule(text: string): { rrule: string } | { error: string 
   } catch (e) {
     return { error: (e as Error).message };
   }
-  const freq = parts.get('FREQ');
-  if (!freq || !FREQUENCIES.has(freq)) return { error: 'FREQ must be DAILY, WEEKLY, MONTHLY or YEARLY' };
-  for (const numeric of ['INTERVAL', 'COUNT']) {
-    const value = parts.get(numeric);
-    if (value !== undefined && !NUMBER.test(value)) return { error: `${numeric} must be a whole number from 1 to 99999` };
-  }
-  if (parts.has('COUNT') && parts.has('UNTIL')) return { error: 'COUNT and UNTIL cannot be combined' };
-  const until = parts.get('UNTIL');
-  if (until !== undefined && untilDate(until) === null) return { error: 'UNTIL must be a date (YYYYMMDD) or a date-time (YYYYMMDDTHHMMSSZ)' };
+  const problem = ruleProblem(parts);
+  if (problem !== null) return { error: problem };
   try {
     const probe = utcOf('2026-01-01');
     const rule = evaluator(parts, probe, false);
@@ -344,7 +363,10 @@ export function ruleFromDraft(d: RuleDraft): string {
 /**
  * The occurrence after the one being completed, mirrored from the server (API.md §20.6,
  * `Recurrence.next`): null when the rule has no more (the task closes), undefined when the rule
- * cannot be evaluated here. `anchor` is the due date, else the start date.
+ * cannot be evaluated here. `anchor` is the due date, else the start date. A rule on set days
+ * counted from completion never lands on or before the anchor (ticked early, it moves on). A
+ * monthly or yearly rule that takes its day from its start, counted from completion, lands a month
+ * or a year after the completion day, on the month's last day when it is shorter.
  */
 export function nextOccurrence(rrule: string, from: 'due' | 'completion', anchor: TaskDate | null, completionDay: LocalDate): { value: TaskDate; rrule: string } | null | undefined {
   let parts: Map<string, string>;
@@ -353,7 +375,7 @@ export function nextOccurrence(rrule: string, from: 'due' | 'completion', anchor
   } catch {
     return undefined;
   }
-  if (!FREQUENCIES.has(parts.get('FREQ') ?? '')) return undefined;
+  if (ruleProblem(parts) !== null) return undefined;
   const countValue = parts.get('COUNT');
   const count = countValue !== undefined ? Number(countValue) : null;
   if (count !== null && count <= 1) return null;
@@ -362,10 +384,21 @@ export function nextOccurrence(rrule: string, from: 'due' | 'completion', anchor
   const timed = anchor !== null && anchor.length > 10;
   const fromDue = from === 'due' && anchor !== null;
   const start = utcOf(fromDue ? anchor : timed ? `${completionDay}T${timePart(anchor)}` : completionDay);
+  const freq = parts.get('FREQ');
+  const own = [...parts.keys()].filter((k) => k !== 'COUNT' && k !== 'UNTIL' && (timed || (k !== 'BYHOUR' && k !== 'BYMINUTE')));
+  if (!fromDue && (freq === 'MONTHLY' || freq === 'YEARLY') && own.every((k) => DAY_FROM_START.has(k))) {
+    const interval = parts.get('INTERVAL') ?? '1';
+    if (!NUMBER.test(interval)) return undefined;
+    const date = addMonthsClamped(completionDay, (freq === 'YEARLY' ? 12 : 1) * Number(interval));
+    if (until && date > until) return null;
+    if (count !== null) parts.set('COUNT', String(count - 1));
+    return { value: timed ? `${date}T${timePart(anchor)}` : date, rrule: count !== null ? joinParts(parts) : rrule };
+  }
   const earliest = fromDue ? utcOf(addDays(completionDay, 1)) : null;
+  const floor = !fromDue && anchor !== null && SET_DAYS.some((p) => parts.has(p)) ? utcOf(anchor) : null;
   try {
     const rule = evaluator(parts, start, timed);
-    const next = earliest && earliest > start ? rule.after(earliest, true) : rule.after(start, false);
+    const next = earliest && earliest > start ? rule.after(earliest, true) : rule.after(floor && floor > start ? floor : start, false);
     if (!next) return null;
     if (until && dateOf(next) > until) return null;
     if (count !== null) parts.set('COUNT', String(count - 1));
@@ -373,6 +406,16 @@ export function nextOccurrence(rrule: string, from: 'due' | 'completion', anchor
   } catch {
     return undefined;
   }
+}
+
+/** `day` plus `months`, on the month's last day when it is shorter (java.time's plusMonths). */
+function addMonthsClamped(day: LocalDate, months: number): LocalDate {
+  const [y, m, d] = day.split('-').map(Number);
+  const total = m - 1 + months;
+  const year = y + Math.floor(total / 12);
+  const month = total - Math.floor(total / 12) * 12;
+  const last = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  return `${String(year).padStart(4, '0')}-${pad2(month + 1)}-${pad2(Math.min(d, last))}`;
 }
 
 function shift(value: TaskDate, days: number): TaskDate {
@@ -425,6 +468,7 @@ export function upcomingOccurrences(rrule: string, anchor: TaskDate | null, toda
   } catch {
     return [];
   }
+  if (ruleProblem(parts) !== null) return [];
   const timed = anchor !== null && anchor.length > 10;
   const start = utcOf(anchor ?? today);
   const count = parts.has('COUNT') ? Number(parts.get('COUNT')) - 1 : Infinity;
@@ -462,7 +506,7 @@ export function occurrencesBetween(rrule: string, anchor: TaskDate, from: LocalD
   } catch {
     return [];
   }
-  if (!FREQUENCIES.has(parts.get('FREQ') ?? '') || to < from || datePart(anchor) > to) return [];
+  if (ruleProblem(parts) !== null || to < from || datePart(anchor) > to) return [];
   const timed = anchor.length > 10;
   const start = utcOf(anchor);
   const left = parts.has('COUNT') ? Number(parts.get('COUNT')) - 1 : Infinity;

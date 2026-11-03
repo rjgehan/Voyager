@@ -242,6 +242,16 @@ public class EventHub {
 		}
 	}
 
+	/**
+	 * The owner's streams: the connections without a filter, so the NotesApp tabs and app windows, not a guest's
+	 * share page (which never receives a reminder, DESIGN §5.40).
+	 */
+	public int ownerConnectionCount() {
+		synchronized (this.lock) {
+			return (int) this.connections.stream().filter((connection) -> connection.filter == null).count();
+		}
+	}
+
 	private static SseEventBuilder frame(Stored stored) {
 		return SseEmitter.event()
 			.id(stored.id())

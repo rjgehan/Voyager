@@ -108,6 +108,45 @@ describe('rolling forward, as the server does (API.md §20.6 examples, completed
     expect(nextOccurrence('FREQ=DAILY', 'due', '2026-10-20', day)?.value).toBe('2026-10-21');
   });
 
+  it('moves a rule on set days ticked early from completion past the occurrence being completed', () => {
+    // Watered on Tuesday 2026-11-03, due Wednesday 2026-11-04 (as the server's RecurrenceTest).
+    const tuesday = '2026-11-03';
+    expect(nextOccurrence('FREQ=WEEKLY;BYDAY=WE', 'completion', '2026-11-04', tuesday)?.value).toBe('2026-11-11');
+    expect(nextOccurrence('FREQ=WEEKLY;BYDAY=WE', 'completion', '2026-11-04T09:00', tuesday)?.value).toBe('2026-11-11T09:00');
+    expect(nextOccurrence('FREQ=WEEKLY;INTERVAL=2;BYDAY=WE', 'completion', '2026-11-04', tuesday)?.value).toBe('2026-11-18');
+    expect(nextOccurrence('FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR', 'completion', '2026-11-04', tuesday)?.value).toBe('2026-11-05');
+    expect(nextOccurrence('FREQ=WEEKLY;BYDAY=WE', 'completion', '2026-11-11', tuesday)?.value).toBe('2026-11-18');
+    expect(nextOccurrence('FREQ=WEEKLY;BYDAY=MO', 'completion', '2046-11-05', tuesday)?.value).toBe('2046-11-12');
+    expect(nextOccurrence('FREQ=MONTHLY;BYMONTHDAY=15', 'completion', '2026-11-15', '2026-11-14')?.value).toBe('2026-12-15');
+    expect(nextOccurrence('FREQ=YEARLY;BYMONTH=11;BYMONTHDAY=15', 'completion', '2026-11-15', '2026-11-14')?.value).toBe('2027-11-15');
+    expect(nextOccurrence('FREQ=WEEKLY;BYDAY=WE;COUNT=3', 'completion', '2026-11-04', tuesday)).toEqual({ value: '2026-11-11', rrule: 'FREQ=WEEKLY;BYDAY=WE;COUNT=2' });
+    // Ticked late, or without a date, as before; a plain interval counts from the completion day only.
+    expect(nextOccurrence('FREQ=WEEKLY;BYDAY=WE', 'completion', '2026-11-04', '2026-11-06')?.value).toBe('2026-11-11');
+    expect(nextOccurrence('FREQ=WEEKLY;BYDAY=WE', 'completion', null, tuesday)?.value).toBe('2026-11-04');
+    expect(nextOccurrence('FREQ=DAILY;INTERVAL=3', 'completion', '2026-11-04', '2026-11-01')?.value).toBe('2026-11-04');
+    expect(rollForward({ due: '2026-11-04', start: null, recurrence: { rrule: 'FREQ=WEEKLY;BYDAY=WE', from: 'completion' }, reminders: [{ at: '2026-11-04T09:00' }] }, tuesday)).toMatchObject({
+      due: '2026-11-11',
+      reminders: [{ at: '2026-11-11T09:00' }],
+    });
+  });
+
+  it('lands a month or a year after completion on the last day of a shorter month (as the server)', () => {
+    expect(nextOccurrence('FREQ=MONTHLY', 'completion', null, '2026-01-30')?.value).toBe('2026-02-28');
+    expect(nextOccurrence('FREQ=MONTHLY', 'completion', '2026-01-30', '2026-01-30')?.value).toBe('2026-02-28');
+    expect(nextOccurrence('FREQ=MONTHLY', 'completion', null, '2026-03-31')?.value).toBe('2026-04-30');
+    expect(nextOccurrence('FREQ=MONTHLY;INTERVAL=3', 'completion', null, '2026-11-30')?.value).toBe('2027-02-28');
+    expect(nextOccurrence('FREQ=MONTHLY', 'completion', '2026-01-05T09:00', '2026-01-31')?.value).toBe('2026-02-28T09:00');
+    expect(nextOccurrence('FREQ=YEARLY', 'completion', null, '2028-02-29')?.value).toBe('2029-02-28');
+    expect(nextOccurrence('FREQ=MONTHLY', 'due', null, '2026-01-30')?.value).toBe('2026-02-28');
+    expect(nextOccurrence('FREQ=MONTHLY', 'completion', null, '2026-01-15')?.value).toBe('2026-02-15');
+    expect(nextOccurrence('FREQ=MONTHLY;COUNT=3', 'completion', null, '2026-01-30')).toEqual({ value: '2026-02-28', rrule: 'FREQ=MONTHLY;COUNT=2' });
+    expect(nextOccurrence('FREQ=MONTHLY;UNTIL=20260227', 'completion', null, '2026-01-30')).toBeNull();
+    expect(nextOccurrence('FREQ=MONTHLY;UNTIL=20260228', 'completion', null, '2026-01-30')?.value).toBe('2026-02-28');
+    expect(nextOccurrence('FREQ=MONTHLY;BYMONTHDAY=31', 'completion', null, '2026-01-31')?.value).toBe('2026-03-31');
+    expect(nextOccurrence('FREQ=MONTHLY;BYMONTH=1,4,7,10', 'completion', null, '2026-01-15')?.value).toBe('2026-04-15');
+    expect(rollForward({ due: null, start: null, recurrence: { rrule: 'FREQ=MONTHLY', from: 'completion' }, reminders: [] }, '2026-01-30')).toMatchObject({ due: '2026-02-28' });
+  });
+
   it('counts COUNT down and stops at the last occurrence or after UNTIL', () => {
     expect(nextOccurrence('FREQ=DAILY;COUNT=3', 'due', day, day)).toEqual({ value: '2026-10-15', rrule: 'FREQ=DAILY;COUNT=2' });
     expect(nextOccurrence('FREQ=DAILY;COUNT=1', 'due', day, day)).toBeNull();
@@ -172,5 +211,19 @@ describe('hand-edited rules rrule cannot step through', () => {
       expect(upcomingOccurrences(`FREQ=MONTHLY;INTERVAL=${interval}`, '2026-10-21', '2026-10-21')).toEqual([]);
     }
     expect(rollForward({ due: '2026-10-21', start: null, recurrence: { rrule: 'FREQ=DAILY;INTERVAL=-1', from: 'due' }, reminders: [] }, '2026-10-21')).toBeUndefined();
+  });
+
+  it('projects nothing for a rule the server would refuse (its Recurrence.ruleProblem)', () => {
+    // An UNTIL that is not a date would otherwise mean "no end"; the server reports such a rule and closes the task.
+    for (const rule of ['FREQ=DAILY;UNTIL=2026-11-03', 'FREQ=DAILY;UNTIL=20261120Z', 'FREQ=DAILY;COUNT=3;UNTIL=20261120', 'FREQ=WEEKLY;BYDAY=TU,THU', 'FREQ=HOURLY', 'INTERVAL=2', 'FREQ=MONTHLY;WKST=XX']) {
+      expect(nextOccurrence(rule, 'due', '2026-11-02', '2026-11-05'), rule).toBeUndefined();
+      expect(nextOccurrence(rule, 'completion', '2026-11-02', '2026-11-05'), rule).toBeUndefined();
+      expect(occurrencesBetween(rule, '2026-11-02', '2026-11-01', '2026-11-30'), rule).toEqual([]);
+      expect(upcomingOccurrences(rule, '2026-11-02', '2026-11-02'), rule).toEqual([]);
+      expect(validateRule(rule), rule).toHaveProperty('error');
+    }
+    // The same rules written as the server stores them still project.
+    expect(occurrencesBetween('FREQ=DAILY;UNTIL=20261103', '2026-11-02', '2026-11-01', '2026-11-30')).toEqual(['2026-11-03']);
+    expect(nextOccurrence('FREQ=WEEKLY;BYDAY=TU,TH', 'due', '2026-11-04', '2026-11-04')?.value).toBe('2026-11-05');
   });
 });

@@ -90,7 +90,7 @@ public class ReminderController {
 				(config != null) ? config.server().toString() : null,
 				config != null && !config.remindersTopic().equals(config.topic()));
 		return new RemindersStatus(this.scheduler.zoneId().getId(), this.scheduler.zoneReported(), "UTC", webPush,
-				ntfyStatus, new RemindersStatus.InApp(this.hub.connectionCount()), this.scheduler.lastDeliveredAt(),
+				ntfyStatus, new RemindersStatus.InApp(this.hub.ownerConnectionCount()), this.scheduler.lastDeliveredAt(),
 				this.scheduler.lastError(), this.scheduler.lastErrorAt(), this.scheduler.upcoming(UPCOMING));
 	}
 
