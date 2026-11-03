@@ -2224,7 +2224,7 @@ Per-device preferences (theme, spellcheck, autocorrect, remote images, syntax vi
 | `ping` | Nothing; it only feeds the watchdog and the Live indicator (§6.18). |
 | Names registered with `registerEventHandler` (§6.8) | The registered handler. |
 
-**Own mutations.** The server does not echo a client's own content events back to it (API.md §16.4). The originating client therefore patches its caches from its HTTP responses, and **runs the same invalidations as the matching remote event**, so panels and completions reflect the user's own edits: a new heading or tag shows up in `[[Note#` completion, the tags pane and search right after the save.
+**Own mutations.** The server does not echo a client's own content events back to it (API.md §16.4). The originating client therefore patches its caches from its HTTP responses, and **runs the same invalidations as the matching remote event**, so panels and completions reflect the user's own edits: a new heading or tag shows up in `[[Note#` completion, the tags pane and search right after the save. A tree fetch that a patch overlapped fetches again (`refetchTree`, up to three times), since its snapshot may predate the mutation; a patch that finds no tree yet (a note created during a cold start, before the first `GET /api/tree` has answered) counts as overlapping too, so the startup tree always includes this tab's own mutations.
 
 | Response | Cache action |
 |---|---|

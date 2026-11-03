@@ -29,6 +29,21 @@ describe('refetchTree (FE-12)', () => {
     expect(queryClient.getQueryData<TreeResponse>(queryKeys.tree())!.files.map((f) => f.path)).toEqual(['a.md', 'new.md']);
   });
 
+  it('fetches again when an own mutation was answered before the first tree arrived', async () => {
+    // A cold start: no tree yet. The server took its snapshot before the create, whose response
+    // arrives first, so the snapshot lacks the note (and the stream will not replay its own event).
+    const getTree = vi.spyOn(api, 'getTree');
+    getTree.mockImplementationOnce(async () => {
+      upsertFiles(queryClient, [file('new.md')]);
+      return snapshot('b.1', ['a.md']);
+    });
+    getTree.mockImplementationOnce(async () => snapshot('b.2', ['a.md', 'new.md']));
+    const tree = await refetchTree();
+    expect(getTree).toHaveBeenCalledTimes(2);
+    expect(tree.eventId).toBe('b.2');
+    expect(queryClient.getQueryData<TreeResponse>(queryKeys.tree())!.files.map((f) => f.path)).toEqual(['a.md', 'new.md']);
+  });
+
   it('fetches once when nothing patched the tree meanwhile', async () => {
     const getTree = vi.spyOn(api, 'getTree').mockImplementation(async () => snapshot('b.1', ['a.md']));
     await refetchTree();
