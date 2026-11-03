@@ -12,6 +12,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.rjgehan.notes.api.dto.OnConflict;
 import com.rjgehan.notes.events.HistoryCommittedEvent;
@@ -183,6 +184,46 @@ class CommitBatcherTest {
 		assertThat(commits("G.md").get(0).getAuthorIdent().getName()).isEqualTo("Bob");
 		assertThat(committedText("G.md")).isEqualTo("bob edit");
 		assertThat(commits("A.md").get(0).name()).isNotEqualTo(commits("G.md").get(0).name());
+	}
+
+	@Test
+	void aWriteWaitsWhileAnotherAuthorsPartOfTheBatchIsStillToBeCommitted() throws Exception {
+		write("A.md", "a0");
+		write("G.md", "g0");
+		this.vault.flush();
+		Files.writeString(this.dir.resolve("A.md"), "alice edit");
+		this.batcher.markDirty(this.vault.path("A.md"), Author.of(TestVault.ALICE));
+		Files.writeString(this.dir.resolve("G.md"), "bob edit");
+		this.batcher.markDirty(this.vault.path("G.md"), Author.of(TestVault.BOB));
+		AtomicBoolean aliceMayWrite = new AtomicBoolean();
+		ExecutorService threads = Executors.newSingleThreadExecutor();
+		try {
+			// Alice's commit comes first; Bob's G.md is still to be committed (its git add reads the disk).
+			this.vault.git.beforeCommit = () -> {
+				this.vault.git.beforeCommit = () -> {
+				};
+				threads.submit(() -> {
+					this.batcher.prepareWrite(Author.of(TestVault.ALICE));
+					aliceMayWrite.set(true);
+				});
+				try {
+					Thread.sleep(300);
+				}
+				catch (InterruptedException ex) {
+					Thread.currentThread().interrupt();
+				}
+				assertThat(aliceMayWrite).as("Alice waits until Bob's part is committed").isFalse();
+			};
+			this.vault.flush();
+			threads.shutdown();
+			assertThat(threads.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
+			assertThat(aliceMayWrite).isTrue();
+		}
+		finally {
+			threads.shutdownNow();
+		}
+		assertThat(commits("G.md").get(0).getAuthorIdent().getName()).isEqualTo("Bob");
+		assertThat(committedText("G.md")).isEqualTo("bob edit");
 	}
 
 	@Test

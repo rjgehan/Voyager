@@ -7,9 +7,11 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -38,7 +40,8 @@ import org.springframework.stereotype.Component;
  * {@code commit-quiet-period} or at most {@code commit-max-delay} after the first change. Each commit has one author:
  * {@link #prepareWrite} flushes the batch before a different author writes, and every pending path remembers who
  * changed it, so two authors whose writes interleave anyway are committed separately, each under their own name.
- * Failed commits keep their paths pending and are retried with backoff. The batcher stops after the web server has drained and flushes on the way out.
+ * Failed commits keep their paths pending and are retried with backoff. The batcher stops after the web server has
+ * drained and flushes on the way out.
  * <p>
  * Every commit is announced with {@code history.committed}. Inside an {@link Operation} the announcements wait until
  * the operation closes, so they follow the operation's content and trash events (API.md §16.2), including the commit
@@ -86,8 +89,8 @@ public class CommitBatcher implements SmartLifecycle {
 	/** Who changed each pending path (same keys as {@link #pending}); a flush makes one commit per author. */
 	private final Map<String, Author> authors = new LinkedHashMap<>();
 
-	/** The author of the batch {@link #flush} is committing right now, or null; guarded by {@link #state}. */
-	private @Nullable Author inFlightAuthor;
+	/** The authors of the batch {@link #flush} is committing right now (empty when none); guarded by {@link #state}. */
+	private final Set<Author> inFlightAuthors = new HashSet<>();
 
 	private @Nullable Instant firstDirtyAt;
 
@@ -177,7 +180,7 @@ public class CommitBatcher implements SmartLifecycle {
 			boolean otherInFlight;
 			synchronized (this.state) {
 				otherPending = pendingByOther(writer);
-				otherInFlight = this.inFlightAuthor != null && !this.inFlightAuthor.equals(writer);
+				otherInFlight = this.inFlightAuthors.stream().anyMatch((other) -> !other.equals(writer));
 			}
 			if (otherPending) {
 				try {
@@ -265,15 +268,14 @@ public class CommitBatcher implements SmartLifecycle {
 					byAuthor.computeIfAbsent(pathAuthor, (key) -> new ArrayList<>()).add(path);
 				}
 				clearPending();
+				// Set with the batch taken, so a write of another author never slips in before its git add.
+				this.inFlightAuthors.addAll(byAuthor.keySet());
 			}
 			GitStore.Commit last = null;
 			List<Map.Entry<Author, List<ApiPath>>> groups = new ArrayList<>(byAuthor.entrySet());
 			for (int i = 0; i < groups.size(); i++) {
 				Author batchAuthor = groups.get(i).getKey();
 				List<ApiPath> paths = groups.get(i).getValue();
-				synchronized (this.state) {
-					this.inFlightAuthor = batchAuthor;
-				}
 				GitStore.Commit commit;
 				try {
 					commit = commitPaths(paths, (changes) -> batchMessage(changes, batchAuthor), batchAuthor);
@@ -295,7 +297,7 @@ public class CommitBatcher implements SmartLifecycle {
 		}
 		finally {
 			synchronized (this.state) {
-				this.inFlightAuthor = null;
+				this.inFlightAuthors.clear();
 			}
 			this.commitLock.unlock();
 		}
