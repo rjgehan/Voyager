@@ -21,6 +21,17 @@ export interface PendingNote {
    * previous route (the start page, the previous note) never renders in between.
    */
   opening: string | null;
+  /** Why the note does not exist yet, shown in the pending view, which keeps the title and the writing. */
+  problem: PendingProblem | null;
+}
+
+export interface PendingProblem {
+  message: string;
+  /**
+   * `auto`: retried with backoff (the server cannot be reached, a storage problem, a failed first
+   * read); `manual`: the server refused the note, and Try again asks again.
+   */
+  retry: 'auto' | 'manual';
 }
 
 export interface TitleHandoff {
@@ -60,7 +71,7 @@ const committedTitles = new Map<number, string>();
 /** A new pending note (or other file) whose whole title is selected, so typing replaces it. */
 export function startPendingNote(id: number, folder: string, title: string, file: { extension: string; label: string } = { extension: 'md', label: 'note' }): void {
   usePendingNote.setState({
-    pending: { id, folder, ...file, title, committed: false, selectionStart: 0, selectionEnd: title.length, opening: null },
+    pending: { id, folder, ...file, title, committed: false, selectionStart: 0, selectionEnd: title.length, opening: null, problem: null },
     handoff: null,
   });
 }
@@ -90,14 +101,44 @@ export function updatePendingSelection(id: number, selectionStart: number, selec
 
 /**
  * Pending note `id` opens at `path`: a title still being typed goes to the note's inline title
- * (`handoff`), and the pending view stays until the pane shows the note.
+ * (`handoff`), and the pending view stays until the pane shows the note. `offered` is a committed
+ * title the note could not be renamed to, given back to the inline title (selected) to try again.
  */
-export function openPendingNote(id: number, path: string): void {
+export function openPendingNote(id: number, path: string, offered: string | null = null): void {
   const { pending } = usePendingNote.getState();
   if (pending?.id !== id) return;
-  usePendingNote.setState({
-    pending: { ...pending, opening: path },
-    handoff: pending.committed ? null : { path, title: pending.title, selectionStart: pending.selectionStart, selectionEnd: pending.selectionEnd },
+  const handoff = offered !== null ? { path, title: offered, selectionStart: 0, selectionEnd: offered.length } : pending.committed ? null : { path, title: pending.title, selectionStart: pending.selectionStart, selectionEnd: pending.selectionEnd };
+  usePendingNote.setState({ pending: { ...pending, opening: path, problem: null }, handoff });
+}
+
+export function setPendingProblem(id: number, problem: PendingProblem | null): void {
+  const { pending } = usePendingNote.getState();
+  if (pending?.id !== id) return;
+  const same = pending.problem === problem || (pending.problem !== null && problem !== null && pending.problem.message === problem.message && pending.problem.retry === problem.retry);
+  if (!same) usePendingNote.setState({ pending: { ...pending, problem } });
+}
+
+const retryWaiters = new Map<number, () => void>();
+
+/** Try again, in a pending view whose note the server refused. */
+export function retryPendingNote(id: number): void {
+  retryWaiters.get(id)?.();
+}
+
+/** True once Try again is pressed for pending note `id`; false once its pending view has gone. */
+export function whenRetryAsked(id: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    let unsubscribe = () => {};
+    const finish = (again: boolean) => {
+      retryWaiters.delete(id);
+      unsubscribe();
+      resolve(again);
+    };
+    if (usePendingNote.getState().pending?.id !== id) return finish(false);
+    retryWaiters.set(id, () => finish(true));
+    unsubscribe = usePendingNote.subscribe((s) => {
+      if (s.pending?.id !== id) finish(false);
+    });
   });
 }
 

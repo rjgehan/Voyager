@@ -1,18 +1,30 @@
 // File operations (DESIGN §6.15): optimistic new note, rename, move (with Undo), delete, new
 // folder, copy link and download. Every request flushes the affected sessions first and patches
 // the caches from its own response (DESIGN §6.3 "Own mutations").
-import { isProblem } from '../api/client';
+import { errorMessage, isProblem, isStorageProblem, isTransient } from '../api/client';
 import { api } from '../api/endpoints';
 import { currentSettings, currentTree, treeQuery } from '../api/hooks';
 import { queryClient } from '../api/queryClient';
 import { queryKeys } from '../api/queryKeys';
 import type { FailedUpdate, FileEntry, MoveResult, Settings, WriteResult } from '../api/types';
 import { newIdempotencyKey } from '../state/clientId';
-import { clearPendingNote, committedTitle, hasPendingBody, openPendingNote, startPendingNote, takeCommittedTitle, takePendingBody, usePendingNote, type PendingNote } from '../state/pendingNote';
+import {
+  clearPendingNote,
+  committedTitle,
+  hasPendingBody,
+  openPendingNote,
+  setPendingProblem,
+  startPendingNote,
+  takeCommittedTitle,
+  takePendingBody,
+  usePendingNote,
+  whenRetryAsked,
+  type PendingNote,
+} from '../state/pendingNote';
 import { toast } from '../state/toasts';
 import { useUi } from '../state/ui';
 import { applyFolderResult, applyMoveResult, applyRestoreResult, applyTrashEntry } from '../sync/applyEvents';
-import type { DocumentSession } from '../sync/DocumentSession';
+import { BACKOFF_MS, type DocumentSession } from '../sync/DocumentSession';
 import { documents } from '../sync/instance';
 import { syncTarget } from '../sync/liveSync';
 import { applyWriteResult } from '../sync/treePatch';
@@ -106,27 +118,109 @@ function insertPendingBody(session: DocumentSession, id: number): void {
   session.applyEdit({ from, to, insert: body.text }, { selection: { anchor: from + body.selectionStart, head: from + body.selectionEnd } });
 }
 
+const WAITING_FOR_SERVER = "Can't reach the server. The note is created as soon as it answers, with what you type here.";
+
+/** Pending note `id` still has something to keep: its view, writing typed into it, a committed title. */
+function keeps(id: number): boolean {
+  return usePendingNote.getState().pending?.id === id || hasPendingBody(id) || committedTitle(id) !== null;
+}
+
+/**
+ * Runs a request of the new-note flow, again with backoff (and `Retry-After`) while the server cannot
+ * be reached or has a storage problem and pending note `id` has something to keep; the pending view
+ * says so meanwhile. A create keeps its Idempotency-Key, so a retry after a lost response does not
+ * create a second note (API.md §2).
+ */
+async function withRetry<T>(id: number, request: () => Promise<T>): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const result = await request();
+      setPendingProblem(id, null);
+      return result;
+    } catch (e) {
+      if (!(isTransient(e) || isStorageProblem(e)) || !keeps(id)) throw e;
+      setPendingProblem(id, { message: isTransient(e) ? WAITING_FOR_SERVER : `${errorMessage(e)} Trying again…`, retry: 'auto' });
+      const backoff = BACKOFF_MS[Math.min(attempt, BACKOFF_MS.length - 1)];
+      await new Promise((r) => setTimeout(r, Math.max(backoff, isTransient(e) ? (e.retryAfterMs ?? 0) : 0)));
+    }
+  }
+}
+
+/**
+ * Resolves once a new note's session can take input, or will not load without help (an error the
+ * session does not retry by itself, a read-only or deleted file). While a failed first read is
+ * retried (a deploy, a network blip), the pending view keeps the writing and says it is waiting.
+ */
+function whenOpenable(session: DocumentSession, id: number): Promise<void> {
+  return new Promise((resolve) => {
+    const settled = (): boolean => {
+      const s = session.getSnapshot();
+      if (session.isDisposed || session.isEditable() || s.status === 'readonly' || s.status === 'deleted') return true;
+      if (s.status === 'loading') return false;
+      const retrying = s.status === 'error' && !s.loaded && s.retryAt !== null && keeps(id);
+      if (retrying) setPendingProblem(id, { message: WAITING_FOR_SERVER, retry: 'auto' });
+      return !retrying;
+    };
+    const done = () => {
+      setPendingProblem(id, null);
+      resolve();
+    };
+    if (settled()) return done();
+    const unsubscribe = session.subscribe(() => {
+      if (!settled()) return;
+      unsubscribe();
+      done();
+    });
+  });
+}
+
+/** Writing that could not go in when the note opened (its read failed) goes in once it loads. */
+function insertWhenEditable(path: string, id: number): void {
+  const holder = `${BODY_HOLDER}-${id}`;
+  const session = documents.acquire(path, holder);
+  const check = (): boolean => {
+    if (session.isDisposed || !hasPendingBody(id)) return true;
+    if (!session.isEditable()) return false;
+    insertPendingBody(session, id);
+    return true;
+  };
+  if (check()) {
+    documents.release(session, holder);
+    return;
+  }
+  const unsubscribe = session.subscribe(() => {
+    if (!check()) return;
+    unsubscribe();
+    documents.release(session, holder);
+  });
+}
+
 /**
  * The new file at `path` replaces pending note `id` (DESIGN §6.15) once it can take input at once:
  * a note's session has loaded (so its inline title is editable and its editor mounts in the same
  * commit) and the view's chunk is loaded. The pending view keeps taking keys meanwhile; then, in one
  * task, the body typed by then goes in, the title typed by then (with its selection) goes to the
  * inline title, and the note opens. If the user went elsewhere meanwhile, the body still goes in.
+ * `offered`: a committed title the note could not be renamed to, given back to its inline title.
  */
-async function openWhenReady(path: string, id: number, note: boolean): Promise<'opened' | 'rename'> {
+async function openWhenReady(path: string, id: number, note: boolean, offered: string | null): Promise<'opened' | 'rename'> {
   const session = note ? documents.acquire(path, BODY_HOLDER) : null;
   try {
     const entry = currentTree().byPath.get(path);
-    await Promise.all([session?.whenSettled(), entry ? preloadView(entry).catch(() => undefined) : undefined]);
+    await Promise.all([session ? whenOpenable(session, id) : undefined, entry ? preloadView(entry).catch(() => undefined) : undefined]);
     // A title committed meanwhile (Enter while the note was read) is a rename first.
     if (renameTo(id, path) !== null) return 'rename';
-    if (session) insertPendingBody(session, id);
+    if (session) {
+      insertPendingBody(session, id);
+      // A read that failed for good (its error panel offers Try again) takes the writing later.
+      if (hasPendingBody(id)) insertWhenEditable(path, id);
+    }
     const { pending } = usePendingNote.getState();
     if (pending?.id !== id) return 'opened';
     // A title still being typed continues in the inline title; after a committed one the writing
     // continues in the note's text. The navigation then clears the pending view (App's guard).
-    openPendingNote(id, path);
-    if (pending.committed) requestNoteFocus(path);
+    openPendingNote(id, path, offered);
+    if (pending.committed && offered === null) requestNoteFocus(path);
     openPath(path, null, { newNote: true });
     return 'opened';
   } finally {
@@ -205,7 +299,21 @@ export function createNote(folder: string, initialContent: string | Promise<stri
       }
       render = typeof loaded === 'function' ? loaded : null;
       const content = render ? render(initialTitle).text : (loaded as string);
-      const result = await api.createFile({ path: joinPath(folder, `${initialTitle}.${extension}`), content, onConflict: 'rename' }, { idempotencyKey: key });
+      const request = { path: joinPath(folder, `${initialTitle}.${extension}`), content, onConflict: 'rename' as const };
+      let result: WriteResult;
+      for (;;) {
+        try {
+          result = await withRetry(id, () => api.createFile(request, { idempotencyKey: key }));
+          break;
+        } catch (e) {
+          // The server refused the note: the pending view keeps the title and the writing, says
+          // why, and offers Try again.
+          if (usePendingNote.getState().pending?.id !== id) throw e;
+          setPendingProblem(id, { message: `The ${label} could not be created: ${errorMessage(e)}`, retry: 'manual' });
+          if (!(await whenRetryAsked(id))) throw e;
+          setPendingProblem(id, null);
+        }
+      }
       applyWriteResult(queryClient, result, content);
       await treeWith(result, content);
       created = result.file;
@@ -228,24 +336,28 @@ export function createNote(folder: string, initialContent: string | Promise<stri
     // without opening). A template's `{{title}}` follows the final name (the server's free name,
     // `Untitled 1`, until the inline title renames it) and its `{{cursor}}` places the caret; then
     // the note replaces the pending view, with what was typed into its title and body meanwhile.
+    // A rename the server refuses offers the title back in the note's inline title.
     let path = created.path;
     let first = true;
+    let offered: string | null = null;
     for (;;) {
       const wanted = renameTo(id, path);
-      takeCommittedTitle(id);
       let to = path;
       if (wanted !== null) {
+        offered = null;
         try {
-          to = await renameEntry(path, wanted, 'file');
+          to = await withRetry(id, () => renameEntry(path, wanted, 'file'));
         } catch (e) {
           toastError(e);
+          offered = wanted;
         }
       }
+      takeCommittedTitle(id);
       if (first || to !== path) await retitleNewNote(path, to);
       first = false;
       path = to;
       if (usePendingNote.getState().pending?.id !== id && !hasPendingBody(id) && committedTitle(id) === null) return;
-      if ((await openWhenReady(path, id, note)) === 'opened') return;
+      if ((await openWhenReady(path, id, note, offered)) === 'opened') return;
     }
   })();
 }
