@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { extractHtml } from '../src/core/extract';
 import { cleanFolder, composeNote, frontmatter, localDate, noteBasename, notePath, publishedDate, replaceImage, yamlString } from '../src/core/note';
 import type { Clip } from '../src/core/types';
 
@@ -140,5 +141,19 @@ describe('replaceImage', () => {
   it('treats the URL literally', () => {
     expect(replaceImage('![a](https://e.com/a+b.png)', 'https://e.com/a+b.png', 'X')).toBe('X');
     expect(replaceImage('![a](https://e.com/aab.png)', 'https://e.com/a+b.png', 'X')).toBe('![a](https://e.com/aab.png)');
+  });
+
+  it('finds an image whose URL has parentheses or spaces, which the Markdown writes encoded', () => {
+    const url = 'https://upload.wikimedia.org/x/220px-Foo_(bar).jpg';
+    expect(replaceImage('![a](https://upload.wikimedia.org/x/220px-Foo_%28bar%29.jpg)', url, '![[Foo (bar).jpg]]')).toBe('![[Foo (bar).jpg]]');
+    expect(replaceImage('![a](https://e.com/a%20b.png "T")', 'https://e.com/a b.png', 'X')).toBe('X');
+  });
+
+  it('a clipped image whose URL has a lone parenthesis is a working link, replaced by its attachment', () => {
+    const clip = extractHtml('<article><h1>T</h1><p>Some text for the article body.</p><img src="https://e.com/220px-Foo_(bar.jpg" alt="a"></article>', 'https://e.com/p');
+    // A raw ( would leave the destination open, so the image would not be an image at all.
+    expect(clip.markdown).toContain('![a](https://e.com/220px-Foo_%28bar.jpg)');
+    expect(clip.images).toEqual(['https://e.com/220px-Foo_(bar.jpg']);
+    expect(replaceImage(clip.markdown, clip.images[0], '![[Foo (bar.jpg]]')).toContain('![[Foo (bar.jpg]]');
   });
 });

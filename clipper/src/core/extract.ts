@@ -3,7 +3,7 @@
 // the app's /clip page on the HTML a bookmarklet sent, and in the iOS Shortcut's JavaScript step.
 // Nothing here fetches anything; images stay links (the extension may download them afterwards).
 import { Readability } from '@mozilla/readability';
-import { toMarkdown } from './markdown';
+import { markdownUrl, toMarkdown } from './markdown';
 import type { Clip, ExtractOptions } from './types';
 
 /** The page's address without its fragment. */
@@ -134,7 +134,7 @@ export function extractDocument(doc: Document, options: ExtractOptions = {}): Cl
     published: nonEmpty(article?.publishedTime) ?? nonEmpty(metaContent(doc, 'article:published_time', 'datePublished')),
     description: nonEmpty(metaContent(doc, 'description', 'og:description')) ?? nonEmpty(article?.excerpt),
     markdown,
-    images: images.filter((src) => markdown.includes(src.replace(/[ ()]/g, (c) => encodeURIComponent(c)))),
+    images: images.filter((src) => markdown.includes(markdownUrl(src))),
     selection,
   };
 }
