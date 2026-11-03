@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { createFile, newList, newTask, refusal, search, unique, uploadRaw } from '../../lib/api.ts';
+import { createFile, madeUpWord, newList, newTask, refusal, search, unique, uploadRaw } from '../../lib/api.ts';
 import { pdf } from '../../lib/fixtures.ts';
 
 /**
@@ -33,7 +33,9 @@ test('a word, a phrase, a tag, a folder and a negation', async () => {
 });
 
 test('typos are corrected and say so; prefix matching for search-as-you-type', async () => {
-  const w = `vermillion${Date.now().toString(36).replace(/\d/g, '')}`;
+  // Runs pile up in the vault until the next reset, so an earlier run's word is there as well.
+  await createFile(`${unique('Fuzzy')}.md`, `The ${madeUpWord('vermillion')} door.\n`);
+  const w = madeUpWord('vermillion');
   await createFile(`${unique('Fuzzy')}.md`, `The ${w} door.\n`);
   const typo = w.slice(0, 3) + w[4] + w[3] + w.slice(5); // two letters swapped
   const r = await search(typo);

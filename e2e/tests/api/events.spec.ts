@@ -33,6 +33,13 @@ test('another device hears a create, a save, a move and a delete, in that order'
   }
 });
 
+test('the server watches the vault as production does, except on Windows', async () => {
+  // scripts/reset.mjs: the dev profile turns the watcher off for Windows (JDK-6972833, DESIGN §5.9);
+  // elsewhere the suite runs with it, so the watcher meets every save, move and trash below.
+  const status = await call('GET', '/api/status');
+  expect(status.watcher.mode).toBe(process.platform === 'win32' ? 'disabled' : 'inotify');
+});
+
 test('the device that made a change is not told about it again', async () => {
   const self = await EventStream.open({ clientId: CLIENT_ID });
   const other = await EventStream.open();
@@ -40,9 +47,12 @@ test('the device that made a change is not told about it again', async () => {
     const path = `${unique('Echo')}.md`;
     await createFile(path, 'x\n');
     await other.next((e) => e.event === 'file.created' && e.data.file?.path === path);
-    // trash.changed and history.committed go to everyone; content events do not echo.
-    await new Promise((r) => setTimeout(r, 500));
+    // trash.changed and history.committed go to everyone; content events do not echo. Wait past the
+    // vault watcher's debounce (400 ms) and tick, so a watcher that re-announced the app's own write
+    // (as an external change, origin null) would show here.
+    await new Promise((r) => setTimeout(r, 1500));
     expect(self.events.some((e) => e.event === 'file.created' && e.data.file?.path === path)).toBe(false);
+    expect(other.events.filter((e) => JSON.stringify(e.data).includes(path) && e.data.origin === null)).toEqual([]);
   } finally {
     self.close();
     other.close();

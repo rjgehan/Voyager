@@ -6,12 +6,18 @@
 //   npm run reset -- --prod    the jar serving the BUILT frontend on :18570, as in production
 //   npm run reset -- --build   rebuild the jar (and, with --prod, the frontend) even if it looks current
 //
-// The jar is rebuilt by itself when backend/src or backend/pom.xml is newer than it, the frontend
-// build (--prod) when frontend/src, index.html or the lockfile is.
+// For the hallway test on the iPhone (README): E2E_WEB_HOST=<the PC's tailnet address> binds Vite to
+// that one address (never 0.0.0.0), and E2E_EXTRA_HOSTS=<name:port,...> admits more Host names.
+//
+// The jar is rebuilt by itself when backend/src/main, pom.xml or target/classes is newer than its
+// last packaging, the frontend build (--prod) when anything `npm run build` reads is newer than it
+// (scripts/builds.mjs).
 import { execFileSync, execSync, spawn } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, openSync, readFileSync, rmSync } from 'node:fs';
 import { connect } from 'node:net';
 import { join } from 'node:path';
+import { findJar, frontendIsStale, jarIsStale } from './builds.mjs';
+import { hostPort, listOf, serverArgs as launchArgs, viteLaunch } from './launch.mjs';
 import { API_PORT, E2E_LOGIN, ROOT, RUN, WEB_PORT, recordPids, stopRecorded, writeEnv } from './stack.mjs';
 
 const args = new Set(process.argv.slice(2));
@@ -20,31 +26,17 @@ const forceBuild = args.has('--build');
 const win = process.platform === 'win32';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// The hallway test (README): Vite on the PC's tailnet address, and the host names the phone uses.
+const WEB_HOST = process.env.E2E_WEB_HOST?.trim() || undefined;
+const EXTRA_HOSTS = listOf(process.env.E2E_EXTRA_HOSTS);
+if (prod && WEB_HOST) throw new Error('E2E_WEB_HOST is for the dev stack (Vite); with --prod the server listens on 127.0.0.1 only.');
+
 const API_URL = `http://127.0.0.1:${API_PORT}`;
-const WEB_URL = prod ? `http://localhost:${API_PORT}` : `http://localhost:${WEB_PORT}`;
-// The hosts the browser and the suite use. Vite's proxy keeps the browser's Host, so the Vite
-// origin must be allowed too.
-const ALLOWED_HOSTS = [`localhost:${WEB_PORT}`, `127.0.0.1:${WEB_PORT}`, `localhost:${API_PORT}`, `127.0.0.1:${API_PORT}`];
-
-/** Newest modification time under a path (a file, or a folder walked recursively). */
-function newest(path) {
-  if (!existsSync(path)) return 0;
-  const st = statSync(path);
-  if (!st.isDirectory()) return st.mtimeMs;
-  let max = st.mtimeMs;
-  for (const d of readdirSync(path, { withFileTypes: true })) {
-    if (d.name === 'node_modules' || d.name === 'dist') continue;
-    max = Math.max(max, newest(join(path, d.name)));
-  }
-  return max;
-}
-
-function findJar() {
-  const target = join(ROOT, 'backend', 'target');
-  if (!existsSync(target)) return null;
-  const jar = readdirSync(target).find((f) => /^notesapp-.*\.jar$/.test(f) && !f.endsWith('-plain.jar'));
-  return jar ? join(target, jar) : null;
-}
+const WEB_URL = prod
+  ? `http://localhost:${API_PORT}`
+  : WEB_HOST // Vite then listens on that address only.
+    ? `http://${hostPort(WEB_HOST, WEB_PORT)}`
+    : `http://localhost:${WEB_PORT}`;
 
 function run(cmd, cmdArgs, cwd, env = {}) {
   console.log(`> ${cmd} ${cmdArgs.join(' ')}   (in ${cwd})`);
@@ -58,19 +50,16 @@ function run(cmd, cmdArgs, cwd, env = {}) {
 }
 
 function ensureJar() {
-  let jar = findJar();
   const backend = join(ROOT, 'backend');
-  // The jar's own timestamp is fixed (reproducible builds), so compare with the compiled classes.
-  const built = newest(join(backend, 'target', 'classes'));
-  const stale = !jar || Math.max(newest(join(backend, 'src', 'main')), newest(join(backend, 'pom.xml'))) > built;
-  if (forceBuild || stale) {
-    console.log(jar ? 'Rebuilding the backend jar (sources changed)...' : 'Building the backend jar...');
+  let jar = findJar(backend);
+  if (forceBuild || jarIsStale(backend)) {
+    console.log(jar ? 'Rebuilding the backend jar (sources or classes changed since it was packaged)...' : 'Building the backend jar...');
     // Offline locally (the user's Maven cache has everything); CI downloads what it needs.
     const mvnArgs = ['-B', '-q', '-DskipTests', 'package', ...(process.env.CI ? ['-ntp'] : ['-o'])];
     // By its full path: cmd.exe may be set not to look in the current folder.
     if (win) run(join(backend, 'mvnw.cmd'), mvnArgs, backend);
     else run('sh', ['./mvnw', ...mvnArgs], backend);
-    jar = findJar();
+    jar = findJar(backend);
   }
   if (!jar) throw new Error('No backend/target/notesapp-*.jar after the build.');
   return jar;
@@ -78,9 +67,7 @@ function ensureJar() {
 
 function ensureFrontendBuild() {
   const fe = join(ROOT, 'frontend');
-  const dist = join(fe, 'dist', 'index.html');
-  const src = Math.max(newest(join(fe, 'src')), newest(join(fe, 'index.html')), newest(join(fe, 'package-lock.json')));
-  if (forceBuild || !existsSync(dist) || src > statSync(dist).mtimeMs) {
+  if (forceBuild || frontendIsStale(fe)) {
     console.log('Building the frontend...');
     run('npm', ['run', 'build'], fe);
   }
@@ -129,11 +116,15 @@ function start(name, image, cmd, cmdArgs, { cwd, env = {}, log }) {
 }
 
 // ---------------------------------------------------------------------------------------------
-await stopRecorded();
+const unchecked = await stopRecorded();
 for (const port of prod ? [API_PORT] : [API_PORT, WEB_PORT]) {
   // A process just stopped can hold its port for a moment.
   for (let i = 0; i < 20 && (await listening(port)); i++) await sleep(500);
   if (await listening(port)) {
+    if (unchecked.length > 0) {
+      const list = unchecked.map((e) => `${e.name} (pid ${e.pid})`).join(', ');
+      throw new Error(`Port ${port} is in use, and the last reset's ${list} could not be checked, so it was left running. Stop it yourself.`);
+    }
     throw new Error(
       `Port ${port} is in use by a process this script did not start. Stop it yourself, or pick ` +
         'other ports with E2E_API_PORT / E2E_WEB_PORT.',
@@ -152,20 +143,16 @@ console.log('Wiping the scratch vaults...');
 for (const d of ['vault', 'vaults', 'publish', 'web']) rmSync(join(RUN, d), { recursive: true, force: true });
 for (const d of ['vault', 'vaults', 'publish']) mkdirSync(join(RUN, d), { recursive: true });
 
-const serverArgs = [
-  '--spring.profiles.active=dev',
-  `--server.port=${API_PORT}`,
-  '--server.address=127.0.0.1',
-  `--notes.vault-dir=${join(RUN, 'vault')}`,
-  `--notes.vaults.dir=${join(RUN, 'vaults')}`,
-  `--notes.publish.dir=${join(RUN, 'publish')}`,
-  `--notes.allowed-hosts=${ALLOWED_HOSTS.join(',')}`,
-  '--notes.identity.allow-default=true',
-  `--notes.identity.allowed-logins=${E2E_LOGIN}`,
-  '--notes.security.require-tailscale-interface=false',
-  '--notes.git.commit-quiet-period=2s',
-  '--logging.level.com.rjgehan.notes=INFO',
-];
+const serverArgs = launchArgs({
+  platform: process.platform,
+  apiPort: API_PORT,
+  webPort: WEB_PORT,
+  run: RUN,
+  login: E2E_LOGIN,
+  join,
+  webHost: WEB_HOST,
+  extraHosts: EXTRA_HOSTS,
+});
 
 const pids = [];
 const backendLog = join(RUN, 'backend.log');
@@ -195,11 +182,14 @@ if (!prod) {
   const webLog = join(RUN, 'web.log');
   const fe = join(ROOT, 'frontend');
   if (!existsSync(join(fe, 'node_modules', 'vite'))) throw new Error('Run `npm ci` in frontend/ first.');
-  const vite = start('vite', 'node', process.execPath, [join(fe, 'node_modules', 'vite', 'bin', 'vite.js'), '--port', String(WEB_PORT), '--strictPort'], {
-    cwd: fe,
-    env: { NOTES_DEV_BACKEND: API_URL },
-    log: webLog,
+  const launch = viteLaunch({
+    vite: join(fe, 'node_modules', 'vite', 'bin', 'vite.js'),
+    webPort: WEB_PORT,
+    apiUrl: API_URL,
+    webHost: WEB_HOST,
+    extraHosts: EXTRA_HOSTS,
   });
+  const vite = start('vite', 'node', process.execPath, launch.args, { cwd: fe, env: launch.env, log: webLog });
   pids.push(vite.entry);
   recordPids(pids);
   console.log(`Starting Vite on ${WEB_URL} (pid ${vite.entry.pid}, log .run/web.log)...`);

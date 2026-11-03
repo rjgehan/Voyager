@@ -21,6 +21,7 @@ const V2 = 'AAECAwQFBgcICQoLDA0OD/Dg0MCwoJCAcGBQQDAgEACrsoTj31BFp/0kZclovXUwtfxE
 const PLAIN = 'Bank PIN: 4242 ✓\nsecond line';
 
 let vault: MockVault;
+let controls: { latency: number; failures: never[] };
 
 afterEach(() => {
   queryClient.clear();
@@ -32,7 +33,8 @@ afterAll(() => installEndpoints(httpEndpoints));
 function setup(): FileEntry {
   vault = new MockVault(false);
   vault.createFile({ path: 'Safe/Bank.mdenc', content: serializeEncryptedFile({ version: '2.0', hint: 'the usual', encodedData: V2 }) }, 'other-device-1');
-  installEndpoints(createMockEndpoints(vault, { latency: 0, failures: [] }));
+  controls = { latency: 0, failures: [] };
+  installEndpoints(createMockEndpoints(vault, controls));
   return vault.getTree().files.find((f) => f.path === 'Safe/Bank.mdenc')!;
 }
 
@@ -74,10 +76,21 @@ describe('EncryptedNoteView (item 27)', () => {
     expect(container.querySelector('.cm-editor.cm-live-preview')).not.toBeNull();
 
     const view = EditorView.findFromDOM(content)!;
+    // A slow server (300 to 700 ms a request): the test waits for the save, not for a fixed time.
+    controls.latency = 500;
     act(() => view.dispatch({ changes: { from: view.state.doc.length, insert: '\nthird line' }, userEvent: 'input' }));
-    await act(async () => {
-      await new Promise((r) => setTimeout(r, 1400));
-    });
+    // The save lands after the encryption delay, the autosave debounce and the request. Wait for
+    // the stored ciphertext to hold the new line (the old one may be saved again first).
+    const keys = new Map<string, Promise<CryptoKey>>();
+    await waitFor(
+      async () => {
+        const payload = decodePayload(parseEncryptedFile(vault.readFile('Safe/Bank.mdenc').content).encodedData, 2);
+        const salt = payload.salt.join(',');
+        if (!keys.has(salt)) keys.set(salt, deriveKey(PASS, payload.salt, 2));
+        expect(await decryptPayload(payload, await keys.get(salt)!)).toBe(PLAIN + '\nthird line');
+      },
+      { timeout: 8000 },
+    );
     const stored = vault.readFile('Safe/Bank.mdenc').content;
     expect(stored).not.toContain('third');
     expect(stored).not.toContain('4242');

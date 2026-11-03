@@ -12,7 +12,8 @@
     "test:ui": "playwright test --project=desktop --project=iphone",
     "screens": "playwright test --project=screens && node scripts/build-pdf.mjs",
     "report": "playwright show-report",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:scripts": "node --test \"scripts/*.test.mjs\""
   },
   "devDependencies": {
     "@playwright/test": "1.64.1",

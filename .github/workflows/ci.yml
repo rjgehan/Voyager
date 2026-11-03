@@ -98,6 +98,7 @@ jobs:
         run: |
           npm ci
           npm run typecheck
+          npm run test:scripts
           if [ ! -x /opt/google/chrome/chrome ]; then
             npx playwright install --with-deps chromium
             echo "PW_CHANNEL=chromium" >> "$GITHUB_ENV"
@@ -153,10 +154,10 @@ jobs:
         run: |
           command -v shellcheck >/dev/null || sudo apt-get install -y --no-install-recommends shellcheck
           shellcheck --shell=sh --severity=warning deploy/backup/*.sh deploy/backup/test/*.sh deploy/backup/test/fake-bin/*
-      - name: CasaOS composes (valid, and pinned to the images Dependabot keeps current in docker-compose.yml)
+      - name: CasaOS composes (every deploy/casaos-*.yml valid, and pinned to the images Dependabot keeps current in docker-compose.yml)
         run: |
-          for f in deploy/casaos-compose.yml deploy/casaos-backup-compose.yml deploy/casaos-whisper-compose.yml; do docker compose -f "$f" config --quiet; done
-          for image in $(sed -n 's/^ *image: \([^ ]*@sha256:[0-9a-f]*\).*/\1/p' deploy/casaos-*compose.yml); do
+          for f in deploy/casaos-*.yml; do docker compose -f "$f" config --quiet; done
+          for image in $(sed -n 's/^ *image: \([^ ]*@sha256:[0-9a-f]*\).*/\1/p' deploy/casaos-*.yml); do
             grep -qF "image: $image" deploy/docker-compose.yml || { echo "::error::$image differs from deploy/docker-compose.yml"; exit 1; }
           done
       - name: nightly.sh and scheduler.sh (dash)
@@ -170,8 +171,8 @@ jobs:
           image=$(sed -n 's/^ *image: \(restic\/restic:[^ ]*\).*/\1/p' deploy/docker-compose.yml)
           docker run --rm -v "$PWD/deploy/backup:/backup:ro" --entrypoint sh "$image" /backup/test/restic-job-test.sh
 
-  docker-build:                              # the Dockerfile is tested before anything reaches main
-    if: github.event_name == 'pull_request'
+  docker-build:                              # the Dockerfile is tested before anything reaches main: pull requests and "Run workflow" on build/next
+    if: github.ref != 'refs/heads/main'      # on main, publish.yml builds the image itself
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:

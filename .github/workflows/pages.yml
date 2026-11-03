@@ -5,7 +5,8 @@ name: Pages
 on:
   push:
     branches: [main]
-    paths: ['frontend/**', 'docs/images/social-preview.png', '.github/workflows/pages.yml']
+    # The demo's Help page bundles the user guide (frontend/vite-plugin-guide.ts), so a guide-only change redeploys it too.
+    paths: ['frontend/**', 'docs/guide/**', 'docs/images/social-preview.png', '.github/workflows/pages.yml']
   workflow_dispatch:
 permissions:
   contents: read
