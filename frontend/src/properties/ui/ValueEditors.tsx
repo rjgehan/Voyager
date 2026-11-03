@@ -92,21 +92,41 @@ function TextValue({ name, value, sourcePath, onCommit }: ValueEditorProps) {
   );
 }
 
+/** The browser's decimal separator ("," in Germany or France). */
+const LOCALE_DECIMAL = new Intl.NumberFormat().formatToParts(1.5).find((p) => p.type === 'decimal')?.value ?? '.';
+
+/**
+ * A typed number, or null. A single comma between digits is a decimal separator, as the iPhone's
+ * decimal keypad offers in comma regions ("3,5" is 3.5); "1,000" stays unread where "." is the
+ * decimal separator, since it would mean a thousand there.
+ */
+function parseNumber(text: string): number | null {
+  const comma = /^([-+]?\d*),(\d+)$/.exec(text);
+  if (comma && (LOCALE_DECIMAL === ',' || comma[2].length !== 3)) text = `${comma[1]}.${comma[2]}`;
+  if (text === '') return null;
+  const n = Number(text);
+  return Number.isFinite(n) ? n : null;
+}
+
 function NumberValue({ name, value, onCommit }: ValueEditorProps) {
   const text = typeof value === 'number' ? String(value) : '';
   const [draft, setDraft] = useState<string | null>(null);
   // Escape blurs the field while it still shows the draft: that blur does not commit it.
   const cancelled = useRef(false);
   const commit = (v: string) => {
-    setDraft(null);
     if (cancelled.current) {
       cancelled.current = false;
+      setDraft(null);
       return;
     }
     const trimmed = v.trim();
+    const parsed = parseNumber(trimmed);
+    // A number that cannot be read stays in the field, marked invalid, until corrected or Esc.
+    if (trimmed !== '' && parsed === null) return;
+    setDraft(null);
     if (trimmed === text) return;
     if (trimmed === '') onCommit(null);
-    else if (Number.isFinite(Number(trimmed))) onCommit(Number(trimmed));
+    else if (parsed !== null && parsed !== value) onCommit(parsed);
   };
   return (
     <input
@@ -116,7 +136,7 @@ function NumberValue({ name, value, onCommit }: ValueEditorProps) {
       enterKeyHint="done"
       placeholder="Empty"
       value={draft ?? text}
-      aria-invalid={draft !== null && draft.trim() !== '' && !Number.isFinite(Number(draft.trim()))}
+      aria-invalid={draft !== null && draft.trim() !== '' && parseNumber(draft.trim()) === null}
       onChange={(e) => setDraft(e.target.value)}
       onBlur={(e) => commit(e.target.value)}
       onKeyDown={(e) => {

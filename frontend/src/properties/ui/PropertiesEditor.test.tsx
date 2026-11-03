@@ -129,6 +129,28 @@ describe('PropertiesEditor', () => {
     expect(yaml).toContain('rating: 5\n');
   });
 
+  it('takes a comma as the decimal separator in a number, and keeps a number it cannot read, marked invalid', () => {
+    render(<Harness />);
+    const rating = screen.getByLabelText('rating') as HTMLInputElement;
+    act(() => rating.focus());
+    fireEvent.change(rating, { target: { value: '3,5' } });
+    act(() => rating.blur());
+    expect(yaml).toContain('rating: 3.5\n');
+
+    const again = screen.getByLabelText('rating') as HTMLInputElement;
+    act(() => again.focus());
+    fireEvent.change(again, { target: { value: '12 kg' } });
+    act(() => again.blur());
+    expect(yaml).toContain('rating: 3.5\n');
+    expect(again.value).toBe('12 kg');
+    expect(again.getAttribute('aria-invalid')).toBe('true');
+    // Escape gives the value back.
+    act(() => again.focus());
+    fireEvent.keyDown(again, { key: 'Escape' });
+    expect(again.value).toBe('3.5');
+    expect(again.getAttribute('aria-invalid')).toBe('false');
+  });
+
   it('shows a value that does not fit its type as written', () => {
     yaml = 'due: soon\n';
     render(<Harness />);

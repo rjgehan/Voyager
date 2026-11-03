@@ -4298,7 +4298,7 @@ Obsidian's Properties, typed and edited in place, on top of Live Preview's prope
 | Text | A field; links show as links until you click beside them | On Enter or leaving the field (Escape cancels); empty writes `key:` |
 | List, Aliases | Chips (× removes; Backspace in the empty field removes the last) and a field; Enter adds | A block list |
 | Tags | Chips that open the tag's search; Enter, a comma or a space adds (`#` and spaces cleaned) | A block list without `#` |
-| Number | A field with the decimal keyboard; text that is not a number is not written | On Enter or leaving the field (Escape cancels) |
+| Number | A field with the decimal keyboard; a single comma between digits is a decimal point (`3,5` is 3.5, as the iPhone's keypad offers in comma regions; `1,000` only where the browser's locale uses a decimal comma). Text that is not a number is not written: it stays in the field, marked invalid, until corrected or Escape | On Enter or leaving the field (Escape cancels) |
 | Checkbox | A checkbox | At once (`true`/`false`) |
 | Date, Date & time | `<input type="date">` / `datetime-local` (the phone's own pickers) | `YYYY-MM-DD` / `YYYY-MM-DDTHH:mm` at once |
 
