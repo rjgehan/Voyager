@@ -65,6 +65,7 @@ import { registerFlashcards } from '../flashcards/register';
 import { registerHabits } from '../habits/register';
 import { registerCalendar } from '../calendar/register';
 import { registerWorkspace } from '../workspace/register';
+import { navigateHistory } from '../workspace/store';
 import { registerProperties } from '../properties/register';
 import { registerCanvasView } from '../views/canvas/register';
 import { registerKanban } from '../views/kanban/register';
@@ -447,8 +448,9 @@ export function registerBuiltins(): void {
     },
   });
   registerCommand({ id: 'mirror.push', name: 'Push history to the mirror now', icon: CloudUpload, when: () => mirrorConfigured(), run: pushMirrorNow });
-  registerCommand({ id: 'nav.back', name: 'Navigate back', hotkey: 'Mod-Alt-ArrowLeft', run: () => window.history.back() });
-  registerCommand({ id: 'nav.forward', name: 'Navigate forward', hotkey: 'Mod-Alt-ArrowRight', run: () => window.history.forward() });
+  // The browser's history, or the tab's own after the app was reopened (DESIGN §6.40).
+  registerCommand({ id: 'nav.back', name: 'Navigate back', hotkey: 'Mod-Alt-ArrowLeft', run: () => navigateHistory('back') });
+  registerCommand({ id: 'nav.forward', name: 'Navigate forward', hotkey: 'Mod-Alt-ArrowRight', run: () => navigateHistory('forward') });
   registerCommand({ id: 'trash.open', name: 'Open trash', icon: Trash, run: () => goTo('/trash') });
   // The server at a glance (ROADMAP item 38, DESIGN §6.18.1): /x/status, a ribbon and drawer entry, and "Open Status".
   registerPage({ route: 'status', title: 'Status', icon: Activity, load: () => import('../components/pages/StatusPage') });

@@ -31,6 +31,7 @@ import {
   selectAdjacentTab,
   selectTab,
   split,
+  step,
   togglePin,
   type NavKind,
   type OpenOptions,
@@ -207,6 +208,8 @@ export function navigateInPane(pane: string, tab: string, route: string, kind: N
 // ---------- the router's side (RouteSync) ----------
 
 let lastIdx: number | null = null;
+/** The furthest history entry of this page load: below it, the browser can go forward. */
+let maxIdx: number | null = null;
 
 function historyIdx(): number {
   const state = window.history.state as { idx?: unknown } | null;
@@ -222,6 +225,8 @@ export function routerNavigated(route: string, action: string): void {
   const idx = historyIdx();
   const previous = lastIdx ?? idx;
   lastIdx = idx;
+  // A push drops the browser's forward entries.
+  maxIdx = action === 'PUSH' ? idx : Math.max(maxIdx ?? idx, idx);
   const ws = workspace();
   if (action !== 'POP') {
     set(navigate(ws, route, action === 'PUSH' ? 'push' : 'replace'));
@@ -233,8 +238,28 @@ export function routerNavigated(route: string, action: string): void {
   if (result.url !== null) navigateTo(result.url, { replace: true });
 }
 
+/**
+ * Navigate back or forward (the note header's arrows, Mod-Alt-Left/Right): through the browser's
+ * history while it has an entry of this page load that way (the router's POP then walks the tab),
+ * otherwise through the active tab's own saved history. After the app is reopened the browser has
+ * no earlier entry, and Back used to do nothing, or leave NotesApp for the page before it.
+ */
+export function navigateHistory(dir: 'back' | 'forward'): void {
+  const idx = historyIdx();
+  if (dir === 'back' ? idx > 0 : idx < (maxIdx ?? idx)) {
+    if (dir === 'back') window.history.back();
+    else window.history.forward();
+    return;
+  }
+  const result = step(workspace(), dir);
+  if (!result) return;
+  set(result.ws);
+  navigateTo(result.route, { replace: true });
+}
+
 /** Test seam: start over from `ws`. */
 export function resetWorkspace(ws: Workspace = createWorkspace(currentRoute())): void {
   lastIdx = null;
+  maxIdx = null;
   useWorkspace.setState({ ws });
 }

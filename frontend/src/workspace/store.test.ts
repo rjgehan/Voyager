@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { navigateTo, setNavigator, setNewTabOpener } from '../features/navigation';
 import { installTabGestures, wantsNewTab } from './gesture';
 import { installDesktopBridge, type DesktopCommand, type NotesDesktop } from '../desktop/bridge';
@@ -7,6 +7,7 @@ import {
   closeActiveTab,
   focusPaneById,
   loadWorkspace,
+  navigateHistory,
   openInNewTab,
   rebaseWorkspace,
   reopenClosedTab,
@@ -212,5 +213,61 @@ describe('new-tab gestures', () => {
     expect(calls.at(-1)).toEqual({ to: '/n/c.md', replace: false });
     row.remove();
     remove();
+  });
+});
+
+// The app reopened (desktop app, a new browser tab, the Home-Screen app): the tab's saved history
+// comes back, but the browser has no earlier entry of the app to go back to.
+describe('back and forward after the app is reopened', () => {
+  function reopenAt(page: string) {
+    const saved = createWorkspace('/n/c.md');
+    const pane = activePaneOf(saved);
+    pane.tabs[0] = { ...pane.tabs[0], back: ['/n/a.md', '/n/b.md'], forward: [] };
+    localStorage.setItem(WORKSPACE_KEY, JSON.stringify(saved));
+    idx = 0;
+    window.history.replaceState({ idx: 0 }, '', page);
+    resetWorkspace(loadWorkspace());
+  }
+
+  it('Back walks the tab’s own history instead of leaving the app', () => {
+    reopenAt('/n/c.md');
+    routerNavigated('/n/c.md', 'POP');
+    const back = vi.spyOn(window.history, 'back');
+    navigateHistory('back');
+    expect(back).not.toHaveBeenCalled();
+    expect(activeTab(workspace())).toMatchObject({ route: '/n/b.md', back: ['/n/a.md'], forward: ['/n/c.md'] });
+    expect(url()).toBe('/n/b.md');
+    expect(calls.at(-1)).toEqual({ to: '/n/b.md', replace: true });
+    navigateHistory('back');
+    expect(url()).toBe('/n/a.md');
+    navigateHistory('back');
+    expect(url()).toBe('/n/a.md');
+    const forward = vi.spyOn(window.history, 'forward');
+    navigateHistory('forward');
+    navigateHistory('forward');
+    expect(forward).not.toHaveBeenCalled();
+    expect(activeTab(workspace())).toMatchObject({ route: '/n/c.md', back: ['/n/a.md', '/n/b.md'], forward: [] });
+  });
+
+  it('starting at "/" (the installed app) does not add the note it reopens to its own history', () => {
+    reopenAt('/');
+    // HomePage opens the last note.
+    go('/n/c.md', true);
+    expect(activeTab(workspace()).back).toEqual(['/n/a.md', '/n/b.md']);
+    navigateHistory('back');
+    expect(url()).toBe('/n/b.md');
+  });
+
+  it('within a session, the browser’s own history is used as before', () => {
+    routerNavigated('/n/a.md', 'POP');
+    go('/n/b.md', false);
+    const back = vi.spyOn(window.history, 'back').mockImplementation(() => browserPop('/n/a.md', 0));
+    navigateHistory('back');
+    expect(back).toHaveBeenCalledTimes(1);
+    expect(activeTab(workspace()).route).toBe('/n/a.md');
+    const forward = vi.spyOn(window.history, 'forward').mockImplementation(() => browserPop('/n/b.md', 1));
+    navigateHistory('forward');
+    expect(forward).toHaveBeenCalledTimes(1);
+    expect(activeTab(workspace()).route).toBe('/n/b.md');
   });
 });
