@@ -52,13 +52,14 @@ import {
   sheetById,
   sheetByName,
   sheetNameProblem,
+  type CachedValue,
   type ChartProps,
   type FilterColumn,
   type Sheet,
   type SheetFilter,
   type ValidationType,
 } from '../../sheets/format';
-import { dropdownItems, isValid, validationLooks, validations } from '../../sheets/validation';
+import { dropdownItems, holdsItem, isValid, validationLooks, validations } from '../../sheets/validation';
 import { changeDecimals, isGeneral } from '../../sheets/numfmt';
 import { absoluteRangeText, parseRangeText, rangeText, type CellRange } from '../../sheets/refs';
 import { typedInput } from '../../sheets/input';
@@ -147,6 +148,11 @@ function decodeHash(hash: string): string | null {
 
 function errorText(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
+}
+
+/** The dropdown item a cell holds (marked in its list): as it shows, or the one whose value it holds ($5 for 5). */
+function currentItem(items: readonly string[], cell: { value: CachedValue; text: string }): string {
+  return items.find((item) => holdsItem(item, cell.value, cell.text)) ?? cell.text;
 }
 
 function step(at: CellAt, move: Move): CellAt {
@@ -1345,7 +1351,7 @@ ${JSON.stringify(sheet.filter ?? null)}`;
       {dropdown && dropdownRule && (
         <DropdownList
           items={dropdownItems(workbook.file, sheet, dropdownRule)}
-          current={shownCell(sheet, dropdown.at.col, dropdown.at.row).text}
+          current={currentItem(dropdownItems(workbook.file, sheet, dropdownRule), shownCell(sheet, dropdown.at.col, dropdown.at.row))}
           cell={toA1(dropdown.at.col, dropdown.at.row)}
           anchor={dropdown.anchor}
           phone={phone}

@@ -1027,6 +1027,31 @@ describe('checkboxes and dropdowns (DESIGN §6.21.13)', () => {
     expect(await screen.findByText(/“Water” is not one of the values A2 takes/)).toBeInTheDocument();
     expect((await saved(path)).sheets[0].cells.A2).toEqual({ v: 'Rent' });
   });
+
+  it('takes its own items that read as amounts ($5 shows $5.00): picked, ticked and typed under a strict rule', async () => {
+    const path = await openGrid();
+    select(0, 0, 1, 2); // A2:A3
+    fireEvent.click(screen.getByRole('button', { name: 'Checkboxes and dropdowns' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Insert dropdown…' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Data validation rules' });
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Item 1' }), { target: { value: '$5' } });
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Item 2' }), { target: { value: '$10' } });
+    fireEvent.click(within(dialog).getByRole('radio', { name: 'Reject the input' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Done' }));
+    click(0, 1, 95);
+    fireEvent.click(within(await screen.findByRole('listbox', { name: 'Values for A3' })).getByRole('option', { name: '$5' }));
+    expect((await saved(path)).sheets[0].cells.A3).toEqual({ v: 5, fmt: '$#,##0.00' });
+    click(0, 1, 95);
+    const again = await screen.findByRole('listbox', { name: 'Values for A3' });
+    expect(within(again).getByRole('option', { name: '$5' })).toHaveAttribute('aria-selected', 'true');
+    fireEvent.keyDown(again, { key: 'Escape' });
+    select(0, 0);
+    fireEvent.focus(formulaInput());
+    fireEvent.change(formulaInput(), { target: { value: '$10' } });
+    fireEvent.keyDown(formulaInput(), { key: 'Enter' });
+    expect((await saved(path)).sheets[0].cells.A2).toEqual({ v: 10, fmt: '$#,##0.00' });
+    expect(screen.queryByText(/is not one of the values/)).toBeNull();
+  });
 });
 
 describe('formulas typed on an iPhone (Smart Punctuation)', () => {
