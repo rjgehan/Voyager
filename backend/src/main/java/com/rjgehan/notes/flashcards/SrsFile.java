@@ -93,6 +93,12 @@ final class SrsFile {
 
 	final TreeMap<String, Card> cards = new TreeMap<>();
 
+	/**
+	 * True when reading left something out (the file is not JSON or not an object, a section is not an object, or a
+	 * record cannot be read): the next write keeps the file beside it first, so a hand edit is never lost.
+	 */
+	boolean lossy;
+
 	// ---------------------------------------------------------------- reading
 
 	static SrsFile parse(String text, JsonMapper mapper) {
@@ -102,12 +108,15 @@ final class SrsFile {
 			root = mapper.readTree(text);
 		}
 		catch (JacksonException ex) {
-			logger.warn("{} is not valid JSON; it is read as empty and replaced on the next review",
+			logger.warn("{} is not valid JSON; it is read as empty and kept beside it before the next write",
 					FlashcardService.FILE);
+			file.lossy = true;
 			return file;
 		}
 		if (!(root instanceof ObjectNode object)) {
-			logger.warn("{} is not a JSON object; it is read as empty", FlashcardService.FILE);
+			logger.warn("{} is not a JSON object; it is read as empty and kept beside it before the next write",
+					FlashcardService.FILE);
+			file.lossy = true;
 			return file;
 		}
 		for (Map.Entry<String, JsonNode> field : object.properties()) {
@@ -124,6 +133,10 @@ final class SrsFile {
 							file.config.put(entry.getKey(), entry.getValue());
 						}
 					}
+					else {
+						logger.warn("{}: config is not an object and is read as empty", FlashcardService.FILE);
+						file.lossy = true;
+					}
 				}
 				case "cards" -> {
 					if (field.getValue() instanceof ObjectNode cards) {
@@ -133,11 +146,16 @@ final class SrsFile {
 							if (card == null) {
 								logger.warn("{}: the record of card {} cannot be read and is skipped",
 										FlashcardService.FILE, entry.getKey());
+								file.lossy = true;
 							}
 							else {
 								file.cards.put(entry.getKey(), card);
 							}
 						}
+					}
+					else {
+						logger.warn("{}: cards is not an object and is read as empty", FlashcardService.FILE);
+						file.lossy = true;
 					}
 				}
 				default -> file.extra.put(field.getKey(), field.getValue());

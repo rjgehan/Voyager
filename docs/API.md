@@ -3708,7 +3708,7 @@ The notes that may hold cards, with their text: `{config, notes: [{path, version
 
 ### 34.3 `GET /api/flashcards`
 
-`FlashcardsResponse`: the effective settings (every field, with defaults filled in), every record by card id, and `version`, the blob id of `srs.json` (`null` before the first write).
+`FlashcardsResponse`: the effective settings (every field, with defaults filled in), every record by card id, and `version`, the blob id of `srs.json` (`null` before the first write). Reading is tolerant: a file that is not JSON reads as no records and default settings, and a record that cannot be read is left out. The next write keeps such a file beside the new one as `srs.json.bak-<timestamp>` (DESIGN §5.34).
 
 | Setting | Default | Range |
 |---|---|---|
