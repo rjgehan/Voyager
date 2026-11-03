@@ -68,6 +68,58 @@ describe('build check with the service worker', () => {
   });
 });
 
+describe('a reload that did not happen (cancelled by the unsaved-changes prompt)', () => {
+  beforeEach(() => {
+    useUi.getState().setNewBuildAvailable(false);
+    setReloadPreparer(null);
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('an automatic reload that was cancelled shows the banner, and its Reload works', () => {
+    setUnsavedProbe(() => false);
+    const reload = vi.fn();
+    setReloader(reload);
+    reportServerBuild('build-2', 'build-1');
+    expect(reload).toHaveBeenCalledTimes(1);
+    // The page is still here: "Reload site?" was answered Cancel (or the desktop app cancelled it).
+    vi.advanceTimersByTime(5000);
+    expect(useUi.getState().newBuildAvailable).toBe(true);
+    reloadForNewBuild();
+    expect(reload).toHaveBeenCalledTimes(2);
+  });
+
+  it('the banner’s Reload works again after a cancelled reload, once the note has saved', () => {
+    let unsaved = true;
+    setUnsavedProbe(() => unsaved);
+    const reload = vi.fn();
+    setReloader(reload);
+    reportServerBuild('build-2', 'build-1');
+    expect(useUi.getState().newBuildAvailable).toBe(true);
+    reloadForNewBuild();
+    expect(reload).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(5000);
+    unsaved = false;
+    reloadForNewBuild();
+    expect(reload).toHaveBeenCalledTimes(2);
+  });
+
+  it('a later report of the new build still raises the banner', () => {
+    setUnsavedProbe(() => false);
+    const reload = vi.fn();
+    setReloader(reload);
+    reportServerBuild('build-2', 'build-1');
+    vi.advanceTimersByTime(5000);
+    useUi.getState().setNewBuildAvailable(false);
+    reportServerBuild('build-2', 'build-1');
+    expect(useUi.getState().newBuildAvailable).toBe(true);
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('a lazy chunk that cannot load (vite:preloadError)', () => {
   let reload: ReturnType<typeof vi.fn<() => void>>;
 

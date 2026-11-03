@@ -21,6 +21,9 @@ let anyUnsaved: () => boolean = () => false;
 let prepare: (() => Promise<void>) | null = null;
 let reloadPage: () => void = () => window.location.reload();
 let reloading = false;
+/** Armed by each reload: a page still running this long after it was cancelled (beforeunload). */
+const STILL_HERE_MS = 3000;
+let stillHere: ReturnType<typeof setTimeout> | null = null;
 
 /** The document registry tells the check whether a reload would interrupt a save. */
 export function setUnsavedProbe(probe: () => boolean): void {
@@ -36,6 +39,8 @@ export function setReloadPreparer(fn: (() => Promise<void>) | null): void {
 export function setReloader(reload: () => void): void {
   reloadPage = reload;
   reloading = false;
+  if (stillHere !== null) clearTimeout(stillHere);
+  stillHere = null;
   try {
     sessionStorage.removeItem(GUARD_KEY);
   } catch {
@@ -71,7 +76,7 @@ function startReload(automatic: boolean): void {
   if (reloading) return;
   reloading = true;
   if (!prepare) {
-    reloadPage();
+    reloadNow();
     return;
   }
   void prepare()
@@ -83,8 +88,23 @@ function startReload(automatic: boolean): void {
         useUi.getState().setNewBuildAvailable(true);
         return;
       }
-      reloadPage();
+      reloadNow();
     });
+}
+
+/**
+ * The page cancels an unload while anything is unsaved (sync/documents.ts): the browser asks
+ * "Reload site?" and the user may stay, and the desktop app cancels it outright. A page still running
+ * shortly after reloading shows the banner, and its Reload (and later reports) work again.
+ */
+function reloadNow(): void {
+  reloadPage();
+  if (stillHere !== null) clearTimeout(stillHere);
+  stillHere = setTimeout(() => {
+    stillHere = null;
+    reloading = false;
+    useUi.getState().setNewBuildAvailable(true);
+  }, STILL_HERE_MS);
 }
 
 export function reportServerBuild(serverBuild: string | null | undefined, ownBuild: string = pageBuild): void {
