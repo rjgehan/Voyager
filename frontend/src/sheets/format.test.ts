@@ -19,7 +19,7 @@ import {
 const EXAMPLE = {
   type: 'notesapp-sheet',
   version: 1,
-  engine: 'hyperformula@3.5.0',
+  engine: 'hyperformula@3.5.0+1',
   sheets: [
     {
       id: 's1',
@@ -63,7 +63,7 @@ describe('parseSheet', () => {
   it('reads the documented example without repairs', () => {
     const { file, repairs } = parse(EXAMPLE);
     expect(repairs).toEqual([]);
-    expect(file.engine).toBe('hyperformula@3.5.0');
+    expect(file.engine).toBe('hyperformula@3.5.0+1');
     expect(file.sheets[0].cells.B10).toEqual({ f: '=SUM(B2:B9)', c: 1937.5 });
     expect(file.sheets[0].cols.B).toEqual({ w: 110, fmt: '$#,##0.00' });
     expect(file.sheets[0].rows['1']).toEqual({ bold: true });

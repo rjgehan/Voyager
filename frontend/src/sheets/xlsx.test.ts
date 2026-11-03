@@ -13,7 +13,7 @@ function file(value: unknown): SheetFile {
 const BUDGET = file({
   type: 'notesapp-sheet',
   version: 1,
-  engine: 'hyperformula@3.5.0',
+  engine: 'hyperformula@3.5.0+1',
   sheets: [
     {
       id: 's1',

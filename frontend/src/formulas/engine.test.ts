@@ -23,6 +23,12 @@ describe('note formulas engine (ROADMAP 39)', () => {
     expect(r.cell(0, 0, 0)).toBeNull();
   });
 
+  it('formats TEXT with Google Sheets’ format codes, as a .sheet file does', () => {
+    const r = computeNote({ tables: [budget] });
+    expect(r.inline('=TEXT(budget!B2,"$#,##0.00")')?.text).toBe('$1,450.00');
+    expect(r.inline('=TEXT(DATE(2026,10,17),"dddd")')?.text).toBe('Saturday');
+  });
+
   it('shows errors with their code and message', () => {
     const t: FormulaTable = { name: 'Table1', named: false, rows: [['a', 'b'], ['1', '=A2/0'], ['=FOO(1)', '=SUM(']], formats: {} };
     const r = computeNote({ tables: [t] });

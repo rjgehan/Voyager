@@ -2,7 +2,7 @@ import { HyperFormula } from 'hyperformula';
 import { describe, expect, it, vi } from 'vitest';
 import { shownCell } from './display';
 import { typedEdit } from './edits';
-import { ENGINE_ID, Workbook, type WorkbookChange } from './engine';
+import { ENGINE_ID, ENGINE_REVISION, Workbook, type WorkbookChange } from './engine';
 import { cellValue, parseSheet, serializeSheet, SHEET_ENGINE, type SheetFile } from './format';
 import { loadSheetEngine } from './loadEngine';
 import { mergeSheetText } from './merge';
@@ -45,9 +45,32 @@ const BUDGET = {
   named: { Total: 'Budget!$B$10' },
 };
 
+describe('functions with Google Sheets’ meaning', () => {
+  it('formats TEXT with Google Sheets’ format codes', () => {
+    const cases: Array<[string, string]> = [
+      ['=TEXT(1234.5,"#,##0.00")', '1,234.50'],
+      ['=TEXT(0.25,"0%")', '25%'],
+      ['=TEXT(0.125,"0.0%")', '12.5%'],
+      ['=TEXT(1234,"$#,##0")', '$1,234'],
+      ['=TEXT(DATE(2026,10,17),"mmm d, yyyy")', 'Oct 17, 2026'],
+      ['=TEXT(DATE(2026,10,17),"mmmm")', 'October'],
+      ['=TEXT(DATE(2026,10,17),"dddd")', 'Saturday'],
+      ['=TEXT(DATE(2026,10,17),"yyyy-mm-dd")', '2026-10-17'],
+      ['=TEXT(-5,"0;(0)")', '(5)'],
+      ['=TEXT("12","0.0")', '12.0'],
+      ['=TEXT("abc","0")', 'abc'],
+      ['=TEXT(A20,"0.00")', '42.00'],
+    ];
+    const cells: Record<string, unknown> = { A20: { v: 42 } };
+    cases.forEach(([f], i) => (cells[`A${i + 1}`] = { f }));
+    const wb = workbook([{ name: 'S', cells }]);
+    cases.forEach(([, want], i) => expect(value(wb, `A${i + 1}`)).toBe(want));
+  });
+});
+
 describe('engine identity', () => {
   it('is the pinned HyperFormula, which new files name', () => {
-    expect(ENGINE_ID).toBe(`hyperformula@${HyperFormula.version}`);
+    expect(ENGINE_ID).toBe(`hyperformula@${HyperFormula.version}+${ENGINE_REVISION}`);
     // An engine upgrade recalculates every sheet; update SHEET_ENGINE deliberately with it.
     expect(SHEET_ENGINE).toBe(ENGINE_ID);
   });

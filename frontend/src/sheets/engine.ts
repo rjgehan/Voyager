@@ -71,11 +71,19 @@ import {
 } from './refs';
 // The functions that read notes (ROADMAP item 42), registered before any engine is built.
 import './links/noteFunctions';
+// Built-in functions given their Google Sheets meaning (TEXT), registered the same way.
+import './sheetsFunctions';
 
 export { functionCatalog } from './functions';
 
-/** The engine identity written to `engine`. A config change that alters results must change it too. */
-export const ENGINE_ID = `hyperformula@${HyperFormula.version}`;
+/**
+ * Counts this app's changes to the engine that alter results (its configuration, the functions it
+ * replaces): 1 is TEXT with Google Sheets' format codes.
+ */
+export const ENGINE_REVISION = 1;
+
+/** The engine identity written to `engine`. A config change that alters results must change ENGINE_REVISION. */
+export const ENGINE_ID = `hyperformula@${HyperFormula.version}+${ENGINE_REVISION}`;
 
 /** Edits of more cells than this rebuild the engine, which is faster than as many single updates. */
 const REBUILD_THRESHOLD = 1000;

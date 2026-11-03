@@ -23,7 +23,7 @@ vi.mock('../../loadEngine', () => ({ loadSheetEngine: () => answer() }));
 const BUDGET = {
   type: 'notesapp-sheet',
   version: 1,
-  engine: 'hyperformula@3.5.0',
+  engine: 'hyperformula@3.5.0+1',
   sheets: [{ id: 's1', name: 'Budget', cells: { A1: { v: 'Rent' }, B1: { v: 10 }, B2: { f: '=B1*2', c: 20 } }, cols: {}, rows: {}, frozen: { rows: 0, cols: 0 } }],
   named: {},
 };
