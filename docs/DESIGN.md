@@ -4457,9 +4457,9 @@ Shared files touched (each change additive): `sheets/engine.ts` (`Workbook.open(
 | Function | Result |
 |---|---|
 | `NOTEPROP(note, property)` | A property of the note's frontmatter (by name, any case), else a file field by its Dataview name: `file.name` (or `title`), `file.path`, `file.folder`, `file.mtime`, `file.mday`, `file.size`, `file.tags`, `file.aliases`, `file.link` (§6.43.4) |
-| `NOTETABLE(note, [table], [headers])` | The note's table as its formulas compute it (item 39, §6.42), spilled: the table named by its `^id` (or `Table2`), else the first; `headers` (TRUE) includes the header row |
+| `NOTETABLE(note, [table], [headers])` | The note's table as its formulas compute it (item 39, §6.42), spilled: the table named by its `^id` (or `Table2`), else the first; `headers` (default TRUE) includes the header row; FALSE leaves it out |
 | `NOTECOUNT([query])` | How many notes the query matches (all notes without one) |
-| `NOTEQUERY([query], [columns], [headers])` | The matching notes (path order, at most 500), one row each, spilled; `columns` is text such as `"title, status, due"` (default `title`), each a property or file field as for `NOTEPROP`; `headers` (TRUE) puts the column names first |
+| `NOTEQUERY([query], [columns], [headers])` | The matching notes (path order, at most 500), one row each, spilled; `columns` is text such as `"title, status, due"` (default `title`), each a property or file field as for `NOTEPROP`; `headers` (default TRUE) puts the column names first; FALSE leaves them out |
 
 - **Notes are named as links name them** (`"Plan"`, `"Projects/Plan"`, `"[[Plan]]"`), resolved from the spreadsheet's path with the client's link resolution over the tree (§6.6), so `NOTEPROP("Plan", …)` reads the note `[[Plan]]` would open. A name that resolves to nothing is `#REF!` (it resolves again when a note of that name appears).
 - **Values are typed:** numbers and booleans as they are; text; dates (`2026-11-05`) and date-times as serial dates whose type the engine knows (a cell typed `=NOTEPROP(…)` gets the date format, §6.21.8); lists joined with commas; `[[Link|text]]` as its text; a missing or empty property `#N/A` with "“Plan” has no property “status”"; objects as JSON.

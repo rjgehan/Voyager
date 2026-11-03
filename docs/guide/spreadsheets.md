@@ -124,9 +124,9 @@ Four functions bring your notes into a spreadsheet. Name a note as a link would 
 | Formula | Gives |
 |---|---|
 | `=NOTEPROP("Projects/Plan", "status")` | A property of the note, or a file field such as `file.name`, `file.mtime`, `file.size` or `file.tags` |
-| `=NOTETABLE("Budget note", "budget")` | A table of the note, with its formulas worked out: the table named `^budget` (see [Use a table from elsewhere in the note](tables-and-formulas.md#use-a-table-from-elsewhere-in-the-note)), or the first one without a name. Add `TRUE` to include the header row. |
+| `=NOTETABLE("Budget note", "budget")` | A table of the note, with its formulas worked out: the table named `^budget` (see [Use a table from elsewhere in the note](tables-and-formulas.md#use-a-table-from-elsewhere-in-the-note)), or the first one without a name. Its first row is the table's header row; add `FALSE` to leave it out: `=NOTETABLE("Budget note", "budget", FALSE)`. |
 | `=NOTECOUNT("tag:work")` | How many notes match (all of them without a query) |
-| `=NOTEQUERY("tag:work status!=done", "title, status, due")` | One row per matching note (up to 500), with the columns you name (`title` alone without them). Add `TRUE` for a header row. |
+| `=NOTEQUERY("tag:work status!=done", "title, status, due")` | One row per matching note (up to 500), with the columns you name (`title` alone without them), after a first row of the column names; add `FALSE` to leave that row out: `=NOTEQUERY("tag:work", "title, status", FALSE)`. |
 
 - **Queries** combine words with AND: `tag:work` or `#work`, `folder:Projects`, `links:Plan` or `[[Plan]]` (notes that link to it), `status=open`, `status!=done`, `prop:status` (has the property), and any other words as a search in the notes' text.
 - `NOTETABLE` and `NOTEQUERY` fill the cells below and to the right, so leave them empty. Write their note and table as text in the formula: with a cell reference instead (`=NOTETABLE(A1)`) they show `#VALUE!`.
