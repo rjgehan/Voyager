@@ -44,4 +44,25 @@ class MoveLogTest {
 		assertThat(this.log.movedTo("Note.md")).isNull();
 	}
 
+	@Test
+	void aMoveAwayFromANameMadeBeforeAnotherNoteTookItIsNotFollowed() {
+		this.log.record("Meeting.md", "Meeting 2026-10.md");
+		this.log.record("Meeting new.md", "Meeting.md");
+		assertThat(this.log.movedTo("Meeting new.md")).isEqualTo("Meeting.md");
+		assertThat(this.log.movedTo("Meeting.md")).isEqualTo("Meeting 2026-10.md");
+		this.log.record("Meeting.md", "X.md");
+		assertThat(this.log.movedTo("Meeting new.md")).isEqualTo("X.md");
+		assertThat(this.log.movedTo("Meeting.md")).isEqualTo("Meeting 2026-10.md");
+	}
+
+	@Test
+	void theOldestEntriesAreEvicted() {
+		this.log.record("First.md", "Gone.md");
+		for (int i = 0; i < MoveLog.CAPACITY; i++) {
+			this.log.record("n" + i + ".md", "m" + i + ".md");
+		}
+		assertThat(this.log.movedTo("First.md")).isNull();
+		assertThat(this.log.movedTo("n0.md")).isEqualTo("m0.md");
+	}
+
 }
