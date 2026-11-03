@@ -303,8 +303,8 @@ public class VaultRegistry implements DisposableBean {
 				throw new IllegalStateException("The main application has no servlet context");
 			}
 			ConfigurableApplicationContext context = application(entry, servletContext).run();
-			DispatcherServlet servlet = context.getBean(DispatcherServlet.class);
-			servlet.init(new VaultServletConfig("notesapp-vault-" + entry.name, servletContext));
+			DispatcherServlet servlet = initDispatcher(context,
+					new VaultServletConfig("notesapp-vault-" + entry.name, servletContext));
 			synchronized (this) {
 				if (this.closed) {
 					servlet.destroy();
@@ -318,9 +318,36 @@ public class VaultRegistry implements DisposableBean {
 			logger.info("Vault {} ready in {} ms ({})", entry.name,
 					TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started), entry.dir);
 		}
-		catch (RuntimeException | ServletException ex) {
+		catch (RuntimeException | ServletException | Error ex) {
+			// An Error too: a vault left STARTING would answer "retry shortly" for good.
 			entry.state = State.FAILED;
 			logger.error("VAULT_START_FAILED: vault {} at {} could not be started", entry.name, entry.dir, ex);
+			if (ex instanceof Error error) {
+				throw error;
+			}
+		}
+	}
+
+	/**
+	 * Sets up the dispatcher of a vault context that has started. On any failure the context is closed before the
+	 * failure is rethrown: it runs the vault's watcher, commit batcher and scheduled tasks, and nothing else would
+	 * ever close it (only a ready vault's context is kept, for {@link #destroy}).
+	 */
+	static DispatcherServlet initDispatcher(ConfigurableApplicationContext context, ServletConfig config)
+			throws ServletException {
+		try {
+			DispatcherServlet servlet = context.getBean(DispatcherServlet.class);
+			servlet.init(config);
+			return servlet;
+		}
+		catch (Throwable ex) {
+			try {
+				context.close();
+			}
+			catch (RuntimeException closing) {
+				ex.addSuppressed(closing);
+			}
+			throw ex;
 		}
 	}
 
