@@ -37,8 +37,19 @@ class CasaOsLayoutTest {
 		Map<String, Object> env = map(service(read("deploy/casaos-compose.yml"), "notes").get("environment"));
 		assertThat(String.valueOf(env.get("NOTES_ALLOWED_HOSTS")).split(","))
 			.containsExactly("homeserver.<tailnet>.ts.net", "homeserver.<tailnet>.ts.net:8443");
-		// Required: a placeholder the user replaces with their login (it admits nobody), never left out.
+		// Required: a placeholder the user replaces with their login (it makes nobody an owner), never left out.
 		assertThat(env.get("NOTES_IDENTITY_ALLOWED_LOGINS")).isEqualTo("you@example.com");
+	}
+
+	@Test
+	void theFileSaysOtherLoginsSeeOnlyWhatIsSharedWithThem() throws Exception {
+		// The listed logins are the owners; every other login is a guest of the shares naming it (DESIGN §5.40).
+		String text = read("deploy/casaos-compose.yml");
+		assertThat(text).doesNotContain("lets nobody in").doesNotContain("nobody else is let in");
+		assertThat(text).contains("# Tailscale login (required: you are the owner; any other login sees only what you share with it).\n")
+			.contains("      # Required: your Tailscale login, the email the admin console shows (comma-separate several). These\n"
+					+ "      # logins are the owners; every other login sees only what is shared with it, and the placeholder\n"
+					+ "      # makes nobody an owner.\n");
 	}
 
 	@Test
