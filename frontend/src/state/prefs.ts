@@ -60,16 +60,41 @@ interface PrefsState extends Prefs {
 export const usePrefs = create<PrefsState>()((set, get) => ({
   ...load(),
   update(patch) {
-    set(patch);
-    const { theme, spellcheck, autocorrect, loadRemoteImages, offlineNotes, vimMode, syntaxVisibility, encryptionLockMinutes, encryptionLockOnHide, scripts } = get();
+    const before = get().theme;
+    // Merged into what is stored, not this page's copy: another tab may have changed other
+    // preferences since this one loaded (its 'storage' event can come late or not at all).
+    let stored: Prefs;
     try {
-      localStorage.setItem(PREFS_KEY, JSON.stringify({ theme, spellcheck, autocorrect, loadRemoteImages, offlineNotes, vimMode, syntaxVisibility, encryptionLockMinutes, encryptionLockOnHide, scripts }));
+      stored = localStorage.getItem(PREFS_KEY) === null ? pick(get()) : load();
+    } catch {
+      stored = pick(get());
+    }
+    const next: Prefs = { ...stored, ...patch };
+    set(next);
+    try {
+      localStorage.setItem(PREFS_KEY, JSON.stringify(next));
     } catch {
       // Private mode or quota: the preference still applies to this page load.
     }
-    if (patch.theme) applyTheme();
+    if (next.theme !== before || patch.theme) applyTheme();
   },
 }));
+
+function pick(p: Prefs): Prefs {
+  const { theme, spellcheck, autocorrect, loadRemoteImages, offlineNotes, vimMode, syntaxVisibility, encryptionLockMinutes, encryptionLockOnHide, scripts } = p;
+  return { theme, spellcheck, autocorrect, loadRemoteImages, offlineNotes, vimMode, syntaxVisibility, encryptionLockMinutes, encryptionLockOnHide, scripts };
+}
+
+// Another tab of this device changed them (Settings › This device, the theme toggle): follow it, so
+// this tab stops keeping offline copies when they are turned off, and shows the same theme.
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (e) => {
+    if (e.key !== PREFS_KEY && e.key !== null) return;
+    const before = usePrefs.getState().theme;
+    usePrefs.setState(load());
+    if (usePrefs.getState().theme !== before) applyTheme();
+  });
+}
 
 export function resolvedTheme(pref: ThemePref = usePrefs.getState().theme): 'dark' | 'light' {
   if (pref === 'system') {
