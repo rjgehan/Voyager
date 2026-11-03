@@ -22,7 +22,7 @@ On the same page you can change the quick-capture key and turn on **Launch Voyag
 
 - **Closing the window** keeps Voyager running in the tray (the notification area on Windows, the menu bar on a Mac), so quick capture, live sync and reminders keep working. **Quit** is in the tray menu.
 - **The tray menu** has Quick capture, Open Voyager, Open today's note, Reload, Launch at login, Settings… and Quit.
-- **Unsaved changes**: while a note has changes not yet saved to the server (offline, say), **Reload** or a new server address first asks whether to continue; the changes stay on this computer either way. **Quit** quits without asking, and the changes are saved the next time Voyager reaches the server.
+- **Unsaved changes**: while a note has changes not yet saved to the server (offline, say), **Reload** or a new server address first asks whether to continue; the changes stay on this computer either way. **Stay** after a new server address keeps the old one. **Quit** quits without asking, and the changes are saved the next time Voyager reaches the server.
 - **Quick capture from anywhere**: press `Ctrl+Shift+Space` (Mac: `Cmd+Shift+Space`) in any program. A small window opens on top; type, choose **Inbox** or **Today**, and save with `Ctrl+Enter`. `Esc` closes it without saving. Inside Voyager too, this key opens the small window rather than the in-app capture dialog.
 - **Reminders** arrive as Windows or macOS notifications when **In the app** is switched on under Settings › Reminders. Clicking one brings Voyager to the front.
 - **Links to websites** open in your usual browser; the app's window only ever shows your server.

@@ -1,4 +1,5 @@
 'use strict';
+const { isServerUrl } = require('./security');
 // The app's page cancels an unload while a note has unsaved changes (its beforeunload handler,
 // frontend/src/sync/documents.ts). A browser turns that into a "Leave site?" prompt; Electron shows
 // nothing and silently cancels the close, quit or reload unless the shell handles
@@ -26,4 +27,15 @@ function decideUnload({ quitting, ask }) {
   return UNLOAD_PROMPT.buttons[ask()] === 'Continue' ? 'leave' : 'stay';
 }
 
-module.exports = { decideUnload, UNLOAD_PROMPT };
+/**
+ * A server change saves the new address and then loads it; a page with unsaved changes can refuse,
+ * and Stay leaves the window on the old server. `pendingChange` is `{ previous }` while such a change
+ * has not navigated yet. Returns the old address to go back to when the window (`pageUrl`) is still
+ * on it, or null to keep the settings as they are.
+ */
+function serverAfterStay(pendingChange, pageUrl) {
+  if (!pendingChange || !pendingChange.previous) return null;
+  return isServerUrl(pageUrl, pendingChange.previous) ? pendingChange.previous : null;
+}
+
+module.exports = { decideUnload, serverAfterStay, UNLOAD_PROMPT };
