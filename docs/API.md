@@ -248,7 +248,7 @@ These rules are normative for every text-kind file (`note`, `text`) and for sett
         "movedTo": null
       }
       ```
-   4. **`flushHistory: true`:** before writing, the server commits its current copy (and any pending history) to git. If git is enabled and that commit fails, the response is `503 history-unavailable` (`reason: "commit-failed"`) and nothing is written.
+   4. **`flushHistory: true`:** before writing, the server commits its current copy (and any pending history) to git. If git is enabled and that commit fails, the response is `503 history-unavailable` (`reason: "commit-failed"`) and nothing is written. While the startup import is running and a version is still to be committed, the server waits a few seconds for the import, then answers `503 history-unavailable` (`reason: "importing"`) and writes nothing.
    5. Otherwise the server writes. The response carries the new `version`. Other clients receive `file.changed`.
 4. **Resolving a conflict** (client's choice):
 
@@ -627,7 +627,7 @@ Request `SaveFileRequest`:
 | `409 case-collision` (`baseVersion: null`, and an entry whose name differs only by case exists; `existingPath` names it) |
 | `409 type-mismatch` |
 | `413 too-large`, `415 not-text` |
-| `503 history-unavailable` (`reason: "commit-failed"`) with `flushHistory: true` |
+| `503 history-unavailable` (`reason: "commit-failed"`, or `"importing"` while the startup import runs) with `flushHistory: true`; `503 busy` (`Retry-After`) when another author's version is still to be committed and the startup import is running |
 
 Events to other clients: `file.changed` (or `folder.created` and `file.created` for a create), plus a later `history.committed` once the batch commits.
 

@@ -21,6 +21,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import com.rjgehan.notes.api.dto.ChangeType;
+import com.rjgehan.notes.api.error.NotesException;
 import com.rjgehan.notes.config.NotesProperties;
 import com.rjgehan.notes.events.EventHub;
 import com.rjgehan.notes.events.HistoryCommittedEvent;
@@ -58,6 +59,9 @@ public class CommitBatcher implements SmartLifecycle {
 			Duration.ofMinutes(2), Duration.ofMinutes(5));
 
 	private static final Duration SHUTDOWN_WAIT = Duration.ofSeconds(20);
+
+	/** How long a write that must not replace an uncommitted version waits for the startup import to end. */
+	private volatile Duration importWait = Duration.ofSeconds(5);
 
 	/**
 	 * What {@code /api/status} shows about history; the two counters (commits made and failed commit attempts, during
@@ -168,14 +172,27 @@ public class CommitBatcher implements SmartLifecycle {
 		return false;
 	}
 
+	private boolean pendingByOtherNow(Author writer) {
+		synchronized (this.state) {
+			return pendingByOther(writer);
+		}
+	}
+
 	/**
 	 * Called under the path lock before a write: when the pending batch belongs to another author, it is committed
 	 * first, so the previous author's last version is committed under their name and the new bytes are not. A batch of
 	 * another author that is being committed right now counts too: its {@code git add} reads the disk, so the write
-	 * waits until that commit is done. Commits never take vault or path locks, so waiting here cannot deadlock.
+	 * waits until that commit is done. Commits never take vault or path locks, so waiting here cannot deadlock. While
+	 * the startup import runs, nothing can be committed: the write waits briefly for the import to end, then refuses.
+	 * @throws NotesException {@code 503 busy} (with {@code Retry-After}) when another author's batch is pending and the
+	 * startup import is still running
 	 */
 	public void prepareWrite(Author writer) {
 		while (true) {
+			if (pendingByOtherNow(writer) && !awaitImport()) {
+				// The batch cannot be committed until the import ends; writing now would lose that version.
+				throw NotesException.busy();
+			}
 			boolean otherPending;
 			boolean otherInFlight;
 			synchronized (this.state) {
@@ -397,6 +414,33 @@ public class CommitBatcher implements SmartLifecycle {
 			this.importing = false;
 			this.importDone.countDown();
 		}
+	}
+
+	/**
+	 * For a write that must not replace an uncommitted version: when the startup import is running and paths are
+	 * pending, waits up to a few seconds for the import to end. Returns false when it is still running then (a flush
+	 * would commit nothing); true when the pending batch can be committed.
+	 */
+	public boolean awaitImport() {
+		CountDownLatch done;
+		synchronized (this.state) {
+			if (!this.importing || this.pending.isEmpty()) {
+				return true;
+			}
+			done = this.importDone;
+		}
+		try {
+			return done.await(this.importWait.toMillis(), TimeUnit.MILLISECONDS);
+		}
+		catch (InterruptedException ex) {
+			Thread.currentThread().interrupt();
+			return false;
+		}
+	}
+
+	/** For tests: how long {@link #awaitImport} waits. */
+	public void setImportWait(Duration wait) {
+		this.importWait = wait;
 	}
 
 	public boolean isImporting() {
