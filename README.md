@@ -1,158 +1,183 @@
-<div align="center">
+<p align="center">
+  <img src="docs/images/icon.svg" width="96" alt="Voyager's icon: the Golden Record, a gold disc on deep purple">
+</p>
 
-<img src="docs/images/icon.svg" width="112" height="112" alt="Voyager's icon: the Golden Record, a gold disc on deep purple">
+<h1 align="center">Voyager</h1>
 
-# Voyager
+<p align="center">
+  <b>Notes and Google-Sheets-style spreadsheets in one app, finally.</b><br>
+  A self-hosted, Obsidian-style workspace for notes, spreadsheets, drawings and tasks,<br>
+  running on my home server and live on my iPhone and Windows PC.
+</p>
 
-**Your notes, spreadsheets, drawings and tasks in one self-hosted, Obsidian-style app. Plain files on your own server, every version kept, and live on every device you own.**
+<p align="center">
+  <a href="docs/media/voyager-demo.mp4">
+    <img src="docs/media/voyager-demo.gif" width="720" alt="Voyager in action: a note whose table totals are spreadsheet formulas, a formula reading a spreadsheet, drawings, a canvas, a Kanban board, and an edit on the PC appearing on the iPhone">
+  </a><br>
+  <sub>A quick tour. Click it for the full 45-second video with sound.</sub>
+</p>
 
-[![CI](https://github.com/rjgehan/notesapp/actions/workflows/ci.yml/badge.svg)](https://github.com/rjgehan/notesapp/actions/workflows/ci.yml)
-[![Live demo](https://img.shields.io/badge/live%20demo-open%20in%20your%20browser-8a5cf5)](https://rjgehan.github.io/notesapp/)
-[![Licence: GPL-3.0](https://img.shields.io/badge/licence-GPL--3.0-blue)](LICENSE)
-![Java 21](https://img.shields.io/badge/Java-21-e76f00)
-![Spring Boot 4](https://img.shields.io/badge/Spring%20Boot-4.1-6db33f)
-![React 19](https://img.shields.io/badge/React-19-58c4dc)
-![TypeScript](https://img.shields.io/badge/TypeScript-6-3178c6)
+<p align="center">
+  <a href="https://github.com/rjgehan/notesapp/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/rjgehan/notesapp/actions/workflows/ci.yml/badge.svg"></a>
+  <img alt="Java 21" src="https://img.shields.io/badge/Java-21-b07219">
+  <img alt="Spring Boot 4" src="https://img.shields.io/badge/Spring%20Boot-4.1-6db33f">
+  <img alt="React 19 + TypeScript" src="https://img.shields.io/badge/React%2019-TypeScript-3178c6">
+  <img alt="Electron" src="https://img.shields.io/badge/desktop-Electron-47848f">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-4%2C600%2B-2ead33">
+  <img alt="Licence GPL-3.0" src="https://img.shields.io/badge/licence-GPL--3.0-blue">
+</p>
 
-<a href="docs/media/voyager-demo.mp4">
-  <img src="docs/media/voyager-demo.gif" width="720" alt="Voyager in action: a note whose table totals are spreadsheet formulas, a formula reading a spreadsheet, drawings, a canvas, a Kanban board, and an edit on the PC appearing on the iPhone">
-</a>
+---
 
-<sub>A quick tour. Click it for the full 45-second video with sound.</sub>
-
-### [▶ Try the live demo](https://rjgehan.github.io/notesapp/)
-
-It runs entirely in your browser on a sample vault: nothing to install, nothing saved.
-
-</div>
-
-## What it is
-
-Voyager is a complete notes app that I built for myself and use every day on an iPhone and a Windows PC. It looks and works like [Obsidian](https://obsidian.md), but the vault lives on a home server instead of a sync service: one Docker image, reachable only over a private [Tailscale](https://tailscale.com) network, with every change kept in git.
-
-- **Write without seeing Markdown.** One Live Preview editor (CodeMirror 6) that renders as you type; tables are editable grids whose cells take spreadsheet formulas.
-- **More than notes.** Spreadsheets, Excalidraw drawings, canvases, Kanban boards, a task manager, a calendar, a graph, flashcards and a habit tracker, all stored as ordinary files in the vault.
-- **Never lose a keystroke.** Atomic writes, version checks with a side-by-side conflict view, drafts kept in the browser until the server confirms them, and a git commit for every change.
-- **Live everywhere.** Server-Sent Events push each change to every open tab, the phone app (an installable PWA with offline mode) and the Windows and macOS desktop app.
-- **Obsidian-compatible.** Open the same folder in Obsidian: wikilinks, embeds, frontmatter, callouts, canvases and Kanban boards are its formats.
-
-Every feature is explained in the user guide, which is built into the app as its **Help** page: [open it in the live demo](https://rjgehan.github.io/notesapp/x/help), or read it here in [docs/guide](docs/guide/index.md).
-
-**Why "Voyager".** The Voyager probes were launched in 1977 and are still sending data home. This app is built to last in the same way: your notes are plain files, and every change is kept. Each probe carries a Golden Record of what matters to us; this is your own, with notes, sheets, drawings and tasks in one place. And it travels with you, on the PC and on the iPhone. The icon is that Golden Record. More in [BRAND.md](BRAND.md). (The app was called NotesApp until November 2026; the repository and the Docker image keep that name.)
-
-## See it in action
-
-<img src="docs/images/formulas.gif" alt="Editing a cost in a Live Preview table: the totals, the per-person shares and an inline formula update as you type" width="640">
-
-*A table in a note works like a small spreadsheet: change a cost and the totals, the shares and the inline formula below update as you type.*
+## At a glance
 
 | | |
-|:---:|:---:|
-| <img src="docs/images/spreadsheet.webp" alt="Spreadsheet view with a formula bar and a line chart" width="100%"><br>**Spreadsheets** with ~400 Google-Sheets functions (HyperFormula), charts, and CSV and Excel import and export | <img src="docs/images/drawing.webp" alt="An Excalidraw drawing of the Voyager architecture" width="100%"><br>**Drawings** in Excalidraw, stored in the vault, merged across devices and embeddable in notes |
-| <img src="docs/images/tasks-board.webp" alt="A task list shown as a Kanban board with To do, Doing and Review columns" width="100%"><br>**Tasks** with due dates, priorities, subtasks and repeating rules, as lists or Kanban boards | <img src="docs/images/calendar.webp" alt="Month calendar with daily notes, tasks and meetings" width="100%"><br>**Calendar** of daily notes, tasks and notes dated by a property |
-| <img src="docs/images/canvas.webp" alt="A canvas with cards, embedded notes and links" width="100%"><br>**Canvases** in Obsidian's JSON Canvas format | <img src="docs/images/graph.webp" alt="Graph view of notes and links, colored by folder" width="100%"><br>**Graph** of every note and link, laid out in a Web Worker |
-| <img src="docs/images/kanban.webp" alt="An Obsidian Kanban plugin board" width="100%"><br>**Kanban boards** in the Obsidian Kanban plugin's Markdown format | <img src="docs/images/flashcards.webp" alt="A flashcard review with Again, Hard, Good and Easy" width="100%"><br>**Flashcards** written in notes, scheduled with FSRS |
-| <img src="docs/images/habits.webp" alt="Habit tracker with streaks and a heatmap" width="100%"><br>**Habits** checked in from daily notes, with streaks and a heatmap | <img src="docs/images/light-theme.webp" alt="The Welcome note in the light theme" width="100%"><br>**Dark and light themes**, an outline, backlinks and properties |
+| --- | --- |
+| **What** | A notes app in the style of [Obsidian](https://obsidian.md), with real spreadsheets built in: notes, Google-Sheets-style sheets (about 400 functions and charts), Excalidraw drawings, canvases, Kanban boards, tasks with reminders, flashcards and habits, all stored as plain files |
+| **Why** | I love Google Sheets, and I wanted my notes and my spreadsheets in the same app. That didn't exist, so I built it. Formulas work across both: a table in a note can total itself, and a sentence can quote a spreadsheet cell |
+| **Status** | In daily use on my iPhone (an installable web app) and my Windows PC (a desktop app), served from my home server over a private [Tailscale](https://tailscale.com) network. Every push to `main` deploys itself |
+| **Size** | ~170k lines of application code (Java 48k, TypeScript 104k, CSS 17k) plus ~80k lines of tests. 109 REST endpoints, 4,600+ automated tests, 694 commits in about three and a half weeks |
+
+## What it does
+
+- **Write without seeing Markdown.** A single Live Preview editor (CodeMirror 6) renders as you type. Tables are editable grids, and any cell takes a spreadsheet formula, with suggestions and click-to-reference like Google Sheets.
+- **Spreadsheets that feel like Google Sheets:** formulas, sorting and filters, frozen rows, conditional formatting, drop-downs, find and replace, charts, pivot tables, and copy and paste with Sheets and Excel. A spreadsheet can be embedded in a note and edited right there.
+- **Everything else in one place:** Excalidraw drawings, JSON canvases, Kanban boards, a task manager with repeating tasks and push reminders, a calendar, a graph of linked notes, flashcards (FSRS) and a habit tracker.
+- **Never lose a keystroke.** Every change is versioned with git and synced live to every open device; conflicting edits from two devices are caught and shown side by side.
+- **Family sharing.** Share a note or a folder with family members on the same private network, read-only or editable.
+- **Obsidian-compatible.** The same folder opens in Obsidian: wikilinks, embeds, frontmatter, callouts, canvases and Kanban boards use its formats.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/spreadsheet.webp" alt="Spreadsheet view with a formula bar and a line chart"><br><b>Spreadsheets</b> with ~400 functions, charts and Excel import and export</td>
+    <td width="50%"><img src="docs/images/formulas.gif" alt="Editing a cost in a note table: the totals and shares update as you type"><br><b>Formulas in notes:</b> change a cost and every total updates</td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/drawing.webp" alt="An Excalidraw drawing of the Voyager architecture"><br><b>Drawings</b> in Excalidraw, merged across devices</td>
+    <td><img src="docs/images/tasks-board.webp" alt="A task list shown as a Kanban board"><br><b>Tasks</b> with due dates, repeats and reminders, as lists or boards</td>
+  </tr>
+</table>
 
 <img src="docs/images/phones.webp" alt="Four iPhone screenshots: a note with a table, today's tasks, a spreadsheet and the habits page" width="100%">
 
-*Phone-first: the iPhone home-screen app has a keyboard-aware editor and toolbar, a drawer, quick capture and a share-sheet target.*
-
-The complete list, from search syntax to backups, is in **[docs/FEATURES.md](docs/FEATURES.md)**.
+<sub>More screenshots and the complete feature list: [docs/FEATURES.md](docs/FEATURES.md).</sub>
 
 ## Architecture
 
 ```mermaid
-flowchart TB
-    subgraph devices["Your devices, on your tailnet"]
-        direction LR
-        phone["iPhone / iPad<br/>installed PWA"]
-        desk["Windows / macOS<br/>Electron app"]
+flowchart LR
+    subgraph Clients["My devices, on my private network"]
+        phone["iPhone<br/>installable web app, offline mode"]
+        desk["Windows PC<br/>Electron desktop app"]
         web["Any browser"]
     end
-    subgraph server["Home server: one Docker image"]
+    subgraph Server["Home server · one Docker image"]
         ts["Tailscale<br/>HTTPS + identity"]
-        api["Spring Boot 4<br/>REST + SSE API, serves the React SPA"]
+        api["Spring Boot 4 API<br/>REST + Server-Sent Events<br/>serves the React app"]
         index[("In-memory index<br/>links, tags, full text")]
         vault[("Vault<br/>plain Markdown files")]
-        git[("Git history<br/>JGit")]
+        git[("Git history<br/>a commit per change")]
     end
-    devices -- "HTTPS over the tailnet" --> ts --> api
-    api -- "reads" --> index
+    gh["GitHub Actions → GHCR"]
+
+    Clients -- "HTTPS over Tailscale" --> ts --> api
+    api --> index
     api -- "atomic writes" --> vault
-    api -- "a commit per change" --> git
-    api -. "live changes (SSE)" .-> devices
+    api --> git
+    api -. "live changes" .-> Clients
+    gh -. "images, pulled by Watchtower" .-> Server
 ```
 
-A Spring Boot backend (Java 21, run on JDK 25 with an AOT cache) serves a REST and Server-Sent Events API and the React single-page app from one image. There is **no database**: the vault is a directory of files, an in-memory index of links, tags and full text is built at startup and kept current by a file watcher (edits made over SSH or in Obsidian show up live), and JGit commits every change into the vault's own `.git`. There is no app login either: the app listens only inside Tailscale's network namespace, `tailscale serve` terminates HTTPS and passes the caller's identity, and host and identity allowlists are the security boundary.
+- **No database, on purpose.** The vault is a folder of plain files, so it stays readable and portable. An in-memory index of links, tags and full text is built at startup and kept current by a file watcher, and JGit commits every change to the vault's own history.
+- **No login screen.** The app only listens inside a private Tailscale network, which supplies each person's verified identity. Allowlists on the host name and identity are the security boundary.
+- **One React app everywhere.** The same React 19 + TypeScript front end runs in the browser, as an installable iPhone app, and inside the Electron desktop app. Each file type (notes, sheets, drawings, canvases, tasks, PDFs) loads as its own lazy bundle, so the first load stays under a **350 KiB budget that the build enforces**.
 
-The frontend is React 19 + TypeScript on Vite. Each file type (notes, spreadsheets, drawings, canvases, task lists, PDFs) plugs into a view registry and loads as its own lazy chunk, so the first load stays under a **350 KiB gzip budget that the build enforces**. The full design is in [docs/DESIGN.md](docs/DESIGN.md) and the API contract in [docs/API.md](docs/API.md).
+## Engineering highlights
+
+**1. Never losing a keystroke across devices.** Notes are edited on a phone and a PC at once, often offline. Every save carries the file's git blob id ([`FileService.java`](backend/src/main/java/com/rjgehan/notes/vault/FileService.java)): a stale write gets `409 Conflict` instead of overwriting, and the client ([`DocumentSession.ts`](frontend/src/sync/DocumentSession.ts)) merges or shows both versions side by side. Unsaved text is kept as a draft in the browser until the server confirms it, writes are atomic, and Server-Sent Events push every change to every open tab within moments.
+
+**2. One formula engine for notes and spreadsheets.** I wanted Google Sheets inside my notes, not next to them. The spreadsheet engine (HyperFormula) also powers tables in notes ([`formulas/engine.ts`](frontend/src/formulas/engine.ts)), and formulas can read across files: a note can say `='Budget.sheet'!H8` and stay current ([`sheets/links/`](frontend/src/sheets/links/)). Spreadsheets edited on two devices are merged cell by cell ([`merge.ts`](frontend/src/sheets/merge.ts)), not overwritten.
+
+**3. A file-based backend that stays fast at scale.** I built a load-test kit ([`perf/`](perf/)) with a generated 10,000-note vault, a 5 MB note and a 2,000-commit history, profiled the hot paths, and fixed five cliffs with before-and-after numbers ([PERFORMANCE.md](docs/PERFORMANCE.md)). For example, graph zoom with 10,000 nodes went from 340 ms per frame to 10 ms, and searching a huge note from 90 ms to 13 ms.
+
+**4. A real security model for a self-hosted app.** Family members get scoped, revocable shares with their own guest pages ([`ShareService.java`](backend/src/main/java/com/rjgehan/notes/share/ShareService.java)), backed by a written threat model and a security audit ([SECURITY.md](docs/SECURITY.md)). The audit caught that the server's port was reachable from the local network, where identity headers could be forged; I moved the deployment to listen on the server's loopback only.
+
+**5. Finding bugs systematically, not by accident.** Besides the unit and end-to-end suites, I ran a structured bug hunt over the whole codebase: independent reviewers searched each area, other reviewers tried to disprove every finding, and only confirmed bugs were fixed, each with a regression test. Three rounds confirmed and fixed **157 bugs**, from lost keystrokes during app start-up to spreadsheet results that differed from Google Sheets. A manual QA pass is in [`qa/`](qa/2026-11-02/FINDINGS.md).
+
+## Testing and delivery
+
+- **Backend:** about 1,340 JUnit 5 tests, including integration tests against a real temporary vault and git repository, run on both JDK 21 and JDK 25.
+- **Front end:** about 3,100 Vitest and Testing Library tests in 300+ files, including one that boots the whole app on a demo vault.
+- **End to end:** 89 Playwright tests against the production build, at desktop and iPhone sizes, covering the API, the core editing loop, sync between two devices and offline behaviour. They gate every release.
+- **Also tested:** the web clipper (79 tests), the desktop app (51) and the deploy and backup scripts.
+- **CI/CD:** [GitHub Actions](.github/workflows/ci.yml) runs all of it on every push. A push to `main` publishes multi-architecture Docker images to GHCR, Watchtower rolls them out on the server within minutes, and open tabs reload themselves onto the new build.
+- **Written contracts:** [API.md](docs/API.md) is the binding API contract (a test keeps it identical to the front end's types), and [DESIGN.md](docs/DESIGN.md) records every design decision and why.
 
 ## Tech stack
 
-| Area | Technologies |
-|---|---|
-| **Backend** | Java 21, Spring Boot 4.1, JGit, Server-Sent Events, lib-recur (RRULE), PDFBox, the Anthropic Java SDK (Ask your vault, optional) |
-| **Frontend** | React 19, TypeScript, Vite, CodeMirror 6, TanStack Query, Zustand, HyperFormula, Glide Data Grid, Excalidraw, Mermaid, KaTeX, PDF.js, d3-force, ts-fsrs, QuickJS (sandboxed scripts) |
-| **Apps** | Installable PWA with a service worker and offline mode; Electron desktop app for Windows and macOS; browser extension, bookmarklet and iOS Shortcut web clipper |
-| **Infrastructure** | Docker (multi-stage, amd64 + arm64), GitHub Actions, GitHub Container Registry, Watchtower, Tailscale, restic backups to B2 or S3, ntfy alerts, GitHub Pages for the demo |
+| Layer | Tech |
+| --- | --- |
+| Backend | Java 21, Spring Boot 4.1 (Web MVC, Actuator), JGit, Server-Sent Events, lib-recur (repeat rules), PDFBox, Web Push, Maven |
+| Front end | React 19, TypeScript, Vite, CodeMirror 6, TanStack Query, Zustand, HyperFormula, Glide Data Grid, Excalidraw, Mermaid, KaTeX, PDF.js, d3-force, ts-fsrs, QuickJS (sandboxed scripts) |
+| Apps | Installable PWA with a service worker and offline mode, an Electron desktop app, a browser-extension web clipper |
+| Testing | JUnit 5, Spring Boot Test, Vitest, Testing Library, Playwright |
+| Infra | Docker (multi-stage, amd64 + arm64), GitHub Actions, GHCR, Watchtower, CasaOS, Tailscale, restic backups, ntfy alerts |
 
-## How it's built and tested
+## How I built it
 
-- **3,819 automated tests** at the time of writing: 1,149 backend (JUnit 5, Spring Boot tests and integration tests on a real temporary vault), 2,575 frontend (Vitest and Testing Library, 251 files, including one that boots the whole app on the demo vault), 69 for the web clipper and 26 for the desktop app.
-- **CI on every pull request and push** ([ci.yml](.github/workflows/ci.yml)): backend tests on JDK 21 and JDK 25, frontend type checks, lint, tests and production build (with the bundle budget), the demo build, the clipper, and the deploy and backup scripts (in dash and BusyBox); pull requests also build the Docker image.
-- **Zero-touch deploys.** A push to `main` publishes multi-arch images, Watchtower on the server picks them up within minutes, and open tabs reload themselves onto the new build. A weekly rebuild picks up base-image fixes; Dependabot proposes updates; every action is pinned by commit SHA.
-- **Contracts written down first.** [docs/API.md](docs/API.md) is the binding API contract (a test keeps its type section identical to the frontend's `types.ts`), and [docs/DESIGN.md](docs/DESIGN.md) records each design decision and its reasons.
-- **Ops built in.** A status page, app alerts to ntfy, nightly encrypted backups with a restore drill, and an optional mirror of the vault's history to a private GitHub repository.
+I own the product, the architecture and the quality bar:
+- I decided what Voyager does, from how I actually take notes and use spreadsheets every day.
+- I chose the stack, the file-based design and the security model.
+- I set up the testing, the QA and bug-hunting process, and the deployment, and I check every change on my own iPhone and PC.
 
-## Self-hosting
+The code was written with [Claude Code](https://claude.com/claude-code) as an AI pair programmer, working to my direction; most commits carry its co-author line. Working this way, I went from an empty repository to a deployed app with 4,600+ tests in about three and a half weeks.
 
-You need a Linux server with Docker and [Tailscale](https://tailscale.com). The image is `ghcr.io/rjgehan/notesapp`.
+## Repository layout
 
-- **CasaOS:** paste one compose file into the CasaOS UI and run two commands. Step by step in **[docs/CASAOS.md](docs/CASAOS.md)**.
-- **Docker Compose:** the full runbook (first deploy, Tailscale, updates, backups, rollback, troubleshooting) is **[docs/DEPLOY.md](docs/DEPLOY.md)**.
+| Path | What |
+| --- | --- |
+| [`backend/`](backend/) | Spring Boot 4 / Java 21 API: files and versions, git history, search index, tasks and reminders, sharing, live sync |
+| [`frontend/`](frontend/) | React 19 + TypeScript app: the editor, spreadsheets, drawings and every other view |
+| [`desktop/`](desktop/) | Electron desktop app for Windows and macOS |
+| [`clipper/`](clipper/) | Browser-extension web clipper |
+| [`e2e/`](e2e/) | Playwright end-to-end suite |
+| [`perf/`](perf/) | Load-test kit: generated vault, benchmarks, profiling |
+| [`deploy/`](deploy/) | CasaOS and Docker Compose files, backup scripts |
+| [`docs/`](docs/) | Design, API contract, user guide, security, performance and more |
 
-Optional extras are off until you set them up: nightly backups, alerts, the GitHub mirror, voice note transcription, Ask your vault with Claude, and public publishing through Tailscale Funnel.
+## Running it locally
 
-## Desktop app
-
-Windows and macOS installers are attached to the **[GitHub Releases](https://github.com/rjgehan/notesapp/releases)** named `desktop-v…` (`Voyager-Setup-<version>.exe`, `Voyager-<version>-mac.dmg`). The app is a thin, sandboxed window around your own server with a tray icon, a system-wide quick-capture shortcut (`Ctrl+Shift+Space` / `Cmd+Shift+Space`), native notifications and launch at login. The installers are not code-signed yet; [docs/DESKTOP.md](docs/DESKTOP.md) has the SmartScreen and Gatekeeper steps.
-
-## Run it locally
-
-Needs JDK 21 and Node 24. Docker is not needed.
+Needs JDK 21 and Node 24; Docker is not needed.
 
 ```powershell
-# Terminal 1: the API on http://127.0.0.1:8080, with a throwaway vault in .\dev-vault
+# Terminal 1: the API, with a throwaway vault in .\dev-vault
 cd backend; .\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=dev"
 
 # Terminal 2: the app on http://localhost:5173
 cd frontend; npm install; npm run dev
 ```
 
-Or run the frontend alone on the in-memory mock (`$env:VITE_MOCK_API = "1"; npm run dev`), or build the live demo (`npm run build:demo`). Ports, checks and conventions are in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
+Or run the front end alone on its in-memory demo data: `$env:VITE_MOCK_API = "1"; npm run dev`. Self-hosting on a home server is covered in [docs/CASAOS.md](docs/CASAOS.md) and [docs/DEPLOY.md](docs/DEPLOY.md).
 
-## Documentation
+<details>
+<summary><b>All documentation</b></summary>
 
 | Document | What it covers |
-|---|---|
-| [User guide](docs/guide/index.md) | Using the app, task by task: the same pages are its built-in **Help** (the ribbon, the phone's drawer and ⋯ menu, or *Open help* in the command palette) |
+| --- | --- |
+| [User guide](docs/guide/index.md) | Using the app, task by task (also built into the app as its Help page) |
 | [FEATURES.md](docs/FEATURES.md) | Everything the app does |
-| [DESIGN.md](docs/DESIGN.md) | The technical design, backend and frontend (decisive) |
-| [API.md](docs/API.md) | The REST and SSE contract between backend and frontend |
-| [DEVELOPMENT.md](docs/DEVELOPMENT.md) | Local development, repository layout, checks, how a change reaches the server |
-| [DEPLOY.md](docs/DEPLOY.md) | Home-server runbook: first deploy, operations, backups, troubleshooting |
-| [CASAOS.md](docs/CASAOS.md) | Installing on CasaOS with one compose file |
-| [DESKTOP.md](docs/DESKTOP.md) | The Windows and macOS desktop app |
-| [CLIPPER.md](docs/CLIPPER.md) | The web clipper: browser extension, bookmarklet, iPhone Shortcut |
-| [ACCESSIBILITY.md](docs/ACCESSIBILITY.md) | WCAG 2.2 AA status, how it is tested, known gaps |
-| [PERFORMANCE.md](docs/PERFORMANCE.md) | Performance at scale: the load-test kit, results before and after, known limits |
-| [SECURITY.md](docs/SECURITY.md) | Threat model, the trust boundaries of each deployment layout, the security audit's findings, residual risks and hardening advice ([SECURITY.md](SECURITY.md): how to report a vulnerability) |
-| [ROADMAP.md](docs/ROADMAP.md) | Every roadmap item, what each one became, and the proposals still open |
-| [BRAND.md](BRAND.md) | The name Voyager and its story, the voice, the colours and the icon |
+| [DESIGN.md](docs/DESIGN.md) | The technical design and the reasons behind each decision |
+| [API.md](docs/API.md) | The REST and Server-Sent Events contract |
+| [DEVELOPMENT.md](docs/DEVELOPMENT.md) | Local development, checks, and how a change reaches the server |
+| [DEPLOY.md](docs/DEPLOY.md) / [CASAOS.md](docs/CASAOS.md) | Running it on a home server |
+| [DESKTOP.md](docs/DESKTOP.md) | The desktop app |
+| [CLIPPER.md](docs/CLIPPER.md) | The web clipper |
+| [SECURITY.md](docs/SECURITY.md) | Threat model, audit findings and residual risks |
+| [PERFORMANCE.md](docs/PERFORMANCE.md) | Load tests and results |
+| [ACCESSIBILITY.md](docs/ACCESSIBILITY.md) | WCAG 2.2 AA status and known gaps |
+| [ROADMAP.md](docs/ROADMAP.md) | Every roadmap item and what it became |
+| [BRAND.md](BRAND.md) | The name, the story behind it, and the icon |
 
-## Licence
+</details>
 
-Voyager is free software under the GNU General Public License, version 3 only ([LICENSE](LICENSE), SPDX `GPL-3.0-only`). The spreadsheet formula engine, HyperFormula, is used under its GPL-3.0 licence option, which is why the whole repository is GPL-3.0 (decided 2026-10-17, [ROADMAP](docs/ROADMAP.md) item 6). Running your own image needs nothing further; if you ever distribute Voyager, distribute its source under the same licence.
-
-Third-party packages and their licences are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). It is generated: after changing dependencies, run `node scripts/third-party-notices.mjs` from the repository root.
+<sub>**Why "Voyager":** the Voyager probes launched in 1977 and are still sending data home, and each carries a Golden Record of what matters to us. This app is my own record, built to last: plain files, every version kept. More in [BRAND.md](BRAND.md). The app was called NotesApp until November 2026; the repository and Docker image keep that name. Licensed under [GPL-3.0](LICENSE) (HyperFormula is used under its GPL-3.0 option); third-party licences are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).</sub>
