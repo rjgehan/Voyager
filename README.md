@@ -14,11 +14,15 @@
 ![React 19](https://img.shields.io/badge/React-19-58c4dc)
 ![TypeScript](https://img.shields.io/badge/TypeScript-6-3178c6)
 
+<a href="docs/media/voyager-demo.mp4">
+  <img src="docs/media/voyager-demo.gif" width="720" alt="Voyager in action: a note whose table totals are spreadsheet formulas, a formula reading a spreadsheet, drawings, a canvas, a Kanban board, and an edit on the PC appearing on the iPhone">
+</a>
+
+<sub>A quick tour. Click it for the full 45-second video with sound.</sub>
+
 ### [▶ Try the live demo](https://rjgehan.github.io/notesapp/)
 
 It runs entirely in your browser on a sample vault: nothing to install, nothing saved.
-
-<img src="docs/images/live-preview.webp" alt="Voyager's Live Preview editor: a note with properties and a Markdown table whose totals are spreadsheet formulas" width="100%">
 
 </div>
 
